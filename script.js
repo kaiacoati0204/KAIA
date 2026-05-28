@@ -16,33 +16,47 @@ function abrirMenu(){
     }
 }
 
-
 const questions = {
     MAT: [
-        { q: "Parte escrita", opts: ["Opção1", "Opção2", "Opção3", "Opção4", "Opção5"], ans: 1 },
+        { q: "Parte escrita", opts: ["Opção1", "Opção2", "Opção3", "Opção4", "Opção5"], ans: 2 },
     ],
-    // Adicione mais perguntas aqui...
+    // Mais perguntas aqui...
 };
 
 // --- CÁLCULO DE TEMPO ADAPTÁVEL ---
 function calculateReadingTime(text, options) {
     const allText = text + " " + options.join(" ");
     const wordCount = allText.split(/\s+/).length;
-    
+
     // Média de 200 palavras por minuto (3.3 palavras por segundo)
     // Adicionamos um "buffer" de 5 segundos de segurança
     const readingTime = Math.ceil(wordCount / 3.3) + 5;
-    
+
     console.log(`Palavras: ${wordCount} | Tempo Adaptado: ${readingTime}s`);
     return readingTime;
 }
 
-// --- MONITOR DE FOCO ---
+// ------ PERGUNTAS -----------------
+function enviarPergunta() {
+    let pergunta = document.getElementById("pergunta").value;
+    let respostas = document.getElementById("respostas");
+    if(pergunta.trim() === "") {
+        respostas.innerHTML = "Digite alguma pergunta.";
+        return;
+    }
+    respostas.innerHTML = `
+        <strong>KaIA:</strong><br>
+        Você perguntou:
+        "${pergunta}"
+    `;
+}
+
+// ------- MONITOR DE FOCO -----------
 setInterval(() => {
     if(isMissionActive) {
         idleTime++;
         document.getElementById('timer').innerText = idleTime;
-        
+
         // Só escurece se ultrapassar o limite calculado para aquela pergunta específica
         if (idleTime >= dynamicLimit) {
             document.getElementById('overlay').style.opacity = "0.95";
@@ -63,17 +77,17 @@ function startMission(subject) {
     isMissionActive = true;
     document.getElementById('menu-view').style.display = 'none';
     document.getElementById('quiz-view').style.display = 'block';
-    
+
     const list = questions[subject];
     currentQuestion = list[Math.floor(Math.random() * list.length)];
-    
+
     // Define o limite dinâmico com base no texto
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
-    
+
     document.getElementById('question-display').innerText = currentQuestion.q;
     const optionsDiv = document.getElementById('options-display');
     optionsDiv.innerHTML = "";
-    
+
     currentQuestion.opts.forEach((opt, idx) => {
         const btn = document.createElement('button');
         btn.className = "option-btn";

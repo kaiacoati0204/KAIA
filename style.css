@@ -1,146 +1,446 @@
-/* Cores Principais*/
+/* =========================
+   ROOT / CORES
+========================= */
 
 :root {
     --profundo: #1A2B4C;
     --azul-coati: #2D4BA5;
     --bege: #c4a186;
     --creme-bg: #eae0d2;
-    --gravata-kinrou: #F2B705;
+    --gravata-kinrou: #f3d009;
     --prox-br: #E6E1DA;
+    --vd-uniao: #57D979;
 }
+
+/* =========================
+   RESET
+========================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* =========================
+   BODY
+========================= */
 
 body {
     font-family: 'Plus Jakarta Sans', sans-serif;
     background-color: var(--creme-bg);
     color: var(--azul-coati);
-    margin: 0;
     height: 100vh;
     overflow: hidden;
 }
-.botao{
+
+/* =========================
+   MENU BOTÃO
+========================= */
+
+.botao {
     font-size: 30px;
     cursor: pointer;
     position: fixed;
     top: 15px;
     left: 15px;
-    z-index: 2;
+    z-index: 2000;
+    color: var(--azul-coati);
+    transition: 0.3s ease;
 }
-.menu{
+.botao:hover {
+    transform: scale(1.1);
+}
+
+/* =========================
+   MENU LATERAL
+========================= */
+
+.menu {
     width: 0;
     height: 100vh;
-    background-color: var(--bege);
+    background-color: var(--profundo);
     position: fixed;
     top: 0;
     left: 0;
     overflow-x: hidden;
-    transition: 0.4s;
-    padding-top: 60px;
+    transition: 0.4s ease;
+    padding-top: 80px;
+    z-index: 1500;
 }
-
-/* LINKS */
-
-.menu a{
+.menu a {
     display: block;
-    color: var(--bege);
+    color: var(--prox-br);
     text-decoration: none;
     padding: 15px 25px;
-    transition: 0.3s;
+    font-weight: 700;
+    transition: 0.3s ease;
+}
+.menu a:hover {
+    background-color: var(--azul-coati);
+    padding-left: 35px;
 }
 
-.menu a:hover{
-    background-color: var(--creme-bg);
+/* =========================
+   APP WRAPPER
+========================= */
+
+.app-wrapper {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: 100vh;
 }
 
-/* CONTEÚDO */
+/* =========================
+   SIDEBAR
+========================= */
 
-.conteudo{
-    padding: 30px;
-    margin-left: 60px;
-}
-/* -----------------------------------------------------------------------------------------*/
-/* Sidebar*/
 .sidebar {
-    background: var(--creme-bg);
-    border-right: 1px solid var(--azul-coati);
-    padding: 60px 40px;
+    background-color: var(--creme-bg);
+    border-right: 1px solid var(--profundo);
+    padding: 80px 40px;
     display: flex;
     flex-direction: column;
+    gap: 50px;
 }
+
+/* =========================
+   BRAND
+========================= */
 
 .brand h1 {
     font-size: 3.5rem;
-    margin: 0;
     color: var(--azul-coati);
+    margin-bottom: 10px;
+}
+.brand h1 span {
+    color: var(--gravata-kinrou);
+}
+.brand h2 {
+    font-size: 1rem;
+    color: var(--bege);
+    letter-spacing: 2px;
 }
 
-.brand h1 span { color: var(--bege); }
+/* =========================
+   SYSTEM STATS
+========================= */
 
+.system-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
 .stat-card {
-    border-left: 3px solid var(--bege);
-    background: rgba(248, 224, 142, 0.05);
-    padding: 15px;
-    margin-top: 20px;
+    border-left: 4px solid var(--bege);
+    background-color: rgba(255, 255, 255, 0.4);
+    padding: 20px;
+    border-radius: 25px;
+    backdrop-filter: blur(15px);
+}
+.stat-card label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--bege);
+    margin-bottom: 8px;
+}
+.value {
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+.status-active {
+    color: var(--vd-uniao);
 }
 
-.stat-card label { font-size: 0.7rem; color: var(--bege); font-weight: 700; }
+/* =========================
+   MAIN CONTENT
+========================= */
 
-/* Main Content Dark Mode */
 .main-content {
-    background: var(--deep-navy);
-    padding: 80px;
+    background-color: var(--bege);
+    padding: 60px;
+    overflow-y: auto;
 }
+
+/* =========================
+   HEADER
+========================= */
+
+.content-header {
+    margin-bottom: 40px;
+}
+.content-header h2 {
+    font-size: 2.5rem;
+    color: var(--profundo);
+    margin-bottom: 10px;
+}
+.content-header p {
+    color: var(--profundo);
+    font-size: 1rem;
+}
+
+/* =========================
+   GRID DE MISSÕES
+========================= */
+
+.mission-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 25px;
+}
+
+/* =========================
+   PERGUNTAS
+========================= */
+
+.pergunts{
+    display: flex;
+    gap: 15px;
+    margin-top: 40px;
+}
+.pergunts input {
+    flex: 1;
+    padding: 18px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    background-color: rgba(255,255,255,0.05);
+    color: var(--azul-coati);
+    font-size: 1rem;
+    outline: none;
+    transition: 0.3s ease;
+}
+.pergunts input:focus {
+    border-color: var(--gravata-kinrou);
+    box-shadow: 0 0 10px rgba(243, 208, 9, 0.4);
+}
+.pergunts button {
+    padding: 18px 24px;
+    border: none;
+    border-radius: 14px;
+    background-color: var(--gravata-kinrou);
+    color: var(--profundo);
+    font-weight: 800;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+.pergunts button:hover {
+    transform: scale(1.05);
+}
+#respostas {
+    margin-top: 30px;
+    padding: 25px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.05);
+    color: var(--creme-bg);
+    line-height: 1.6;
+    min-height: 15px;
+}
+
+/* =========================
+   CARDS
+========================= */
 
 .mission-card {
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(248, 224, 142, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     padding: 30px;
-    border-radius: 4px; /* Estilo Equinox */
+    border-radius: 20px;
     cursor: pointer;
-    transition: 0.3s;
+    transition: all 0.3s ease;
 }
-
 .mission-card:hover {
-    background: rgba(248, 224, 142, 0.1);
-    border-color: var(--mellow-sun);
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--gravata-kinrou);
+}
+.mission-card .icon {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+}
+.mission-card h3 {
+    color: var(--gravata-kinrou);
+    border-style: #2D4BA5;
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+.mission-card span {
+    color: var(--profundo);
 }
 
-.mission-card h3 { color: var(--mellow-sun); }
+/* =========================
+   QUIZ
+========================= */
 
-/* Opções de Resposta */
+.quiz-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+.quiz-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.abort-btn {
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--profundo);
+    padding: 12px 20px;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: 0.3s ease;
+}
+.abort-btn:hover {
+    border-color: var(--gravata-kinrou);
+    color: var(--gravata-kinrou);
+}
+
+/* =========================
+   QUESTÕES
+========================= */
+
+.question-wrapper h2 {
+    color: var(--prox-br);
+    font-size: 2rem;
+    margin-bottom: 30px;
+}
+
+/* =========================
+   OPÇÕES
+========================= */
+
+.options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
 .option-btn {
     background: transparent;
-    border: 1px solid rgba(241, 244, 249, 0.3);
-    color: var(--ice-white);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: var(--prox-br);
     padding: 20px;
-    margin-bottom: 10px;
-    width: 100%;
-    text-align: left;
+    border-radius: 14px;
     cursor: pointer;
-    transition: 0.2s;
+    text-align: left;
+    transition: all 0.2s ease;
 }
-
 .option-btn:hover {
-    border-color: var(--mellow-sun);
-    color: var(--mellow-sun);
+    border-color: var(--gravata-kinrou);
+    color: var(--profundo
+    );
+    transform: translateX(5px);
 }
 
-/* Overlay Dinâmico */
+/* =========================
+   FEEDBACK
+========================= */
+
+.feedback-msg {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gravata-kinrou);
+}
+
+/* =========================
+   OVERLAY
+========================= */
+
 #overlay {
     position: fixed;
     inset: 0;
-    background: black;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 1000;
-    transition: opacity 8s ease; /* Escurecimento suave */
+    background: rgba(0, 0, 0, 0.95);
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-direction: column;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5000;
+    transition: opacity 1s ease;
+}
+.overlay-content {
+    text-align: center;
+}
+.overlay-content h1 {
+    color: var(--gravata-kinrou);
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+.overlay-content h2 {
+    color: white;
+    font-weight: 300;
 }
 
-.overlay-msg {
-    color: var(--mellow-sun);
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 4px;
+/* =========================
+   ANEL ALERTA
+========================= */
+.anel-alerta {
+    width: 120px;
+    height: 120px;
+    border: 4px solid var(--gravata-kinrou);
+    border-radius: 50%;
+    margin: 0 auto 30px auto;
+    animation: pulse 2s infinite;
+}
+@keyframes pulse {
+    0% {
+        transform: scale(0.9);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.3);
+        opacity: 0;
+    }
+}
+
+/* =========================
+   ANIMAÇÃO
+========================= */
+.fade-in {
+    animation: fade 0.5s ease;
+}
+@keyframes fade {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* =========================
+   PRA BAIXO
+========================= */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-thumb {
+    background-color: var(--gravata-kinrou);
+    border-radius: 20px;
+}
+
+/* =========================
+   COISOS JS
+========================= */
+
+@media (max-width: 900px) {
+    .app-wrapper {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        display: none;
+    }
+    .main-content {
+        padding: 30px;
+    }
+    .content-header h2 {
+        font-size: 2rem;
+    }
+    .question-wrapper h2 {
+        font-size: 1.5rem;
+    }
 }

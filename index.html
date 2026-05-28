@@ -1,94 +1,177 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
+    <!-- CONFIG -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
-    <title>KAIÁ | Focus Architecture</title>
+
+    <!-- FONTES -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap"
+        rel="stylesheet">
+
+    <title>KaIA | Testes</title>
 </head>
+
 <body>
+
+    <!-- ================= MENU LATERAL ================= -->
+
     <span class="botao" onclick="abrirMenu()">☰</span>
-        <!-- MENU -->
-        <div class="menu" id="menu">
-            <h1>KaIA</h1>
-            <a href="#">Início</a>
-            <a href="#">Perfil</a>
-            <a href="#">Matérias</a>
-            <a href="#">Meu Coati</a>
-            <a href="#">Config.</a>
-        </div>
+
+    <div class="menu" id="menu">
+        <h1>KaIA</h1>
+
+        <a href="#">Início</a>
+        <a href="#">Perfil</a>
+        <a href="#">Matérias</a>
+        <a href="#">Meu Coati</a>
+        <a href="#">Config.</a>
     </div>
 
-    <!-- ____________________Está Aí?______________________ -->
+    <!-- ================= OVERLAY DE INATIVIDADE ================= -->
+
     <div id="overlay">
         <div class="overlay-content">
-            <div class="pulse-ring"></div>
+
+            <div class="anel-alerta"></div>
+
             <h1>Ainda está Conosco?</h1>
             <h2>Mova o mouse para retomar a missão</h2>
+
         </div>
     </div>
 
-    <!-- ____________________?______________________ -->
+    <!-- ================= APP PRINCIPAL ================= -->
+
     <main class="app-wrapper">
+
+        <!-- ===== SIDEBAR ===== -->
+
         <section class="sidebar">
+
             <div class="brand">
                 <h1>Ka<span>IA</span></h1>
                 <h2>Deep Focus Protocol</h2>
             </div>
-            
+
             <div class="system-stats">
+
                 <div class="stat-card">
                     <label>TEMPO DE FOCO</label>
-                    <div class="value"><span id="timer">0</span>s</div>
+
+                    <div class="value">
+                        <span id="timer">0</span>s
+                    </div>
                 </div>
+
                 <div class="stat-card">
                     <label>ESTADO ATUAL</label>
-                    <div class="value status-active" id="system-status">PRONTO</div>
+
+                    <div class="value status-active" id="system-status">
+                        PRONTO
+                    </div>
                 </div>
+
             </div>
         </section>
 
+        <!-- ===== CONTEÚDO PRINCIPAL ===== -->
+
         <section class="main-content">
+
+            <!-- ===== MENU DE MISSÕES ===== -->
+
             <div id="menu-view" class="fade-in">
+
                 <header class="content-header">
                     <h2>Selecione sua Missão</h2>
-                    <p>Escolha um domínio para iniciar o ciclo de aprendizado ativo.</p>
+
+                    <p>
+                        Escolha um domínio para iniciar o ciclo de aprendizado ativo.
+                    </p>
                 </header>
-                
+
                 <div class="mission-grid">
+
                     <div class="mission-card" onclick="startMission('MAT')">
                         <div class="icon">∑</div>
+
                         <h3>Matemática</h3>
                         <span>Cálculo de Dano & Lógica</span>
                     </div>
+
                     <div class="mission-card" onclick="startMission('PORT')">
                         <div class="icon">¶</div>
+
                         <h3>Português</h3>
                         <span>Grimório & Sintaxe</span>
                     </div>
+
                     <div class="mission-card" onclick="startMission('HIS')">
                         <div class="icon">🏛</div>
+
                         <h3>História</h3>
                         <span>Crônicas & Eras</span>
                     </div>
                 </div>
             </div>
 
-            <div id="quiz-view" class="quiz-container fade-in" style="display: none;">
+            <!-- ===== QUIZ ===== -->
+
+            <div id="quiz-view"
+                class="quiz-container fade-in"
+                style="display: none;">
+
                 <div class="quiz-nav">
-                    <span id="current-subject">MISSÃO</span>
-                    <button class="abort-btn" onclick="resetSystem()">ABANDONAR</button>
+
+                    <span id="current-subject">
+                        MISSÃO
+                    </span>
+
+                    <button class="abort-btn" onclick="resetSystem()">
+                        ABANDONAR
+                    </button>
+
                 </div>
+
                 <div class="question-wrapper">
+
                     <h2 id="question-display">...</h2>
-                    <div id="options-display" class="options-grid"></div>
+
+                    <div id="options-display"
+                        class="options-grid">
+                    </div>
+
                 </div>
+
                 <div id="feedback" class="feedback-msg"></div>
+
             </div>
+            <!-- PERGUNTASSS -->
+            <div class="pergunts">
+                <input 
+                    type="text"
+                    placeholder="Pergunte algo para a KaIA..."
+                    id="pergunta"
+                >
+                <button onclick="enviarPergunta()">
+                    Enviar
+                </button>
+            </div>
+            <div id="respostas"></div>
+
+            <div id="feedback" class="feedback-msg"></div>
+
         </section>
     </main>
 
+    <!-- JS -->
     <script src="script.js"></script>
+
 </body>
+
 </html>

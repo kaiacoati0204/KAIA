@@ -7,17 +7,26 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 app = Flask(__name__)
 
+prompt_sistema = f'''
+Responda:
+    - de forma clara 
+    - em português 
+    - usando explicações simples 
+    - usando exemplos 
+Utilize desses hobbies para responder de forma personalizada: 
+    história
+    futebol
+Pergunta: {pergunta}
+'''
+
 @app.route("/perguntar", methods=["POST"])
 def perguntar():
     pergunta = request.json["pergunta"]
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={API_KEY}"
     body = {
         "contents": [
-            {
-                "parts": [
-                    {
-                        "text": pergunta
-                    }]}]
+            {"parts": [
+                    { "text": {prompt_sistema} }]}]
     }
     response = requests.post(url, json=body)
     data = response.json()
@@ -25,4 +34,5 @@ def perguntar():
     return jsonify({
         "resposta": resposta
     })
+
 app.run(debug=True)

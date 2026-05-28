@@ -39,21 +39,37 @@ function calculateReadingTime(text, options) {
 }
 
 // ------ PERGUNTAS -----------------
+
 async function enviarPergunta() {
-    let pergunta = document.getElementById("pergunta").value;
-    let respostas = document.getElementById("respostas");
-    respostas.innerHTML = "KaIA pensando...";
-    const response = await fetch("http://127.0.0.1:5000/perguntar", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            pergunta: pergunta
-        })
-    });
+
+    let pergunta =
+        document.getElementById("pergunta").value;
+
+    let respostas =
+        document.getElementById("respostas");
+
+    respostas.innerHTML =
+        "KaIA pensando...";
+
+    const response = await fetch(
+        "http://127.0.0.1:5000/perguntar",
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                pergunta: pergunta
+            })
+        }
+    );
+
     const data = await response.json();
-    respostas.innerHTML = data.resposta;
+
+    respostas.innerHTML =
+        data.resposta;
 }
 
 // ------- MONITOR DE FOCO -----------

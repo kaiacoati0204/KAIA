@@ -1,7 +1,9 @@
 let idleTime = 0;
 let isMissionActive = false;
 let currentQuestion = null;
-let dynamicLimit = 10; // Tempo padrão inicial
+let dynamicLimit = 10; // Tempo padrão (Por Enquanto)
+let focusLostAt = null;
+let mudancasAba = 0;
 
 // Menu
 let aberto = false;
@@ -40,41 +42,18 @@ function calculateReadingTime(text, options) {
 async function enviarPergunta() {
     let pergunta = document.getElementById("pergunta").value;
     let respostas = document.getElementById("respostas");
-    if (pergunta.trim() === "") {
-        respostas.innerHTML = "Digite alguma pergunta.";
-        return;
-    }
-    respostas.innerHTML = "KaIA está pensando...";
-    try {
-        const response = await fetch(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=CHAVE_ACESSO",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [
-                                {
-                                    text: pergunta
-                                }]}]})}
-        );
-        const data = await response.json();
-        let texto =
-            data.candidates[0].content.parts[0].text;
-        respostas.innerHTML = `
-            <strong>KaIA:</strong><br><br>
-            ${texto}
-        `;
-    } catch (erro) {
-        respostas.innerHTML =
-            "Erro ao conectar com a KaIA.";
-        console.log(erro);
-    }
+    respostas.innerHTML = "KaIA pensando...";
+    const response = await fetch("http://127.0.0.1:5000/perguntar", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            pergunta: pergunta
+        })
+    });
+    const data = await response.json();
+    respostas.innerHTML = data.resposta;
 }
 
 // ------- MONITOR DE FOCO -----------
@@ -97,6 +76,29 @@ document.onmousemove = () => {
     if(isMissionActive) document.getElementById('system-status').innerText = "ESTUDANDO";
 };
 
+// ------ TEMPO NO LUGAR ERRADO -----------------
+document.addEventListener('visibilitychange', () => {
+    if (!isMissionActive) return;
+  
+    if (document.hidden) {
+      // saiu da aba
+      focusLostAt = performance.now();
+      mudancasAba++;
+    } else {
+      // voltou para a aba
+      if (focusLostAt !== null) {
+        const duracao_s = (performance.now() - focusLostAt) / 1000;
+  
+        // Aqui você pode salvar no seu array de eventos depois
+        console.log({
+          tipo: "tab_change",
+          mudancas_aba: mudancasAba,
+          tempo_fora_foco_s: parseFloat(duracao_s.toFixed(2))
+        });
+        focusLostAt = null;
+      }
+    }
+  });
 
 // --- INICIAR MISSÃO ---
 function startMission(subject) {

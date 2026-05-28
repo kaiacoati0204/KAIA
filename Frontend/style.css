@@ -232,7 +232,7 @@ body {
     padding: 25px;
     border-radius: 20px;
     background: rgba(255,255,255,0.05);
-    color: var(--creme-bg);
+    color: var(--profundo);
     line-height: 1.6;
     min-height: 15px;
 }
@@ -255,13 +255,14 @@ body {
     border-color: var(--gravata-kinrou);
 }
 .mission-card .icon {
-    font-size: 2.5rem;
+    font-size: 3rem;
+    text-shadow: 1px 1px 1px var(--prox-br);
     margin-bottom: 20px;
 }
 .mission-card h3 {
     color: var(--gravata-kinrou);
-    border-style: #2D4BA5;
-    font-size: 1.5rem;
+    text-shadow: 1px 1px 1px var(--profundo);
+    font-size: 2rem;
     margin-bottom: 10px;
 }
 .mission-card span {

@@ -37,18 +37,44 @@ function calculateReadingTime(text, options) {
 }
 
 // ------ PERGUNTAS -----------------
-function enviarPergunta() {
+async function enviarPergunta() {
     let pergunta = document.getElementById("pergunta").value;
     let respostas = document.getElementById("respostas");
-    if(pergunta.trim() === "") {
+    if (pergunta.trim() === "") {
         respostas.innerHTML = "Digite alguma pergunta.";
         return;
     }
-    respostas.innerHTML = `
-        <strong>KaIA:</strong><br>
-        Você perguntou:
-        "${pergunta}"
-    `;
+    respostas.innerHTML = "KaIA está pensando...";
+    try {
+        const response = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=CHAVE_ACESSO",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    contents: [
+                        {
+                            parts: [
+                                {
+                                    text: pergunta
+                                }]}]})}
+        );
+        const data = await response.json();
+        let texto =
+            data.candidates[0].content.parts[0].text;
+        respostas.innerHTML = `
+            <strong>KaIA:</strong><br><br>
+            ${texto}
+        `;
+    } catch (erro) {
+        respostas.innerHTML =
+            "Erro ao conectar com a KaIA.";
+        console.log(erro);
+    }
 }
 
 // ------- MONITOR DE FOCO -----------

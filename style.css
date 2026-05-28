@@ -73,16 +73,16 @@ body {
     color: var(--azul-coati);
 }
 
-.brand h1 span { color: var(--mellow-sun); }
+.brand h1 span { color: var(--bege); }
 
 .stat-card {
-    border-left: 3px solid var(--mellow-sun);
+    border-left: 3px solid var(--bege);
     background: rgba(248, 224, 142, 0.05);
     padding: 15px;
     margin-top: 20px;
 }
 
-.stat-card label { font-size: 0.7rem; color: var(--mellow-sun); font-weight: 700; }
+.stat-card label { font-size: 0.7rem; color: var(--bege); font-weight: 700; }
 
 /* Main Content Dark Mode */
 .main-content {

@@ -119,6 +119,35 @@ async function enviarParaIA(historicoBotoes) {
 }
 
 // ============================================================
+//                  FAÇA-SE A LUZ
+// ============================================================
+const luz = document.getElementById('luzFundo');
+const container = document.querySelector('.tela-login');
+let luzX = window.innerWidth / 2;
+let luzY = window.innerHeight / 2;
+const raioFuga = 200; 
+
+container.addEventListener('mousemove', (e) => {
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    const dx = luzX - mouseX;
+    const dy = luzY - mouseY;
+    const distancia = Math.sqrt(dx * dx + dy * dy);
+    if (distancia < raioFuga) {
+        const forca = (raioFuga - distancia) / raioFuga;
+        const direcaoX = dx / distancia;
+        const direcaoY = dy / distancia;
+
+        luzX += direcaoX * forca * 30;
+        luzY += direcaoY * forca * 30;
+        luzX = Math.max(50, Math.min(window.innerWidth - 50, luzX));
+        luzY = Math.max(50, Math.min(window.innerHeight - 50, luzY));
+        luz.style.left = `${luzX}px`;
+        luz.style.top = `${luzY}px`;
+    }
+});
+
+// ============================================================
 //                  CÁLCULO DE TEMPO ADAPTÁVEL
 // ============================================================
 function calculateReadingTime(text, options) {

@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import os
 import json
 from datetime import datetime
+from flask_cors import CORS
+CORS(app)
 
 load_dotenv()
 API_KEY = os.getenv("API_KEY")

@@ -1,7 +1,6 @@
-/* =========================
-   ROOT / CORES
-========================= */
-
+/* ===============================
+    ROOT / CORES
+================================= */
 :root {
     --profundo: #1A2B4C;
     --azul-coati: #2D4BA5;
@@ -15,7 +14,6 @@
 /* =========================
    RESET
 ========================= */
-
 * {
     margin: 0;
     padding: 0;
@@ -25,7 +23,6 @@
 /* =========================
    BODY
 ========================= */
-
 body {
     font-family: 'Plus Jakarta Sans', sans-serif;
     background-color: var(--creme-bg);
@@ -37,7 +34,6 @@ body {
 /* =========================
    MENU BOTÃO
 ========================= */
-
 .botao {
     font-size: 30px;
     cursor: pointer;
@@ -55,7 +51,6 @@ body {
 /* =========================
    MENU LATERAL
 ========================= */
-
 .menu {
     width: 0;
     height: 100vh;
@@ -84,23 +79,43 @@ body {
 /* =========================
    LOGIN
 ========================= */
-
+/* =========================
+   LOGIN
+========================= */
 .tela-login {
     width: 100%;
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    background:
-        radial-gradient(
-            circle at top left,
-            #2D4BA5,
-            #1A2B4C 60%
-        );
+    background: radial-gradient(circle at top left, #2D4BA5, #1A2B4C 60%);
     overflow: hidden;
     position: relative;
 }
 
+/* 1. LUZINHA (Fica na camada 1, atrás do texto) */
+.luz-fundo {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    background: radial-gradient(circle, rgba(226, 174, 2, 0.4) 0%, rgba(255, 197, 88, 0) 70%);
+    border-radius: 50%;
+    pointer-events: none; 
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1; /* Camada de trás */
+}
+
+/* 2. CONTEÚDO DA FRENTE (Sua caixa de login/quadrado precisa disso!) */
+.conteudo-login, 
+.quiz-container, 
+.pergunts {
+    position: relative; /* Obrigatório para o z-index funcionar */
+    z-index: 2;         /* Força a ficar na FRENTE da luzinha e dos borrões */
+}
+
+/* Pseudo-elementos de fundo (Ficam na camada 0, bem atrás de tudo) */
 .tela-login::before,
 .tela-login::after {
     content: "";
@@ -110,24 +125,23 @@ body {
     border-radius: 50%;
     filter: blur(100px);
     opacity: 0.4;
+    z-index: 0; 
 }
-
 .tela-login::before {
-    background: var(--gravata-kinrou);
+    background: var(--gravata-kinrou, #e2ae02);
     top: -100px;
     left: -100px;
 }
-
 .tela-login::after {
-    background: var(--azul-coati);
+    background: var(--azul-coati, #2D4BA5);
     bottom: -120px;
     right: -120px;
 }
 
+
 /* =========================
    CAIXA LOGIN
 ========================= */
-
 .caixa-login {
     width: 400px;
     padding: 50px;
@@ -141,7 +155,6 @@ body {
     gap: 25px;
     position: relative;
 }
-
 .caixa-login::before {
     content: "";
     position: absolute;
@@ -175,13 +188,11 @@ body {
 /* =========================
    INPUTS
 ========================= */
-
 .grupo-input {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
-
 .grupo-input input {
     padding: 18px 20px;
     border-radius: 18px;
@@ -192,19 +203,15 @@ body {
     outline: none;
     transition: all 0.3s ease;
 }
-
 .grupo-input input::placeholder {
     color: rgba(255,255,255,0.4);
 }
-
 .grupo-input input:focus {
     border-color: var(--gravata-kinrou);
     background: rgba(255,255,255,0.06);
     box-shadow:
         0 0 20px rgba(243,208,9,0.25);
 }
-
-
 .grupo-input label {
     color: var(--prox-br);
     font-weight: 700;
@@ -273,7 +280,8 @@ body {
     display: inline-flex !important;   
     justify-content: center;
     align-items: center;
-    width: 100px !important;           
+    min-width: 80px !important;
+    max-width: 180px !important;            
     padding: 20px;
     border: none;
     border-radius: 20px;
@@ -294,7 +302,6 @@ body {
 .botao-hobbies:hover {
     transform: translateY(-4px);
     box-shadow: 0 15px 30px rgba(226, 174, 2, 0.342);
-    
 }
 .botao-hobbies.selecionado {
     background: var(--vd-uniao); 
@@ -309,7 +316,7 @@ body {
     transition: 0.3s ease;
 }
 .caixa-hobbies {
-    width: 600px;
+    width: 650px;
     height: 600px;
     padding: 55px;
     border-radius: 32px;
@@ -579,8 +586,7 @@ body {
 }
 .option-btn:hover {
     border-color: var(--gravata-kinrou);
-    color: var(--profundo
-    );
+    color: var(--profundo);
     transform: translateX(5px);
 }
 

@@ -251,44 +251,68 @@ body {
     box-shadow: 0 0 15px rgba(243, 208, 9, 0.4);
 }
 
-/* =========================
+/* ==========================================
    BOTÃO
-========================= */
+============================================= */
 
 
 .botao-login {
     padding: 18px;
-
     border: none;
-
     border-radius: 20px;
-
     background:
         linear-gradient(
             135deg,
             var(--gravata-kinrou),
             #ffe96b
         );
-
     color: var(--profundo);
-
     font-size: 1rem;
-
     font-weight: 800;
-
     cursor: pointer;
-
     transition: all 0.3s ease;
 }
-
 .botao-login:hover {
     transform: translateY(-4px);
-
     box-shadow:
         0 15px 30px rgba(243,208,9,0.35);
 }
 
-
+.botoes-colunares{
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 15px;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.botao-hobbies{
+    flex: 1 1 calc(10% - 15px);
+    min-width: 95px;
+    max-width: 250px;
+    padding: 20px;
+    border: none;
+    border-radius: 20px;
+    box-sizing: border-box;
+    text-align: center;
+    text-decoration: none;
+    background: 
+        linear-gradient(
+            150deg, 
+            var(--gravata-kinrou),
+             #ffc558);
+    color: var(--profundo);
+    font-size: 1rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.botao-hobbies:hover {
+    transform: translateY(-4px);
+    box-shadow:
+        0 15px 30px rgba(226, 174, 2, 0.342);
+}
 
 /* =========================
    TEXTO

@@ -18,6 +18,44 @@ function abrirMenu(){
     }
 }
 
+// ------------ HOBBIES ADQUIRIDOS ---------------------------------------
+let historicoDeCliques = [];
+const botoes = document.querySelectorAll('.botao-hobbies');
+const campoTexto = document.getElementById('resultado-clique');
+
+botoes.forEach(botao => {
+    botao.addEventListener('click', function(evento) {
+        evento.preventDefault();
+        const oQueFoiClicado = this.getAttribute('data-nome');
+        historicoDeCliques.push(oQueFoiClicado);
+        console.log("Histórico atual:", historicoDeCliques);
+        campoTexto.innerText = "Você clicou em: " + historicoDeCliques.join(', ');
+    });
+});
+
+// ------------ HOBBIES NAS PERGUNTAS? ---------------------------------------
+async function enviarParaIA(historicoBotoes) {
+    const campoTexto = document.getElementById('resultado-clique');
+    campoTexto.innerText = "A KaIA está pensando...";
+
+    try {
+        const resposta = await fetch('http://localhost:5000/pergunta-ia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                prompt: `O usuário escolheu os seguintes hobbies/opções no site: ${historicoBotoes.join(', ')}. 
+                        Responda a questão com referencias a esses hobbies para que o aluno entenda adequadamente.` 
+            })
+        });
+
+        const dados = await resposta.json();
+        campoTexto.innerText = dados.respostaDaIA;
+    } catch (erro) {
+        campoTexto.innerText = "Houve um erro ao conversar com a IA.";
+        console.error(erro);
+    }
+}
+
 const questions = {
     MAT: [
         { q: "Parte escrita", opts: ["Opção1", "Opção2", "Opção3", "Opção4", "Opção5"], ans: 2 },
@@ -25,29 +63,25 @@ const questions = {
     // Mais perguntas aqui...
 };
 
-// --- CÁLCULO DE TEMPO ADAPTÁVEL ---
+// ------------ CÁLCULO DE TEMPO ADAPTÁVEL ---------------------------------------
 function calculateReadingTime(text, options) {
     const allText = text + " " + options.join(" ");
     const wordCount = allText.split(/\s+/).length;
 
-    // Média de 200 palavras por minuto (3.3 palavras por segundo)
-    // Adicionamos um "buffer" de 5 segundos de segurança
+    // Por enquanto 200 palavras por minuto (3.3 palavras por segundo)
     const readingTime = Math.ceil(wordCount / 3.3) + 5;
 
     console.log(`Palavras: ${wordCount} | Tempo Adaptado: ${readingTime}s`);
     return readingTime;
 }
 
-// ------ PERGUNTAS -----------------
-
+// --------------- PERGUNTAS --------------------------------------------
 async function enviarPergunta() {
 
     let pergunta =
         document.getElementById("pergunta").value;
-
     let respostas =
         document.getElementById("respostas");
-
     respostas.innerHTML =
         "KaIA pensando...";
 
@@ -55,19 +89,14 @@ async function enviarPergunta() {
         "http://127.0.0.1:5000/perguntar",
         {
             method: "POST",
-
             headers: {
                 "Content-Type": "application/json"
             },
-
             body: JSON.stringify({
-                pergunta: pergunta
-            })
-        }
+                pergunta: pergunta })}
     );
 
     const data = await response.json();
-
     respostas.innerHTML =
         data.resposta;
 }

@@ -131,8 +131,6 @@ body {
     right: -120px;
 }
 
-
-
 /* =========================
    CAIXA LOGIN
 ========================= */
@@ -153,23 +151,15 @@ body {
 
 .caixa-login::before {
     content: "";
-
     position: absolute;
-
     width: 250px;
     height: 250px;
-
     background: rgba(243, 208, 9, 0.08);
-
     border-radius: 50%;
-
     top: -120px;
     right: -120px;
-
     filter: blur(20px);
 }
-
-
 
 /* =========================
    TÍTULOS
@@ -201,19 +191,12 @@ body {
 
 .grupo-input input {
     padding: 18px 20px;
-
     border-radius: 18px;
-
     border: 1px solid rgba(255,255,255,0.06);
-
     background: rgba(255,255,255,0.04);
-
     color: white;
-
     font-size: 1rem;
-
     outline: none;
-
     transition: all 0.3s ease;
 }
 
@@ -223,9 +206,7 @@ body {
 
 .grupo-input input:focus {
     border-color: var(--gravata-kinrou);
-
     background: rgba(255,255,255,0.06);
-
     box-shadow:
         0 0 20px rgba(243,208,9,0.25);
 }
@@ -255,39 +236,37 @@ body {
    BOTÃO
 ========================= */
 
-
 .botao-login {
     padding: 18px;
-
     border: none;
-
     border-radius: 20px;
-
     background:
         linear-gradient(
             135deg,
             var(--gravata-kinrou),
             #ffe96b
         );
-
     color: var(--profundo);
-
     font-size: 1rem;
-
     font-weight: 800;
-
     cursor: pointer;
-
     transition: all 0.3s ease;
 }
 
 .botao-login:hover {
     transform: translateY(-4px);
-
     box-shadow:
         0 15px 30px rgba(243,208,9,0.35);
 }
 
+/* =========================
+   HOBBIES ESCOLHIDOS
+========================= */
+.clique{
+    color: white;
+    margin-top: 20px;
+    text-align: center;
+}
 
 
 /* =========================
@@ -332,24 +311,19 @@ body {
 }
 
 @keyframes aparecer {
-
     from {
         opacity: 0;
-
         transform:
             translateY(20px)
             scale(0.97);
     }
-
     to {
         opacity: 1;
-
         transform:
             translateY(0)
             scale(1);
     }
 }
-
 
 /* =========================
    APP WRAPPER

@@ -77,41 +77,61 @@
         <!-- ===== CONTEÚDO PRINCIPAL ===== -->
 
         <section class="main-content">
-
             <!-- ===== MENU DE MISSÕES ===== -->
-
             <div id="menu-view" class="fade-in">
-
                 <header class="content-header">
                     <h2>Selecione sua Missão</h2>
                     <p>Escolha um domínio para iniciar o ciclo de aprendizado ativo.</p>
                 </header>
 
                 <div class="mission-grid">
-
-                    <div class="mission-card" onclick="startMission('MAT')">
+                    <div class="mission-card" onclick="abrirMateria('MAT')">
                         <div class="icon">∑</div>
-
                         <h3>Matemática</h3>
                         <span>Cálculo de Dano & Lógica</span>
                     </div>
 
-                    <div class="mission-card" onclick="startMission('PORT')">
+                    <div class="mission-card" onclick="abrirMateria('PORT')">
                         <div class="icon">¶</div>
-
                         <h3>Português</h3>
                         <span>Grimório & Sintaxe</span>
                     </div>
 
-                    <div class="mission-card" onclick="startMission('HIS')">
+                    <div class="mission-card" onclick="abrirMateria('HIS')">
                         <div class="icon">🏛</div>
-
                         <h3>História</h3>
                         <span>Crônicas & Eras</span>
                     </div>
                 </div>
             </div>
 
+            <!-- ===== TELA DE TEMAS (escondida até escolher matéria) ===== -->
+            <div id="temas-view" style="display:none;">
+                <h2>Escolha o tema</h2>
+                <div id="temas-display" class="mission-grid"></div>
+            </div>
+
+            <!-- ===== QUIZ ===== -->
+            <div id="quiz-view" class="quiz-container fade-in" style="display: none;">
+                <div class="quiz-nav">
+                    <span id="current-subject">MISSÃO</span>
+                    <button class="abort-btn" onclick="resetSystem()">ABANDONAR</button>
+                </div>
+                <div class="question-wrapper">
+                    <h2 id="question-display">...</h2>
+                    <div id="options-display" class="options-grid"></div>
+                </div>
+                <div id="feedback" class="feedback-msg"></div>
+            </div>
+
+            <!-- ===== PERGUNTAS ===== -->
+            <div class="pergunts">
+                <input type="text" placeholder="Pergunte algo para a KaIA..." id="pergunta">
+                <button onclick="enviarPergunta()">Enviar</button>
+            </div>
+            <div id="respostas"></div>
+
+        </section>
             <!-- ===== QUIZ ===== -->
 
             <div id="quiz-view"

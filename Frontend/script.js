@@ -1,9 +1,4 @@
-// ============================================================
-//  KaIA — Frontend Event Tracker
-//  Sprint 1 · Jun/2026
-// ============================================================
-
-// --- Configuração ------------------------------------------
+// --- Configuração -----------------------------------------------------------------------
 const API_URL = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL)
     || 'http://localhost:5000';
 
@@ -29,8 +24,6 @@ let keystrokeTimer  = null;
 let currentQuestion = null;
 
 // --- Banco de questões -------------------------------------
-// Adicione perguntas reais substituindo "Parte escrita" e as opções.
-// ans = índice (0-based) da opção correta.
 const questions = {
     MAT: [
         { q: "Parte escrita", opts: ["Opção1", "Opção2", "Opção3", "Opção4", "Opção5"], ans: 2 },
@@ -47,9 +40,7 @@ const questions = {
 };
 
 // ============================================================
-//  CORE: logEvent
-//  Centraliza todos os eventos — console em dev, POST quando
-//  o endpoint /events estiver pronto no backend.
+//                  CORE: logEvent
 // ============================================================
 function logEvent(type, payload) {
     const event = {
@@ -60,18 +51,11 @@ function logEvent(type, payload) {
     };
 
     console.log('[KaIA Event]', event);
-
-    // Descomentar quando o backend estiver pronto:
-    // fetch(`${API_URL}/events`, {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify(event)
-    // }).catch(err => console.error('[KaIA] Erro ao enviar evento:', err));
 }
 
-// ============================================================
-//  MENU
-// ============================================================
+// ==================================================================================================
+//                          MENU
+// ===================================================================================================
 let aberto = false;
 
 function abrirMenu() {
@@ -86,21 +70,34 @@ function abrirMenu() {
 }
 
 // ============================================================
-//  HOBBIES
+//                       HOBBIES
 // ============================================================
-let historicoDeCliques = [];
-const botoes     = document.querySelectorAll('.botao-hobbies');
-const campoTexto = document.getElementById('resultado-clique');
+let historicoDeCliques = JSON.parse(sessionStorage.getItem('hobbies') || '[]');
+const botoes = document.querySelectorAll('.botao-hobbies');
 
 botoes.forEach(botao => {
     botao.addEventListener('click', function (evento) {
         evento.preventDefault();
-        const oQueFoiClicado = this.getAttribute('data-nome');
-        historicoDeCliques.push(oQueFoiClicado);
-        console.log('Histórico atual:', historicoDeCliques);
-        if (campoTexto) campoTexto.innerText = 'Você clicou em: ' + historicoDeCliques.join(', ');
+        const nome = this.getAttribute('data-nome');
+
+        if (historicoDeCliques.includes(nome)) {
+            // já estava selecionado → remove
+            historicoDeCliques = historicoDeCliques.filter(h => h !== nome);
+            this.classList.remove('selecionado');
+        } else {
+            // não estava → adiciona
+            historicoDeCliques.push(nome);
+            this.classList.add('selecionado');
+        }
+
+        console.log('Hobbies:', historicoDeCliques);
     });
 });
+
+function salvarHobbies() {
+    sessionStorage.setItem('hobbies', JSON.stringify(historicoDeCliques));
+    window.location.href = 'index.html';
+}
 
 async function enviarParaIA(historicoBotoes) {
     if (campoTexto) campoTexto.innerText = 'A KaIA está pensando...';
@@ -122,7 +119,7 @@ async function enviarParaIA(historicoBotoes) {
 }
 
 // ============================================================
-//  CÁLCULO DE TEMPO ADAPTÁVEL
+//                  CÁLCULO DE TEMPO ADAPTÁVEL
 // ============================================================
 function calculateReadingTime(text, options) {
     const allText   = text + ' ' + options.join(' ');
@@ -133,7 +130,7 @@ function calculateReadingTime(text, options) {
 }
 
 // ============================================================
-//  PERGUNTAS (chat livre)
+//                      PERGUNTAS - CHAT
 // ============================================================
 async function enviarPergunta() {
     const pergunta  = document.getElementById('pergunta').value;
@@ -143,7 +140,7 @@ async function enviarPergunta() {
         const response = await fetch(`${API_URL}/perguntar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pergunta })
+            body: JSON.stringify({ pergunta, hobbies: historicoDeCliques })
         });
         const data = await response.json();
         respostas.innerHTML = data.resposta;
@@ -154,18 +151,16 @@ async function enviarPergunta() {
 }
 
 // ============================================================
-//  MONITOR DE OCIOSIDADE (idleTime)
+//              MONITOR DE OCIOSIDADE (idleTime)
 // ============================================================
 function iniciarIdleMonitor() {
     if (idleInterval) clearInterval(idleInterval);
 
     idleInterval = setInterval(() => {
         if (!isMissionActive) return;
-
         idleTime++;
         const timerEl = document.getElementById('timer');
         if (timerEl) timerEl.innerText = idleTime;
-
         if (idleTime >= dynamicLimit) {
             document.getElementById('overlay').style.opacity   = '0.95';
             document.getElementById('system-status').innerText = 'FALTA DE INTERAÇÃO';
@@ -173,9 +168,13 @@ function iniciarIdleMonitor() {
     }, 1000);
 }
 
+// ================================================================================================
+// -------------------- EVENTOS LISTENER -------------------------------
+// ================================================================================================
+
+
 // ============================================================
-//  EVENT LISTENER 1: MOVIMENTO DO MOUSE
-//  FIX: restrito ao quiz-view, não ao documento inteiro.
+//                    MOVIMENTO DO MOUSE
 // ============================================================
 function registrarMouseMove() {
     const quizView = document.getElementById('quiz-view');
@@ -190,8 +189,7 @@ function registrarMouseMove() {
 }
 
 // ============================================================
-//  EVENT LISTENER 2: VISIBILITYCHANGE (troca de aba)
-//  Captura: mudancas_aba, tempo_fora_foco_s
+//              VISIBILITYCHANGE - TROCAS DE ABAS
 // ============================================================
 document.addEventListener('visibilitychange', () => {
     if (!isMissionActive) return;
@@ -212,8 +210,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ============================================================
-//  EVENT LISTENER 3: SCROLL
-//  Captura: velocidade_scroll_px_s, rolagem_sem_leitura
+//                           SCROLL
 // ============================================================
 function registrarScroll() {
     const quizView = document.getElementById('quiz-view');
@@ -250,8 +247,7 @@ function registrarScroll() {
 }
 
 // ============================================================
-//  EVENT LISTENER 4: TECLADO
-//  Captura: pausas_digitacao_s, taxa_backspace
+//                      TECLADO ESCREVENDO
 // ============================================================
 function registrarTeclado() {
     let totalTeclas    = 0;
@@ -259,10 +255,8 @@ function registrarTeclado() {
 
     document.addEventListener('keydown', (e) => {
         if (!isMissionActive) return;
-
         const now     = performance.now();
         const pausa_s = (now - lastKeystroke) / 1000;
-
         totalTeclas++;
         if (e.key === 'Backspace') totalBackspace++;
 
@@ -270,11 +264,8 @@ function registrarTeclado() {
             logEvent('keystroke_pause', {
                 duracao_s: parseFloat(pausa_s.toFixed(2)),
                 taxa_backspace: totalTeclas > 0
-                    ? parseFloat((totalBackspace / totalTeclas).toFixed(3))
-                    : 0
-            });
+                    ? parseFloat((totalBackspace / totalTeclas).toFixed(3)): 0});
         }
-
         lastKeystroke = now;
 
         if (keystrokeTimer) clearTimeout(keystrokeTimer);
@@ -291,8 +282,7 @@ function registrarTeclado() {
 }
 
 // ============================================================
-//  EVENT LISTENER 5: CLIQUES FORA DA ÁREA DE ESTUDO
-//  Captura: cliques_fora_area_estudo
+//                  CLIQUES FORA DA ÁREA 
 // ============================================================
 function registrarCliquesForaDaArea() {
     document.addEventListener('click', (e) => {
@@ -309,8 +299,7 @@ function registrarCliquesForaDaArea() {
 }
 
 // ============================================================
-//  EVENT LISTENER 6: TEMPO DE RESPOSTA POR QUESTÃO
-//  Captura: tempo_resposta_ms, acertou
+//                  TEMPO DE RESPOSTA POR QUESTÃO
 // ============================================================
 let questionShownAt = 0;
 
@@ -326,8 +315,7 @@ function registrarTempoDeResposta(acertou, opcaoEscolhida) {
 }
 
 // ============================================================
-//  EVENT LISTENER 7: COPIAR / COLAR
-//  Captura: copiar_colar_detectado
+//                      COPIAR / COLAR
 // ============================================================
 function registrarCopiarColar() {
     ['copy', 'paste'].forEach(tipo => {
@@ -338,69 +326,89 @@ function registrarCopiarColar() {
     });
 }
 
-// ============================================================
-//  INICIAR MISSÃO
-// ============================================================
-function startMission(subject) {
-    // Valida se a matéria existe no banco de questões
-    const list = questions[subject];
-    if (!list || list.length === 0) {
-        console.error(`[KaIA] Nenhuma questão encontrada para: "${subject}"`);
-        alert(`Ainda não há questões cadastradas para esta matéria.`);
+// ================================================================
+//                          INICIAR MISSÃO
+// =================================================================
+let currentSubject = null;
+
+// Busca os Subtemas com a IA
+async function abrirMateria(subject) {
+    currentSubject = subject;
+    const temasView = document.getElementById('temas-view');
+    const temasBox  = document.getElementById('temas-display');
+
+    document.getElementById('menu-view').style.display = 'none';
+    temasView.style.display = 'block';
+    temasBox.innerHTML = 'KaIA montando os temas...';
+    try {
+        const r = await fetch(`${API_URL}/temas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ materia: subject })
+        });
+        const data = await r.json();
+        temasBox.innerHTML = '';
+        (data.temas || []).forEach(tema => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = tema;
+            btn.onclick = () => startMission(subject, tema);
+            temasBox.appendChild(btn);
+        });
+    } catch (e) {
+        temasBox.innerHTML = 'Erro ao carregar os temas.';
+        console.error(e);
+    }
+}
+// 2) IA gera a questão
+async function startMission(subject, tema) {
+    document.getElementById('temas-view').style.display = 'none';
+    document.getElementById('quiz-view').style.display  = 'block';
+    document.getElementById('question-display').innerText = 'KaIA criando sua questão...';
+    document.getElementById('options-display').innerHTML  = '';
+    try {
+        const r = await fetch(`${API_URL}/gerar-questao`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ materia: subject, tema, hobbies: historicoDeCliques })
+        });
+        currentQuestion = await r.json();
+        if (currentQuestion.erro) throw new Error(currentQuestion.erro);
+    } catch (e) {
+        document.getElementById('question-display').innerText = 'Erro ao gerar a questão.';
+        console.error(e);
         return;
     }
-
-    // Reset completo de estado
     isMissionActive = true;
-    idleTime        = 0;
-    mudancasAba     = 0;
-    focusLostAt     = null;
-    lastScrollY     = window.scrollY;
-    lastScrollTime  = performance.now();
-    lastKeystroke   = 0;
+    idleTime = 0; mudancasAba = 0; focusLostAt = null;
+    lastScrollY = window.scrollY; lastScrollTime = performance.now();
+    lastKeystroke = 0;
     if (keystrokeTimer) clearTimeout(keystrokeTimer);
-
-    // Nova sessionId para cada missão
     sessionId = crypto.randomUUID();
-    console.log('[KaIA] Nova sessão iniciada:', sessionId, '| Matéria:', subject);
 
-    // UI
-    document.getElementById('menu-view').style.display = 'none';
-    document.getElementById('quiz-view').style.display = 'block';
-
-    // Atualiza label da missão no quiz-view
     const subjectEl = document.getElementById('current-subject');
-    if (subjectEl) subjectEl.innerText = subject;
+    if (subjectEl) subjectEl.innerText = `${subject} · ${tema}`;
 
-    // Sorteia questão
-    currentQuestion = list[Math.floor(Math.random() * list.length)];
-
-    // Tempo adaptável
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
-
-    // Exibe questão e opções
     document.getElementById('question-display').innerText = currentQuestion.q;
+
     const optionsDiv = document.getElementById('options-display');
     optionsDiv.innerHTML = '';
-
     currentQuestion.opts.forEach((opt, idx) => {
-        const btn     = document.createElement('button');
+        const btn = document.createElement('button');
         btn.className = 'option-btn';
         btn.innerText = opt;
-        btn.onclick   = () => checkAnswer(idx, btn);
+        btn.onclick = () => checkAnswer(idx, btn);
         optionsDiv.appendChild(btn);
     });
 
-    // Marca quando a questão apareceu (para tempo_resposta_ms)
     questionShownAt = performance.now();
-
-    // Inicia o monitor de ociosidade
     iniciarIdleMonitor();
 }
 
-// ============================================================
-//  VERIFICAR RESPOSTA
-// ============================================================
+// ==============================================================
+//                      VERIFICAR RESPOSTA
+// ==============================================================
 function checkAnswer(idx, btn) {
     if (!isMissionActive) return;
 
@@ -421,18 +429,18 @@ function checkAnswer(idx, btn) {
     }, 1500);
 }
 
-// ============================================================
-//  RESET
-// ============================================================
+// =================================================================
+//                              RESET
+// ==============================================================
 function resetSystem() {
     if (idleInterval)   clearInterval(idleInterval);
     if (keystrokeTimer) clearTimeout(keystrokeTimer);
     location.reload();
 }
 
-// ============================================================
-//  INICIALIZAÇÃO — registra todos os listeners uma única vez
-// ============================================================
+// ====================================================================================
+//                  INICIALIZAÇÃO — registra todos os listeners 
+// ===================================================================================
 document.addEventListener('DOMContentLoaded', () => {
     registrarMouseMove();
     registrarScroll();

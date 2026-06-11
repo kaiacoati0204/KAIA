@@ -3,26 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login KaIA</title>
+    <link rel="stylesheet" href="style.css">
+    <title>Hobbies | KaIA</title>
 </head>
 <body>
-    <!-- CSS -->
-    <link rel="stylesheet" href="style.css">
-    
-    <!-- ================= LOGIN ================= -->
-
     <div class="tela-login">
-        <div class="caixa-login">
+        <div class="caixa-hobbies">
             <h1>Ka<span>IA</span></h1>
             <p>Inicie sua missão de foco.</p>
             <div class="botoes-hobbies">
-                <a href="#" class="botao-hobbies" data-nome="Entrar">Entrar</a>
-                <a href="#" class="botao-hobbies" data-nome="Cadastrar">Cadastrar</a>
-                <a href="#" class="botao-hobbies" data-nome="Ajuda">Ajuda</a>
+                <a href="#" class="botao-hobbies" data-nome="Futebol">Futebol</a>
+                <a href="#" class="botao-hobbies" data-nome="Tricô">Tricô</a>
+                <a href="#" class="botao-hobbies" data-nome="RPG">RPG</a>
+                <a href="#" class="botao-hobbies" data-nome="Pintar">Pintar</a>
+                <a href="#" class="botao-hobbies" data-nome="Culinária">Culinária</a>
+                <a href="#" class="botao-hobbies" data-nome="Música">Música</a>
+                <a href="#" class="botao-hobbies" data-nome="Leitura">Leitura</a>
+                <a href="#" class="botao-hobbies" data-nome="Cinema/Filme">Cinema/Filme</a>
             </div>
-            <p id="resultado-clique" class="clique">
+            <p id="resultado-clique" class="clique"></p>
+            <button class="botao-login" onclick="salvarHobbies()">
+                Começar
+            </button>
         </div>
-
     </div>
+
+    <script src="script.js"></script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 // --- Configuração -----------------------------------------------------------------------
+// Use 127.0.0.1 (IPv4) em vez de "localhost": no Windows "localhost" pode
+// resolver para IPv6 (::1) e o Flask dev server só escuta em IPv4 → "não responde".
 const API_URL = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_URL)
-    || 'http://localhost:5000';
+    || 'http://127.0.0.1:5000';
 
 // --- Estado da sessão --------------------------------------
 let sessionId       = crypto.randomUUID();
@@ -51,6 +53,122 @@ function logEvent(type, payload) {
     };
 
     console.log('[KaIA Event]', event);
+
+    // Envia para o backend (não bloqueia a UI; ignora falha se a API estiver off)
+    fetch(`${API_URL}/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+        keepalive: true
+    }).catch(() => {});
+}
+
+// ============================================================
+//        CAMADA DE DADOS — PERFIL + FEATURES (Supabase-ready)
+// ============================================================
+// Tudo é persistido em localStorage sob a chave 'kaia_perfil' e
+// espelhado no backend (/perfil). Quando você plugar o Supabase,
+// basta trocar `enviarPerfil` por um insert/upsert na tabela `perfis`.
+
+function lerPerfil() {
+    return JSON.parse(localStorage.getItem('kaia_perfil') || '{}');
+}
+function gravarPerfil(perfil) {
+    localStorage.setItem('kaia_perfil', JSON.stringify(perfil));
+}
+
+// Snapshot NÃO-mutável das features (apenas leitura, p/ enviar junto dos dados)
+function snapshotFeatures() {
+    const agora   = new Date();
+    const perfil  = lerPerfil();
+    const dias    = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+    const hh      = String(agora.getHours()).padStart(2, '0');
+    const mm      = String(agora.getMinutes()).padStart(2, '0');
+
+    // duracao_pausa_anterior_min — minutos desde a última sessão registrada
+    let duracaoPausa = null;
+    if (perfil.ultima_sessao_ts) {
+        duracaoPausa = parseFloat(((agora.getTime() - perfil.ultima_sessao_ts) / 60000).toFixed(2));
+    }
+
+    // dias_para_prova — só se o usuário informou a data (onboarding/calendário)
+    let diasParaProva = null;
+    if (perfil.data_prova) {
+        const prova = new Date(perfil.data_prova);
+        diasParaProva = Math.max(0, Math.ceil((prova - agora) / 86400000));
+    }
+
+    return {
+        horario_inicio:             `${hh}:${mm}`,                       // TIME   — extraído do relógio
+        sessoes_no_dia:             perfil.sessoes_no_dia || 0,          // INTEGER— contador local
+        dia_semana:                 dias[agora.getDay()],                // ENUM   — derivado do timestamp
+        dias_para_prova:            diasParaProva,                       // INTEGER— null se não informado
+        sequencia_dias_estudo:      perfil.sequencia_dias_estudo || 0,   // INTEGER— streak
+        duracao_pausa_anterior_min: duracaoPausa,                        // FLOAT  — intervalo entre sessões
+        ambiente_dispositivo:       perfil.ambiente_dispositivo || null  // ENUM   — auto-declarado (onboarding)
+    };
+}
+
+// Mutável: chamado quando uma sessão de ESTUDO começa (atualiza streak/contadores)
+function registrarInicioSessao() {
+    const agora   = new Date();
+    const perfil  = lerPerfil();
+    const hojeStr = agora.toISOString().slice(0, 10);
+
+    if (perfil.ultimo_dia_estudo === hojeStr) {
+        perfil.sessoes_no_dia = (perfil.sessoes_no_dia || 0) + 1;       // mais uma sessão hoje
+    } else {
+        const ontem = new Date(agora);
+        ontem.setDate(ontem.getDate() - 1);
+        const ontemStr = ontem.toISOString().slice(0, 10);
+        // manteve o hábito se estudou ontem; senão zera o streak
+        perfil.sequencia_dias_estudo =
+            (perfil.ultimo_dia_estudo === ontemStr) ? (perfil.sequencia_dias_estudo || 0) + 1 : 1;
+        perfil.sessoes_no_dia = 1;
+    }
+
+    perfil.ultimo_dia_estudo = hojeStr;
+    perfil.ultima_sessao_ts  = agora.getTime();
+    gravarPerfil(perfil);
+    return snapshotFeatures();
+}
+
+// Hooks de onboarding (chame quando tiver os campos no formulário)
+function definirAmbiente(valor)  { const p = lerPerfil(); p.ambiente_dispositivo = valor; gravarPerfil(p); } // 'silencioso' | 'ruido_moderado' | 'ruido_alto'
+function definirDataProva(iso)   { const p = lerPerfil(); p.data_prova = iso;            gravarPerfil(p); } // 'AAAA-MM-DD'
+
+// Envia o pacote completo (login + hobbies + features) para o backend
+async function enviarPerfil(extra = {}) {
+    const payload = {
+        session_id: sessionId,
+        ts:         new Date().toISOString(),
+        perfil:     lerPerfil(),
+        hobbies:    historicoDeCliques,
+        features:   snapshotFeatures(),
+        ...extra
+    };
+    try {
+        await fetch(`${API_URL}/perfil`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            keepalive: true
+        });
+    } catch (e) {
+        console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e);
+    }
+}
+
+// Chamado pelo botão "Entrar" / "Criar conta" do login.html
+function salvarLogin(event) {
+    if (event) event.preventDefault();
+    const email = document.getElementById('login-email')?.value.trim() || '';
+    // OBS: a senha NÃO é guardada em texto puro — no Supabase use o Auth (supabase.auth.signIn)
+    const perfil = lerPerfil();
+    perfil.email = email;
+    gravarPerfil(perfil);
+    enviarPerfil({ tipo: 'login', email });
+    window.location.href = 'hobbies.html';
 }
 
 // ==================================================================================================
@@ -96,6 +214,10 @@ botoes.forEach(botao => {
 
 function salvarHobbies() {
     sessionStorage.setItem('hobbies', JSON.stringify(historicoDeCliques));
+    const perfil = lerPerfil();
+    perfil.hobbies = historicoDeCliques;
+    gravarPerfil(perfil);
+    enviarPerfil({ tipo: 'hobbies' });
     window.location.href = 'index.html';
 }
 
@@ -123,29 +245,34 @@ async function enviarParaIA(historicoBotoes) {
 // ============================================================
 const luz = document.getElementById('luzFundo');
 const container = document.querySelector('.tela-login');
-let luzX = window.innerWidth / 2;
-let luzY = window.innerHeight / 2;
-const raioFuga = 200; 
 
-container.addEventListener('mousemove', (e) => {
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-    const dx = luzX - mouseX;
-    const dy = luzY - mouseY;
-    const distancia = Math.sqrt(dx * dx + dy * dy);
-    if (distancia < raioFuga) {
-        const forca = (raioFuga - distancia) / raioFuga;
-        const direcaoX = dx / distancia;
-        const direcaoY = dy / distancia;
+// Só ativa a luz se a página realmente tiver o elemento (evita travar
+// o script inteiro em páginas sem .tela-login, como o index.html).
+if (luz && container) {
+    let luzX = window.innerWidth / 2;
+    let luzY = window.innerHeight / 2;
+    const raioFuga = 300;
 
-        luzX += direcaoX * forca * 30;
-        luzY += direcaoY * forca * 30;
-        luzX = Math.max(50, Math.min(window.innerWidth - 50, luzX));
-        luzY = Math.max(50, Math.min(window.innerHeight - 50, luzY));
-        luz.style.left = `${luzX}px`;
-        luz.style.top = `${luzY}px`;
-    }
-});
+    container.addEventListener('mousemove', (e) => {
+        const mouseX = e.clientX;
+        const mouseY = e.clientY;
+        const dx = luzX - mouseX;
+        const dy = luzY - mouseY;
+        const distancia = Math.sqrt(dx * dx + dy * dy);
+        if (distancia < raioFuga) {
+            const forca = (raioFuga - distancia) / raioFuga;
+            const direcaoX = dx / distancia;
+            const direcaoY = dy / distancia;
+
+            luzX += direcaoX * forca * 30;
+            luzY += direcaoY * forca * 30;
+            luzX = Math.max(50, Math.min(window.innerWidth - 50, luzX));
+            luzY = Math.max(50, Math.min(window.innerHeight - 50, luzY));
+            luz.style.left = `${luzX}px`;
+            luz.style.top = `${luzY}px`;
+        }
+    });
+}
 
 // ============================================================
 //                  CÁLCULO DE TEMPO ADAPTÁVEL
@@ -414,6 +541,11 @@ async function startMission(subject, tema) {
     lastKeystroke = 0;
     if (keystrokeTimer) clearTimeout(keystrokeTimer);
     sessionId = crypto.randomUUID();
+
+    // Atualiza features da sessão (streak, sessões no dia, pausa) e envia o perfil
+    const features = registrarInicioSessao();
+    logEvent('session_start', { materia: subject, tema, features });
+    enviarPerfil({ tipo: 'session_start', materia: subject, tema });
 
     const subjectEl = document.getElementById('current-subject');
     if (subjectEl) subjectEl.innerText = `${subject} · ${tema}`;

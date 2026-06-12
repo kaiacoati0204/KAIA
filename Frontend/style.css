@@ -77,8 +77,23 @@ body {
 }
 
 /* =========================
-   LOGIN
+   FAÇA-SE LUZ
 ========================= */
+.luz-fundo {
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    background: 
+        radial-gradient(circle, rgba(226, 174, 2, 0.4) 0%, 
+        rgba(255, 197, 88, 0) 70%);
+    border-radius: 50%;
+    pointer-events: none; 
+    left: 20%;
+    top: 20%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+}
+
 /* =========================
    LOGIN
 ========================= */
@@ -88,34 +103,21 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at top left, #2D4BA5, #1A2B4C 60%);
+    background: 
+        radial-gradient(circle at top left,
+        #2D4BA5, 
+        #1A2B4C 60%);
     overflow: hidden;
     position: relative;
 }
-
-/* 1. LUZINHA (Fica na camada 1, atrás do texto) */
-.luz-fundo {
-    position: absolute;
-    width: 150px;
-    height: 150px;
-    background: radial-gradient(circle, rgba(226, 174, 2, 0.4) 0%, rgba(255, 197, 88, 0) 70%);
-    border-radius: 50%;
-    pointer-events: none; 
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 1; /* Camada de trás */
-}
-
-/* 2. CONTEÚDO DA FRENTE (Sua caixa de login/quadrado precisa disso!) */
-.conteudo-login, 
-.quiz-container, 
+.conteudo-login,
+.caixa-login,
+.caixa-hobbies,
+.quiz-container,
 .pergunts {
-    position: relative; /* Obrigatório para o z-index funcionar */
-    z-index: 2;         /* Força a ficar na FRENTE da luzinha e dos borrões */
+    position: relative;
+    z-index: 2;
 }
-
-/* Pseudo-elementos de fundo (Ficam na camada 0, bem atrás de tudo) */
 .tela-login::before,
 .tela-login::after {
     content: "";

@@ -9,45 +9,36 @@
     <!-- CSS -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- ================= LUZ ================= -->
+    <!-- ================= LOGIN (luz + caixa no mesmo container) ================= -->
     <div class="tela-login">
+        <!-- A luz fica ATRÁS da caixa (z-index na .caixa-login), sem cobri-la -->
         <div class="luz-fundo" id="luzFundo"></div>
-    
-        <div class="conteudo-login">
-            </div>
-    </div>
 
-    <!-- ================= LOGIN ================= -->
-    <div class="tela-login">
         <div class="caixa-login">
             <h1>Ka<span>IA</span></h1>
             <p>Inicie sua missão de foco.</p>
             <div class="grupo-input">
                 <label>Email</label>
-                <input 
+                <input
+                    id="login-email"
                     type="email"
                     placeholder="Digite seu email">
             </div>
             <div class="grupo-input">
                 <label>Senha</label>
-                <input 
+                <input
+                    id="login-senha"
                     type="password"
                     placeholder="Digite sua senha"
                 >
             </div>
-            <a href="hobbies.html" class="botao-login">
+            <a href="hobbies.html" class="botao-login" onclick="salvarLogin(event)">
                 Entrar
             </a>
-
-            <span class="texto-login">
-                Ainda não possui conta?
+            <span class="body">
+                Esqueci a senha
             </span>
-            <a href="hobbies.html">
-                Criar conta
-            </a>
         </div>
-        
-
     </div>
     <script src="script.js"></script>
 </body>

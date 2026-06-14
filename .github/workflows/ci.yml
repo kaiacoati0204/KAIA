@@ -1,0 +1,67 @@
+name: CI
+
+# Roda a cada push na main
+on:
+  push:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+
+    # Postgres descartável só para o CI: isola do Supabase real (sem Secret,
+    # sem tocar produção, não quebra se o projeto Supabase estiver pausado).
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Aponta para o Postgres do runner (não o Supabase). O boot + /docs não
+      # usam as tabelas — só precisam que o pool asyncpg conecte.
+      DATABASE_URL: postgresql://postgres:ci@127.0.0.1:5432/postgres
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configura Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instala dependências
+        run: pip install -r Backend/requirements.txt
+
+      - name: Sobe o FastAPI e confirma que /docs responde 200
+        working-directory: Backend
+        run: |
+          python app.py > server.log 2>&1 &
+          SERVER_PID=$!
+
+          ok=""
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/docs || true)
+            if [ "$code" = "200" ]; then
+              ok="1"; echo "✅ /docs respondeu 200 (após ${i}s)"; break
+            fi
+            sleep 1
+          done
+
+          echo "----- log do servidor -----"
+          cat server.log
+
+          kill $SERVER_PID 2>/dev/null || true
+
+          if [ -z "$ok" ]; then
+            echo "❌ servidor não subiu ou /docs não respondeu 200"
+            exit 1
+          fi

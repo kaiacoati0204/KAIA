@@ -3,6 +3,7 @@ from datetime import datetime, date, timezone
 import os
 import re
 import json
+import uuid
 
 import asyncpg
 import requests
@@ -19,6 +20,10 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Aluno "anônimo" sentinela: usado quando o /events precisa auto-criar uma
+# sessão sem conhecer o aluno (satisfaz a FK sessions.user_id -> perfis.user_id).
+ANON_USER = "00000000-0000-0000-0000-000000000000"
+
 
 
 # --- Pool asyncpg (criado no startup, fechado no shutdown) --------------------
@@ -33,6 +38,13 @@ async def lifespan(app: FastAPI):
         max_size=5,
     )
     print("[KaIA] Pool de conexão com o Supabase criado.")
+
+    # Garante o aluno anônimo (alvo da FK no fallback do /events)
+    async with app.state.pool.acquire() as conn:
+        await conn.execute(
+            "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
+            ANON_USER,
+        )
 
     # Scheduler: agrega features das sessões ativas a cada 30s
     scheduler = AsyncIOScheduler()
@@ -283,24 +295,30 @@ class SessionIn(BaseModel):
 @app.post("/sessions")
 async def criar_sessao(body: SessionIn, request: Request):
     pool = request.app.state.pool
+    user_id = body.user_id or str(uuid.uuid4())
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            insert into sessions (session_id, user_id, session_start_ts, platform, app_version)
-            values (coalesce($1::uuid, gen_random_uuid()),
-                    coalesce($2::uuid, gen_random_uuid()),
-                    now(), $3, $4)
-            on conflict (session_id) do nothing
-            returning session_id, user_id
-            """,
-            body.session_id, body.user_id, body.platform, body.app_version,
-        )
-        # session_id já existia → ON CONFLICT não retorna; busca a linha existente
-        if row is None:
-            row = await conn.fetchrow(
-                "select session_id, user_id from sessions where session_id = $1::uuid",
-                body.session_id,
+        async with conn.transaction():
+            # Garante o aluno em `perfis` ANTES da sessão (FK sessions.user_id
+            # -> perfis.user_id). Cria um perfil mínimo; o /perfil enriquece depois.
+            await conn.execute(
+                "insert into perfis (user_id) values ($1::uuid) on conflict (user_id) do nothing",
+                user_id,
             )
+            row = await conn.fetchrow(
+                """
+                insert into sessions (session_id, user_id, session_start_ts, platform, app_version)
+                values (coalesce($1::uuid, gen_random_uuid()), $2::uuid, now(), $3, $4)
+                on conflict (session_id) do nothing
+                returning session_id, user_id
+                """,
+                body.session_id, user_id, body.platform, body.app_version,
+            )
+            # session_id já existia → ON CONFLICT não retorna; busca a existente
+            if row is None:
+                row = await conn.fetchrow(
+                    "select session_id, user_id from sessions where session_id = $1::uuid",
+                    body.session_id,
+                )
 
     print("[KaIA Sessão]", row["session_id"])
     return {
@@ -348,15 +366,16 @@ async def receber_evento(body: EventIn, request: Request):
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Garante a sessão pai (FK session_events.session_id -> sessions).
-            # O frontend dispara eventos sem criar a sessão antes; isso evita
-            # violação de FK e mantém a ingestão simples e robusta.
+            # Fallback: se o evento chegar antes do /sessions, cria a sessão com
+            # o aluno ANÔNIMO (satisfaz a FK sessions.user_id -> perfis). No fluxo
+            # normal o /sessions já criou a sessão com o user_id real do aluno.
             await conn.execute(
                 """
                 insert into sessions (session_id, user_id, session_start_ts, platform, app_version)
-                values ($1::uuid, gen_random_uuid(), now(), 'web', 'mvp-0.1')
+                values ($1::uuid, $2::uuid, now(), 'web', 'mvp-0.1')
                 on conflict (session_id) do nothing
                 """,
-                body.session_id,
+                body.session_id, ANON_USER,
             )
             # ts = now() do BANCO (autoritativo). NÃO usamos body.ts do frontend:
             # o relógio do navegador pode estar defasado e quebraria a janela de

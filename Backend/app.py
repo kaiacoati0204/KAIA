@@ -39,12 +39,17 @@ async def lifespan(app: FastAPI):
     )
     print("[KaIA] Pool de conexão com o Supabase criado.")
 
-    # Garante o aluno anônimo (alvo da FK no fallback do /events)
-    async with app.state.pool.acquire() as conn:
-        await conn.execute(
-            "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
-            ANON_USER,
-        )
+    # Garante o aluno anônimo (alvo da FK no fallback do /events).
+    # Tolerante a falha: em ambiente sem schema (ex: CI com Postgres vazio) o
+    # servidor ainda sobe — só não cria o anônimo.
+    try:
+        async with app.state.pool.acquire() as conn:
+            await conn.execute(
+                "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
+                ANON_USER,
+            )
+    except Exception as e:
+        print("[KaIA] aviso: não foi possível garantir o aluno anônimo:", e)
 
     # Scheduler: agrega features das sessões ativas a cada 30s
     scheduler = AsyncIOScheduler()

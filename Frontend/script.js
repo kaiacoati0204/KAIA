@@ -5,9 +5,19 @@ const API_URL = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_
     || 'http://127.0.0.1:5000';
 
 // --- Estado da sessão --------------------------------------
-let sessionId       = crypto.randomUUID();
+// O session_id "oficial" é criado via POST /sessions e guardado no
+// sessionStorage (sobrevive à navegação entre páginas da mesma aba).
+let sessionId       = sessionStorage.getItem('kaia_session_id') || null;
 let isMissionActive = false;
 let idleInterval    = null;
+
+// user_id ESTÁVEL por aluno: vive no localStorage (persiste entre abas e
+// sessões). É a identidade do aluno no MVP (até plugarmos o Supabase Auth).
+let userId = localStorage.getItem('kaia_user_id');
+if (!userId) {
+    userId = crypto.randomUUID();
+    localStorage.setItem('kaia_user_id', userId);
+}
 
 // --- Estado dos sensores -----------------------------------
 let idleTime        = 0;
@@ -40,6 +50,58 @@ const questions = {
         // mais perguntas aqui...
     ],
 };
+
+// ============================================================
+//        ABRE A SESSÃO OFICIAL (POST /sessions)
+// ============================================================
+// Cria uma NOVA sessão (1 por missão). Não envia session_id → o backend gera
+// um novo; mantém o user_id estável do aluno.
+async function criarSessao() {
+    try {
+        const resp = await fetch(`${API_URL}/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        });
+        const data = await resp.json();
+        sessionId = data.session_id;
+        console.log('[KaIA] Nova sessão:', sessionId, '| user:', userId);
+    } catch (e) {
+        // Fallback offline: não trava a UI (o backend auto-cria a sessão no /events)
+        sessionId = crypto.randomUUID();
+        console.warn('[KaIA] /sessions indisponível, usando id local:', sessionId, e);
+    }
+    sessionStorage.setItem('kaia_session_id', sessionId);
+    return sessionId;
+}
+
+// Marca o fim da sessão atual (grava session_end_ts no backend).
+// Usa sendBeacon p/ sobreviver ao fechamento da aba; cai pra fetch keepalive.
+function encerrarSessao() {
+    if (!sessionId) return;
+    const url = `${API_URL}/sessions/${sessionId}/end`;
+    if (navigator.sendBeacon) {
+        navigator.sendBeacon(url);
+    } else {
+        fetch(url, { method: 'POST', keepalive: true }).catch(() => {});
+    }
+}
+
+// --- Fallback local (usado quando o Gemini está indisponível, ex: cota) ------
+const TEMAS_FALLBACK = {
+    MAT:  ['Álgebra', 'Geometria', 'Trigonometria', 'Funções', 'Probabilidade', 'Estatística'],
+    PORT: ['Morfologia', 'Sintaxe', 'Interpretação de Texto', 'Figuras de Linguagem', 'Variação Linguística', 'Gêneros Textuais'],
+    HIS:  ['Brasil Colônia', 'Era Vargas', 'Guerras Mundiais', 'Idade Média', 'Revolução Industrial', 'Guerra Fria'],
+};
+
+// Questão local p/ a missão iniciar mesmo sem o Gemini — mantém o pipeline testável
+function questaoFallback(subject, tema) {
+    return {
+        q: `[OFFLINE] Questão de teste sobre "${tema}" (${subject}). Escolha uma opção:`,
+        opts: ['Opção A', 'Opção B', 'Opção C', 'Opção D', 'Opção E'],
+        ans: 0
+    };
+}
 
 // ============================================================
 //                  CORE: logEvent
@@ -141,6 +203,7 @@ function definirDataProva(iso)   { const p = lerPerfil(); p.data_prova = iso;   
 async function enviarPerfil(extra = {}) {
     const payload = {
         session_id: sessionId,
+        user_id:    userId,
         ts:         new Date().toISOString(),
         perfil:     lerPerfil(),
         hobbies:    historicoDeCliques,
@@ -496,6 +559,7 @@ async function abrirMateria(subject) {
     document.getElementById('menu-view').style.display = 'none';
     temasView.style.display = 'block';
     temasBox.innerHTML = 'KaIA montando os temas...';
+    let temas = [];
     try {
         const r = await fetch(`${API_URL}/temas`, {
             method: 'POST',
@@ -503,18 +567,23 @@ async function abrirMateria(subject) {
             body: JSON.stringify({ materia: subject })
         });
         const data = await r.json();
-        temasBox.innerHTML = '';
-        (data.temas || []).forEach(tema => {
-            const btn = document.createElement('button');
-            btn.className = 'option-btn';
-            btn.innerText = tema;
-            btn.onclick = () => startMission(subject, tema);
-            temasBox.appendChild(btn);
-        });
+        temas = data.temas || [];
     } catch (e) {
-        temasBox.innerHTML = 'Erro ao carregar os temas.';
-        console.error(e);
+        console.warn('[KaIA] /temas indisponível:', e);
     }
+    // Fallback: Gemini falhou/estourou cota → usa temas locais p/ não travar o fluxo
+    if (!temas.length) {
+        temas = TEMAS_FALLBACK[subject] || ['Tema 1', 'Tema 2', 'Tema 3'];
+        console.warn('[KaIA] usando temas locais (fallback).');
+    }
+    temasBox.innerHTML = '';
+    temas.forEach(tema => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = tema;
+        btn.onclick = () => startMission(subject, tema);
+        temasBox.appendChild(btn);
+    });
 }
 // 2) IA gera a questão
 async function startMission(subject, tema) {
@@ -529,18 +598,22 @@ async function startMission(subject, tema) {
             body: JSON.stringify({ materia: subject, tema, hobbies: historicoDeCliques })
         });
         currentQuestion = await r.json();
-        if (currentQuestion.erro) throw new Error(currentQuestion.erro);
+        if (!currentQuestion || currentQuestion.erro || !Array.isArray(currentQuestion.opts)) {
+            throw new Error(currentQuestion && currentQuestion.erro ? currentQuestion.erro : 'formato inválido');
+        }
     } catch (e) {
-        document.getElementById('question-display').innerText = 'Erro ao gerar a questão.';
-        console.error(e);
-        return;
+        // Fallback: Gemini indisponível (ex: cota) → questão local, missão inicia mesmo assim
+        console.warn('[KaIA] /gerar-questao indisponível, usando questão local:', e);
+        currentQuestion = questaoFallback(subject, tema);
     }
     isMissionActive = true;
     idleTime = 0; mudancasAba = 0; focusLostAt = null;
     lastScrollY = window.scrollY; lastScrollTime = performance.now();
     lastKeystroke = 0;
     if (keystrokeTimer) clearTimeout(keystrokeTimer);
-    sessionId = crypto.randomUUID();
+
+    // 1 sessão por missão: cria uma nova em `sessions` (gera session_id novo)
+    await criarSessao();
 
     // Atualiza features da sessão (streak, sessões no dia, pausa) e envia o perfil
     const features = registrarInicioSessao();
@@ -579,8 +652,9 @@ function checkAnswer(idx, btn) {
     // Feedback visual
     btn.style.background = acertou ? '#27ae60' : '#e74c3c';
 
-    // Desativa missão e volta ao menu após 1.5s
+    // Desativa missão, encerra a sessão (session_end_ts) e volta ao menu após 1.5s
     isMissionActive = false;
+    encerrarSessao();
     setTimeout(() => {
         document.getElementById('quiz-view').style.display  = 'none';
         document.getElementById('menu-view').style.display  = 'block';
@@ -594,15 +668,22 @@ function checkAnswer(idx, btn) {
 //                              RESET
 // ==============================================================
 function resetSystem() {
+    encerrarSessao();   // ABANDONAR também encerra a sessão
     if (idleInterval)   clearInterval(idleInterval);
     if (keystrokeTimer) clearTimeout(keystrokeTimer);
     location.reload();
 }
 
+// Fechar/recarregar a aba no meio da missão também encerra a sessão
+window.addEventListener('beforeunload', () => {
+    if (isMissionActive) encerrarSessao();
+});
+
 // ====================================================================================
 //                  INICIALIZAÇÃO — registra todos os listeners 
 // ===================================================================================
 document.addEventListener('DOMContentLoaded', () => {
+    // sessão NÃO é criada no load — só ao iniciar uma missão (criarSessao em startMission)
     registrarMouseMove();
     registrarScroll();
     registrarTeclado();

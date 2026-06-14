@@ -2,3 +2,9 @@ flask
 flask-cors
 requests
 python-dotenv
+fastapi
+uvicorn
+asyncpg
+pydantic
+python-dotenv
+apscheduler

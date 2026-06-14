@@ -1,3 +1,19 @@
+# Segredos / credenciais
 Backend/.env
+.env
+
+# Python
 __pycache__/
+*.pyc
 venv/
+.venv/
+
+# Logs e saídas de runtime
+server.log
+*.output
+
+# Config pessoal do Claude Code (mantém .claude/settings.json compartilhável)
+.claude/settings.local.json
+
+# Dados locais antigos (migrados para o Supabase)
+*.jsonl

@@ -17,12 +17,19 @@ from typing import Optional
 
 # --- Inicialização ------------------------------------------------------------
 load_dotenv()
-API_KEY = os.getenv("API_KEY")
+# Aceita os dois nomes: API_KEY (prod/CI) ou CHAVE_ACESSO (.env local).
+API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Aluno "anônimo" sentinela: usado quando o /events precisa auto-criar uma
+# Aluno "anônimos" sentinela: usado quando o /events precisa auto-criar uma
 # sessão sem conhecer o aluno (satisfaz a FK sessions.user_id -> perfis.user_id).
 ANON_USER = "00000000-0000-0000-0000-000000000000"
+
+# Resposta padrão quando o servidor está sem banco (pool = None).
+_SEM_BANCO = JSONResponse(
+    {"erro": "Banco de dados indisponível. Configure DATABASE_URL no .env (string do Supabase)."},
+    status_code=503,
+)
 
 
 
@@ -31,43 +38,61 @@ ANON_USER = "00000000-0000-0000-0000-000000000000"
 # Supabase: o modo transaction não suporta prepared statements.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.pool = await asyncpg.create_pool(
-        DATABASE_URL,
-        statement_cache_size=0,
-        min_size=1,
-        max_size=5,
-    )
-    print("[KaIA] Pool de conexão com o Supabase criado.")
+    # Pool tolerante a falha: se DATABASE_URL não estiver setada ou o banco
+    # estiver inacessível, o servidor SOBE mesmo assim (pool = None). As rotas
+    # que dependem do banco respondem 503 com mensagem clara, e as de IA (Gemini)
+    # seguem funcionando. Isso evita o crash de startup em dev sem Supabase.
+    app.state.pool = None
+    if not DATABASE_URL:
+        print("[KaIA] AVISO: DATABASE_URL não definida no .env — subindo SEM banco. "
+              "As rotas de dados (sessions/events/perfil/responsavel) ficarão indisponíveis.")
+    else:
+        try:
+            app.state.pool = await asyncpg.create_pool(
+                DATABASE_URL,
+                statement_cache_size=0,
+                min_size=1,
+                max_size=5,
+            )
+            print("[KaIA] Pool de conexão com o Supabase criado.")
+        except Exception as e:
+            print("[KaIA] AVISO: não foi possível conectar ao banco — subindo SEM banco:", e)
 
     # Garante o aluno anônimo (alvo da FK no fallback do /events).
     # Tolerante a falha: em ambiente sem schema (ex: CI com Postgres vazio) o
     # servidor ainda sobe — só não cria o anônimo.
-    try:
-        async with app.state.pool.acquire() as conn:
-            await conn.execute(
-                "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
-                ANON_USER,
-            )
-    except Exception as e:
-        print("[KaIA] aviso: não foi possível garantir o aluno anônimo:", e)
+    if app.state.pool is not None:
+        try:
+            async with app.state.pool.acquire() as conn:
+                await conn.execute(
+                    "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
+                    ANON_USER,
+                )
+        except Exception as e:
+            print("[KaIA] aviso: não foi possível garantir o aluno anônimo:", e)
 
-    # Scheduler: agrega features das sessões ativas a cada 30s
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(job_agregacao, "interval", seconds=30, args=[app], id="agg_features")
-    scheduler.start()
-    print("[KaIA] Scheduler de agregação iniciado (a cada 30s).")
+    # Scheduler: agrega features das sessões ativas a cada 30s.
+    # Só inicia se houver banco — o job de agregação depende do pool.
+    scheduler = None
+    if app.state.pool is not None:
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(job_agregacao, "interval", seconds=30, args=[app], id="agg_features")
+        scheduler.start()
+        print("[KaIA] Scheduler de agregação iniciado (a cada 30s).")
 
     yield
 
-    scheduler.shutdown(wait=False)
-    await app.state.pool.close()
-    print("[KaIA] Pool encerrado.")
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+    if app.state.pool is not None:
+        await app.state.pool.close()
+        print("[KaIA] Pool encerrado.")
 
 
 app = FastAPI(title="KaIA Backend", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # libera o frontend (file:// ou localhost)
+    allow_origins=["*"], 
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -242,8 +267,6 @@ async def agregar_features(pool, session_id):
         cliques_fora_area_estudo = len(cliques)
         tempo_resposta_ms = (sum(tr) / len(tr)) if tr else 0.0
         acertos_questoes = sum(1 for p in respostas if p.get("acertou") is True)
-        # placeholder: sem sinal de dificuldade nos eventos ainda.
-        # A coluna tem CHECK (1..5), então usamos 1 (base) — 0 seria rejeitado.
         nivel_dificuldade_atividade = 1
 
         sessoes_no_dia = 0
@@ -291,8 +314,8 @@ async def job_agregacao(app):
 
 # ================== API: SESSIONS (abre uma nova sessão) ====================
 class SessionIn(BaseModel):
-    session_id: Optional[str] = None   # uuid gerado no frontend; se ausente, o banco gera
-    user_id: Optional[str] = None      # MVP sem Auth: gerado se ausente
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
     platform: str = "web"
     app_version: str = "mvp-0.1"
 
@@ -300,6 +323,8 @@ class SessionIn(BaseModel):
 @app.post("/sessions")
 async def criar_sessao(body: SessionIn, request: Request):
     pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
     user_id = body.user_id or str(uuid.uuid4())
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -338,6 +363,8 @@ async def encerrar_sessao(session_id: str, request: Request):
     """Marca o fim da sessão (session_end_ts). Idempotente: só grava se ainda
     estiver aberta (end is null)."""
     pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -366,6 +393,8 @@ class EventIn(BaseModel):
 @app.post("/events")
 async def receber_evento(body: EventIn, request: Request):
     pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
     payload_json = json.dumps(body.payload, ensure_ascii=False)
 
     async with pool.acquire() as conn:
@@ -433,6 +462,8 @@ async def perfil(request: Request, dados: dict = Body(default={})):
             ult_ts = None
 
     pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
     try:
         async with pool.acquire() as conn:
             await conn.execute(
@@ -461,6 +492,118 @@ async def perfil(request: Request, dados: dict = Body(default={})):
 
     print("[KaIA Perfil upsert]", email or user_id)
     return {"status": "ok"}
+
+
+# ================== API: RESPONSÁVEL (estatísticas do aluno) ================
+def _tendencia(valores, melhor_quando="sobe"):
+    """Compara a média da 1ª metade da série com a da 2ª metade e devolve
+    'melhorando' | 'piorando' | 'estavel' | 'sem_dados'. `melhor_quando` diz se
+    valores MAIORES são bons ('sobe', ex: acertos) ou ruins ('desce', ex: aba)."""
+    vals = [float(v) for v in valores if v is not None]
+    if len(vals) < 2:
+        return "sem_dados"
+    meio = len(vals) // 2
+    ini = sum(vals[:meio]) / max(meio, 1)
+    fim = sum(vals[meio:]) / max(len(vals) - meio, 1)
+    if abs(fim - ini) < 1e-9:
+        return "estavel"
+    subiu = fim > ini
+    bom = subiu if melhor_quando == "sobe" else not subiu
+    return "melhorando" if bom else "piorando"
+
+
+@app.get("/responsavel/aluno")
+async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Optional[str] = None):
+    """Painel do responsável: resolve o aluno por e-mail (ou user_id) e devolve a
+    evolução diária das features de atenção/desempenho + uma leitura de tendência
+    (o filho está melhorando?)."""
+    if not email and not user_id:
+        return JSONResponse({"erro": "Informe o e-mail (ou user_id) do aluno."}, status_code=400)
+
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        if not user_id:
+            row = await conn.fetchrow(
+                "select user_id from perfis where lower(email) = lower($1)", email
+            )
+            if row is None:
+                return JSONResponse({"erro": "Aluno não encontrado."}, status_code=404)
+            user_id = str(row["user_id"])
+
+        aluno = await conn.fetchrow(
+            """
+            select user_id, email, hobbies, sequencia_dias_estudo, sessoes_no_dia,
+                   data_prova, ultima_sessao_ts
+            from perfis where user_id = $1::uuid
+            """,
+            user_id,
+        )
+        if aluno is None:
+            return JSONResponse({"erro": "Aluno não encontrado."}, status_code=404)
+
+        linhas = await conn.fetch(
+            """
+            select date(sf.window_ts)               as dia,
+                   sum(sf.acertos_questoes)         as acertos,
+                   avg(sf.tempo_resposta_ms)        as tempo_resposta_ms,
+                   sum(sf.mudancas_aba)             as mudancas_aba,
+                   sum(sf.tempo_fora_foco_s)        as tempo_fora_foco_s,
+                   sum(sf.cliques_fora_area_estudo) as cliques_fora,
+                   avg(sf.velocidade_scroll_px_s)   as scroll_px_s,
+                   count(*)                         as janelas
+            from session_features sf
+            join sessions s on s.session_id = sf.session_id
+            where s.user_id = $1::uuid
+            group by date(sf.window_ts)
+            order by dia
+            """,
+            user_id,
+        )
+
+    series = []
+    for r in linhas:
+        # distração agregada por dia: nº de trocas de aba + cliques fora da área
+        distracao = int(r["mudancas_aba"] or 0) + int(r["cliques_fora"] or 0)
+        series.append({
+            "dia": r["dia"].isoformat(),
+            "acertos": int(r["acertos"] or 0),
+            "tempo_resposta_ms": round(float(r["tempo_resposta_ms"] or 0)),
+            "mudancas_aba": int(r["mudancas_aba"] or 0),
+            "tempo_fora_foco_s": round(float(r["tempo_fora_foco_s"] or 0), 1),
+            "cliques_fora": int(r["cliques_fora"] or 0),
+            "distracao": distracao,
+            "janelas": int(r["janelas"] or 0),
+        })
+
+    hobbies = aluno["hobbies"]
+    if isinstance(hobbies, str):
+        try:
+            hobbies = json.loads(hobbies)
+        except (ValueError, TypeError):
+            hobbies = []
+
+    resumo = {
+        "dias_com_dados": len(series),
+        "total_acertos": sum(s["acertos"] for s in series),
+        "tendencia_acertos": _tendencia([s["acertos"] for s in series], "sobe"),
+        "tendencia_foco": _tendencia([s["distracao"] for s in series], "desce"),
+    }
+
+    return {
+        "aluno": {
+            "user_id": str(aluno["user_id"]),
+            "email": aluno["email"],
+            "hobbies": hobbies or [],
+            "sequencia_dias_estudo": aluno["sequencia_dias_estudo"],
+            "sessoes_no_dia": aluno["sessoes_no_dia"],
+            "data_prova": aluno["data_prova"].isoformat() if aluno["data_prova"] else None,
+            "ultima_sessao_ts": aluno["ultima_sessao_ts"].isoformat() if aluno["ultima_sessao_ts"] else None,
+        },
+        "series": series,
+        "resumo": resumo,
+    }
 
 
 # ================== HEALTHCHECK =============================================

@@ -51,7 +51,8 @@ pip install flask flask-cors requests python-dotenv
 Na mesma pasta do `app.py`, crie um arquivo chamado `.env` com a chave da API do Gemini (sem aspas, sem espaços):
  
 ```
-API_KEY=AIzaSy...sua_chave_aqui
+API_KEY = AIzaSy...sua_chave_aqui
+DATABASE_URL = postgresql://postgres:SUA_SENHA@db.SEU_PROJETO.supabase.co:5432/postgres
 ```
  
 > A chave é gerada no Google AI Studio.

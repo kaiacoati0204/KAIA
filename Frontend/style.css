@@ -632,6 +632,114 @@ body {
 }
 
 /* =========================
+    WARP -
+========================= */    
+.wrap { 
+    max-width: 980px; 
+    margin: 0 auto; 
+}
+.topo { 
+    text-align: center; 
+    margin-bottom: 28px; 
+}
+.topo h1 { 
+    font-size: 2.4rem; 
+    font-weight: 800; 
+}
+.topo h1 span { 
+    color: var(--gravata);
+}
+.topo p { 
+    opacity: .7; 
+    margin-top: 4px; 
+}
+.topo a { color: var(--gravata); 
+    font-size: .85rem; 
+    text-decoration: none; 
+}
+.busca {
+    display: flex; gap: 10px;
+    justify-content: center;
+    margin: 0 auto 28px; 
+    max-width: 520px; 
+    flex-wrap: wrap;
+}
+.busca input {
+    flex: 1; 
+    min-width: 220px; 
+    padding: 12px 16px; 
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,.15); 
+    background: rgba(255,255,255,.06);
+    color: var(--texto); 
+    font-size: 1rem;
+}
+.busca button {
+    padding: 12px 22px; border: none; 
+    border-radius: 10px; cursor: pointer;
+    background: var(--gravata); 
+    color: var(--profundo); 
+    font-weight: 700; 
+    font-size: 1rem;
+}
+.busca button:hover { 
+    filter: brightness(1.08); 
+}
+#status { 
+    text-align: center; 
+    min-height: 24px; 
+    opacity: .85; 
+    margin-bottom: 16px; }
+#painel { 
+    display: none; 
+}
+.cards { 
+    display: grid; 
+    grid-template-columns: 
+        repeat(auto-fit, minmax(160px, 1fr)); 
+    gap: 14px; margin-bottom: 24px; 
+}
+.card {
+    background: rgba(255,255,255,.05); 
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px; 
+    padding: 18px;
+}
+.card label { 
+    display: block; 
+    font-size: .72rem; letter-spacing: .08em; 
+    text-transform: uppercase; 
+    opacity: .6; 
+}
+.card .v { 
+    font-size: 1.8rem; 
+    font-weight: 800; 
+    margin-top: 6px; 
+}
+.tag { font-size: .9rem; font-weight: 700; }
+.tag.bom { color: var(--verde); }
+.tag.ruim { color: var(--vermelho); }
+.tag.neutro { color: var(--gravata); }
+.grafico {
+    background: rgba(255,255,255,.04); 
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px; 
+    padding: 20px; 
+    margin-bottom: 20px;
+}
+.grafico h3 { 
+    font-size: 1rem; 
+    margin-bottom: 12px; 
+    font-weight: 700; 
+}
+.hobbies { 
+    font-size: .85rem; 
+    opacity: .75; 
+    text-align: center; 
+    margin-top: 8px; 
+}
+
+/* =========================
    ANEL ALERTA
 ========================= */
 .anel-alerta {

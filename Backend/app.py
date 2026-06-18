@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 import os
 import re
 import json
@@ -53,6 +53,8 @@ async def lifespan(app: FastAPI):
                 statement_cache_size=0,
                 min_size=1,
                 max_size=5,
+                timeout=8,            # connect timeout: falha rápido se a porta estiver bloqueada
+                command_timeout=15,
             )
             print("[KaIA] Pool de conexão com o Supabase criado.")
         except Exception as e:
@@ -512,6 +514,48 @@ def _tendencia(valores, melhor_quando="sobe"):
     return "melhorando" if bom else "piorando"
 
 
+def _demo_aluno(email):
+    """Resposta de exemplo (sem banco) para o painel funcionar nesta rede.
+    Série de 10 dias com tendência de melhora. Marcado com demo=True."""
+    hoje = datetime.now(timezone.utc).date()
+    series = []
+    for d in range(10):
+        frac = d / 9
+        dia = hoje - timedelta(days=(9 - d))
+        acertos = round(1 + frac * 6)              # 1 -> 7
+        distracao = round(8 - frac * 6)            # 8 -> 2
+        series.append({
+            "dia": dia.isoformat(),
+            "acertos": acertos,
+            "tempo_resposta_ms": round(4000 - frac * 1500),
+            "mudancas_aba": max(distracao - 1, 0),
+            "tempo_fora_foco_s": round((distracao - 1) * 8.0, 1),
+            "cliques_fora": 1 if distracao > 0 else 0,
+            "distracao": distracao,
+            "janelas": 5,
+        })
+    resumo = {
+        "dias_com_dados": len(series),
+        "total_acertos": sum(s["acertos"] for s in series),
+        "tendencia_acertos": _tendencia([s["acertos"] for s in series], "sobe"),
+        "tendencia_foco": _tendencia([s["distracao"] for s in series], "desce"),
+    }
+    return {
+        "demo": True,
+        "aluno": {
+            "user_id": "00000000-0000-0000-0000-0000000000de",
+            "email": email,
+            "hobbies": ["Futebol", "Música", "Jogos"],
+            "sequencia_dias_estudo": 10,
+            "sessoes_no_dia": 1,
+            "data_prova": (hoje + timedelta(days=30)).isoformat(),
+            "ultima_sessao_ts": None,
+        },
+        "series": series,
+        "resumo": resumo,
+    }
+
+
 @app.get("/responsavel/aluno")
 async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Optional[str] = None):
     """Painel do responsável: resolve o aluno por e-mail (ou user_id) e devolve a
@@ -522,7 +566,7 @@ async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Op
 
     pool = request.app.state.pool
     if pool is None:
-        return _SEM_BANCO
+        return _demo_aluno(email or "demo@kaia.com")
     async with pool.acquire() as conn:
         if not user_id:
             row = await conn.fetchrow(
@@ -603,6 +647,137 @@ async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Op
         },
         "series": series,
         "resumo": resumo,
+    }
+
+
+# ================== SEED: aluno de TESTE (para visualizar os gráficos) ======
+# Cria/atualiza um aluno fixo (teste@kaia.com) e popula ~10 dias de
+# session_features com uma tendência de MELHORA (acertos sobem, distração cai),
+# para que o painel do responsável mostre gráficos com dados. Idempotente.
+# Uso: POST /seed/aluno-teste  -> depois busque por "teste@kaia.com" no painel.
+SEED_USER_ID = "11111111-1111-1111-1111-111111111111"
+SEED_EMAIL = "teste@kaia.com"
+
+
+@app.post("/seed/aluno-teste")
+async def seed_aluno_teste(request: Request):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+
+    hobbies = ["Futebol", "Música", "Jogos"]
+    dias = 10
+    agora = datetime.now(timezone.utc)
+    prova = (agora + timedelta(days=30)).date()
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # 1) Perfil do aluno
+            await conn.execute(
+                """
+                insert into perfis (user_id, email, hobbies, data_prova,
+                    ambiente_dispositivo, sequencia_dias_estudo, sessoes_no_dia,
+                    ultimo_dia_estudo, ultima_sessao_ts, updated_at)
+                values ($1::uuid, $2, $3::jsonb, $4, 'web', $5, 1, current_date, now(), now())
+                on conflict (user_id) do update set
+                    email = excluded.email,
+                    hobbies = excluded.hobbies,
+                    data_prova = excluded.data_prova,
+                    sequencia_dias_estudo = excluded.sequencia_dias_estudo,
+                    updated_at = now()
+                """,
+                SEED_USER_ID, SEED_EMAIL, json.dumps(hobbies, ensure_ascii=False), prova, dias,
+            )
+
+            # Limpa dados antigos do aluno de teste (idempotência)
+            await conn.execute(
+                """
+                delete from session_features
+                where session_id in (select session_id from sessions where user_id = $1::uuid)
+                """,
+                SEED_USER_ID,
+            )
+            await conn.execute("delete from sessions where user_id = $1::uuid", SEED_USER_ID)
+
+            # 2) Sessões + features por dia (dia mais antigo -> hoje)
+            JANELAS = 5
+            total_janelas = 0
+            for d in range(dias):
+                dia = agora - timedelta(days=(dias - 1 - d))
+                session_id = str(uuid.uuid4())
+                inicio = dia.replace(hour=19, minute=0, second=0, microsecond=0)
+
+                await conn.execute(
+                    """
+                    insert into sessions (session_id, user_id, session_start_ts,
+                        session_end_ts, platform, app_version)
+                    values ($1::uuid, $2::uuid, $3, $4, 'web', 'seed')
+                    """,
+                    session_id, SEED_USER_ID, inicio, inicio + timedelta(minutes=25),
+                )
+
+                frac = d / max(dias - 1, 1)            # 0.0 -> 1.0 (progresso)
+                acertos = round(1 + frac * 6)          # 1 -> 7 acertos/dia
+                distracao = round(8 - frac * 6)        # 8 -> 2 (cai = melhora)
+
+                for j in range(JANELAS):
+                    window_ts = inicio + timedelta(seconds=30 * j)
+                    acertou = 1 if j < acertos else 0
+                    trocas_aba = 1 if j < distracao else 0
+                    cliques_fora = 1 if (distracao - JANELAS) > j else 0
+                    await conn.execute(
+                        """
+                        insert into session_features
+                            (session_id, horario_inicio, sessoes_no_dia, tempo_resposta_ms,
+                             velocidade_scroll_px_s, pausas_digitacao_s, cliques_fora_area_estudo,
+                             mudancas_aba, tempo_fora_foco_s, acertos_questoes,
+                             nivel_dificuldade_atividade, window_ts)
+                        values ($1::uuid, $2, 1, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        """,
+                        session_id, window_ts.time(),
+                        4000 - frac * 1500,            # tempo de resposta cai (mais rápido)
+                        150.0, 2.0, cliques_fora, trocas_aba, trocas_aba * 8.0,
+                        acertou, 1 + round(frac * 2), window_ts,
+                    )
+                    total_janelas += 1
+
+    print(f"[KaIA Seed] aluno de teste {SEED_EMAIL}: {dias} dias, {total_janelas} janelas.")
+    return {
+        "status": "ok",
+        "email": SEED_EMAIL,
+        "user_id": SEED_USER_ID,
+        "dias": dias,
+        "janelas": total_janelas,
+        "dica": f"Abra o painel do responsável e busque por: {SEED_EMAIL}",
+    }
+
+
+# ================== API: DADOS DO GRÁFICO DE HOBBIES ========================
+# Conta quantas vezes cada hobby aparece nos perfis (coluna jsonb `hobbies`) e
+# devolve no formato { labels: [...], valores: [...] } que o Chart.js espera.
+@app.get("/api/dados-grafico")
+async def dados_grafico(request: Request):
+    pool = request.app.state.pool
+    if pool is None:
+        # Modo demonstração (sem banco): dados de exemplo só para a UI funcionar.
+        return {
+            "labels": ["Futebol", "Música", "Jogos", "Leitura", "Desenho"],
+            "valores": [15, 22, 8, 11, 6],
+            "demo": True,
+        }
+    async with pool.acquire() as conn:
+        linhas = await conn.fetch(
+            """
+            select hb as hobby, count(*) as n
+            from perfis, jsonb_array_elements_text(hobbies) as hb
+            where jsonb_typeof(hobbies) = 'array'
+            group by hb
+            order by n desc, hb
+            """
+        )
+    return {
+        "labels": [r["hobby"] for r in linhas],
+        "valores": [int(r["n"]) for r in linhas],
     }
 
 

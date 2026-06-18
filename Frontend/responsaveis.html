@@ -25,6 +25,8 @@
             <button onclick="carregar()">Ver estatísticas</button>
         </div>
 
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
         <div id="status"></div>
 
         <div id="painel">
@@ -62,6 +64,12 @@
             </div>
 
             <p class="hobbies" id="hobbies"></p>
+        </div>
+
+        <div class="container-grafico"
+             style="width: 80%; max-width: 600px; margin: 30px auto 0; background: #1a2b4c; padding: 20px; border-radius: 15px;">
+            <h3 style="color: white; text-align: center;">Estatísticas de Hobbies dos Usuários</h3>
+            <canvas id="meuGraficoKaIA"></canvas>
         </div>
     </div>
 
@@ -103,7 +111,9 @@
                     return;
                 }
 
-                status.textContent = '';
+                status.textContent = data.demo
+                    ? '⚠️ Modo demonstração: dados de exemplo (sem conexão com o banco nesta rede).'
+                    : '';
                 painel.style.display = 'block';
 
                 document.getElementById('m-acertos').textContent = data.resumo.total_acertos;
@@ -159,6 +169,59 @@
         document.getElementById('email').addEventListener('keydown', e => {
             if (e.key === 'Enter') carregar();
         });
+
+        // --- Gráfico geral: hobbies de todos os usuários (Supabase via API) ---
+        let gHobbies = null;
+        async function carregarGraficoHobbies() {
+            try {
+                const resposta = await fetch(`${API_URL}/api/dados-grafico`);
+                const dadosDoBanco = await resposta.json();
+                // dadosDoBanco = { labels: [...], valores: [...] }
+                if (!dadosDoBanco.labels || !dadosDoBanco.labels.length) return;
+
+                if (dadosDoBanco.demo) {
+                    const h = document.querySelector('.container-grafico h3');
+                    if (h) h.textContent += ' (dados de exemplo)';
+                }
+
+                const ctx = document.getElementById('meuGraficoKaIA').getContext('2d');
+                gHobbies?.destroy();
+                gHobbies = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: dadosDoBanco.labels,
+                        datasets: [{
+                            label: 'Quantidade de Escolhas',
+                            data: dadosDoBanco.valores,
+                            backgroundColor: [
+                                'rgba(226, 174, 2, 0.7)',
+                                'rgba(45, 75, 165, 0.7)',
+                                'rgba(255, 197, 88, 0.7)',
+                                'rgba(41, 128, 185, 0.7)'
+                            ],
+                            borderColor: '#e2ae02',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                                ticks: { color: '#ffffff' }
+                            },
+                            x: { ticks: { color: '#ffffff' } }
+                        },
+                        plugins: { legend: { labels: { color: '#ffffff' } } }
+                    }
+                });
+            } catch (erro) {
+                console.error("Erro ao carregar dados para o gráfico:", erro);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', carregarGraficoHobbies);
     </script>
 </body>
 

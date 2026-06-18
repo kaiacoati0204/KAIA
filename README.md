@@ -52,11 +52,12 @@ Na mesma pasta do `app.py`, crie um arquivo chamado `.env` com a chave da API do
  
 ```
 API_KEY = AIzaSy...sua_chave_aqui
-DATABASE_URL = postgresql://postgres:SUA_SENHA@db.SEU_PROJETO.supabase.co:5432/postgres
+DATABASE_URL = postgresql:[sua_chave]//postgres:SUA_SENHA@db.SEU_PROJETO.supabase.co:5432/postgres
 ```
  
 > A chave é gerada no Google AI Studio.
- 
+> O do database é criado assim que cria o banco de dados no site Supabase
+
 ### 3. Subir o backend
  
 ```bash
@@ -90,4 +91,3 @@ Abra o `login.html` no navegador (ou rode com um servidor local, ex.: extensão 
 - [ ] Ativar o envio dos eventos de foco (descomentar o `fetch` do `logEvent` no `script.js`).
 - [ ] Trocar o armazenamento de eventos (`events.jsonl`) por um banco de dados (PostgreSQL).
 ---
--> 11/06

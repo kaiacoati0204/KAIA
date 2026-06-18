@@ -437,7 +437,6 @@ body {
 /* =========================
    GRID DE MISSÕES
 ========================= */
-
 .mission-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -452,7 +451,6 @@ body {
 /* =========================
    PERGUNTAS
 ========================= */
-
 .pergunts{
     display: flex;
     gap: 15px;
@@ -499,7 +497,6 @@ body {
 /* =========================
    CARDS
 ========================= */
-
 .mission-card {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -531,7 +528,6 @@ body {
 /* =========================
    QUIZ
 ========================= */
-
 .quiz-container {
     display: flex;
     flex-direction: column;
@@ -559,17 +555,15 @@ body {
 /* =========================
    QUESTÕES
 ========================= */
-
 .question-wrapper h2 {
     color: var(--prox-br);
-    font-size: 2rem;
+    font-size: 1.5rem;
     margin-bottom: 30px;
 }
 
 /* =========================
    OPÇÕES
 ========================= */
-
 .options-grid {
     display: flex;
     flex-direction: column;
@@ -594,7 +588,6 @@ body {
 /* =========================
    FEEDBACK
 ========================= */
-
 .feedback-msg {
     font-size: 1rem;
     font-weight: 700;
@@ -604,7 +597,6 @@ body {
 /* =========================
    OVERLAY
 ========================= */
-
 #overlay {
     position: fixed;
     inset: 0;
@@ -636,15 +628,16 @@ body {
 ========================= */    
 .wrap { 
     max-width: 980px; 
-    margin: 0 auto; 
+    margin:  auto; 
 }
 .topo { 
     text-align: center; 
-    margin-bottom: 28px; 
+    margin-bottom: 50px; 
 }
 .topo h1 { 
-    font-size: 2.4rem; 
-    font-weight: 800; 
+    font-size: 3.4rem; 
+    font-weight: 840; 
+    color: var(--gravata);
 }
 .topo h1 span { 
     color: var(--gravata);
@@ -653,7 +646,8 @@ body {
     opacity: .7; 
     margin-top: 4px; 
 }
-.topo a { color: var(--gravata); 
+.topo a { 
+    color: var(--gravata); 
     font-size: .85rem; 
     text-decoration: none; 
 }
@@ -699,27 +693,24 @@ body {
         repeat(auto-fit, minmax(160px, 1fr)); 
     gap: 14px; margin-bottom: 24px; 
 }
-.card {
-    background: rgba(255,255,255,.05); 
-    border: 1px solid rgba(255,255,255,.08);
-    border-radius: 14px; 
-    padding: 18px;
-}
-.card label { 
-    display: block; 
-    font-size: .72rem; letter-spacing: .08em; 
-    text-transform: uppercase; 
-    opacity: .6; 
-}
 .card .v { 
     font-size: 1.8rem; 
     font-weight: 800; 
     margin-top: 6px; 
 }
-.tag { font-size: .9rem; font-weight: 700; }
-.tag.bom { color: var(--verde); }
-.tag.ruim { color: var(--vermelho); }
-.tag.neutro { color: var(--gravata); }
+.tag { 
+    font-size: .9rem; 
+    font-weight: 700; 
+}
+.tag.bom { 
+    color: var(--verde); 
+}
+.tag.ruim { 
+    color: var(--vermelho); 
+}
+.tag.neutro { 
+    color: var(--gravata); 
+}
 .grafico {
     background: rgba(255,255,255,.04); 
     border: 1px solid rgba(255,255,255,.08);

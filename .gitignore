@@ -18,3 +18,8 @@ server.log
 
 # Dados locais antigos (antes do Supabase)
 *.jsonl
+
+# Artefatos gerados pelo notebook de pré-processamento (regeneráveis)
+ml/artifacts/*.pkl
+# checkpoints do Jupyter
+.ipynb_checkpoints/

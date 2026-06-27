@@ -8,3 +8,10 @@ asyncpg
 pydantic
 python-dotenv
 apscheduler
+
+# ML / notebooks (pré-processamento e Random Forest)
+pandas
+numpy
+scikit-learn
+openpyxl
+jupyter

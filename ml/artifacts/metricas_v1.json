@@ -1,0 +1,67 @@
+{
+  "versao": "v1",
+  "modelo": "RandomForestClassifier",
+  "parametros": {
+    "n_estimators": 100,
+    "max_depth": 10,
+    "random_state": 42,
+    "class_weight": "balanced"
+  },
+  "tempo_treino_s": 0.086,
+  "acuracia": 1.0,
+  "classification_report": {
+    "engajado": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 40.0
+    },
+    "distraido": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 40.0
+    },
+    "muito_distraido": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 40.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 120.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 120.0
+    }
+  },
+  "matriz_confusao": [
+    [
+      40,
+      0,
+      0
+    ],
+    [
+      0,
+      40,
+      0
+    ],
+    [
+      0,
+      0,
+      40
+    ]
+  ],
+  "labels": [
+    "engajado",
+    "distraido",
+    "muito_distraido"
+  ]
+}

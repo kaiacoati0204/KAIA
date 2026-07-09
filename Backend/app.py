@@ -17,87 +17,14 @@ from typing import Optional
 
 # --- Inicialização ------------------------------------------------------------
 load_dotenv()
-# Aceita os dois nomes: API_KEY (prod/CI) ou CHAVE_ACESSO (.env local).
-API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
-DATABASE_URL = os.getenv("DATABASE_URL")
+API_KEY = os.getenv("API_KEY")
 
-# Aluno "anônimos" sentinela: usado quando o /events precisa auto-criar uma
-# sessão sem conhecer o aluno (satisfaz a FK sessions.user_id -> perfis.user_id).
-ANON_USER = "00000000-0000-0000-0000-000000000000"
+app = Flask(__name__)
+CORS(app)  # libera o frontend (file:// ou localhost) a chamar a API
 
-# Resposta padrão quando o servidor está sem banco (pool = None).
-_SEM_BANCO = JSONResponse(
-    {"erro": "Banco de dados indisponível. Configure DATABASE_URL no .env (string do Supabase)."},
-    status_code=503,
-)
-
-
-
-# --- Pool asyncpg (criado no startup, fechado no shutdown) --------------------
-# statement_cache_size=0 é OBRIGATÓRIO no pooler transaction (pgbouncer) do
-# Supabase: o modo transaction não suporta prepared statements.
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Pool tolerante a falha: se DATABASE_URL não estiver setada ou o banco
-    # estiver inacessível, o servidor SOBE mesmo assim (pool = None). As rotas
-    # que dependem do banco respondem 503 com mensagem clara, e as de IA (Gemini)
-    # seguem funcionando. Isso evita o crash de startup em dev sem Supabase.
-    app.state.pool = None
-    if not DATABASE_URL:
-        print("[KaIA] AVISO: DATABASE_URL não definida no .env — subindo SEM banco. "
-              "As rotas de dados (sessions/events/perfil/responsavel) ficarão indisponíveis.")
-    else:
-        try:
-            app.state.pool = await asyncpg.create_pool(
-                DATABASE_URL,
-                statement_cache_size=0,
-                min_size=1,
-                max_size=5,
-                timeout=8,            # connect timeout: falha rápido se a porta estiver bloqueada
-                command_timeout=15,
-            )
-            print("[KaIA] Pool de conexão com o Supabase criado.")
-        except Exception as e:
-            print("[KaIA] AVISO: não foi possível conectar ao banco — subindo SEM banco:", e)
-
-    # Garante o aluno anônimo (alvo da FK no fallback do /events).
-    # Tolerante a falha: em ambiente sem schema (ex: CI com Postgres vazio) o
-    # servidor ainda sobe — só não cria o anônimo.
-    if app.state.pool is not None:
-        try:
-            async with app.state.pool.acquire() as conn:
-                await conn.execute(
-                    "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
-                    ANON_USER,
-                )
-        except Exception as e:
-            print("[KaIA] aviso: não foi possível garantir o aluno anônimo:", e)
-
-    # Scheduler: agrega features das sessões ativas a cada 30s.
-    # Só inicia se houver banco — o job de agregação depende do pool.
-    scheduler = None
-    if app.state.pool is not None:
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(job_agregacao, "interval", seconds=30, args=[app], id="agg_features")
-        scheduler.start()
-        print("[KaIA] Scheduler de agregação iniciado (a cada 30s).")
-
-    yield
-
-    if scheduler is not None:
-        scheduler.shutdown(wait=False)
-    if app.state.pool is not None:
-        await app.state.pool.close()
-        print("[KaIA] Pool encerrado.")
-
-
-app = FastAPI(title="KaIA Backend", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], 
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Arquivos locais (espelham as futuras tabelas do Supabase)
+EVENTS_FILE = "events.jsonl"
+PERFIS_FILE = "perfis.jsonl"
 
 
 # ================= HELPERS GEMINI =============================================
@@ -384,110 +311,18 @@ async def encerrar_sessao(session_id: str, request: Request):
     return {"status": "ok", "session_id": session_id, "duracao_s": round(dur, 1)}
 
 
-# ================== API: EVENTS (ingestão de eventos de atenção) =============
-class EventIn(BaseModel):
-    session_id: str
-    event_type: str
-    payload: dict = {}
-    ts: Optional[str] = None   # ISO 8601 vindo do frontend; default = now() no banco
-
-
-@app.post("/events")
-async def receber_evento(body: EventIn, request: Request):
-    pool = request.app.state.pool
-    if pool is None:
-        return _SEM_BANCO
-    payload_json = json.dumps(body.payload, ensure_ascii=False)
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            # Garante a sessão pai (FK session_events.session_id -> sessions).
-            # Fallback: se o evento chegar antes do /sessions, cria a sessão com
-            # o aluno ANÔNIMO (satisfaz a FK sessions.user_id -> perfis). No fluxo
-            # normal o /sessions já criou a sessão com o user_id real do aluno.
-            await conn.execute(
-                """
-                insert into sessions (session_id, user_id, session_start_ts, platform, app_version)
-                values ($1::uuid, $2::uuid, now(), 'web', 'mvp-0.1')
-                on conflict (session_id) do nothing
-                """,
-                body.session_id, ANON_USER,
-            )
-            # ts = now() do BANCO (autoritativo). NÃO usamos body.ts do frontend:
-            # o relógio do navegador pode estar defasado e quebraria a janela de
-            # tempo do job de agregação (session_features). Eventos chegam em
-            # tempo real (fetch por evento), então now() ≈ hora do evento.
-            ev = await conn.fetchrow(
-                """
-                insert into session_events (session_id, event_type, payload, ts)
-                values ($1::uuid, $2, $3::jsonb, now())
-                returning event_id
-                """,
-                body.session_id, body.event_type, payload_json,
-            )
-
-    print("[KaIA Event]", body.event_type, body.session_id)
-    return {"status": "ok", "event_id": str(ev["event_id"])}
-
-
-# ================== API: PERFIL (login + hobbies, upsert em `perfis`) ========
-# Atributos ESTÁVEIS do aluno (1 linha por user_id). A tabela user_profiles
-# guarda features AGREGADAS/derivadas e é populada depois pelo pipeline de ML.
-def _to_date(s):
+# ================== API: PERFIL (login + hobbies + features) =================
+# Espelha a futura tabela `perfis` do Supabase. Campos esperados:
+#   email, hobbies[], features{horario_inicio, sessoes_no_dia, dia_semana,
+#   dias_para_prova, sequencia_dias_estudo, duracao_pausa_anterior_min,
+#   ambiente_dispositivo}
+@app.route("/perfil", methods=["POST"])
+def perfil():
+    dados = request.get_json(silent=True) or {}
+    dados["received_at"] = datetime.utcnow().isoformat()
     try:
-        return date.fromisoformat(s) if s else None
-    except (ValueError, TypeError):
-        return None
-
-
-@app.post("/perfil")
-async def perfil(request: Request, dados: dict = Body(default={})):
-    user_id = dados.get("user_id")
-    if not user_id:
-        # sem identidade estável não há como fazer upsert
-        return JSONResponse({"status": "ignorado", "motivo": "sem user_id"}, status_code=400)
-
-    p = dados.get("perfil") or {}
-    email = p.get("email") or dados.get("email") or None
-    hobbies = p.get("hobbies") or dados.get("hobbies") or []
-    ambiente = p.get("ambiente_dispositivo")
-    seq = int(p.get("sequencia_dias_estudo") or 0)
-    sess_dia = int(p.get("sessoes_no_dia") or 0)
-
-    # ultima_sessao_ts vem como epoch em ms → timestamptz
-    ult_ts = None
-    raw_ts = p.get("ultima_sessao_ts")
-    if raw_ts:
-        try:
-            ult_ts = datetime.fromtimestamp(float(raw_ts) / 1000, tz=timezone.utc)
-        except (ValueError, TypeError, OSError):
-            ult_ts = None
-
-    pool = request.app.state.pool
-    if pool is None:
-        return _SEM_BANCO
-    try:
-        async with pool.acquire() as conn:
-            await conn.execute(
-                """
-                insert into perfis (user_id, email, hobbies, data_prova, ambiente_dispositivo,
-                    sequencia_dias_estudo, sessoes_no_dia, ultimo_dia_estudo, ultima_sessao_ts, updated_at)
-                values ($1::uuid, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, now())
-                on conflict (user_id) do update set
-                    email                 = coalesce(excluded.email, perfis.email),
-                    hobbies               = excluded.hobbies,
-                    data_prova            = coalesce(excluded.data_prova, perfis.data_prova),
-                    ambiente_dispositivo  = coalesce(excluded.ambiente_dispositivo, perfis.ambiente_dispositivo),
-                    sequencia_dias_estudo = excluded.sequencia_dias_estudo,
-                    sessoes_no_dia        = excluded.sessoes_no_dia,
-                    ultimo_dia_estudo     = coalesce(excluded.ultimo_dia_estudo, perfis.ultimo_dia_estudo),
-                    ultima_sessao_ts      = coalesce(excluded.ultima_sessao_ts, perfis.ultima_sessao_ts),
-                    updated_at            = now()
-                """,
-                user_id, email, json.dumps(hobbies, ensure_ascii=False),
-                _to_date(p.get("data_prova")), ambiente, seq, sess_dia,
-                _to_date(p.get("ultimo_dia_estudo")), ult_ts,
-            )
+        with open(PERFIS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(dados, ensure_ascii=False) + "\n")
     except Exception as e:
         print("[KaIA] Erro ao gravar perfil:", e)
         return JSONResponse({"status": "erro"}, status_code=500)

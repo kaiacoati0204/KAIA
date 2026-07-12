@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <!-- CONFIG -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- FONTES -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap"
+        rel="stylesheet">
+
+    <!----------- TESTE ------------->
+    <script type="module"
+        src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js">
+    </script>
+    <style>
+        body{
+            margin:0;
+            background:#ffffff;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+        }
+
+        model-viewer{
+            width:100vw;
+            height:80vh;
+            border-radius:10px;
+        }
+    </style>
+
+    <title>KaIA | Testes</title>
+</head>
+
+<body>
+
+    <!-- ================= MENU LATERAL ================= -->
+
+    <span class="botao" onclick="abrirMenu()">☰</span>
+
+    <div class="menu" id="menu">
+        <h1> - KaIA</h1>
+
+        <a href="index.html">Início</a>
+        <a href="login.html">Login</a>
+        <a href="perfil.html">Perfil</a>
+        <a href="materias.html">Matérias</a>
+        <a href="responsaveis.html">Professor/Responsável</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="config.html">Config.</a>
+    </div>
+
+    <section class="main-content">
+        <header class="content-header">
+            <h2>Teste de Modelos 3D</h2>
+            <p>Visualize o modelo 3D do personagem.</p>
+        </header>
+
+        <div class="model-viewer-container">
+        <model-viewer
+            src="Coati.glb"
+            auto-rotate
+            camera-controls
+            shadow-intensity="1">
+        </model-viewer>
+
+    </section>
+
+    <!-- JS -->
+    <script src="script.js"></script>
+
+</body>
+
+</html>

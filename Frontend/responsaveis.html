@@ -2,6 +2,7 @@
 <html lang="pt-br">
 
 <head>
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap"
@@ -9,21 +10,27 @@
     <title>Responsável | KaIA</title>
     <!-- CSS -->
     <link rel="stylesheet" href="style.css">
-
 </head>
 
 <body>
-    <div class="wrap">
-        <div class="topo">
-            <h1>Ka<span>IA</span></h1>
-            <p>Painel do Responsável — acompanhe a evolução do seu filho(a)</p>
-            <a href="index.html">← voltar ao app</a>
+    <span class="botao" onclick="abrirMenu()">☰</span>
+
+        <div class="menu" id="menu">
+            <h1> - KaIA</h1>
+            <a href="index.html">Início</a>
+            <a href="login.html">Login</a>
+            <a href="perfil.html">Perfil</a>
+            <a href="materias.html">Matérias</a>
+            <a href="meu-coati.html">Meu Coati</a>
+            <a href="responsaveis.html">Professor/Responsável</a>
+            <a href="dashboard.html">Dashboard</a>
+            <a href="config.html">Config.</a>
         </div>
 
         <div class="busca">
             <input id="email" type="email" placeholder="E-mail do aluno" autocomplete="off">
             <button onclick="carregar()">Ver estatísticas</button>
-        </div>
+        </div><div class="wrap">
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -223,6 +230,10 @@
 
         document.addEventListener('DOMContentLoaded', carregarGraficoHobbies);
     </script>
+    
+    <!-- JS -->
+    <script src="script.js"></script>
+
 </body>
 
 </html>

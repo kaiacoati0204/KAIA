@@ -17,14 +17,87 @@ from typing import Optional
 
 # --- Inicialização ------------------------------------------------------------
 load_dotenv()
-API_KEY = os.getenv("API_KEY")
+# Aceita os dois nomes: API_KEY (prod/CI) ou CHAVE_ACESSO (.env local).
+API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-app = Flask(__name__)
-CORS(app)  # libera o frontend (file:// ou localhost) a chamar a API
+# Aluno "anônimos" sentinela: usado quando o /events precisa auto-criar uma
+# sessão sem conhecer o aluno (satisfaz a FK sessions.user_id -> perfis.user_id).
+ANON_USER = "00000000-0000-0000-0000-000000000000"
 
-# Arquivos locais (espelham as futuras tabelas do Supabase)
-EVENTS_FILE = "events.jsonl"
-PERFIS_FILE = "perfis.jsonl"
+# Resposta padrão quando o servidor está sem banco (pool = None).
+_SEM_BANCO = JSONResponse(
+    {"erro": "Banco de dados indisponível. Configure DATABASE_URL no .env (string do Supabase)."},
+    status_code=503,
+)
+
+
+
+# --- Pool asyncpg (criado no startup, fechado no shutdown) --------------------
+# statement_cache_size=0 é OBRIGATÓRIO no pooler transaction (pgbouncer) do
+# Supabase: o modo transaction não suporta prepared statements.
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Pool tolerante a falha: se DATABASE_URL não estiver setada ou o banco
+    # estiver inacessível, o servidor SOBE mesmo assim (pool = None). As rotas
+    # que dependem do banco respondem 503 com mensagem clara, e as de IA (Gemini)
+    # seguem funcionando. Isso evita o crash de startup em dev sem Supabase.
+    app.state.pool = None
+    if not DATABASE_URL:
+        print("[KaIA] AVISO: DATABASE_URL não definida no .env — subindo SEM banco. "
+              "As rotas de dados (sessions/events/perfil/responsavel) ficarão indisponíveis.")
+    else:
+        try:
+            app.state.pool = await asyncpg.create_pool(
+                DATABASE_URL,
+                statement_cache_size=0,
+                min_size=1,
+                max_size=5,
+                timeout=8,            # connect timeout: falha rápido se a porta estiver bloqueada
+                command_timeout=15,
+            )
+            print("[KaIA] Pool de conexão com o Supabase criado.")
+        except Exception as e:
+            print("[KaIA] AVISO: não foi possível conectar ao banco — subindo SEM banco:", e)
+
+    # Garante o aluno anônimo (alvo da FK no fallback do /events).
+    # Tolerante a falha: em ambiente sem schema (ex: CI com Postgres vazio) o
+    # servidor ainda sobe — só não cria o anônimo.
+    if app.state.pool is not None:
+        try:
+            async with app.state.pool.acquire() as conn:
+                await conn.execute(
+                    "insert into perfis (user_id, email) values ($1::uuid, 'anonimo') on conflict (user_id) do nothing",
+                    ANON_USER,
+                )
+        except Exception as e:
+            print("[KaIA] aviso: não foi possível garantir o aluno anônimo:", e)
+
+    # Scheduler: agrega features das sessões ativas a cada 30s.
+    # Só inicia se houver banco — o job de agregação depende do pool.
+    scheduler = None
+    if app.state.pool is not None:
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(job_agregacao, "interval", seconds=30, args=[app], id="agg_features")
+        scheduler.start()
+        print("[KaIA] Scheduler de agregação iniciado (a cada 30s).")
+
+    yield
+
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+    if app.state.pool is not None:
+        await app.state.pool.close()
+        print("[KaIA] Pool encerrado.")
+
+
+app = FastAPI(title="KaIA Backend", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ================= HELPERS GEMINI =============================================
@@ -311,18 +384,110 @@ async def encerrar_sessao(session_id: str, request: Request):
     return {"status": "ok", "session_id": session_id, "duracao_s": round(dur, 1)}
 
 
-# ================== API: PERFIL (login + hobbies + features) =================
-# Espelha a futura tabela `perfis` do Supabase. Campos esperados:
-#   email, hobbies[], features{horario_inicio, sessoes_no_dia, dia_semana,
-#   dias_para_prova, sequencia_dias_estudo, duracao_pausa_anterior_min,
-#   ambiente_dispositivo}
-@app.route("/perfil", methods=["POST"])
-def perfil():
-    dados = request.get_json(silent=True) or {}
-    dados["received_at"] = datetime.utcnow().isoformat()
+# ================== API: EVENTS (ingestão de eventos de atenção) =============
+class EventIn(BaseModel):
+    session_id: str
+    event_type: str
+    payload: dict = {}
+    ts: Optional[str] = None   # ISO 8601 vindo do frontend; default = now() no banco
+
+
+@app.post("/events")
+async def receber_evento(body: EventIn, request: Request):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    payload_json = json.dumps(body.payload, ensure_ascii=False)
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Garante a sessão pai (FK session_events.session_id -> sessions).
+            # Fallback: se o evento chegar antes do /sessions, cria a sessão com
+            # o aluno ANÔNIMO (satisfaz a FK sessions.user_id -> perfis). No fluxo
+            # normal o /sessions já criou a sessão com o user_id real do aluno.
+            await conn.execute(
+                """
+                insert into sessions (session_id, user_id, session_start_ts, platform, app_version)
+                values ($1::uuid, $2::uuid, now(), 'web', 'mvp-0.1')
+                on conflict (session_id) do nothing
+                """,
+                body.session_id, ANON_USER,
+            )
+            # ts = now() do BANCO (autoritativo). NÃO usamos body.ts do frontend:
+            # o relógio do navegador pode estar defasado e quebraria a janela de
+            # tempo do job de agregação (session_features). Eventos chegam em
+            # tempo real (fetch por evento), então now() ≈ hora do evento.
+            ev = await conn.fetchrow(
+                """
+                insert into session_events (session_id, event_type, payload, ts)
+                values ($1::uuid, $2, $3::jsonb, now())
+                returning event_id
+                """,
+                body.session_id, body.event_type, payload_json,
+            )
+
+    print("[KaIA Event]", body.event_type, body.session_id)
+    return {"status": "ok", "event_id": str(ev["event_id"])}
+
+
+# ================== API: PERFIL (login + hobbies, upsert em `perfis`) ========
+# Atributos ESTÁVEIS do aluno (1 linha por user_id). A tabela user_profiles
+# guarda features AGREGADAS/derivadas e é populada depois pelo pipeline de ML.
+def _to_date(s):
     try:
-        with open(PERFIS_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(dados, ensure_ascii=False) + "\n")
+        return date.fromisoformat(s) if s else None
+    except (ValueError, TypeError):
+        return None
+
+
+@app.post("/perfil")
+async def perfil(request: Request, dados: dict = Body(default={})):
+    user_id = dados.get("user_id")
+    if not user_id:
+        # sem identidade estável não há como fazer upsert
+        return JSONResponse({"status": "ignorado", "motivo": "sem user_id"}, status_code=400)
+
+    p = dados.get("perfil") or {}
+    email = p.get("email") or dados.get("email") or None
+    hobbies = p.get("hobbies") or dados.get("hobbies") or []
+    ambiente = p.get("ambiente_dispositivo")
+    seq = int(p.get("sequencia_dias_estudo") or 0)
+    sess_dia = int(p.get("sessoes_no_dia") or 0)
+
+    # ultima_sessao_ts vem como epoch em ms → timestamptz
+    ult_ts = None
+    raw_ts = p.get("ultima_sessao_ts")
+    if raw_ts:
+        try:
+            ult_ts = datetime.fromtimestamp(float(raw_ts) / 1000, tz=timezone.utc)
+        except (ValueError, TypeError, OSError):
+            ult_ts = None
+
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                insert into perfis (user_id, email, hobbies, data_prova, ambiente_dispositivo,
+                    sequencia_dias_estudo, sessoes_no_dia, ultimo_dia_estudo, ultima_sessao_ts, updated_at)
+                values ($1::uuid, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, now())
+                on conflict (user_id) do update set
+                    email                 = coalesce(excluded.email, perfis.email),
+                    hobbies               = excluded.hobbies,
+                    data_prova            = coalesce(excluded.data_prova, perfis.data_prova),
+                    ambiente_dispositivo  = coalesce(excluded.ambiente_dispositivo, perfis.ambiente_dispositivo),
+                    sequencia_dias_estudo = excluded.sequencia_dias_estudo,
+                    sessoes_no_dia        = excluded.sessoes_no_dia,
+                    ultimo_dia_estudo     = coalesce(excluded.ultimo_dia_estudo, perfis.ultimo_dia_estudo),
+                    ultima_sessao_ts      = coalesce(excluded.ultima_sessao_ts, perfis.ultima_sessao_ts),
+                    updated_at            = now()
+                """,
+                user_id, email, json.dumps(hobbies, ensure_ascii=False),
+                _to_date(p.get("data_prova")), ambiente, seq, sess_dia,
+                _to_date(p.get("ultimo_dia_estudo")), ult_ts,
+            )
     except Exception as e:
         print("[KaIA] Erro ao gravar perfil:", e)
         return JSONResponse({"status": "erro"}, status_code=500)
@@ -614,6 +779,209 @@ async def dados_grafico(request: Request):
         "labels": [r["hobby"] for r in linhas],
         "valores": [int(r["n"]) for r in linhas],
     }
+
+
+# ================== API: DADOS DO DASHBOARD =================================
+# Duas fontes possíveis, nesta ordem de prioridade:
+#   1) data/KaIA_Base_Sintetica.xlsx  → base EXPERIMENTAL (600 sessões, 1 linha
+#      por sessão, com as features de atenção e o rótulo `target`). O backend
+#      AGREGA essa base nos blocos que o dashboard consome.
+#   2) Backend/dados_dashboard.xlsx   → planilha manual (uma aba por bloco),
+#      criada por `python gerar_planilha_dashboard.py`.
+# Se nenhuma existir, o frontend cai no fallback de demonstração (script.js).
+#
+# ATENÇÃO: a base sintética NÃO tem dados financeiros. Os blocos `mrr_mensal`,
+# `metas_fase` e `saude_financeira` (aba FINANCEIRO) não são emitidos aqui —
+# o frontend preenche esses com o demo. Isso é intencional e sinalizado na UI.
+BASE_SINTETICA = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "data", "KaIA_Base_Sintetica.xlsx")
+)
+DASHBOARD_XLSX = os.path.join(os.path.dirname(__file__), "dados_dashboard.xlsx")
+
+# Rótulos amigáveis para o `target` (mantém a ordem verde → amarelo → vermelho,
+# que é a mesma ordem das cores do gráfico de rosca no frontend).
+_TARGETS = [("engajado", "Engajado"), ("distraido", "Distraído"), ("muito_distraido", "Muito distraído")]
+
+# Sinais de dispersão exibidos como barras: rótulo -> coluna da base.
+# Cada um vira "intensidade média" = média / máximo observado (0–100%).
+_SINAIS = [
+    ("Trocas de aba",        "mudancas_aba"),
+    ("Cliques fora da área", "cliques_fora_area_estudo"),
+    ("Pausas de digitação",  "pausas_digitacao_s"),
+    ("Velocidade de scroll", "velocidade_scroll_px_s"),
+]
+
+
+def _agregar_base_sintetica(df):
+    """Transforma a base (1 linha = 1 sessão) nos blocos que o dashboard espera."""
+    total = len(df)
+    pct = lambda n: round(100.0 * n / total, 1) if total else 0.0
+
+    df = df.copy()
+    df["hora"] = df["horario_estudo"].dt.hour
+    df["dia"] = df["horario_estudo"].dt.date
+
+    # --- sessões por hora + "alertas" (sessões muito distraídas) ---
+    por_hora = df.groupby("hora").size()
+    alertas_hora = df[df["target"] == "muito_distraido"].groupby("hora").size()
+    sessoes_hora = [
+        {"hora": f"{h}h", "sessoes": int(por_hora.get(h, 0)), "alertas": int(alertas_hora.get(h, 0))}
+        for h in range(24)
+    ]
+
+    # --- distribuição de perfis (ocupa o slot do gráfico de "planos") ---
+    perfis = [{"plano": str(k), "percentual": pct(v)} for k, v in df["perfil"].value_counts().items()]
+
+    # --- sessões mais recentes ---
+    recentes = df.sort_values("horario_estudo", ascending=False).head(6)
+    alunos_recentes = [
+        {
+            "aluno": str(r.session_id),
+            "plano": str(r.perfil),
+            "foco": f"{int(r.acertos_questoes)}/10",
+            "tema": str(r.tipo_atividade),
+        }
+        for r in recentes.itertuples()
+    ]
+
+    # --- sessões com maior dispersão viram os "alertas recentes" ---
+    nivel = {"muito_distraido": "vermelho", "distraido": "amarelo", "engajado": "verde"}
+    piores = df.sort_values(["mudancas_aba", "tempo_fora_foco_s"], ascending=False).head(4)
+    alertas_recentes = [
+        {
+            "nivel": nivel.get(r.target, "amarelo"),
+            "mensagem": f"{r.session_id} — {int(r.mudancas_aba)} trocas de aba · {r.tempo_fora_foco_s:.0f}s fora de foco",
+            "tempo": str(r.perfil),
+        }
+        for r in piores.itertuples()
+    ]
+
+    # --- sessões por dia: iniciadas vs. concluídas (1 - taxa de abandono) ---
+    por_dia = df.groupby("dia").agg(
+        iniciadas=("session_id", "size"), abandono=("taxa_abandono_sessao", "mean")
+    )
+    sessoes_dia = [
+        {
+            "data": d.strftime("%d/%m"),
+            "iniciadas": int(r.iniciadas),
+            "concluidas": int(round(r.iniciadas * (1 - r.abandono))),
+        }
+        for d, r in por_dia.iterrows()
+    ]
+
+    # --- tipos de atividade (ocupa o slot de "temas estudados") ---
+    # Rótulos legíveis: a base guarda em snake_case (video_aula, exercicios).
+    rotulos = {
+        "leitura": "Leitura", "exercicios": "Exercícios", "simulado": "Simulado",
+        "video_aula": "Vídeo-aula", "quiz": "Quiz",
+    }
+    atividades = [
+        {"tema": rotulos.get(str(k), str(k)), "sessoes": int(v)}
+        for k, v in df["tipo_atividade"].value_counts().items()
+    ]
+
+    # --- distribuição do target ---
+    cont = df["target"].value_counts()
+    distribuicao = [{"faixa": rot, "percentual": pct(int(cont.get(chave, 0)))} for chave, rot in _TARGETS]
+
+    # --- sinais de dispersão: média relativa ao pico observado ---
+    eventos = []
+    for rotulo, col in _SINAIS:
+        pico = float(df[col].max())
+        media = float(df[col].mean())
+        eventos.append({"tipo": rotulo, "percentual": round(100.0 * media / pico) if pico else 0})
+
+    # --- engajamento (%) por hora ---
+    eng = df.assign(_e=(df["target"] == "engajado").astype(int)).groupby("hora")["_e"].mean() * 100
+    foco_hora = [{"hora": f"{h}h", "foco": round(float(eng.get(h, 0.0)), 1)} for h in range(24)]
+
+    # --- KPIs (a aba FINANCEIRO não é emitida: a base não tem receita) ---
+    p_eng = pct(int(cont.get("engajado", 0)))
+    p_dis = pct(int(cont.get("distraido", 0)))
+    p_mui = pct(int(cont.get("muito_distraido", 0)))
+    kpis = [
+        {"view": "geral", "icone": "layers", "rotulo": "SESSÕES ANALISADAS", "valor": f"{total}",
+         "subtexto": "base sintética"},
+        {"view": "geral", "icone": "smile", "rotulo": "ENGAJAMENTO", "valor": f"{p_eng}%",
+         "subtexto": "sessões rotuladas engajado", "cor": "verde"},
+        {"view": "geral", "icone": "check", "rotulo": "ACERTOS MÉDIOS",
+         "valor": f"{df['acertos_questoes'].mean():.1f}/10".replace(".", ","), "subtexto": "por sessão"},
+        {"view": "geral", "icone": "alert", "rotulo": "ABANDONO MÉDIO",
+         "valor": f"{df['taxa_abandono_sessao'].mean()*100:.0f}%", "subtexto": "taxa média da sessão",
+         "cor": "vermelho"},
+
+        {"view": "sessoes", "icone": "clock", "rotulo": "DURAÇÃO MÉDIA",
+         "valor": f"{df['duracao_sessao_min'].mean():.0f} min", "subtexto": "por sessão"},
+        {"view": "sessoes", "icone": "list", "rotulo": "TEMPO DE RESPOSTA",
+         "valor": f"{df['tempo_resposta_ms'].mean()/1000:.1f}s".replace(".", ","), "subtexto": "média por questão"},
+        {"view": "sessoes", "icone": "target", "rotulo": "DIFICULDADE MÉDIA",
+         "valor": f"{df['nivel_dificuldade_atividade'].mean():.1f}/5".replace(".", ","), "subtexto": "nível da atividade"},
+        {"view": "sessoes", "icone": "calendar", "rotulo": "DIAS COBERTOS",
+         "valor": f"{df['dia'].nunique()}", "subtexto": "período da base"},
+
+        {"view": "atencao", "icone": "smile", "rotulo": "ENGAJADO", "valor": f"{p_eng}%",
+         "subtexto": "do total de sessões", "cor": "verde"},
+        {"view": "atencao", "icone": "meh", "rotulo": "DISTRAÍDO", "valor": f"{p_dis}%",
+         "subtexto": "do total de sessões", "cor": "amarelo"},
+        {"view": "atencao", "icone": "frown", "rotulo": "MUITO DISTRAÍDO", "valor": f"{p_mui}%",
+         "subtexto": "do total de sessões", "cor": "vermelho"},
+        {"view": "atencao", "icone": "bolt", "rotulo": "TEMPO FORA DE FOCO",
+         "valor": f"{df['tempo_fora_foco_s'].mean():.0f}s", "subtexto": "média por sessão"},
+    ]
+
+    return {
+        "fonte": "base_sintetica",
+        "total_sessoes": total,
+        "periodo": f"{df['dia'].min():%d/%m/%Y} — {df['dia'].max():%d/%m/%Y}",
+        "kpis": kpis,
+        "sessoes_hora": sessoes_hora,
+        "planos": perfis,
+        "alunos_recentes": alunos_recentes,
+        "alertas_recentes": alertas_recentes,
+        "sessoes_14dias": sessoes_dia,
+        "temas_estudados": atividades,
+        "distribuicao_foco": distribuicao,
+        "eventos_tipo": eventos,
+        "foco_hora": foco_hora,
+    }
+
+
+@app.get("/dashboard/dados")
+def dashboard_dados():
+    try:
+        import pandas as pd
+    except ImportError:
+        return JSONResponse(
+            {"erro": "pandas não instalado. Rode: pip install -r requirements.txt"},
+            status_code=500,
+        )
+
+    # 1) Base experimental (prioridade)
+    if os.path.exists(BASE_SINTETICA):
+        try:
+            df = pd.read_excel(BASE_SINTETICA)
+            return _agregar_base_sintetica(df)
+        except Exception as e:
+            print("[KaIA] erro ao agregar a base sintética:", e)
+            return JSONResponse({"erro": "Não foi possível ler a base sintética."}, status_code=500)
+
+    # 2) Planilha manual (uma aba por bloco)
+    if os.path.exists(DASHBOARD_XLSX):
+        try:
+            planilhas = pd.read_excel(DASHBOARD_XLSX, sheet_name=None)
+        except Exception as e:
+            print("[KaIA] erro ao ler dados_dashboard.xlsx:", e)
+            return JSONResponse({"erro": "Não foi possível ler a planilha."}, status_code=500)
+        saida = {"fonte": "planilha_manual"}
+        for nome, df in planilhas.items():
+            if nome.startswith("_"):      # ignora abas auxiliares (ex: _LEIA-ME)
+                continue
+            df = df.where(pd.notnull(df), None)   # NaN → None (JSON válido)
+            saida[nome] = df.to_dict(orient="records")
+        return saida
+
+    # 3) Nada encontrado → frontend usa o demo
+    return {"vazio": True, "motivo": "nenhuma planilha encontrada"}
 
 
 # ================== HEALTHCHECK =============================================

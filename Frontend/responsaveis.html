@@ -15,27 +15,27 @@
 <body>
     <span class="botao" onclick="abrirMenu()">☰</span>
 
-        <div class="menu" id="menu">
-            <h1> - KaIA</h1>
-            <a href="index.html">Início</a>
-            <a href="login.html">Login</a>
-            <a href="perfil.html">Perfil</a>
-            <a href="materias.html">Matérias</a>
-            <a href="meu-coati.html">Meu Coati</a>
-            <a href="responsaveis.html">Professor/Responsável</a>
-            <a href="dashboard.html">Dashboard</a>
-            <a href="config.html">Config.</a>
-        </div>
+    <div class="menu" id="menu">
+        <h1> - KaIA</h1>
+        <a href="index.html">Início</a>
+        <a href="login.html">Login</a>
+        <a href="perfil.html">Perfil</a>
+        <a href="materias.html">Matérias</a>
+        <a href="meu-coati.html">Meu Coati</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="config.html">Config.</a>
+    </div>
 
+    <main class="conteudo">
         <div class="busca">
             <input id="email" type="email" placeholder="E-mail do aluno" autocomplete="off">
             <button onclick="carregar()">Ver estatísticas</button>
-        </div><div class="wrap">
+        </div>
+        </main>
 
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
+        
         <div id="status"></div>
-
         <div id="painel">
             <div class="cards">
                 <div class="card">

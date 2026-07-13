@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="style.css">
+
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+
+    <title>KaIA | Perfil</title>
+</head>
+
+<body>
+
+    <span class="botao" onclick="abrirMenu()">☰</span>
+
+    <div class="menu" id="menu">
+        <h1>- KaIA</h1>
+        <a href="index.html">Início</a>
+        <a href="login.html">Login</a>
+        <a href="perfil.html">Perfil</a>
+        <a href="materias.html">Matérias</a>
+        <a href="meu-coati.html">Meu Coati</a>
+        <a href="responsaveis.html">Professor/Responsável</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="config.html">Configurações</a>
+    </div>
+
+    <main class="conteudo">
+        <section class="perfil">
+            
+            <div class="perfil-topo">
+                <div class="perfil-avatar">
+                    <img src="img/avatar.png" alt="Avatar" id="avatarUsuario">
+                </div>
+                <div class="perfil-info">
+                    <h1 id="nomeUsuario">Carregando...</h1>
+                    <p id="emailUsuario">mail@exemplo.com</p>
+                    <span class="perfil-tag" id="perfilUsuario">Perfil de Aprendizagem</span>
+                </div>
+            </div>
+
+            <div class="cards-perfil">
+                <div class="card-perfil">
+                    <h2 id="tempoResposta">0 ms</h2>
+                    <p>Tempo médio de resposta</p>
+                </div>
+                <div class="card-perfil">
+                    <h2 id="acertos">0</h2>
+                    <p>Questões corretas</p>
+                </div>
+                <div class="card-perfil">
+                    <h2 id="duracaoSessao">0 min</h2>
+                    <p>Duração média da sessão</p>
+                </div>
+                <div class="card-perfil">
+                    <h2 id="sessoesDia">0</h2>
+                    <p>Sessões hoje</p>
+                </div>
+            </div>
+
+            <div class="secao-perfil">
+                <h2>Hábitos de Estudo</h2>
+                <div class="linha-perfil">
+                    <span>Velocidade de Scroll</span>
+                    <span id="scrollUsuario">0 px/s</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Pausas na Digitação</span>
+                    <span id="pausasUsuario">0 s</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Mudanças de Aba</span>
+                    <span id="abasUsuario">0</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Tempo Fora de Foco</span>
+                    <span id="tempoFocoUsuario">0 s</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Cliques Fora da Área</span>
+                    <span id="cliquesUsuario">0</span>
+                </div>
+            </div>
+
+            <div class="secao-perfil">
+                <h2>Resumo da Sessão</h2>
+                <div class="linha-perfil">
+                    <span>Tipo de atividade</span>
+                    <span id="atividadeUsuario">-</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Dificuldade</span>
+                    <span id="dificuldadeUsuario">-</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Horário de estudo</span>
+                    <span id="horarioUsuario">-</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Histórico de intervenções</span>
+                    <span id="intervencoesUsuario">-</span>
+                </div>
+                <div class="linha-perfil">
+                    <span>Taxa de abandono</span>
+                    <span id="abandonoUsuario">-</span>
+                </div>
+            </div>
+
+            <div class="secao-perfil">
+                <h2>Análise da KaIA</h2>
+                <div class="analise-kaia" id="analiseIA">
+                    <p>Aqui aparecerá automaticamente uma análise gerada pela KaIA sobre o desempenho do estudante.</p>
+                    <p>Exemplo:</p>
+                    <ul>
+                        <li>✔ Excelente velocidade de resposta.</li>
+                        <li>✔ Poucas distrações durante a sessão.</li>
+                        <li>✔ Continue estudando neste horário.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>

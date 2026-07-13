@@ -52,16 +52,16 @@ body {
    MENU LATERAL
 ========================= */
 .menu {
-  width: 0;
   height: 100vh;
-  background-color: var(--profundo);
+  width: 0; 
   position: fixed;
   top: 0;
   left: 0;
+  z-index: 9999;
+  background-color: var(--profundo);
   overflow-x: hidden;
   transition: 0.4s ease;
-  padding-top: 80px;
-  z-index: 1500;
+  padding-top: 60px;
 }
 .menu a {
   display: block;
@@ -110,8 +110,43 @@ body {
   position: relative;
 }
 .conteudo-login,
-.caixa-login,
-.caixa-hobbies,
+.caixa-hobbies{
+    width: min(1100px, 98vw);
+    height: min(800px, 95vh);
+    padding: 55px;
+    border-radius: 32px;
+    background: linear-gradient(
+        180deg,
+        rgba(255,255,255,.1),
+        rgba(255,255,255,.03)
+    );
+    backdrop-filter: blur(25px);
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:
+        0 20px 60px rgba(0,0,0,.35),
+        inset 0 1px 1px rgba(255,255,255,.08);
+    display:flex;
+    flex-direction:column;
+    gap:28px;
+    position:relative;
+    overflow:hidden;
+}
+.caixa-login h1,
+.caixa-hobbies h1{
+    font-size: 5rem;
+    text-align: center;
+    color: var(--prox-br);
+}
+.caixa-login h1 span,
+.caixa-hobbies h1 span{
+    color: var(--gravata-kinrou);
+}
+.caixa-login p,
+.caixa-hobbies p{
+    text-align: center;
+    color: var(--prox-br);
+    margin-top: -10px;
+}
 .quiz-container,
 .pergunts {
   position: relative;
@@ -170,7 +205,6 @@ body {
 /* =========================
    TÍTULOS
 ========================= */
-
 .caixa-login h1 {
   font-size: 5rem;
   text-align: center;
@@ -203,20 +237,20 @@ body {
   outline: none;
   transition: all 0.3s ease;
 }
-.grupo-input input::placeholder {
+.grupo-input input::placeholder{
   color: rgba(255, 255, 255, 0.4);
 }
-.grupo-input input:focus {
+.grupo-input input:focus{
   border-color: var(--gravata-kinrou);
   background: rgba(255, 255, 255, 0.06);
   box-shadow: 0 0 20px rgba(243, 208, 9, 0.25);
 }
-.grupo-input label {
+.grupo-input label{
   color: var(--prox-br);
   font-weight: 700;
   font-size: 0.95rem;
 }
-.grupo-input input {
+.grupo-input input{
   padding: 18px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -234,8 +268,7 @@ body {
 /* ==========================================
    BOTÃO
 ============================================= */
-
-.botao-login {
+.botao-login{
   padding: 18px;
   border: none;
   border-radius: 20px;
@@ -246,7 +279,7 @@ body {
   cursor: pointer;
   transition: all 0.3s ease;
 }
-.botao-login:hover {
+.botao-login:hover{
   transform: translateY(-4px);
   box-shadow: 0 15px 30px rgba(243, 208, 9, 0.35);
 }
@@ -254,21 +287,45 @@ body {
 /* =========================
    HOBBIES ESCOLHIDOS
 ========================= */
-.clique {
+.clique{
   color: white;
   margin-top: 20px;
   text-align: center;
 }
-.botoes-hobbies {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
-  gap: 15px !important;
-  width: 100%;
-  justify-content: center;
-  padding: 20px 0;
+.lista-hobbies{
+    flex:1;
+    overflow-y:auto;
+    overflow-x:hidden;
 }
-.botao-hobbies {
+.lista-hobbies::-webkit-scrollbar{
+    width:8px;
+}
+.lista-hobbies::-webkit-scrollbar-track{
+    background:transparent;
+}
+.lista-hobbies::-webkit-scrollbar-thumb{
+    background:#ffd12c;
+    border-radius:20px;
+}
+.lista-hobbies::-webkit-scrollbar-thumb:hover{
+    background:#ffb300;
+}
+.botoes-hobbies{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:18px;
+
+    width:100%;
+    margin-top:20px;
+}
+.botoes-hobbies{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:18px;
+    width:100%;
+    margin-top:20px;
+}
+.botao-hobbies{
   display: inline-flex !important;
   justify-content: center;
   align-items: center;
@@ -286,48 +343,24 @@ body {
   font-weight: 800;
   cursor: pointer;
   transition: all 0.3s ease;
-  transition:
-    background 0.2s,
-    color 0.2s;
 }
-.botao-hobbies:hover {
+.botao-hobbies:hover{
   transform: translateY(-4px);
   box-shadow: 0 15px 30px rgba(226, 174, 2, 0.342);
 }
-.botao-hobbies.selecionado {
+.botao-hobbies.selecionado{
   background: var(--vd-uniao);
   color: var(--profundo);
   font-weight: 700;
 }
-.caixa-hobbies a {
+.caixa-hobbies a{
   text-align: center;
   text-decoration: none;
   color: var(--profundo);
   font-weight: 700;
   transition: 0.3s ease;
 }
-.caixa-hobbies {
-  width: 650px;
-  height: 600px;
-  padding: 55px;
-  border-radius: 32px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.1),
-    rgba(255, 255, 255, 0.03)
-  );
-  backdrop-filter: blur(25px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.35),
-    inset 0 1px 1px rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 28px;
-  position: relative;
-  overflow: hidden;
-  animation: aparecer 0.7s ease;
-}
+
 
 /* =========================
    APP WRAPPER
@@ -510,7 +543,7 @@ body {
   margin-bottom: 10px;
 }
 .mission-card span {
-  color: var(--profundo);
+  color: var(--creme-bg);
 }
 
 /* =========================
@@ -641,21 +674,20 @@ body {
 }
 .busca {
   display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin: 0 auto 28px;
-  max-width: 520px;
-  flex-wrap: wrap;
+  gap: 15px;
+  width: 75%;
+  max-width: 85%;
+  margin: 0 auto;
 }
 .busca input {
   flex: 1;
-  min-width: 220px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--texto);
-  font-size: 1rem;
+  padding: 15px 20px;
+  font-size: 1.1rem;
+  border: 2px solid rgba(196, 161, 134, 0.4);
+  border-radius: 12px;
+  background: white;
+  color: var(--profundo);
+  outline: none;
 }
 .busca button {
   padding: 12px 22px;
@@ -793,6 +825,200 @@ body {
   .question-wrapper h2 {
     font-size: 1.5rem;
   }
+}
+
+/* ==================================================================================================================================================
+  PERFIL 
+================================================================================================================================================== */
+.conteudo {
+  width: 100%;
+  height: 100vh;
+  padding: 40px 60px 40px 100px;
+  overflow-y: auto !important;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  background-color: var(--creme-bg);
+  box-sizing: border-box;
+}
+
+.perfil {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* --- CABEÇALHO --- */
+.perfil-topo {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgba(26, 43, 76, 0.05);
+  border: 1px solid rgba(196, 161, 134, 0.2);
+  width: 100%;
+}
+.perfil-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--profundo);
+  padding: 5px;
+  box-shadow: 0 8px 20px rgba(45, 75, 165, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.perfil-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.perfil-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.perfil-info h1 {
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: var(--profundo);
+}
+
+/* --- CARDS DE ESTATÍSTICAS (O SEGREDO PARA NÃO ESMAGAR) --- */
+.cards-perfil {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 25px;
+  width: 100%;
+}
+.card-perfil {
+  background: white;
+  padding: 35px 25px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.04);
+  border: 1px solid rgba(196, 161, 134, 0.15);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  flex: 1 1 calc(25% - 25px); /* <--- Distribui em 4 colunas perfeitas na tela grande */
+  min-width: 250px; /* <--- Impede de virar um quadrado espremido! */
+}
+.card-perfil h2 {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: var(--azul-coati);
+  margin-bottom: 10px;
+}
+
+/* --- SEÇÕES DE TABELAS/DADOS --- */
+.secao-perfil, .grafico-container {
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.04);
+  border: 1px solid rgba(196, 161, 134, 0.15);
+  width: 100%; /* Ocupa os 100% da tua tela larga */
+  box-sizing: border-box;
+}
+.secao-perfil h2 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--profundo);
+  margin-bottom: 25px;
+  border-bottom: 2px solid var(--creme-bg);
+  padding-bottom: 12px;
+}
+.linha-perfil {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px dashed rgba(196, 161, 134, 0.25);
+}
+
+/* --- MENUS E BOTÕES (BLINDAGEM DO CLICK) --- */
+.menu {
+  height: 100vh;
+  width: 0;
+  position: fixed !important; /* Força ficar por cima */
+  top: 0;
+  left: 0;
+  z-index: 99999 !important; /* Máxima prioridade sobre gráficos e cards */
+  background-color: var(--profundo);
+  overflow-x: hidden;
+  transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding-top: 80px;
+}
+.botao {
+  font-size: 32px;
+  cursor: pointer;
+  position: fixed !important;
+  top: 20px;
+  left: 25px;
+  z-index: 999999 !important;
+  color: var(--profundo) !important;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 5px 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+/* ------------ CARDS DE ESTATÍSTICAS ------------ */
+.cards-perfil {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 25px;
+  width: 100%;
+}
+.card-perfil {
+  background: white;
+  padding: 30px 20px;
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.04);
+  border: 1px solid rgba(196, 161, 134, 0.15);
+  flex: 1;
+  min-width: 220px;
+}
+.card-perfil:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(45, 75, 165, 0.08);
+}
+.card-perfil h2 {
+  font-size: 2.4rem;
+  font-weight: 800;
+  color: var(--azul-coati);
+  margin-bottom: 8px;
+  letter-spacing: -1px;
+}
+.card-perfil p {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--bege);
+}
+
+/* --- SECÇÕES DE DADOS (HÁBITOS E RESUMO) --- */
+.secao-perfil {
+  background: white;
+  padding: 30px;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.04);
+}
+
+
+canvas {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 450px; 
 }
 
 /* ==================================================================================================================================================

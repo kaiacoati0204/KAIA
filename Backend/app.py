@@ -983,6 +983,19 @@ def dashboard_dados():
     # 3) Nada encontrado → frontend usa o demo
     return {"vazio": True, "motivo": "nenhuma planilha encontrada"}
 
+# ========================================= PERFIL =============================================
+@app.get("/perfil")
+def perfil():
+    aluno = df.iloc[0]
+    return jsonify({
+        "nome":"Nome do usuário",
+        "email":aluno["email"],
+        "perfil":aluno["perfil"],
+        "tempo_resposta_ms":
+            aluno["tempo_resposta_ms"],
+        "velocidade_scroll_px_s":
+            aluno["velocidade_scroll_px_s"],
+    })
 
 # ================== HEALTHCHECK =============================================
 @app.get("/")

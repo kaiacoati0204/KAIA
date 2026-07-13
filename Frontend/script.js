@@ -237,16 +237,13 @@ function salvarLogin(event) {
 // ==================================================================================================
 //                          MENU
 // ===================================================================================================
-let aberto = false;
-
 function abrirMenu() {
-    const menu = document.getElementById('menu');
-    if (!aberto) {
-        menu.style.width = '200px';
-        aberto = true;
+    const menu = document.getElementById("menu");
+    if (!menu) return;
+    if (menu.style.width === "250px") {
+        menu.style.width = "0px";
     } else {
-        menu.style.width = '0';
-        aberto = false;
+        menu.style.width = "250px";
     }
 }
 
@@ -692,6 +689,37 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[KaIA] Listeners registrados. Session ID:', sessionId);
 });
 
+// ====================================================================================
+//                  PERFIL - para o usuário ver a própria melhora 
+// ===================================================================================
+async function carregarPerfil() {
+    if (!document.getElementById("nomeUsuario")) return;
+    try {
+        const resposta = await fetch("/perfil");
+        if (!resposta.ok) return;
+        const usuario = await resposta.json();
+    
+        if (document.getElementById("nomeUsuario")) document.getElementById("nomeUsuario").textContent = usuario.nome;
+        if (document.getElementById("emailUsuario")) document.getElementById("emailUsuario").textContent = usuario.email;
+        if (document.getElementById("perfilUsuario")) document.getElementById("perfilUsuario").textContent = usuario.perfil;
+        if (document.getElementById("tempoResposta")) document.getElementById("tempoResposta").textContent = usuario.tempo_resposta_ms + " ms";
+        if (document.getElementById("scrollUsuario")) document.getElementById("scrollUsuario").textContent = usuario.velocidade_scroll_px_s + " px/s";
+    } catch (e) {
+        console.warn("[KaIA] Erro ao carregar dados do perfil:", e);
+    }
+}
+document.addEventListener('DOMContentLoaded', () => {
+    registrarMouseMove();
+    registrarScroll();
+    registrarTeclado();
+    registrarCliquesForaDaArea();
+    registrarCopiarColar();
+    carregarPerfil();
+    if (document.body.classList.contains('dashboard-page')) {
+        iniciarDashboard();
+    }
+    console.log('[KaIA] Listeners e checagens de página ativados.');
+});
 
 // ============================================================================
 

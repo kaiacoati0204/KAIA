@@ -2,40 +2,30 @@
 <html lang="pt-br">
 
 <head>
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap"
-        rel="stylesheet">
-    <title>Responsável | KaIA</title>
-    <!-- CSS -->
+    <title>KaIA | Professor/Responsável</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-<body>
-    <span class="botao" onclick="abrirMenu()">☰</span>
-
-    <div class="menu" id="menu">
-        <h1> - KaIA</h1>
-        <a href="index.html">Início</a>
-        <a href="login.html">Login</a>
-        <a href="perfil.html">Perfil</a>
-        <a href="materias.html">Matérias</a>
-        <a href="meu-coati.html">Meu Coati</a>
-        <a href="dashboard.html">Dashboard</a>
-        <a href="config.html">Config.</a>
-    </div>
+<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->
+<body data-menu>
 
     <main class="conteudo">
+
         <div class="busca">
             <input id="email" type="email" placeholder="E-mail do aluno" autocomplete="off">
-            <button onclick="carregar()">Ver estatísticas</button>
+            <button type="button" onclick="carregar()">Ver estatísticas</button>
         </div>
-        </main>
 
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        
         <div id="status"></div>
+
+        <!-- Liberado pelo JS quando o aluno é encontrado -->
         <div id="painel">
             <div class="cards">
                 <div class="card">
@@ -73,17 +63,27 @@
             <p class="hobbies" id="hobbies"></p>
         </div>
 
-        <div class="container-grafico"
-             style="width: 80%; max-width: 600px; margin: 30px auto 0; background: #1a2b4c; padding: 20px; border-radius: 15px;">
-            <h3 style="color: white; text-align: center;">Estatísticas de Hobbies dos Usuários</h3>
+        <div class="grafico container-grafico">
+            <h3>Estatísticas de Hobbies dos Usuários</h3>
             <canvas id="meuGraficoKaIA"></canvas>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </main>
+
+    <!-- script.js primeiro: define API_URL e o menu lateral usados abaixo -->
+    <script src="script.js"></script>
     <script>
-        const API_URL = 'http://127.0.0.1:5000';
-        let gAcertos = null, gFoco = null;
+        let gAcertos = null, gFoco = null, gHobbies = null;
+
+        // Eixos claros: os gráficos desta página vivem sobre cards brancos.
+        const EIXOS = {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' } },
+                y: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' }, beginAtZero: true },
+            },
+        };
 
         const TREND = {
             melhorando: { txt: '↑ Melhorando', cls: 'bom' },
@@ -92,15 +92,15 @@
             sem_dados:  { txt: '— Sem dados',  cls: 'neutro' },
         };
 
-        function aplicarTend(id, valor, invertido) {
-            const el = document.getElementById(id);
+        function aplicarTend(id, valor) {
             const info = TREND[valor] || TREND.sem_dados;
+            const el = document.getElementById(id);
             el.textContent = info.txt;
             el.className = 'v tag ' + info.cls;
         }
 
         async function carregar() {
-            const email = document.getElementById('email').value.trim();
+            const email  = document.getElementById('email').value.trim();
             const status = document.getElementById('status');
             const painel = document.getElementById('painel');
 
@@ -124,17 +124,20 @@
                 painel.style.display = 'block';
 
                 document.getElementById('m-acertos').textContent = data.resumo.total_acertos;
-                document.getElementById('m-dias').textContent = data.resumo.dias_com_dados;
-                document.getElementById('m-seq').textContent = data.aluno.sequencia_dias_estudo ?? 0;
+                document.getElementById('m-dias').textContent    = data.resumo.dias_com_dados;
+                document.getElementById('m-seq').textContent     = data.aluno.sequencia_dias_estudo ?? 0;
                 aplicarTend('m-tend-acertos', data.resumo.tendencia_acertos);
-                aplicarTend('m-tend-foco', data.resumo.tendencia_foco);
+                aplicarTend('m-tend-foco',    data.resumo.tendencia_foco);
 
                 const hobbies = data.aluno.hobbies || [];
                 document.getElementById('hobbies').textContent =
                     hobbies.length ? `Hobbies usados na personalização: ${hobbies.join(', ')}` : '';
 
-                const labels = data.series.map(s => s.dia);
-                desenhar(labels, data.series.map(s => s.acertos), data.series.map(s => s.distracao));
+                desenhar(
+                    data.series.map(s => s.dia),
+                    data.series.map(s => s.acertos),
+                    data.series.map(s => s.distracao)
+                );
             } catch (e) {
                 status.textContent = 'Não foi possível conectar ao servidor (a API está rodando em :5000?).';
                 console.error(e);
@@ -142,17 +145,6 @@
         }
 
         function desenhar(labels, acertos, distracao) {
-            const grid = { color: 'rgba(255,255,255,.08)' };
-            const tick = { color: '#E6E1DA' };
-            const base = {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid, ticks: tick },
-                    y: { grid, ticks: tick, beginAtZero: true },
-                },
-            };
-
             gAcertos?.destroy();
             gAcertos = new Chart(document.getElementById('g-acertos'), {
                 type: 'line',
@@ -160,7 +152,7 @@
                     data: acertos, borderColor: '#57D979', backgroundColor: 'rgba(87,217,121,.15)',
                     fill: true, tension: .3, pointRadius: 4,
                 }] },
-                options: base,
+                options: EIXOS,
             });
 
             gFoco?.destroy();
@@ -169,70 +161,47 @@
                 data: { labels, datasets: [{
                     data: distracao, backgroundColor: '#e8606b', borderRadius: 6,
                 }] },
-                options: base,
+                options: EIXOS,
             });
+        }
+
+        // Gráfico geral: hobbies de todos os usuários (Supabase via API)
+        async function carregarGraficoHobbies() {
+            try {
+                const r = await fetch(`${API_URL}/api/dados-grafico`);
+                const dados = await r.json();   // { labels: [...], valores: [...] }
+                if (!dados.labels?.length) return;
+
+                if (dados.demo) {
+                    const h = document.querySelector('.container-grafico h3');
+                    if (h) h.textContent += ' (dados de exemplo)';
+                }
+
+                gHobbies?.destroy();
+                gHobbies = new Chart(document.getElementById('meuGraficoKaIA'), {
+                    type: 'bar',
+                    data: {
+                        labels: dados.labels,
+                        datasets: [{
+                            label: 'Quantidade de Escolhas',
+                            data: dados.valores,
+                            backgroundColor: ['#f3d009', '#2d4ba5', '#57d979', '#c4a186'],
+                            borderColor: '#1a2b4c',
+                            borderWidth: 1,
+                        }]
+                    },
+                    options: EIXOS,
+                });
+            } catch (erro) {
+                console.error('Erro ao carregar dados para o gráfico:', erro);
+            }
         }
 
         document.getElementById('email').addEventListener('keydown', e => {
             if (e.key === 'Enter') carregar();
         });
-
-        // --- Gráfico geral: hobbies de todos os usuários (Supabase via API) ---
-        let gHobbies = null;
-        async function carregarGraficoHobbies() {
-            try {
-                const resposta = await fetch(`${API_URL}/api/dados-grafico`);
-                const dadosDoBanco = await resposta.json();
-                // dadosDoBanco = { labels: [...], valores: [...] }
-                if (!dadosDoBanco.labels || !dadosDoBanco.labels.length) return;
-
-                if (dadosDoBanco.demo) {
-                    const h = document.querySelector('.container-grafico h3');
-                    if (h) h.textContent += ' (dados de exemplo)';
-                }
-
-                const ctx = document.getElementById('meuGraficoKaIA').getContext('2d');
-                gHobbies?.destroy();
-                gHobbies = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: dadosDoBanco.labels,
-                        datasets: [{
-                            label: 'Quantidade de Escolhas',
-                            data: dadosDoBanco.valores,
-                            backgroundColor: [
-                                'rgba(226, 174, 2, 0.7)',
-                                'rgba(45, 75, 165, 0.7)',
-                                'rgba(255, 197, 88, 0.7)',
-                                'rgba(41, 128, 185, 0.7)'
-                            ],
-                            borderColor: '#e2ae02',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                                ticks: { color: '#ffffff' }
-                            },
-                            x: { ticks: { color: '#ffffff' } }
-                        },
-                        plugins: { legend: { labels: { color: '#ffffff' } } }
-                    }
-                });
-            } catch (erro) {
-                console.error("Erro ao carregar dados para o gráfico:", erro);
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', carregarGraficoHobbies);
     </script>
-    
-    <!-- JS -->
-    <script src="script.js"></script>
 
 </body>
 

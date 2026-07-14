@@ -2,132 +2,99 @@
 <html lang="pt-br">
 
 <head>
-    <!-- CONFIG -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- CSS -->
-    <link rel="stylesheet" href="style.css">
-
-    <!-- FONTES -->
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap"
-        rel="stylesheet">
-
     <title>KaIA | Matérias</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
+<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->
+<body data-menu>
 
-    
-    <!-- ================= MENU LATERAL ================= -->
-
-    <span class="botao" onclick="abrirMenu()">☰</span>
-
-    <div class="menu" id="menu">
-        <h1> - KaIA</h1>
-
-        <a href="index.html">Início</a>
-        <a href="login.html">Login</a>
-        <a href="perfil.html">Perfil</a>
-        <a href="meu-coati.html">Meu Coati</a>
-        <a href="responsaveis.html">Professor/Responsável</a>
-        <a href="dashboard.html">Dashboard</a>
-        <a href="config.html">Config.</a>
-    </div>
-      <!-- ================= OVERLAY DE INATIVIDADE ================= -->
-
+    <!-- Aparece quando o aluno fica ocioso além do tempo de leitura da questão -->
     <div id="overlay">
         <div class="overlay-content">
-
             <div class="anel-alerta"></div>
-
             <h1>Ainda está Conosco?</h1>
             <h2>Mova o mouse para retomar a missão</h2>
-
         </div>
     </div>
-    
-        <!-- ===== CONTEÚDO PRINCIPAL ===== -->
 
-        <section class="main-content">
-            <!-- ===== MENU DE MISSÕES ===== -->
-            <div id="menu-view" class="fade-in">
-                <header class="content-header">
-                    <h2>Selecione uma matéria para estudar</h2>
-                    <p>Escolha um domínio para iniciar o ciclo de aprendizado ativo.</p>
-                </header>
+    <main class="main-content">
 
-                <div class="mission-grid">
-                    <div class="mission-card" onclick="abrirMateria('MAT')">
-                        <div class="icon">∑</div>
-                        <h3>Matemática</h3>
-                        <span>Cálculo de Dano & Lógica</span>
-                    </div>
+        <!-- 1) ESCOLHA DA MATÉRIA -->
+        <div id="menu-view" class="fade-in">
+            <header class="content-header">
+                <h2>Selecione uma matéria para estudar</h2>
+                <p>Escolha um domínio para iniciar o ciclo de aprendizado ativo.</p>
+            </header>
 
-                    <div class="mission-card" onclick="abrirMateria('PORT')">
-                        <div class="icon">¶</div>
-                        <h3>Português</h3>
-                        <span>Grimório & Sintaxe</span>
-                    </div>
-
-                    <div class="mission-card" onclick="abrirMateria('HIS')">
-                        <div class="icon">🏛</div>
-                        <h3>História</h3>
-                        <span>Crônicas & Eras</span>
-                    </div>
-
-                     <div class="mission-card" onclick="abrirMateria('GEO')">
-                        <div class="icon">🌎︎</div>
-                        <h3>Geografia</h3>
-                        <span>Geopolítica & Regiões</span>
-                    </div>
-
-                     <div class="mission-card" onclick="abrirMateria('BIO')">
-                        <div class="icon">🌿︎</div>
-                        <h3>Biologia</h3>
-                        <span>Genética & Botânica</span>
-                    </div>
-
-                     <div class="mission-card" onclick="abrirMateria('FIS')">
-                        <div class="icon">⚛︎</div>
-                        <h3>Física</h3>
-                        <span>Mecânica & Eletromagnetismo</span>
-                    </div>
+            <div class="mission-grid">
+                <div class="mission-card" onclick="abrirMateria('MAT')">
+                    <div class="icon">∑</div>
+                    <h3>Matemática</h3>
+                    <span>Cálculo de Dano &amp; Lógica</span>
+                </div>
+                <div class="mission-card" onclick="abrirMateria('PORT')">
+                    <div class="icon">¶</div>
+                    <h3>Português</h3>
+                    <span>Grimório &amp; Sintaxe</span>
+                </div>
+                <div class="mission-card" onclick="abrirMateria('HIS')">
+                    <div class="icon">🏛</div>
+                    <h3>História</h3>
+                    <span>Crônicas &amp; Eras</span>
+                </div>
+                <div class="mission-card" onclick="abrirMateria('GEO')">
+                    <div class="icon">🌎︎</div>
+                    <h3>Geografia</h3>
+                    <span>Geopolítica &amp; Regiões</span>
+                </div>
+                <div class="mission-card" onclick="abrirMateria('BIO')">
+                    <div class="icon">🌿︎</div>
+                    <h3>Biologia</h3>
+                    <span>Genética &amp; Botânica</span>
+                </div>
+                <div class="mission-card" onclick="abrirMateria('FIS')">
+                    <div class="icon">⚛︎</div>
+                    <h3>Física</h3>
+                    <span>Mecânica &amp; Eletromagnetismo</span>
                 </div>
             </div>
+        </div>
 
-            <!-- ===== TELA DE TEMAS (escondida até escolher matéria) ===== -->
-            <div id="temas-view" style="display:none;">
-                <h2>Escolha o tema</h2>
-                <div id="temas-display" class="mission-grid"></div>
+        <!-- 2) ESCOLHA DO TEMA (a IA sugere; escondida até escolher a matéria) -->
+        <div id="temas-view" style="display: none;">
+            <h2>Escolha o tema</h2>
+            <div id="temas-display" class="mission-grid"></div>
+        </div>
+
+        <!-- 3) QUIZ -->
+        <div id="quiz-view" class="quiz-container fade-in" style="display: none;">
+            <div class="quiz-nav">
+                <span id="current-subject">MISSÃO</span>
+                <button type="button" class="abort-btn" onclick="resetSystem()">ABANDONAR</button>
             </div>
-
-            <!-- ===== QUIZ ===== -->
-            <div id="quiz-view" class="quiz-container fade-in" style="display: none;">
-                <div class="quiz-nav">
-                    <span id="current-subject">MISSÃO</span>
-                    <button class="abort-btn" onclick="resetSystem()">ABANDONAR</button>
-                </div>
-                <div class="question-wrapper">
-                    <h2 id="question-display">...</h2>
-                    <div id="options-display" class="options-grid"></div>
-                </div>
-                <div id="feedback" class="feedback-msg"></div>
+            <div class="question-wrapper">
+                <h2 id="question-display">...</h2>
+                <div id="options-display" class="options-grid"></div>
             </div>
+            <div id="feedback" class="feedback-msg"></div>
+        </div>
 
-            <!-- ===== PERGUNTAS ===== -->
-            <div class="pergunts">
-                <input type="text" placeholder="Pergunte algo para a KaIA..." id="pergunta">
-                <button onclick="enviarPergunta()">Enviar</button>
-            </div>
-            <div id="respostas"></div>
+        <!-- CHAT LIVRE COM A KaIA -->
+        <div class="pergunts">
+            <input type="text" id="pergunta" placeholder="Pergunte algo para a KaIA...">
+            <button type="button" onclick="enviarPergunta()">Enviar</button>
+        </div>
+        <div id="respostas"></div>
 
-        </section>
     </main>
 
-    <!-- JS -->
     <script src="script.js"></script>
-
 </body>
 
 </html>

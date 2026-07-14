@@ -1,45 +1,42 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login KaIA</title>
-</head>
-<body>
-    <!-- CSS -->
+    <title>KaIA | Login</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    
-    <!-- ================= LOGIN (luz + caixa no mesmo container) ================= -->
+</head>
+
+<body>
+
     <div class="tela-login">
-        <!-- A luz fica ATRÁS da caixa (z-index na .caixa-login), sem cobri-la -->
+        <!-- A luz foge do mouse e fica ATRÁS da caixa (ver registrarLuz no script.js) -->
         <div class="luz-fundo" id="luzFundo"></div>
 
-        <div class="caixa-login">
+        <form class="caixa-login" onsubmit="salvarLogin(event)">
             <h1>Ka<span>IA</span></h1>
             <p>Inicie sua missão de foco.</p>
+
             <div class="grupo-input">
-                <label>Email</label>
-                <input
-                    id="login-email"
-                    type="email"
-                    placeholder="Digite seu email">
+                <label for="login-email">Email</label>
+                <input id="login-email" type="email" placeholder="Digite seu email" autocomplete="email">
             </div>
+
             <div class="grupo-input">
-                <label>Senha</label>
-                <input
-                    id="login-senha"
-                    type="password"
-                    placeholder="Digite sua senha"
-                >
+                <label for="login-senha">Senha</label>
+                <input id="login-senha" type="password" placeholder="Digite sua senha" autocomplete="current-password">
             </div>
-            <a href="hobbies.html" class="botao-login" onclick="salvarLogin(event)">
-                Entrar
-            </a>
-            <span class="body">
-                Esqueci a senha
-            </span>
-        </div>
+
+            <button type="submit" class="botao-login">Entrar</button>
+            <span class="link-secundario">Esqueci a senha</span>
+        </form>
     </div>
+
     <script src="script.js"></script>
 </body>
+
 </html>

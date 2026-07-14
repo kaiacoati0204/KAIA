@@ -4,36 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <link rel="stylesheet" href="style.css">
-
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
-
     <title>KaIA | Perfil</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 
-<body>
-
-    <span class="botao" onclick="abrirMenu()">☰</span>
-
-    <div class="menu" id="menu">
-        <h1>- KaIA</h1>
-        <a href="index.html">Início</a>
-        <a href="login.html">Login</a>
-        <a href="perfil.html">Perfil</a>
-        <a href="materias.html">Matérias</a>
-        <a href="meu-coati.html">Meu Coati</a>
-        <a href="responsaveis.html">Professor/Responsável</a>
-        <a href="dashboard.html">Dashboard</a>
-        <a href="config.html">Configurações</a>
-    </div>
+<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->
+<body data-menu>
 
     <main class="conteudo">
         <section class="perfil">
-            
+
             <div class="perfil-topo">
                 <div class="perfil-avatar">
-                    <img src="img/avatar.png" alt="Avatar" id="avatarUsuario">
+                    <img src="Coati.jpg" alt="Avatar do aluno" id="avatarUsuario">
                 </div>
                 <div class="perfil-info">
                     <h1 id="nomeUsuario">Carregando...</h1>
@@ -42,6 +28,7 @@
                 </div>
             </div>
 
+            <!-- Preenchido por carregarPerfil() (script.js) a partir de GET /perfil -->
             <div class="cards-perfil">
                 <div class="card-perfil">
                     <h2 id="tempoResposta">0 ms</h2>
@@ -121,8 +108,11 @@
                     </ul>
                 </div>
             </div>
+
         </section>
     </main>
+
     <script src="script.js"></script>
 </body>
+
 </html>

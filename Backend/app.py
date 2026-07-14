@@ -21,8 +21,6 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Aluno "anônimos" sentinela: usado quando o /events precisa auto-criar uma
-# sessão sem conhecer o aluno (satisfaz a FK sessions.user_id -> perfis.user_id).
 ANON_USER = "00000000-0000-0000-0000-000000000000"
 
 # Resposta padrão quando o servidor está sem banco (pool = None).
@@ -974,9 +972,9 @@ def dashboard_dados():
             return JSONResponse({"erro": "Não foi possível ler a planilha."}, status_code=500)
         saida = {"fonte": "planilha_manual"}
         for nome, df in planilhas.items():
-            if nome.startswith("_"):      # ignora abas auxiliares (ex: _LEIA-ME)
+            if nome.startswith("_"):
                 continue
-            df = df.where(pd.notnull(df), None)   # NaN → None (JSON válido)
+            df = df.where(pd.notnull(df), None)
             saida[nome] = df.to_dict(orient="records")
         return saida
 

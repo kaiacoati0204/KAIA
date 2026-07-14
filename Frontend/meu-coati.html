@@ -11,6 +11,13 @@
     <link rel="stylesheet" href="style.css">
 
     <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+    <script src="./config.js"></script>
+    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+    </script>
 </head>
 
 <!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->

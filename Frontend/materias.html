@@ -9,6 +9,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <script src="./config.js"></script>
+    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+    </script>
 </head>
 
 <!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->

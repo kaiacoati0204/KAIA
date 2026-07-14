@@ -9,10 +9,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <script src="./config.js"></script>
+    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+    </script>
 </head>
 
-<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->
-<body data-menu>
+<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral
+     data-saudacao: injeta o "Olá, [nome]" no canto superior direito -->
+<body data-menu data-saudacao>
 
     <main class="app-wrapper">
 
@@ -83,7 +91,7 @@
                         <div class="coati-texto">
                             <h3>O Coati e a nossa Filosofia</h3>
                             <p>
-                                O nome <strong>KaIA</strong> une a nossa proposta tecnológica à nossa identidade brasileira: a terminação <strong>"IA"</strong> vem da Inteligência Artificial que calibra o sistema, e a sonoridade homenageia o nosso mascote, o <strong>Coati</strong> (também grafado como Quati) — um animal curioso, ágil e típico da nossa fauna.
+                                O nome <strong>KaIA</strong> une a nossa proposta tecnológica à nossa identidade brasileira: o nome vem do tupi <strong>"kaiá"</strong> que vem da língua Tupi e significa lugar de refúgio, enquanto a terminação <strong>"IA"</strong> vem da Inteligência Artificial que calibra o sistema, e a sonoridade homenageia o nosso mascote, o <strong>Coati</strong> (também grafado como Quati) — um animal curioso, ágil e típico da nossa fauna.
                             </p>
                             <p>
                                 Diferente de plataformas com mascotes barulhentos e notificações persistentes, o nosso Coati representa a <strong>curiosidade silenciosa</strong> e o <strong>foco direcionado</strong>. Quando o foco é mantido, ele prospera; quando há dispersão, ele convida sutilmente o aluno a voltar.

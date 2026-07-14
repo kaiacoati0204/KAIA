@@ -1,9 +1,10 @@
 // ============================================================
 //  KaIA — script compartilhado por todas as páginas
 // ============================================================
-// 127.0.0.1 (e não "localhost"): no Windows "localhost" pode resolver para
-// IPv6 (::1) e o Flask dev server só escuta em IPv4 → "não responde".
-const API_URL = 'http://127.0.0.1:5000';
+// A configuração (API_URL + credenciais do Supabase) vive no config.js, que é
+// carregado ANTES deste arquivo em todas as páginas e não vai para o git.
+// O fallback mantém a página de pé se o config.js não existir.
+const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 
 // --- Atalhos de DOM ---------------------------------------------------------
 const $  = (id) => document.getElementById(id);
@@ -146,13 +147,59 @@ function enviarPerfil(extra = {}) {
     }, true).catch(e => console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e));
 }
 
-// Botão "Entrar" do login.html. A senha NÃO é guardada — use o Supabase Auth.
-function salvarLogin(event) {
+// Botão "Entrar" do login.html.
+// Sem senha por enquanto: o e-mail é a identidade. A autenticação de verdade
+// (Supabase Auth) entra depois — este fluxo só RESOLVE quem é o usuário.
+const ROTA_POR_ROLE = {
+    professor:   'responsaveis.html',
+    coordenador: 'responsaveis.html',
+    pai:         'responsaveis.html',
+};
+
+async function salvarLogin(event) {
     if (event) event.preventDefault();
+
     const email = $('login-email')?.value.trim() || '';
-    gravarPerfil({ ...lerPerfil(), email });
-    enviarPerfil({ tipo: 'login', email });
-    window.location.href = 'hobbies.html';
+    const erro  = $('login-erro');
+    const falhar = (msg) => { if (erro) erro.textContent = msg; };
+
+    falhar('');
+    if (!email) return falhar('Digite seu e-mail.');
+
+    try {
+        const r = await fetch(`${API_URL}/perfil?email=${encodeURIComponent(email)}`);
+
+        if (r.status === 404) return falhar('E-mail não encontrado. Confira e tente de novo.');
+        if (!r.ok)            return falhar('Não foi possível entrar agora. Tente mais tarde.');
+
+        const u = await r.json();
+
+        sessionStorage.setItem('kaia_usuario', JSON.stringify({
+            user_id:   u.user_id,
+            email:     u.email,
+            nome:      u.nome,
+            role:      u.role,
+            escola_id: u.escola_id,
+            turma_id:  u.turma_id,
+        }));
+
+        // A identidade estável usada pelos sensores (sessions/events) passa a ser
+        // a do perfil real — senão a sessão seria gravada no user_id aleatório.
+        localStorage.setItem('kaia_user_id', u.user_id);
+
+        const hobbies = u.hobbies || [];
+        sessionStorage.setItem('hobbies', JSON.stringify(hobbies));
+        gravarPerfil({ ...lerPerfil(), email: u.email, hobbies });
+
+        if (u.role === 'aluno') {
+            window.location.href = hobbies.length ? 'index.html' : 'hobbies.html';
+        } else {
+            window.location.href = ROTA_POR_ROLE[u.role] || 'index.html';
+        }
+    } catch (e) {
+        console.error('[KaIA] falha no login:', e);
+        falhar('Não foi possível conectar ao servidor (a API está rodando em :5000?).');
+    }
 }
 
 // ============================================================
@@ -192,6 +239,26 @@ function montarMenu() {
 function abrirMenu() {
     const menu = $('menu');
     if (menu) menu.style.width = (menu.style.width === '250px') ? '0px' : '250px';
+}
+
+// ============================================================
+//                    SAUDAÇÃO ("Olá, [nome]")
+// ============================================================
+// Mesmo padrão do menu: injetada por JS nas páginas com <body data-saudacao>,
+// lendo o usuário que o login gravou no sessionStorage.
+function montarSaudacao() {
+    if (!document.body.hasAttribute('data-saudacao')) return;
+
+    const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    if (!u) return;
+
+    const nome = (u.nome || u.email || '').trim();
+    if (!nome) return;
+
+    const saudacao = document.createElement('div');
+    saudacao.className = 'saudacao-usuario';
+    saudacao.textContent = `Olá, ${nome}`;
+    document.body.appendChild(saudacao);
 }
 
 // ============================================================
@@ -891,6 +958,7 @@ async function iniciarDashboard() {
 // uma missão (criarSessao em startMission).
 document.addEventListener('DOMContentLoaded', () => {
     montarMenu();
+    montarSaudacao();
     registrarHobbies();
     registrarLuz();
     registrarSensores();

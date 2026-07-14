@@ -2,6 +2,9 @@
 Backend/.env
 .env
 .venv
+# Config do frontend (tem a URL e a chave do Supabase).
+# O modelo versionado é o Frontend/config.example.js.
+Frontend/config.js
 
 # Python
 __pycache__/

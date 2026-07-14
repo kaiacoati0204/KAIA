@@ -11,12 +11,28 @@
     <link rel="stylesheet" href="style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script src="./config.js"></script>
+    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+    </script>
 </head>
 
-<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->
-<body data-menu>
+<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral
+     data-saudacao: injeta o "Olá, [nome]" no canto superior direito -->
+<body data-menu data-saudacao>
 
     <main class="conteudo">
+
+        <!-- Painel por role (professor / coordenador / pai).
+             Preenchido por carregarPainel() a partir de GET /responsavel/painel. -->
+        <section id="painel-role">
+            <h2 id="painel-titulo">Carregando…</h2>
+            <p id="painel-sub" class="painel-sub"></p>
+            <div id="painel-tabela"></div>
+        </section>
 
         <div class="busca">
             <input id="email" type="email" placeholder="E-mail do aluno" autocomplete="off">
@@ -197,10 +213,94 @@
             }
         }
 
+        // ========================================================
+        //   PAINEL POR ROLE — professor / coordenador / pai
+        // ========================================================
+        // `usuario` vem da guarda de rota no <head> (sessionStorage.kaia_usuario).
+        const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+
+        // Uma tabela simples a partir de [{rotulo, campo, fmt}] + as linhas.
+        function tabela(colunas, linhas) {
+            if (!linhas.length) return '<p class="painel-sub">Nenhum dado nesta semana.</p>';
+            const th = colunas.map(c => `<th>${c.rotulo}</th>`).join('');
+            const tr = linhas.map(l => '<tr>' + colunas
+                .map(c => `<td>${c.fmt ? c.fmt(l[c.campo]) : (l[c.campo] ?? '—')}</td>`)
+                .join('') + '</tr>').join('');
+            return `<table class="tabela-painel"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+        }
+
+        const VISOES = {
+            professor: (d) => ({
+                titulo: `Turmas de ${d.professor.materia}`,
+                sub: `${d.professor.nome} · ${d.professor.escola} · semana ${d.semana} · `
+                   + `${d.alunos.length} alunos (ordenados por menor atenção)`,
+                html: tabela([
+                    { rotulo: 'Aluno',   campo: 'nome' },
+                    { rotulo: 'Turma',   campo: 'turma' },
+                    { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
+                    { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
+                    { rotulo: 'Minutos', campo: 'minutos' },
+                ], d.alunos),
+            }),
+
+            coordenador: (d) => ({
+                titulo: `Turmas — ${d.coordenador.escola}`,
+                sub: `${d.coordenador.nome} · semana ${d.semana} · média das matérias por turma`,
+                html: tabela([
+                    { rotulo: 'Turma',   campo: 'turma' },
+                    { rotulo: 'Alunos',  campo: 'alunos' },
+                    { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
+                    { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
+                    // soma por matéria: um aluno em risco em 3 matérias conta 3x
+                    { rotulo: 'Casos de risco', campo: 'casos_risco' },
+                ], d.turmas),
+            }),
+
+            pai: (d) => ({
+                titulo: 'Desempenho dos seus filhos',
+                sub: `${d.responsavel.nome} · semana ${d.semana} · média entre as matérias`,
+                html: tabela([
+                    { rotulo: 'Aluno',   campo: 'nome' },
+                    { rotulo: 'Turma',   campo: 'turma' },
+                    { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
+                    { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
+                    { rotulo: 'Minutos', campo: 'minutos' },
+                ], d.filhos),
+            }),
+        };
+
+        async function carregarPainel() {
+            const titulo = $('painel-titulo');
+            const sub    = $('painel-sub');
+            const corpo  = $('painel-tabela');
+
+            const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; };
+
+            try {
+                const r = await fetch(`${API_URL}/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
+                const d = await r.json();
+                if (!r.ok) return falhar(d.erro || 'Não foi possível carregar o painel.');
+
+                const visao = VISOES[d.role];
+                if (!visao) return falhar(`Sem painel para a role "${d.role}".`);
+
+                const v = visao(d);
+                titulo.textContent = v.titulo;
+                sub.textContent    = v.sub;
+                corpo.innerHTML    = v.html;
+            } catch (e) {
+                console.error('[KaIA] falha ao carregar o painel:', e);
+                falhar('Não foi possível conectar ao servidor (a API está rodando em :5000?).');
+            }
+        }
+
         document.getElementById('email').addEventListener('keydown', e => {
             if (e.key === 'Enter') carregar();
         });
-        document.addEventListener('DOMContentLoaded', carregarGraficoHobbies);
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarPainel();
+            carregarGraficoHobbies();
+        });
     </script>
 
 </body>

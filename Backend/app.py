@@ -983,17 +983,212 @@ def dashboard_dados():
 
 # ========================================= PERFIL =============================================
 @app.get("/perfil")
-def perfil():
-    aluno = df.iloc[0]
-    return jsonify({
-        "nome":"Nome do usuário",
-        "email":aluno["email"],
-        "perfil":aluno["perfil"],
-        "tempo_resposta_ms":
-            aluno["tempo_resposta_ms"],
-        "velocidade_scroll_px_s":
-            aluno["velocidade_scroll_px_s"],
-    })
+async def get_perfil(request: Request, email: str = None):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    if not email:
+        return JSONResponse({"status": "erro", "motivo": "email obrigatório"}, status_code=400)
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT user_id, email, hobbies, nome, role, escola_id, turma_id
+                FROM perfis WHERE lower(email) = lower($1)
+                """,
+                email
+            )
+        if not row:
+            return JSONResponse({"status": "não encontrado"}, status_code=404)
+
+        # hobbies é jsonb: o asyncpg devolve a STRING crua ('["Xadrez"]'), não a
+        # lista. Sem este parse o front recebe "[]", que é truthy — e o aluno sem
+        # hobbies nunca seria mandado para o onboarding.
+        hobbies = row["hobbies"]
+        if isinstance(hobbies, str):
+            try:
+                hobbies = json.loads(hobbies)
+            except (ValueError, TypeError):
+                hobbies = []
+
+        return {
+            "user_id": str(row["user_id"]),
+            "email": row["email"],
+            "nome": row["nome"],
+            "role": row["role"],
+            "escola_id": str(row["escola_id"]) if row["escola_id"] else None,
+            "turma_id": str(row["turma_id"]) if row["turma_id"] else None,
+            "hobbies": hobbies or [],
+        }
+    except Exception as e:
+        print("[KaIA] Erro ao buscar perfil:", e)
+        return JSONResponse({"status": "erro"}, status_code=500)
+
+# ============ API: PAINEL DO RESPONSÁVEL (professor/coordenador/pai) ========
+# Um endpoint só, que despacha pela `role` do perfil — o frontend faz uma
+# chamada e renderiza conforme o que voltar.
+#
+# NOTA SOBRE O SCHEMA: `professores` tem escola_id + materia, mas NÃO tem
+# turma_id. Então "a turma do professor" não existe no banco: o professor vê os
+# alunos de TODAS as turmas da escola dele, filtrados pela matéria que leciona.
+#
+# A semana é o inteiro `semana` (1..8) de desempenho_semanal — não é uma data.
+# "Semana mais recente" = max(semana).
+def _turma_rotulo(ano, turno):
+    return f"{ano}º ano · {turno}" if ano is not None else "—"
+
+
+@app.get("/responsavel/painel")
+async def painel_responsavel(request: Request, email: Optional[str] = None):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    if not email:
+        return JSONResponse({"erro": "Informe o e-mail do usuário logado."}, status_code=400)
+
+    async with pool.acquire() as conn:
+        perfil = await conn.fetchrow(
+            "select user_id, nome, role from perfis where lower(email) = lower($1)", email
+        )
+        if perfil is None:
+            return JSONResponse({"erro": "Usuário não encontrado."}, status_code=404)
+
+        role = (perfil["role"] or "").lower()
+        semana = await conn.fetchval("select max(semana) from desempenho_semanal")
+
+        # ---------- PROFESSOR: alunos da escola, na matéria dele ----------
+        if role == "professor":
+            prof = await conn.fetchrow(
+                "select nome, materia, escola_id from professores where lower(email) = lower($1)", email
+            )
+            if prof is None:
+                return JSONResponse(
+                    {"erro": "Este e-mail tem role='professor' em `perfis`, mas não está "
+                             "vinculado a nenhuma linha de `professores`."},
+                    status_code=404,
+                )
+
+            escola = await conn.fetchval(
+                "select nome from escolas where escola_id = $1", prof["escola_id"]
+            )
+            linhas = await conn.fetch(
+                """
+                select p.nome, t.ano, t.turno,
+                       d.media_atencao, d.taxa_acerto, d.minutos_estudados
+                from desempenho_semanal d
+                join perfis p on p.user_id  = d.aluno_id
+                join turmas t on t.turma_id = d.turma_id
+                where d.escola_id = $1 and d.materia = $2 and d.semana = $3
+                order by d.media_atencao asc          -- quem mais precisa de atenção primeiro
+                """,
+                prof["escola_id"], prof["materia"], semana,
+            )
+            return {
+                "role": "professor",
+                "semana": semana,
+                "professor": {"nome": prof["nome"], "materia": prof["materia"], "escola": escola},
+                "alunos": [
+                    {
+                        "nome": r["nome"],
+                        "turma": _turma_rotulo(r["ano"], r["turno"]),
+                        "media_atencao": round(float(r["media_atencao"]), 3),
+                        "taxa_acerto": round(float(r["taxa_acerto"]), 3),
+                        "minutos": int(r["minutos_estudados"]),
+                    }
+                    for r in linhas
+                ],
+            }
+
+        # ---------- COORDENADOR: resumo de todas as turmas da escola ----------
+        if role == "coordenador":
+            coord = await conn.fetchrow(
+                "select nome, escola_id from coordenadores where lower(email) = lower($1)", email
+            )
+            if coord is None:
+                return JSONResponse(
+                    {"erro": "Este e-mail tem role='coordenador' em `perfis`, mas não está "
+                             "vinculado a nenhuma linha de `coordenadores`."},
+                    status_code=404,
+                )
+
+            escola = await conn.fetchval(
+                "select nome from escolas where escola_id = $1", coord["escola_id"]
+            )
+            linhas = await conn.fetch(
+                """
+                select t.ano, t.turno,
+                       avg(r.media_atencao_turma)     as media_atencao,
+                       avg(r.media_taxa_acerto_turma) as taxa_acerto,
+                       sum(r.alunos_em_risco)         as casos_risco,
+                       count(*)                       as materias,
+                       (select count(*) from perfis p where p.turma_id = t.turma_id) as alunos
+                from resumo_turma_semanal r
+                join turmas t on t.turma_id = r.turma_id
+                where r.escola_id = $1 and r.semana = $2
+                group by t.turma_id, t.ano, t.turno
+                order by t.ano, t.turno
+                """,
+                coord["escola_id"], semana,
+            )
+            return {
+                "role": "coordenador",
+                "semana": semana,
+                "coordenador": {"nome": coord["nome"], "escola": escola},
+                "turmas": [
+                    {
+                        "turma": _turma_rotulo(r["ano"], r["turno"]),
+                        "alunos": int(r["alunos"]),
+                        "media_atencao": round(float(r["media_atencao"]), 3),
+                        "taxa_acerto": round(float(r["taxa_acerto"]), 3),
+                        # soma dos alertas nas N matérias — um mesmo aluno pode
+                        # estar em risco em mais de uma, então isto são CASOS.
+                        "casos_risco": int(r["casos_risco"]),
+                        "materias": int(r["materias"]),
+                    }
+                    for r in linhas
+                ],
+            }
+
+        # ---------- PAI: desempenho dos filhos vinculados ----------
+        if role == "pai":
+            linhas = await conn.fetch(
+                """
+                select p.nome, t.ano, t.turno,
+                       avg(d.media_atencao)      as media_atencao,
+                       avg(d.taxa_acerto)        as taxa_acerto,
+                       sum(d.minutos_estudados)  as minutos
+                from pai_aluno pa
+                join perfis p       on p.user_id  = pa.aluno_id
+                left join turmas t  on t.turma_id = p.turma_id
+                left join desempenho_semanal d
+                       on d.aluno_id = p.user_id and d.semana = $2
+                where pa.pai_id = $1
+                group by p.user_id, p.nome, t.ano, t.turno
+                order by p.nome
+                """,
+                perfil["user_id"], semana,
+            )
+            return {
+                "role": "pai",
+                "semana": semana,
+                "responsavel": {"nome": perfil["nome"]},
+                "filhos": [
+                    {
+                        "nome": r["nome"],
+                        "turma": _turma_rotulo(r["ano"], r["turno"]),
+                        # left join: filho ainda sem desempenho na semana → None
+                        "media_atencao": round(float(r["media_atencao"]), 3) if r["media_atencao"] is not None else None,
+                        "taxa_acerto": round(float(r["taxa_acerto"]), 3) if r["taxa_acerto"] is not None else None,
+                        "minutos": int(r["minutos"]) if r["minutos"] is not None else 0,
+                    }
+                    for r in linhas
+                ],
+            }
+
+    return JSONResponse(
+        {"erro": f"O painel do responsável não atende a role '{role}'."}, status_code=403
+    )
+
 
 # ================== HEALTHCHECK =============================================
 @app.get("/")

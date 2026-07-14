@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <script src="./config.js"></script>
 </head>
 
 <body>
@@ -30,6 +32,9 @@
                 <label for="login-senha">Senha</label>
                 <input id="login-senha" type="password" placeholder="Digite sua senha" autocomplete="current-password">
             </div>
+
+            <!-- Preenchido por salvarLogin() quando o e-mail não é encontrado -->
+            <p id="login-erro" class="erro-login" role="alert" aria-live="polite"></p>
 
             <button type="submit" class="botao-login">Entrar</button>
             <span class="link-secundario">Esqueci a senha</span>

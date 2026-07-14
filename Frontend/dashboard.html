@@ -14,6 +14,13 @@
 
 <!-- Chart.js (necessário só nesta página) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+<script src="./config.js"></script>
+<!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+<script>
+    const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    if (!usuario) window.location.href = 'login.html';
+</script>
 </head>
 
 <!-- class="dashboard-page" ATIVA o CSS/JS do dashboard (ver style.css e script.js)

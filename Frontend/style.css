@@ -477,7 +477,6 @@ body {
   margin-bottom: 30px;
   color: var(--profundo);
 }
-/* No quiz o enunciado fica sobre o card escuro — aí o claro é o legível */
 #quiz-view .question-wrapper h2 {
   color: var(--prox-br);
 }

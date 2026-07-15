@@ -11,13 +11,17 @@
   --azul-coati: #2d4ba5;
   --bege: #c4a186;
   --creme-bg: #eae0d2;
+  /* Fundo marfim (acessibilidade TEA/TDAH): off-white no lugar do bege escuro.
+     Regra fixa do projeto: nunca #fff/#000 puros — off-white e quase-preto. */
+  --marfim: #f4ecdd;   /* fundo das páginas */
+  --tinta: #2b2a26;    /* texto corrido — quase-preto, nunca #000 */
   --gravata-kinrou: #f3d009;
   --prox-br: #e6e1da;
   --vd-uniao: #57d979;
   --vermelho: #e8606b;
 
   /* superfícies (dashboard e cards) */
-  --card: #ffffff;
+  --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */
   --surface: #f6f2ec;
   --border: rgba(26, 43, 76, 0.08);
   --sep: #f0ebe3;
@@ -36,7 +40,7 @@
 
 body {
   font-family: "Plus Jakarta Sans", sans-serif;
-  background-color: var(--creme-bg);
+  background-color: var(--marfim);
   color: var(--azul-coati);
   min-height: 100vh;
 }
@@ -266,7 +270,7 @@ body {
    HOBBIES
 ========================= */
 .clique {
-  color: white;
+  color: var(--prox-br);
   margin-top: 20px;
   text-align: center;
 }
@@ -314,16 +318,33 @@ body {
    APP (SIDEBAR + CONTEÚDO)
 ========================= */
 .app-wrapper {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  height: 100vh;
+  /* index sem lateral: coluna única, a página rola normalmente */
+  display: block;
+  min-height: 100vh;
+}
+/* Coluna de leitura confortável — escopada no index, pois .content-header e
+   .quiz-container são compartilhadas com matérias/meu-coati (lá ficam largas). */
+.app-wrapper .content-header,
+.app-wrapper .quiz-container {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.acesso-rodape {
+  max-width: 860px;
+  margin: 44px auto 0;
+  text-align: center;
+}
+.acesso-rodape .btn-login-extra {
+  display: inline-block;
+  padding: 14px 32px;
 }
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 50px;
   padding: 80px 40px;
-  background-color: var(--creme-bg);
+  background-color: var(--marfim);
   border-right: 1px solid var(--profundo);
 }
 .brand h1 {
@@ -390,7 +411,7 @@ body {
 .main-content {
   padding: 60px;
   overflow-y: auto;
-  background-color: var(--bege);
+  background-color: var(--marfim);
 }
 .content-header {
   margin-bottom: 40px;
@@ -416,14 +437,14 @@ body {
 .mission-card {
   padding: 30px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  background: var(--card);
   cursor: pointer;
   transition: all 0.3s ease;
 }
 .mission-card:hover {
   transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--surface);
   border-color: var(--gravata-kinrou);
 }
 .mission-card .icon {
@@ -434,11 +455,10 @@ body {
 .mission-card h3 {
   font-size: 2rem;
   margin-bottom: 10px;
-  color: var(--gravata-kinrou);
-  text-shadow: 1px 1px 1px var(--profundo);
+  color: var(--profundo);
 }
 .mission-card span {
-  color: var(--creme-bg);
+  color: var(--profundo);
 }
 #temas-view h2 {
   font-size: 2.2rem;
@@ -460,7 +480,7 @@ body {
 }
 .abort-btn {
   padding: 12px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border);
   border-radius: 50px;
   background-color: transparent;
   color: var(--profundo);
@@ -478,7 +498,7 @@ body {
   color: var(--profundo);
 }
 #quiz-view .question-wrapper h2 {
-  color: var(--prox-br);
+  color: var(--profundo);
 }
 .question-wrapper p {
   margin-bottom: 14px;
@@ -492,10 +512,10 @@ body {
 }
 .option-btn {
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: transparent;
-  color: var(--prox-br);
+  background: var(--card);
+  color: var(--profundo);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -525,10 +545,10 @@ body {
 .pergunts input {
   flex: 1;
   padding: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--azul-coati);
+  background-color: var(--card);
+  color: var(--tinta);
   font-family: inherit;
   font-size: 1rem;
   outline: none;
@@ -587,7 +607,7 @@ body {
   color: var(--gravata-kinrou);
 }
 .overlay-content h2 {
-  color: white;
+  color: var(--prox-br);
   font-weight: 300;
 }
 .anel-alerta {
@@ -829,7 +849,7 @@ body {
   width: 100%;
   height: 70vh;
   border-radius: 12px;
-  background: #fff;
+  background: var(--card);
 }
 
 /* =========================
@@ -842,7 +862,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 30px;
-  background-color: var(--creme-bg);
+  background-color: var(--marfim);
 }
 .perfil {
   width: 100%;
@@ -893,8 +913,9 @@ body {
   align-self: flex-start;
   padding: 4px 12px;
   border-radius: 20px;
-  background: var(--creme-bg);
-  color: var(--bege);
+  border: 1px solid var(--border);
+  background: var(--marfim);
+  color: var(--profundo);
   font-size: 0.8rem;
   font-weight: 700;
 }

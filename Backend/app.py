@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, date, timezone, timedelta
+from pathlib import Path
 import os
 import re
 import json
+import pickle
 import uuid
 
 import asyncpg
+import pandas as pd
 import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
@@ -72,6 +75,21 @@ async def lifespan(app: FastAPI):
                 )
         except Exception as e:
             print("[KaIA] aviso: não foi possível garantir o aluno anônimo:", e)
+
+    # Carrega o modelo RF + scaler UMA única vez (não a cada request). O modelo
+    # vive em ml/models/ e o scaler em ml/artifacts/. Tolerante a falha: se não
+    # carregar, o /diagnose responde 503 e o resto do app segue funcionando.
+    app.state.modelo = None
+    app.state.scaler = None
+    try:
+        ROOT = Path(__file__).resolve().parent.parent
+        with open(ROOT / "ml" / "models" / "modelo_rf_v1.pkl", "rb") as f:
+            app.state.modelo = pickle.load(f)
+        with open(ROOT / "ml" / "artifacts" / "scaler.pkl", "rb") as f:
+            app.state.scaler = pickle.load(f)
+        print("[KaIA] Modelo RF v1 + scaler carregados no startup.")
+    except Exception as e:
+        print("[KaIA] AVISO: não foi possível carregar modelo/scaler:", e)
 
     # Scheduler: agrega features das sessões ativas a cada 30s.
     # Só inicia se houver banco — o job de agregação depende do pool.
@@ -312,6 +330,161 @@ async def job_agregacao(app):
             print("[KaIA] erro ao agregar", r["session_id"], ":", e)
     if ativas:
         print(f"[KaIA] Agregação rodou para {len(ativas)} sessão(ões) ativa(s).")
+
+
+# ============ FEATURES PARA O MODELO (vetor cumulativo por sessão) ==========
+# O modelo RandomForest (ml/artifacts) foi treinado com 1 linha por SESSÃO
+# INTEIRA. Logo, o vetor enviado ao modelo é calculado sobre a sessão toda
+# (cumulativo), NÃO sobre a janela de 30s de session_features (que continua
+# existindo apenas para o painel do responsável).
+
+# Ordem EXATA esperada pelo modelo/scaler (scaler.feature_names_in_). NÃO altere.
+FEATURE_ORDER = [
+    "tempo_resposta_ms", "velocidade_scroll_px_s", "pausas_digitacao_s",
+    "acertos_questoes", "nivel_dificuldade_atividade", "duracao_sessao_min",
+    "historico_intervencoes", "taxa_abandono_sessao", "mudancas_aba",
+    "tempo_fora_foco_s", "cliques_fora_area_estudo", "sessoes_no_dia",
+    "hora_do_dia", "produtividade", "distracao_score",
+]
+# Min/max de tempo_fora_foco_s na base de treino, para reproduzir a
+# normalização min-max do distracao_score (preprocessing.ipynb).
+TFF_MIN, TFF_MAX = 0.4, 299.9
+NIVEL_DIFICULDADE_PADRAO = 1  # importância ~0 no modelo; default seguro (CHECK 1..5)
+
+# Mapeamento do rótulo (int) -> estado, conforme encoding do treino.
+ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
+
+
+async def montar_features_sessao(conn, session_id):
+    """Monta o dict das 15 features (CUMULATIVO, sessão inteira), mesma
+    granularidade do treino. Retorna dict {feature: valor} ou None se a
+    sessão não existir."""
+    sess = await conn.fetchrow(
+        "select user_id, session_start_ts from sessions where session_id = $1::uuid",
+        session_id,
+    )
+    if sess is None:
+        return None
+
+    eventos = await conn.fetch(
+        "select event_type, payload from session_events where session_id = $1::uuid",
+        session_id,
+    )
+    evs = [(r["event_type"], json.loads(r["payload"])) for r in eventos]
+
+    def do_tipo(t):
+        return [p for et, p in evs if et == t]
+
+    tab, scroll = do_tipo("tab_change"), do_tipo("scroll_burst")
+    teclas, cliques = do_tipo("keystroke_pause"), do_tipo("click_outside")
+    respostas = do_tipo("question_answer")
+
+    mudancas_aba = len(tab)
+    cliques_fora_area_estudo = len(cliques)
+    tempo_fora_foco_s = sum(float(p.get("tempo_fora_foco_s") or 0) for p in tab)
+    pausas_digitacao_s = sum(float(p.get("duracao_s") or 0) for p in teclas)
+    px = [float(p.get("px_s") or 0) for p in scroll]
+    velocidade_scroll_px_s = (sum(px) / len(px)) if px else 0.0
+    tr = [float(p.get("tempo_resposta_ms") or 0) for p in respostas]
+    tempo_resposta_ms = (sum(tr) / len(tr)) if tr else 0.0
+    acertos_questoes = sum(1 for p in respostas if p.get("acertou") is True)
+
+    agora = datetime.now(timezone.utc)
+    duracao_sessao_min = max((agora - sess["session_start_ts"]).total_seconds() / 60.0, 1e-6)
+    local = datetime.now()
+    hora_do_dia = round(local.hour + local.minute / 60.0, 2)
+
+    sessoes_no_dia = 0
+    start = do_tipo("session_start")
+    if start:
+        sessoes_no_dia = int(((start[0] or {}).get("features") or {}).get("sessoes_no_dia") or 0)
+    if not sessoes_no_dia:
+        sessoes_no_dia = await conn.fetchval(
+            "select count(*) from sessions where user_id = $1::uuid "
+            "and date(session_start_ts) = current_date",
+            sess["user_id"],
+        ) or 0
+
+    ab = await conn.fetchrow(
+        """
+        select count(*) filter (where session_end_ts is null and session_id <> $2::uuid) as abandonadas,
+               count(*) as total
+        from sessions
+        where user_id = $1::uuid and session_start_ts >= now() - interval '7 days'
+        """,
+        sess["user_id"], session_id,
+    )
+    taxa_abandono_sessao = (ab["abandonadas"] / ab["total"]) if ab and ab["total"] else 0.0
+
+    try:  # tabela interventions pode ainda não existir (Tarefa 4)
+        historico_intervencoes = await conn.fetchval(
+            "select count(*) from interventions where session_id = $1::uuid", session_id
+        ) or 0
+    except Exception:
+        historico_intervencoes = 0
+
+    produtividade = acertos_questoes / duracao_sessao_min
+    tff_norm = (tempo_fora_foco_s - TFF_MIN) / (TFF_MAX - TFF_MIN)
+    tff_norm = min(max(tff_norm, 0.0), 1.0)  # clamp p/ 0..1 como no treino
+    distracao_score = mudancas_aba * 0.4 + cliques_fora_area_estudo * 0.3 + tff_norm * 0.3
+
+    return {
+        "tempo_resposta_ms": tempo_resposta_ms,
+        "velocidade_scroll_px_s": velocidade_scroll_px_s,
+        "pausas_digitacao_s": pausas_digitacao_s,
+        "acertos_questoes": acertos_questoes,
+        "nivel_dificuldade_atividade": NIVEL_DIFICULDADE_PADRAO,
+        "duracao_sessao_min": duracao_sessao_min,
+        "historico_intervencoes": historico_intervencoes,
+        "taxa_abandono_sessao": taxa_abandono_sessao,
+        "mudancas_aba": mudancas_aba,
+        "tempo_fora_foco_s": tempo_fora_foco_s,
+        "cliques_fora_area_estudo": cliques_fora_area_estudo,
+        "sessoes_no_dia": sessoes_no_dia,
+        "hora_do_dia": hora_do_dia,
+        "produtividade": produtividade,
+        "distracao_score": distracao_score,
+    }
+
+
+def vetor_para_modelo(feats):
+    """Ordena o dict na ordem exata do treino (FEATURE_ORDER)."""
+    return [float(feats[nome]) for nome in FEATURE_ORDER]
+
+
+# ================== API: DIAGNOSE (predição do estado via RF) ===============
+@app.get("/diagnose")
+async def diagnose(request: Request, session_id: str):
+    """Prediz o estado de atenção da sessão (engajado/distraido/muito_distraido)
+    usando o RandomForest v1 carregado no startup. As features são o vetor
+    CUMULATIVO da sessão (montar_features_sessao), na ordem exata do treino."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    modelo, scaler = request.app.state.modelo, request.app.state.scaler
+    if modelo is None or scaler is None:
+        return JSONResponse({"erro": "Modelo indisponível no servidor."}, status_code=503)
+
+    async with pool.acquire() as conn:
+        feats = await montar_features_sessao(conn, session_id)
+    if feats is None:
+        return JSONResponse({"erro": "Sessão não encontrada."}, status_code=404)
+
+    # DataFrame com as colunas na ordem do treino -> sem warning de feature names.
+    Xdf = pd.DataFrame([vetor_para_modelo(feats)], columns=FEATURE_ORDER)
+    Xs = pd.DataFrame(scaler.transform(Xdf), columns=FEATURE_ORDER)
+    pred = int(modelo.predict(Xs)[0])
+    proba = modelo.predict_proba(Xs)[0]
+    classes = list(modelo.classes_)
+    score = float(proba[classes.index(pred)])
+    estado = ESTADOS[pred] if 0 <= pred < len(ESTADOS) else str(pred)
+
+    return {
+        "session_id": session_id,
+        "estado": estado,
+        "score": round(score, 4),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # ================== API: SESSIONS (abre uma nova sessão) ====================

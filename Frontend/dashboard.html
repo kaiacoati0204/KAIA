@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KaIA — Dashboard Interno</title>
+
+<!-- FONTES -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- CSS COMPARTILHADO (a seção "DASHBOARD INTERNO" vive no final do style.css) -->
+<link rel="stylesheet" href="style.css">
+
+<!-- Chart.js (necessário só nesta página) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+<script src="./config.js"></script>
+<!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+<script>
+    const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    if (!usuario) window.location.href = 'login.html';
+</script>
+</head>
+
+<!-- class="dashboard-page" ATIVA o CSS/JS do dashboard (ver style.css e script.js)
+     data-menu: o script.js injeta o botão ☰ e o menu lateral -->
+<body class="dashboard-page" data-menu>
+
+<div class="shell">
+<div class="frame">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-row">
+      <div>
+        <span class="logo">Ka<em>IA</em></span>
+        <!-- preenchido pelo JS: base sintética / planilha manual / demo -->
+        <span class="db-tag" id="fonte-dados">CARREGANDO…</span>
+      </div>
+      <div class="meta">
+        <div class="live"><div class="dot"></div>AO VIVO</div>
+        <div class="clk" id="clk">—</div>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" onclick="sv('geral',this)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        VISÃO GERAL
+      </button>
+      <button class="tab" onclick="sv('sessoes',this)">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        SESSÕES
+      </button>
+      <button class="tab" onclick="sv('atencao',this)">
+        <svg viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>
+        ATENÇÃO
+      </button>
+      <button class="tab" onclick="sv('fin',this)">
+        <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        FINANCEIRO
+      </button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div class="db-body">
+
+  <!-- ========================= VISÃO GERAL ========================= -->
+  <div id="v-geral" class="view on">
+    <!-- KPIs (planilha: aba "kpis", view=geral) -->
+    <div class="r4" id="kpi-geral"></div>
+
+    <div class="r2">
+      <div class="card">
+        <div class="ch">
+          <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>SESSÕES POR HORA DO DIA</div>
+          <div class="chint">barras = sessões · linha = muito distraído</div>
+        </div>
+        <!-- legenda: sempre fixa aqui -->
+        <div class="lg">
+          <div class="li"><div class="ls" style="background:#2D4BA5"></div>Sessões</div>
+          <div class="li"><div class="ls" style="background:#f3d009"></div>Muito distraído</div>
+        </div>
+        <!-- dados: bloco "sessoes_hora" -->
+        <div class="cw" style="height:200px"><canvas id="c1" role="img" aria-label="Barras de sessões por hora com linha de sessões muito distraídas">Sessões por hora.</canvas></div>
+      </div>
+      <div class="card">
+        <div class="ch">
+          <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>PERFIS DE ALUNO</div>
+        </div>
+        <!-- legenda gerada pelo JS (bloco "planos" = perfis na base sintética) -->
+        <div class="lg" id="lg-planos"></div>
+        <div class="cw" style="height:200px"><canvas id="c2" role="img" aria-label="Distribuição de perfis de aluno">Distribuição de perfis.</canvas></div>
+      </div>
+    </div>
+
+    <div class="r2e">
+      <div class="card">
+        <div class="ch">
+          <div class="ct"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>SESSÕES RECENTES</div>
+          <div class="chint">últimas da base</div>
+        </div>
+        <!-- dados: bloco "alunos_recentes" -->
+        <table class="tbl">
+          <colgroup><col style="width:22%"><col style="width:32%"><col style="width:16%"><col style="width:30%"></colgroup>
+          <thead><tr><th>Sessão</th><th>Perfil</th><th>Acertos</th><th>Atividade</th></tr></thead>
+          <tbody id="alunos-recentes"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="ch">
+          <div class="ct"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>SESSÕES MAIS DISPERSAS</div>
+          <div class="chint">maior nº de trocas de aba</div>
+        </div>
+        <!-- dados: bloco "alertas_recentes" -->
+        <div class="af" id="alertas-recentes"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= SESSÕES ========================= -->
+  <div id="v-sessoes" class="view">
+    <!-- KPIs (planilha: aba "kpis", view=sessoes) -->
+    <div class="r4" id="kpi-sessoes"></div>
+
+    <div class="card">
+      <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>SESSÕES POR DIA</div><div class="chint">iniciadas vs. concluídas (1 − taxa de abandono)</div></div>
+      <div class="lg"><div class="li"><div class="ls" style="background:#2D4BA5"></div>Iniciadas</div><div class="li"><div class="ls" style="background:#57D979"></div>Concluídas</div></div>
+      <!-- dados: bloco "sessoes_14dias" (na base sintética = todos os dias do período) -->
+      <div class="cw" style="height:200px"><canvas id="c3" role="img" aria-label="Sessões iniciadas e concluídas por dia">Sessões por dia.</canvas></div>
+    </div>
+    <div class="card">
+      <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>TIPOS DE ATIVIDADE</div></div>
+      <!-- dados: bloco "temas_estudados" -->
+      <div class="cw" style="height:195px"><canvas id="c4" role="img" aria-label="Sessões por tipo de atividade">Sessões por tipo de atividade.</canvas></div>
+    </div>
+  </div>
+
+  <!-- ========================= ATENÇÃO ========================= -->
+  <div id="v-atencao" class="view">
+    <!-- KPIs (planilha: aba "kpis", view=atencao) -->
+    <div class="r4" id="kpi-atencao"></div>
+
+    <div class="r2">
+      <div class="card">
+        <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>DISTRIBUIÇÃO DO TARGET</div><div class="chint">rótulo de ML</div></div>
+        <!-- legenda gerada pelo JS (bloco "distribuicao_foco" = target) -->
+        <div class="lg" id="lg-foco"></div>
+        <div class="cw" style="height:200px"><canvas id="c5" role="img" aria-label="Distribuição do target: engajado, distraído, muito distraído">Engajado, Distraído, Muito distraído.</canvas></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/></svg>SINAIS DE DISPERSÃO</div><div class="chint">média ÷ pico observado</div></div>
+        <!-- dados: bloco "eventos_tipo" -->
+        <div class="evl" id="eventos-tipo" style="margin-bottom:13px"></div>
+        <div class="div"></div>
+        <div class="ch" style="margin-bottom:8px"><div class="ct"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>ENGAJAMENTO POR HORA</div></div>
+        <!-- dados: bloco "foco_hora" (% de sessões engajadas) -->
+        <div class="cw" style="height:90px"><canvas id="c6" role="img" aria-label="Percentual de sessões engajadas por hora">Engajamento por hora.</canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= FINANCEIRO ========================= -->
+  <div id="v-fin" class="view">
+    <!-- ATENÇÃO: a base sintética NÃO possui dados financeiros.
+         Esta aba inteira usa os valores de DEMONSTRAÇÃO do script.js. -->
+    <div class="card" style="border-left:3px solid var(--gravata-kinrou)">
+      <div class="ct">⚠ PROJEÇÃO — não vem da base sintética (dados de demonstração)</div>
+    </div>
+
+    <!-- KPIs de demonstração (view=fin) -->
+    <div class="r4" id="kpi-fin"></div>
+
+    <div class="card">
+      <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>MRR MENSAL — ANO 01</div><div class="chint">Essencial + Intensivo empilhados</div></div>
+      <div class="lg"><div class="li"><div class="ls" style="background:#f3d009"></div>Essencial</div><div class="li"><div class="ls" style="background:#57D979"></div>Intensivo</div></div>
+      <!-- planilha: aba "mrr_mensal" -->
+      <div class="cw" style="height:200px"><canvas id="c7" role="img" aria-label="MRR mensal do M1 ao M12">Crescimento ao longo do ano.</canvas></div>
+    </div>
+    <div class="r2e">
+      <div class="card">
+        <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>METAS DE FASE</div></div>
+        <!-- planilha: aba "metas_fase" -->
+        <div class="plist" id="metas-fase"></div>
+      </div>
+      <div class="card">
+        <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>SAÚDE FINANCEIRA</div></div>
+        <!-- planilha: aba "saude_financeira" -->
+        <table class="htbl"><tbody id="saude-financeira"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /db-body -->
+</div><!-- /frame -->
+</div><!-- /shell -->
+
+<!-- JS COMPARTILHADO (a seção "DASHBOARD INTERNO" vive no final do script.js) -->
+<script src="script.js"></script>
+</body>
+</html>

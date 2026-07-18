@@ -15,3 +15,7 @@ numpy
 scikit-learn
 openpyxl
 jupyter
+
+# Seed da base sintética de visualização dos painéis (data/seed_visualizacao.py)
+faker
+psycopg2-binary

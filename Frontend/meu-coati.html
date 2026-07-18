@@ -4,11 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KaIA | Hobbies</title>
+    <title>KaIA | Meu Coati</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 
     <script src="./config.js"></script>
     <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
@@ -18,22 +20,24 @@
     </script>
 </head>
 
-<body>
+<!-- data-menu: o script.js injeta o botão ☰ e o menu lateral -->
+<body data-menu>
 
-    <div class="tela-login">
-        <div class="caixa-hobbies">
-            <h1>Ka<span>IA</span></h1>
-            <p>Escolha o que você curte — a KaIA usa isso para criar questões que fazem sentido para você.</p>
+    <main class="main-content">
+        <header class="content-header">
+            <h2>Meu Coati</h2>
+            <p>Visualize o modelo 3D do seu mascote.</p>
+        </header>
 
-            <div class="lista-hobbies">
-                <!-- Os botões vêm da constante HOBBIES do script.js -->
-                <div class="botoes-hobbies"></div>
-            </div>
-
-            <p id="resultado-clique" class="clique"></p>
-            <button type="button" class="botao-login" onclick="salvarHobbies()">Começar</button>
-        </div>
-    </div>
+        <model-viewer
+            class="visor-3d"
+            src="Coati_3d.glb"
+            alt="Modelo 3D do Coati, mascote da KaIA"
+            auto-rotate
+            camera-controls
+            shadow-intensity="1">
+        </model-viewer>
+    </main>
 
     <script src="script.js"></script>
 </body>

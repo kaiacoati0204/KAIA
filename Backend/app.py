@@ -10,6 +10,8 @@ import uuid
 import asyncpg
 import pandas as pd
 import requests
+
+from thompson import ThompsonSampling, INTERVENCOES
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Request
@@ -88,6 +90,14 @@ async def lifespan(app: FastAPI):
         print("[KaIA] Modelo RF v1 + scaler carregados no startup.")
     except Exception as e:
         print("[KaIA] AVISO: não foi possível carregar modelo/scaler:", e)
+
+    # Thompson Sampling (bandit das 9 intervenções) — carrega params persistidos.
+    try:
+        app.state.thompson = ThompsonSampling()
+        print("[KaIA] Thompson Sampling carregado (9 intervenções).")
+    except Exception as e:
+        app.state.thompson = None
+        print("[KaIA] AVISO: não foi possível iniciar Thompson Sampling:", e)
 
     # Scheduler: agrega features das sessões ativas a cada 30s.
     # Só inicia se houver banco — o job de agregação depende do pool.
@@ -322,12 +332,67 @@ async def job_agregacao(app):
             """
         )
     for r in ativas:
+        sid = str(r["session_id"])
         try:
-            await agregar_features(pool, str(r["session_id"]))
+            await agregar_features(pool, sid)
         except Exception as e:
             print("[KaIA] erro ao agregar", r["session_id"], ":", e)
+        try:
+            await rodar_intervencao(app, sid)
+        except Exception as e:
+            print("[KaIA] erro na intervenção", sid, ":", e)
     if ativas:
         print(f"[KaIA] Agregação rodou para {len(ativas)} sessão(ões) ativa(s).")
+
+
+async def rodar_intervencao(app, session_id):
+    """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
+    Regras: só para estado distraido/muito_distraido, respeitando cooldown de
+    INTERV_COOLDOWN_MIN e teto de INTERV_MAX_POR_SESSAO por sessão. Silencioso
+    se a tabela interventions ainda não existir (Tarefa 4)."""
+    thompson = app.state.thompson
+    modelo, scaler = app.state.modelo, app.state.scaler
+    if thompson is None or modelo is None or scaler is None:
+        return
+
+    async with app.state.pool.acquire() as conn:
+        res = await predizer_estado(modelo, scaler, conn, session_id)
+        if res is None or res["estado"] not in ESTADOS_QUE_INTERVEM:
+            return
+
+        try:
+            stats = await conn.fetchrow(
+                """
+                select count(*) as n, max(triggered_at) as ultima
+                from interventions where session_id = $1::uuid
+                """,
+                session_id,
+            )
+        except Exception as e:
+            print("[KaIA] tabela interventions indisponível (rode a Tarefa 4):", e)
+            return
+
+        n = stats["n"] or 0
+        if n >= INTERV_MAX_POR_SESSAO:
+            return
+        if stats["ultima"] is not None:
+            desde_min = (datetime.now(timezone.utc) - stats["ultima"]).total_seconds() / 60.0
+            if desde_min < INTERV_COOLDOWN_MIN:
+                return
+
+        sessoes_no_dia = int(res["feats"].get("sessoes_no_dia") or 0)
+        tipo = thompson.select(res["estado"], sessoes_no_dia)
+        if not tipo:
+            return
+
+        await conn.execute(
+            """
+            insert into interventions (session_id, intervention_type, triggered_at)
+            values ($1::uuid, $2, now())
+            """,
+            session_id, tipo,
+        )
+        print(f"[KaIA Intervenção] {session_id} estado={res['estado']} -> {tipo}")
 
 
 # ============ FEATURES PARA O MODELO (vetor cumulativo por sessão) ==========
@@ -351,6 +416,11 @@ NIVEL_DIFICULDADE_PADRAO = 1  # importância ~0 no modelo; default seguro (CHECK
 
 # Mapeamento do rótulo (int) -> estado, conforme encoding do treino.
 ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
+
+# Regras de disparo de intervenção (no scheduler de 30s).
+INTERV_COOLDOWN_MIN = 3        # tempo mínimo entre intervenções da mesma sessão
+INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
+ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
 
 
 async def montar_features_sessao(conn, session_id):
@@ -450,6 +520,24 @@ def vetor_para_modelo(feats):
     return [float(feats[nome]) for nome in FEATURE_ORDER]
 
 
+async def predizer_estado(modelo, scaler, conn, session_id):
+    """Núcleo de predição compartilhado por /diagnose e pelo scheduler.
+    Retorna dict {estado, score, feats} ou None se sessão/modelo indisponível."""
+    if modelo is None or scaler is None:
+        return None
+    feats = await montar_features_sessao(conn, session_id)
+    if feats is None:
+        return None
+    # DataFrame com as colunas na ordem do treino -> sem warning de feature names.
+    Xdf = pd.DataFrame([vetor_para_modelo(feats)], columns=FEATURE_ORDER)
+    Xs = pd.DataFrame(scaler.transform(Xdf), columns=FEATURE_ORDER)
+    pred = int(modelo.predict(Xs)[0])
+    proba = modelo.predict_proba(Xs)[0]
+    score = float(proba[list(modelo.classes_).index(pred)])
+    estado = ESTADOS[pred] if 0 <= pred < len(ESTADOS) else str(pred)
+    return {"estado": estado, "score": score, "feats": feats}
+
+
 # ================== API: DIAGNOSE (predição do estado via RF) ===============
 @app.get("/diagnose")
 async def diagnose(request: Request, session_id: str):
@@ -464,24 +552,104 @@ async def diagnose(request: Request, session_id: str):
         return JSONResponse({"erro": "Modelo indisponível no servidor."}, status_code=503)
 
     async with pool.acquire() as conn:
-        feats = await montar_features_sessao(conn, session_id)
-    if feats is None:
+        res = await predizer_estado(modelo, scaler, conn, session_id)
+    if res is None:
         return JSONResponse({"erro": "Sessão não encontrada."}, status_code=404)
-
-    # DataFrame com as colunas na ordem do treino -> sem warning de feature names.
-    Xdf = pd.DataFrame([vetor_para_modelo(feats)], columns=FEATURE_ORDER)
-    Xs = pd.DataFrame(scaler.transform(Xdf), columns=FEATURE_ORDER)
-    pred = int(modelo.predict(Xs)[0])
-    proba = modelo.predict_proba(Xs)[0]
-    classes = list(modelo.classes_)
-    score = float(proba[classes.index(pred)])
-    estado = ESTADOS[pred] if 0 <= pred < len(ESTADOS) else str(pred)
 
     return {
         "session_id": session_id,
-        "estado": estado,
-        "score": round(score, 4),
+        "estado": res["estado"],
+        "score": round(res["score"], 4),
         "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ================== API: INTERVENÇÃO (pendente + feedback) ===================
+class FeedbackIn(BaseModel):
+    session_id: str
+    intervention_type: str
+    reward: float                              # 0.0, 0.5 ou 1.0
+    tempo_ate_aceitar_s: Optional[float] = None
+    feedback_usuario: Optional[str] = None
+
+
+@app.get("/intervencao/pendente")
+async def intervencao_pendente(request: Request, session_id: str):
+    """Frontend consulta a intervenção recém-disparada (sem reward ainda) nos
+    últimos 5 min. É a 'flag' que substitui o WebSocket: o front faz polling."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                """
+                select intervention_id, intervention_type, triggered_at
+                from interventions
+                where session_id = $1::uuid and reward is null
+                  and triggered_at >= now() - interval '5 minutes'
+                order by triggered_at desc limit 1
+                """,
+                session_id,
+            )
+        except Exception:
+            return {"pendente": None}
+    if row is None:
+        return {"pendente": None}
+    return {"pendente": {
+        "intervention_id": str(row["intervention_id"]),
+        "intervention_type": row["intervention_type"],
+        "triggered_at": row["triggered_at"].isoformat(),
+    }}
+
+
+@app.post("/intervencao/feedback")
+async def intervencao_feedback(body: FeedbackIn, request: Request):
+    """Recebe o feedback do aluno, grava o reward na intervenção mais recente
+    (dessa sessão+tipo ainda sem reward) e atualiza o bandit (thompson.update)."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    if body.intervention_type not in INTERVENCOES:
+        return JSONResponse({"erro": "intervention_type inválido."}, status_code=400)
+    reward = min(max(float(body.reward), 0.0), 1.0)
+
+    intervention_id = None
+    async with pool.acquire() as conn:
+        try:
+            row = await conn.fetchrow(
+                """
+                update interventions
+                   set reward = $3,
+                       tempo_ate_aceitar_s = coalesce($4::double precision, tempo_ate_aceitar_s),
+                       feedback_usuario    = coalesce($5::text, feedback_usuario)
+                 where intervention_id = (
+                       select intervention_id from interventions
+                        where session_id = $1::uuid and intervention_type = $2 and reward is null
+                        order by triggered_at desc limit 1
+                 )
+                returning intervention_id
+                """,
+                body.session_id, body.intervention_type, reward,
+                body.tempo_ate_aceitar_s, body.feedback_usuario,
+            )
+            if row is not None:
+                intervention_id = str(row["intervention_id"])
+        except Exception as e:
+            return JSONResponse(
+                {"erro": f"tabela interventions indisponível: {e}"}, status_code=503
+            )
+
+    # Atualiza o bandit mesmo que não haja linha correspondente (feedback direto).
+    thompson = request.app.state.thompson
+    if thompson is not None:
+        thompson.update(body.intervention_type, reward)
+
+    return {
+        "status": "ok",
+        "intervention_id": intervention_id,
+        "intervention_type": body.intervention_type,
+        "reward": reward,
     }
 
 

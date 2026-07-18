@@ -24,5 +24,7 @@ server.log
 
 # Artefatos gerados pelo notebook de pré-processamento (regeneráveis)
 ml/artifacts/*.pkl
+# Estado de runtime do Thompson Sampling (alpha/beta mutáveis)
+ml/artifacts/thompson_params.json
 # checkpoints do Jupyter
 .ipynb_checkpoints/

@@ -19,6 +19,12 @@
   --prox-br: #e6e1da;
   --vd-uniao: #57d979;
   --vermelho: #e8606b;
+  /* Status SUAVE (fundo claro + texto escuro da mesma família) — usados no
+     feedback do quiz e, depois, nas etiquetas de status. Verde DEDICADO. */
+  --acerto-bg: #e4efe3;
+  --acerto-tx: #2f5d3a;
+  --erro-bg: #f3e2e2;
+  --erro-tx: #8a3b3b;
 
   /* superfícies (dashboard e cards) */
   --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */
@@ -51,62 +57,6 @@ body {
 ::-webkit-scrollbar-thumb {
   background-color: var(--gravata-kinrou);
   border-radius: 20px;
-}
-
-/* =========================
-   MENU LATERAL (injetado pelo script.js em <body data-menu>)
-========================= */
-.botao {
-  position: fixed;
-  top: 20px;
-  left: 25px;
-  z-index: 10000;
-  font-size: 32px;
-  line-height: 1;
-  cursor: pointer;
-  user-select: none;
-  color: var(--profundo);
-  background: rgba(255, 255, 255, 0.8);
-  padding: 5px 12px;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s ease;
-}
-.botao:hover {
-  transform: scale(1.1);
-}
-.menu {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 9999;
-  width: 0; /* abre para 250px via abrirMenu() */
-  height: 100vh;
-  padding-top: 80px;
-  overflow-x: hidden;
-  background-color: var(--profundo);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.menu h1 {
-  color: var(--prox-br);
-  padding: 0 25px 10px;
-  white-space: nowrap;
-}
-.menu a {
-  display: block;
-  padding: 15px 25px;
-  color: var(--prox-br);
-  text-decoration: none;
-  font-weight: 700;
-  white-space: nowrap;
-  transition: 0.3s ease;
-}
-.menu a:hover {
-  background-color: var(--azul-coati);
-  padding-left: 35px;
-}
-.menu a.ativo {
-  color: var(--gravata-kinrou);
 }
 
 /* =========================
@@ -339,57 +289,6 @@ body {
   display: inline-block;
   padding: 14px 32px;
 }
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 50px;
-  padding: 80px 40px;
-  background-color: var(--marfim);
-  border-right: 1px solid var(--profundo);
-}
-.brand h1 {
-  font-size: 3.5rem;
-  color: var(--azul-coati);
-  margin-bottom: 10px;
-}
-.brand h1 span {
-  color: var(--gravata-kinrou);
-}
-.brand h2 {
-  font-size: 1rem;
-  color: var(--bege);
-  letter-spacing: 2px;
-}
-.system-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.stat-card {
-  padding: 20px;
-  border-radius: 25px;
-  border-left: 4px solid var(--bege);
-  background-color: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(15px);
-}
-.stat-card label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--bege);
-}
-.value {
-  font-size: 1.5rem;
-  font-weight: 800;
-}
-.status-active {
-  color: var(--vd-uniao);
-}
-.sidebar-footer {
-  margin-top: auto;
-  padding-top: 20px;
-}
 .btn-login-extra {
   display: block;
   padding: 12px;
@@ -530,6 +429,65 @@ body {
   font-size: 1rem;
   font-weight: 700;
   color: var(--gravata-kinrou);
+}
+
+/* ===== Feedback da resposta (Etapa 7): explica o erro, sem sair da tela ===== */
+/* Alternativa correta e a escolha errada, em tons SUAVES (fundo claro + texto
+   escuro da mesma família). Nada de vibrante — o erro não é punição. */
+.option-btn.respondido {
+  cursor: default;
+  transform: none;
+}
+.option-btn.correta {
+  border-color: var(--acerto-tx);
+  background: var(--acerto-bg);
+  color: var(--acerto-tx);
+}
+.option-btn.errada {
+  border-color: var(--erro-tx);
+  background: var(--erro-bg);
+  color: var(--erro-tx);
+}
+.exp-aberta {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+.exp-bloco {
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--tinta);
+  font-weight: 400;
+  line-height: 1.6;
+}
+.exp-bloco h3 {
+  margin-bottom: 8px;
+  color: var(--profundo);
+}
+.exp-bloco p {
+  margin-top: 6px;
+}
+.exp-bloco .exp-erro {
+  color: var(--erro-tx);
+}
+.botao-proxima {
+  padding: 14px 28px;
+  border: none;
+  border-radius: 14px;
+  background: var(--gravata-kinrou);
+  color: var(--profundo);
+  font-family: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.botao-proxima:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(243, 208, 9, 0.35);
 }
 
 /* =========================
@@ -1079,12 +1037,6 @@ canvas {
    RESPONSIVO (app + manifesto)
 ========================= */
 @media (max-width: 900px) {
-  .app-wrapper {
-    grid-template-columns: 1fr;
-  }
-  .sidebar {
-    display: none;
-  }
   .main-content,
   .conteudo {
     padding: 30px;
@@ -1528,21 +1480,6 @@ canvas {
   text-align: center;
 }
 
-/* "Olá, [nome]" — canto superior direito. Injetado pelo script.js
-   (montarSaudacao) nas páginas com <body data-saudacao>. */
-.saudacao-usuario {
-  position: fixed;
-  top: 16px;
-  right: 20px;
-  z-index: 900;
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--raio);
-  background: var(--card);
-  color: var(--profundo);
-  font-size: 13px;
-  font-weight: 700;
-}
 
 /* ============================================================
    PAINEL DO RESPONSÁVEL — tabela por role
@@ -1584,3 +1521,104 @@ canvas {
 
 .tabela-painel tbody tr:last-child td { border-bottom: none; }
 .tabela-painel tbody tr:hover { background: var(--surface); }
+
+/* ============================================================
+   BARRA LATERAL ESTÁTICA (rail) — injetada em <body data-rail>
+   Começa estreita (só ícones) e expande ao clicar (ícones + texto).
+   É uma COLUNA real (o body vira flex): empurra o conteúdo, não sobrepõe.
+   ============================================================ */
+:root {
+  --rail-col: 60px;
+  --rail-col-aberta: 180px;
+}
+body[data-rail] {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+}
+/* a rail tem largura fixa; qualquer outro filho (o conteúdo) preenche o resto */
+body[data-rail] > .railnav { flex: 0 0 var(--rail-col); }
+body[data-rail].rail-aberta > .railnav { flex-basis: var(--rail-col-aberta); }
+body[data-rail] > :not(.railnav) { flex: 1 1 auto; min-width: 0; }
+
+.railnav {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  transition: flex-basis 0.25s ease;
+}
+.rail-links { display: flex; flex-direction: column; gap: 4px; }
+
+.rail-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--profundo);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rail-item:hover { background: var(--surface); }
+/* página atual: traço AMARELO à esquerda (amarelo só como acento/relevo) */
+.rail-item.ativo { background: var(--surface); box-shadow: inset 3px 0 0 var(--gravata-kinrou); }
+
+.rail-ic {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+.rail-ic svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* rótulos: escondidos quando colapsada, aparecem ao expandir */
+.rail-tx { opacity: 0; transition: opacity 0.2s ease; }
+body.rail-aberta .rail-tx { opacity: 1; }
+
+/* rodapé: identidade + Sair, empurrado para baixo e separado dos links */
+.rail-rodape {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sep);
+}
+.rail-avatar {
+  background: var(--profundo);
+  color: var(--marfim);
+  border-radius: 50%;
+  font-weight: 800;
+}
+/* Sair: vermelho só no hover, como sinal de saída (acento, não puro) */
+.rail-sair:hover {
+  background: var(--surface);
+  color: var(--vermelho);
+}
+
+/* .conteudo tinha padding-left extra para o antigo botão flutuante;
+   com a rail em coluna própria esse respiro deixa de ser necessário */
+body[data-rail] .conteudo { padding-left: 60px; }

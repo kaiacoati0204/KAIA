@@ -44,6 +44,8 @@ let lastKeystroke   = 0;
 let keystrokeTimer  = null;
 let questionShownAt = 0;
 let currentQuestion = null;
+let currentSubject  = null;   // matéria/tema da questão atual — para "Próxima questão"
+let currentTema     = null;
 
 // ============================================================
 //                        SESSÃO
@@ -302,56 +304,78 @@ async function salvarLogin(event) {
 // não fica copiado (e divergindo) em cada HTML.
 const MENU_LINKS = [
     ['index.html',        'Início'],
-    ['login.html',        'Login'],
     ['perfil.html',       'Perfil'],
     ['materias.html',     'Matérias'],
     ['meu-coati.html',    'Meu Coati'],
-    ['responsaveis.html', 'Professor/Responsável'],
+    ['responsaveis.html', 'Acompanhar'],
     ['dashboard.html',    'Dashboard'],
 ];
 
-function montarMenu() {
-    if (!document.body.hasAttribute('data-menu')) return;
+// O menu lateral antigo (☰) e a saudação flutuante foram substituídos pela
+// barra estática (montarRail, abaixo). MENU_LINKS agora alimenta a rail.
+
+// ============================================================
+//              BARRA LATERAL ESTÁTICA (rail)
+// ============================================================
+// Injetada nas páginas com <body data-rail>. Começa estreita (só ícones) e
+// expande ao clicar no ícone de menu (classe rail-aberta no body). É uma COLUNA
+// real do layout (o body vira flex): empurra o conteúdo em vez de sobrepor.
+const RAIL_ICONES = {
+    menu:                '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+    'index.html':        '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+    'login.html':        '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
+    'perfil.html':       '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
+    'materias.html':     '<svg viewBox="0 0 24 24"><path d="M4 4h13a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M4 4v14"/></svg>',
+    'meu-coati.html':    '<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg>',
+    'responsaveis.html': '<svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>',
+    'dashboard.html':    '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    sair:                '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+};
+
+function montarRail() {
+    if (!document.body.hasAttribute('data-rail')) return;
     const atual = location.pathname.split('/').pop() || 'index.html';
 
-    const nav = document.createElement('nav');
-    nav.className = 'menu';
-    nav.id = 'menu';
-    nav.innerHTML = '<h1>- KaIA</h1>' + MENU_LINKS
-        .map(([href, rotulo]) => `<a href="${href}"${href === atual ? ' class="ativo"' : ''}>${rotulo}</a>`)
-        .join('');
+    const item = (ic, tx) => `<span class="rail-ic">${ic}</span><span class="rail-tx">${tx}</span>`;
 
-    const botao = document.createElement('span');
-    botao.className = 'botao';
-    botao.textContent = '☰';
-    botao.addEventListener('click', abrirMenu);
+    const links = MENU_LINKS.map(([href, rotulo]) => {
+        const ativo = href === atual ? ' ativo' : '';
+        return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
+    }).join('');
 
-    document.body.prepend(nav, botao);
-}
-
-function abrirMenu() {
-    const menu = $('menu');
-    if (menu) menu.style.width = (menu.style.width === '250px') ? '0px' : '250px';
-}
-
-// ============================================================
-//                    SAUDAÇÃO ("Olá, [nome]")
-// ============================================================
-// Mesmo padrão do menu: injetada por JS nas páginas com <body data-saudacao>,
-// lendo o usuário que o login gravou no sessionStorage.
-function montarSaudacao() {
-    if (!document.body.hasAttribute('data-saudacao')) return;
-
+    // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
     const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
-    if (!u) return;
+    const nome = u ? (u.nome || u.email || '').trim() : '';
+    const inicial = nome ? nome[0].toUpperCase() : '·';
+    const saudacao = nome
+        ? `<div class="rail-item rail-user"><span class="rail-ic rail-avatar">${inicial}</span><span class="rail-tx">Olá, ${nome}</span></div>`
+        : '';
+    const rodape =
+        `<div class="rail-rodape">${saudacao}`
+        + `<button class="rail-item rail-sair" type="button">${item(RAIL_ICONES.sair, 'Sair')}</button>`
+        + `</div>`;
 
-    const nome = (u.nome || u.email || '').trim();
-    if (!nome) return;
+    const rail = document.createElement('nav');
+    rail.className = 'railnav';
+    rail.setAttribute('aria-label', 'Navegação');
+    rail.innerHTML =
+        `<button class="rail-item rail-toggle" type="button" aria-label="Expandir ou recolher o menu">${item(RAIL_ICONES.menu, 'Menu')}</button>`
+        + `<div class="rail-links">${links}</div>`
+        + rodape;
+    document.body.prepend(rail);
 
-    const saudacao = document.createElement('div');
-    saudacao.className = 'saudacao-usuario';
-    saudacao.textContent = `Olá, ${nome}`;
-    document.body.appendChild(saudacao);
+    // Estado (aberta/colapsada) lembrado entre páginas via localStorage.
+    if (localStorage.getItem('kaia_rail_aberta') === '1') document.body.classList.add('rail-aberta');
+    rail.querySelector('.rail-toggle').addEventListener('click', () => {
+        const aberta = document.body.classList.toggle('rail-aberta');
+        localStorage.setItem('kaia_rail_aberta', aberta ? '1' : '0');
+    });
+
+    // Sair: limpa a sessão (mantém a identidade do dispositivo) e volta ao login.
+    rail.querySelector('.rail-sair').addEventListener('click', () => {
+        sessionStorage.clear();
+        window.location.href = 'login.html';
+    });
 }
 
 // ============================================================
@@ -597,7 +621,10 @@ const TEMAS_FALLBACK = {
 const questaoFallback = (subject, tema) => ({
     q: `[OFFLINE] Questão de teste sobre "${tema}" (${subject}). Escolha uma opção:`,
     opts: ['Opção A', 'Opção B', 'Opção C', 'Opção D', 'Opção E'],
-    ans: 0
+    ans: 0,
+    explicacao: 'Modo offline: a explicação detalhada aparece quando a IA está disponível.',
+    porque_erradas: ['', 'Não é a alternativa correta.', 'Não é a alternativa correta.',
+                     'Não é a alternativa correta.', 'Não é a alternativa correta.'],
 });
 
 // Troca qual das três telas de materias.html está visível.
@@ -642,7 +669,11 @@ async function abrirMateria(subject) {
 
 // 2) A IA gera a questão e a missão começa.
 async function startMission(subject, tema) {
+    currentSubject = subject;
+    currentTema = tema;
     mostrarTela('quiz-view');
+    const fb = $('feedback');
+    if (fb) { fb.className = 'feedback-msg'; fb.innerHTML = ''; }
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
 
@@ -700,15 +731,66 @@ function checkAnswer(idx, btn) {
         });
     }
 
-    btn.style.background = acertou ? '#27ae60' : '#e74c3c';
+    // A missão termina, mas a TELA NÃO SAI: o aluno lê a explicação no ritmo dele.
     isMissionActive = false;
+    clearInterval(idleInterval);
+    setEstado('RESPONDIDA');   // também baixa o overlay de inatividade, se estava visível
     encerrarSessao();
 
-    setTimeout(() => {
-        mostrarTela('menu-view');
-        clearInterval(idleInterval);
-        setEstado('AGUARDANDO');
-    }, 1500);
+    mostrarExplicacao(idx, acertou);
+}
+
+// Destaca correta/errada e mostra a explicação do erro, sem trocar de tela (Etapa 7).
+// Usa textContent nos trechos vindos da IA (evita injeção de HTML no enunciado).
+function mostrarExplicacao(escolha, acertou) {
+    $$('#options-display .option-btn').forEach((b, i) => {
+        b.disabled = true;
+        b.classList.add('respondido');
+        if (i === currentQuestion.ans) b.classList.add('correta');
+        else if (i === escolha)        b.classList.add('errada');
+    });
+
+    const porque = currentQuestion.porque_erradas || [];
+    const fb = $('feedback');
+    fb.className = 'feedback-msg exp-aberta';
+    fb.innerHTML = '';
+
+    const bloco = document.createElement('div');
+    bloco.className = 'exp-bloco';
+
+    const h = document.createElement('h3');
+    h.textContent = acertou ? 'Isso mesmo!' : 'Vamos entender';
+    bloco.appendChild(h);
+
+    const pExp = document.createElement('p');
+    pExp.innerHTML = '<strong>Por que esta é a resposta: </strong>';
+    pExp.appendChild(document.createTextNode(currentQuestion.explicacao || ''));
+    bloco.appendChild(pExp);
+
+    if (!acertou && porque[escolha]) {
+        const pErr = document.createElement('p');
+        pErr.className = 'exp-erro';
+        const forte = document.createElement('strong');
+        forte.textContent = `Sua escolha (${currentQuestion.opts[escolha]}): `;
+        pErr.appendChild(forte);
+        pErr.appendChild(document.createTextNode(porque[escolha]));
+        bloco.appendChild(pErr);
+    }
+
+    const proxima = document.createElement('button');
+    proxima.type = 'button';
+    proxima.className = 'botao-proxima';
+    proxima.textContent = 'Próxima questão →';
+    proxima.addEventListener('click', proximaQuestao);
+
+    fb.appendChild(bloco);
+    fb.appendChild(proxima);
+    fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// "Próxima questão": gera outra no MESMO tema (mantém o fluxo de estudo em série).
+function proximaQuestao() {
+    startMission(currentSubject, currentTema);
 }
 
 // "ABANDONAR" também encerra a sessão.
@@ -1063,8 +1145,7 @@ async function iniciarDashboard() {
 // bloco pode rodar em qualquer HTML. A sessão NÃO nasce aqui: só ao iniciar
 // uma missão (criarSessao em startMission).
 document.addEventListener('DOMContentLoaded', () => {
-    montarMenu();
-    montarSaudacao();
+    montarRail();
     registrarHobbies();
     registrarLuz();
     registrarSensores();

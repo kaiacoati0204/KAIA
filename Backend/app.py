@@ -231,11 +231,27 @@ Crie UMA questão objetiva de múltipla escolha sobre "{tema}" ({materia}) para 
 ensino médio. Personalize o enunciado usando, se possível, estes hobbies do
 aluno: {lista}.
 Responda APENAS com JSON no formato EXATO:
-{{"q": "enunciado da questão", "opts": ["a", "b", "c", "d", "e"], "ans": 0}}
-onde "ans" é o índice (0 a 4) da alternativa correta.
+{{"q": "enunciado da questão", "opts": ["a", "b", "c", "d", "e"], "ans": 0,
+  "explicacao": "por que a alternativa correta é a correta (1 a 2 frases)",
+  "porque_erradas": ["por que a opção 0 está errada", "...opção 1...", "...", "...", "..."]}}
+Regras:
+- "ans" é o índice (0 a 4) da alternativa correta.
+- "porque_erradas" tem EXATAMENTE o mesmo tamanho e a mesma ordem de "opts";
+  no índice da alternativa correta use string vazia "".
+- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 """
     try:
         questao = extrair_json(chamar_gemini(prompt))
+        # Normaliza porque_erradas para ficar SEMPRE alinhada a opts (o frontend
+        # acessa por índice). Se a IA devolveu tamanho errado ou omitiu, completa.
+        opts = questao.get("opts") or []
+        pe = questao.get("porque_erradas")
+        if not isinstance(pe, list) or len(pe) != len(opts):
+            questao["porque_erradas"] = [
+                (pe[i] if isinstance(pe, list) and i < len(pe) else "")
+                for i in range(len(opts))
+            ]
+        questao.setdefault("explicacao", "")
         return questao
     except Exception as e:
         print("[KaIA] erro /gerar-questao:", e)

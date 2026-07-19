@@ -78,6 +78,99 @@ function logEvent(type, payload) {
 }
 
 // ============================================================
+//        INTERVENÇÕES (polling /intervencao/pendente + feedback)
+// ============================================================
+let intervencaoInterval   = null;
+let intervencaoAtual      = null;   // tipo em exibição (evita duplicar)
+let intervencaoMostradaEm = 0;      // p/ calcular tempo_ate_aceitar_s
+
+// Copy das 9 intervenções (emoji + título + texto).
+const INTERVENCOES_MSG = {
+    nudge_refoco:          { emoji: '🎯', titulo: 'Foco!',             texto: 'Respira fundo e volta pra questão — você consegue.' },
+    pausa_pomodoro:        { emoji: '⏲️', titulo: 'Pausa Pomodoro',    texto: 'Que tal 5 min de pausa? Você volta rendendo mais.' },
+    mensagem_motivacional: { emoji: '💪', titulo: 'Você tá indo bem',  texto: 'Cada questão te deixa mais perto do objetivo.' },
+    troca_atividade:       { emoji: '🔄', titulo: 'Trocar de tema',    texto: 'Experimenta um tema diferente pra reengajar.' },
+    pausa_ativa:           { emoji: '🤸', titulo: 'Pausa ativa',       texto: 'Levanta, alonga, bebe água — 2 minutinhos.' },
+    microlearning:         { emoji: '📚', titulo: 'Micro-aprendizado', texto: 'Um resuminho rápido pra destravar o assunto.' },
+    alerta_fadiga:         { emoji: '😴', titulo: 'Sinais de cansaço',  texto: 'Talvez seja hora de um descanso de verdade.' },
+    badge_foco:            { emoji: '🏅', titulo: 'Badge de Foco!',     texto: 'Mandou bem — continua nesse ritmo!' },
+    comparacao_social:     { emoji: '📊', titulo: 'Bora acompanhar',    texto: 'Outros alunos como você já avançaram hoje. Sua vez!' },
+};
+
+function _garantirCardIntervencao() {
+    if ($('kaia-intervencao')) return;
+    const css = document.createElement('style');
+    css.textContent = `
+      #kaia-intervencao{position:fixed;right:20px;bottom:20px;max-width:320px;z-index:9999;
+        background:#1f2937;color:#f9fafb;border-radius:14px;padding:16px 18px;
+        box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:inherit;display:none;animation:kaiaIn .25s ease}
+      #kaia-intervencao h4{margin:0 0 6px;font-size:15px}
+      #kaia-intervencao p{margin:0 0 12px;font-size:13px;line-height:1.4;opacity:.9}
+      #kaia-intervencao .kaia-fb{display:flex;gap:8px}
+      #kaia-intervencao button{flex:1;border:0;border-radius:8px;padding:7px 0;font-size:13px;cursor:pointer}
+      #kaia-intervencao .k1{background:#22c55e;color:#052e13}
+      #kaia-intervencao .k2{background:#eab308;color:#3a2e05}
+      #kaia-intervencao .k3{background:#ef4444;color:#3a0808}
+      @keyframes kaiaIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`;
+    document.head.appendChild(css);
+    const card = document.createElement('div');
+    card.id = 'kaia-intervencao';
+    card.innerHTML = `<h4 id="kaia-int-titulo"></h4><p id="kaia-int-texto"></p>
+      <div class="kaia-fb">
+        <button class="k1" data-r="1.0">Ajudou 👍</button>
+        <button class="k2" data-r="0.5">Mais ou menos</button>
+        <button class="k3" data-r="0.0">Não 👎</button>
+      </div>`;
+    document.body.appendChild(card);
+    $$('#kaia-intervencao button').forEach(b =>
+        b.addEventListener('click', () => enviarFeedbackIntervencao(intervencaoAtual, parseFloat(b.dataset.r))));
+}
+
+function mostrarIntervencao(intv) {
+    _garantirCardIntervencao();
+    const info = INTERVENCOES_MSG[intv.intervention_type]
+              || { emoji: '💡', titulo: 'Dica', texto: 'Continue focado!' };
+    intervencaoAtual = intv.intervention_type;
+    intervencaoMostradaEm = performance.now();
+    $('kaia-int-titulo').innerText = `${info.emoji} ${info.titulo}`;
+    $('kaia-int-texto').innerText  = info.texto;
+    $('kaia-intervencao').style.display = 'block';
+}
+
+function esconderIntervencao() {
+    const c = $('kaia-intervencao');
+    if (c) c.style.display = 'none';
+    intervencaoAtual = null;
+}
+
+async function enviarFeedbackIntervencao(tipo, reward) {
+    if (!tipo) return;
+    const tempo = intervencaoMostradaEm ? (performance.now() - intervencaoMostradaEm) / 1000 : null;
+    try {
+        await postJSON('/intervencao/feedback', {
+            session_id: sessionId, intervention_type: tipo,
+            reward, tempo_ate_aceitar_s: tempo
+        });
+        console.log('[KaIA] feedback enviado:', tipo, reward);
+    } catch (e) { console.warn('[KaIA] falha no feedback:', e); }
+    esconderIntervencao();
+}
+
+function iniciarPollIntervencao() {
+    clearInterval(intervencaoInterval);
+    esconderIntervencao();
+    intervencaoInterval = setInterval(async () => {
+        if (!isMissionActive) { clearInterval(intervencaoInterval); return; }
+        if (intervencaoAtual || !sessionId) return;   // já há uma aguardando feedback
+        try {
+            const r = await fetch(`${API_URL}/intervencao/pendente?session_id=${sessionId}`);
+            const data = await r.json();
+            if (data && data.pendente) mostrarIntervencao(data.pendente);
+        } catch (_) { /* silencioso */ }
+    }, 15000);
+}
+
+// ============================================================
 //        CAMADA DE DADOS — PERFIL + FEATURES (Supabase-ready)
 // ============================================================
 // Persistido em localStorage sob 'kaia_perfil' e espelhado no backend (/perfil).
@@ -396,24 +489,36 @@ function registrarSensores() {
     });
 
     // --- scroll: rajadas rápidas indicam rolagem sem leitura ---
-    lastScrollY    = window.scrollY;
+    // Quem rola pode ser a janela OU um container interno, dependendo da página.
+    // Listener em FASE DE CAPTURA no document pega o 'scroll' de QUALQUER elemento
+    // (scroll não borbulha, mas é capturado na descida). Lemos a posição do alvo.
+    const posDoAlvo = (t) =>
+        (!t || t === document || t === document.documentElement || t === document.body || t === window)
+            ? (window.scrollY || document.documentElement.scrollTop || 0)
+            : (t.scrollTop || 0);
+    lastScrollY    = window.scrollY || 0;
     lastScrollTime = performance.now();
-    window.addEventListener('scroll', () => {
+    let ultimoBurst = 0;   // throttle: no máximo 1 scroll_burst por segundo
+    document.addEventListener('scroll', (e) => {
         if (!isMissionActive) return;
+        const y      = posDoAlvo(e.target);
         const agora  = performance.now();
         const deltaT = (agora - lastScrollTime) / 1000;
-        const px_s   = deltaT > 0 ? Math.abs(window.scrollY - lastScrollY) / deltaT : 0;
+        const px_s   = deltaT > 0 ? Math.abs(y - lastScrollY) / deltaT : 0;
+        lastScrollY    = y;      // posição atualizada SEMPRE (velocidade contínua)
+        lastScrollTime = agora;
 
-        if (px_s > 300) {
+        // O evento 'scroll' dispara a cada frame; sem throttle uma rolagem vira
+        // centenas de eventos. Registramos no máximo 1 scroll_burst por segundo.
+        if (px_s > 300 && (agora - ultimoBurst) >= 1000) {
+            ultimoBurst = agora;
             logEvent('scroll_burst', {
                 px_s: parseFloat(px_s.toFixed(1)),
                 duracao_s: parseFloat(deltaT.toFixed(2)),
                 rolagem_sem_leitura: (px_s > 500 && deltaT > 2)
             });
         }
-        lastScrollY    = window.scrollY;
-        lastScrollTime = agora;
-    }, { passive: true });
+    }, { capture: true, passive: true });
 
     // --- teclado: pausas longas e taxa de backspace ---
     let totalTeclas = 0;
@@ -578,6 +683,7 @@ async function startMission(subject, tema) {
 
     questionShownAt = performance.now();
     iniciarIdleMonitor();
+    iniciarPollIntervencao();
 }
 
 // 3) Resposta: registra o tempo, dá o feedback visual e encerra a sessão.

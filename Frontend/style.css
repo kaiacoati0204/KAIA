@@ -25,6 +25,8 @@
   --acerto-tx: #2f5d3a;
   --erro-bg: #f3e2e2;
   --erro-tx: #8a3b3b;
+  --alerta-bg: #f7ecd2;   /* âmbar suave — faixa "Atenção" (status do meio) */
+  --alerta-tx: #8a6d1e;
 
   /* superfícies (dashboard e cards) */
   --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */
@@ -1622,3 +1624,108 @@ body.rail-aberta .rail-tx { opacity: 1; }
 /* .conteudo tinha padding-left extra para o antigo botão flutuante;
    com a rail em coluna própria esse respiro deixa de ser necessário */
 body[data-rail] .conteudo { padding-left: 60px; }
+
+/* ============================================================
+   PAINEL DO RESPONSÁVEL — etiquetas de status + gráficos (Etapa 5)
+   ============================================================ */
+/* Etiqueta de status por aluno: fundo claro + texto escuro da mesma família. */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.status-bem     { background: var(--acerto-bg); color: var(--acerto-tx); border-color: var(--acerto-tx); }
+.status-atencao { background: var(--alerta-bg); color: var(--alerta-tx); border-color: var(--alerta-tx); }
+.status-risco   { background: var(--erro-bg);   color: var(--erro-tx);   border-color: var(--erro-tx); }
+
+/* Gráficos acima da tabela, visíveis sem rolar. */
+#painel-graficos {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.graf-linha {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.graf-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--raio);
+  background: var(--card);
+}
+.graf-card h4 {
+  margin-bottom: 10px;
+  color: var(--profundo);
+  font-size: 13px;
+  font-weight: 800;
+}
+.graf-wrap {
+  position: relative;
+  height: 220px;
+}
+@media (max-width: 900px) {
+  .graf-linha { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   TEXTURA DE PAPEL (Etapa 6) — desligada por padrão (body.textura-papel)
+   ============================================================ */
+/* Ruído procedural via SVG feTurbulence embutido (data URI: sem imagem externa,
+   sem rede). É uma background-image sobre as superfícies marfim (body + os
+   contêineres de conteúdo), então fica ATRÁS do texto — não altera o contraste.
+   A opacidade é baixíssima (alfa ~0.06 no pico, ~0.03 médio): "alma de papel".
+   Grão monocromático (feColorMatrix saturate 0) para não colorir o fundo. */
+body.textura-papel,
+body.textura-papel .main-content,
+body.textura-papel .conteudo {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.25' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.15'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/* Interruptor (switch) das configurações do perfil */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  background: var(--sep);
+  border: 1px solid var(--border);
+  transition: 0.2s;
+}
+.switch-slider::before {
+  content: "";
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(26, 43, 76, 0.25);
+  transition: 0.2s;
+}
+.switch input:checked + .switch-slider {
+  background: var(--profundo);
+}
+.switch input:checked + .switch-slider::before {
+  transform: translateX(20px);
+}

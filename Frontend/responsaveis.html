@@ -30,6 +30,8 @@
         <section id="painel-role">
             <h2 id="painel-titulo">Carregando…</h2>
             <p id="painel-sub" class="painel-sub"></p>
+            <!-- gráficos (rosca de status + barras por turma + evolução) antes da tabela -->
+            <div id="painel-graficos"></div>
             <div id="painel-tabela"></div>
         </section>
 
@@ -218,6 +220,11 @@
         // `usuario` vem da guarda de rota no <head> (sessionStorage.kaia_usuario).
         const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 
+        // Status por aluno (mesmos cortes/cores do backend: <50 risco, 50-70 atenção, ≥70 bem)
+        const STATUS_ROT = { bem: 'Bem', atencao: 'Atenção', risco: 'Em risco' };
+        const STATUS_COR = { bem: '#2f5d3a', atencao: '#8a6d1e', risco: '#8a3b3b' };
+        const badge = (s) => s ? `<span class="status-badge status-${s}">${STATUS_ROT[s] || '—'}</span>` : '—';
+
         // Uma tabela simples a partir de [{rotulo, campo, fmt}] + as linhas.
         function tabela(colunas, linhas) {
             if (!linhas.length) return '<p class="painel-sub">Nenhum dado nesta semana.</p>';
@@ -236,6 +243,7 @@
                 html: tabela([
                     { rotulo: 'Aluno',   campo: 'nome' },
                     { rotulo: 'Turma',   campo: 'turma' },
+                    { rotulo: 'Status',  campo: 'status', fmt: badge },
                     { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
                     { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
                     { rotulo: 'Minutos', campo: 'minutos' },
@@ -268,12 +276,67 @@
             }),
         };
 
+        // Gráficos do painel (rosca de status + barras por turma + evolução).
+        // Só professor/coordenador têm `graficos`; para pai, g é undefined e limpa.
+        let gStatus = null, gTurma = null, gEvo = null;
+        const OPT_BARRA = {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' } },
+                y: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' }, beginAtZero: true, suggestedMax: 100 },
+            },
+        };
+
+        function renderGraficos(g) {
+            const box = $('painel-graficos');
+            gStatus?.destroy(); gTurma?.destroy(); gEvo?.destroy();
+            if (!g) { box.innerHTML = ''; return; }
+
+            box.innerHTML =
+                `<div class="graf-linha">
+                    <div class="graf-card"><h4>Distribuição por status</h4><div class="graf-wrap"><canvas id="gf-status"></canvas></div></div>
+                    <div class="graf-card"><h4>Atenção média por turma (%)</h4><div class="graf-wrap"><canvas id="gf-turma"></canvas></div></div>
+                 </div>
+                 <div class="graf-card"><h4>Evolução da atenção por semana (%)</h4><div class="graf-wrap"><canvas id="gf-evo"></canvas></div></div>`;
+
+            gStatus = new Chart($('gf-status'), {
+                type: 'doughnut',
+                data: { labels: ['Bem', 'Atenção', 'Em risco'], datasets: [{
+                    data: [g.status.bem, g.status.atencao, g.status.risco],
+                    backgroundColor: [STATUS_COR.bem, STATUS_COR.atencao, STATUS_COR.risco],
+                    borderColor: '#fbf6ec', borderWidth: 2,
+                }] },
+                options: { responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#1a2b4c' } } } },
+            });
+
+            gTurma = new Chart($('gf-turma'), {
+                type: 'bar',
+                data: { labels: g.atencao_turma.map(t => t.turma), datasets: [{
+                    data: g.atencao_turma.map(t => Math.round(t.atencao * 100)),
+                    backgroundColor: '#2d4ba5', borderRadius: 6,
+                }] },
+                options: OPT_BARRA,
+            });
+
+            gEvo = new Chart($('gf-evo'), {
+                type: 'line',
+                data: { labels: g.evolucao.map(e => 'Sem ' + e.semana), datasets: [{
+                    data: g.evolucao.map(e => Math.round(e.atencao * 100)),
+                    borderColor: '#2d4ba5', backgroundColor: 'rgba(45,75,165,.12)',
+                    fill: true, tension: .3, pointRadius: 3,
+                }] },
+                options: OPT_BARRA,
+            });
+        }
+
         async function carregarPainel() {
             const titulo = $('painel-titulo');
             const sub    = $('painel-sub');
             const corpo  = $('painel-tabela');
 
-            const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; };
+            const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; renderGraficos(null); };
 
             try {
                 const r = await fetch(`${API_URL}/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
@@ -287,6 +350,7 @@
                 titulo.textContent = v.titulo;
                 sub.textContent    = v.sub;
                 corpo.innerHTML    = v.html;
+                renderGraficos(d.graficos);
             } catch (e) {
                 console.error('[KaIA] falha ao carregar o painel:', e);
                 falhar('Não foi possível conectar ao servidor (a API está rodando em :5000?).');

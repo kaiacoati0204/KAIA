@@ -104,6 +104,17 @@
             </div>
 
             <div class="secao-perfil">
+                <h2>Configurações</h2>
+                <div class="linha-perfil">
+                    <span>Textura de papel no fundo</span>
+                    <label class="switch">
+                        <input type="checkbox" id="toggleTextura">
+                        <span class="switch-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="secao-perfil">
                 <h2>Análise da KaIA</h2>
                 <div class="analise-kaia" id="analiseIA">
                     <p>Aqui aparecerá automaticamente uma análise gerada pela KaIA sobre o desempenho do estudante.</p>
@@ -120,6 +131,23 @@
     </main>
 
     <script src="script.js"></script>
+    <script>
+        // Toggle da textura de papel (Etapa 6 — PREVIEW só no perfil por enquanto).
+        // Preferência por-dispositivo em localStorage; desligada por padrão.
+        (function () {
+            const KEY = 'kaia_textura_papel';
+            const aplicar = (on) => document.body.classList.toggle('textura-papel', on);
+            aplicar(localStorage.getItem(KEY) === '1');
+            const t = document.getElementById('toggleTextura');
+            if (t) {
+                t.checked = localStorage.getItem(KEY) === '1';
+                t.addEventListener('change', () => {
+                    localStorage.setItem(KEY, t.checked ? '1' : '0');
+                    aplicar(t.checked);
+                });
+            }
+        })();
+    </script>
 </body>
 
 </html>

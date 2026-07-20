@@ -811,24 +811,37 @@ window.addEventListener('beforeunload', () => {
 // ============================================================
 async function carregarPerfil() {
     if (!$('nomeUsuario')) return;
+
+    const SEM_DADO = '—';
+    const nomeLocal = () => {
+        const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        return u && (u.nome || u.email) || SEM_DADO;
+    };
+
+    // A rota /perfil devolve IDENTIDADE, não as métricas de sessão (tempo de
+    // resposta, scroll, etc.). Até a fonte desses cards ser decidida (parte 2 da
+    // Etapa 4.1), eles mostram "—" em vez de zeros enganosos ou "undefined".
+    ['tempoResposta', 'acertos', 'duracaoSessao', 'sessoesDia', 'scrollUsuario',
+     'pausasUsuario', 'abasUsuario', 'tempoFocoUsuario', 'cliquesUsuario']
+        .forEach(id => { const el = $(id); if (el) el.textContent = SEM_DADO; });
+
+    // O email do usuário logado (gravado no login) é o parâmetro que a rota espera.
+    const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    if (!usuario?.email) {
+        $('nomeUsuario').textContent = nomeLocal();
+        return;
+    }
+
     try {
-        const r = await fetch(`${API_URL}/perfil`);
-        if (!r.ok) return;
+        const r = await fetch(`${API_URL}/perfil?email=${encodeURIComponent(usuario.email)}`);
+        if (!r.ok) { $('nomeUsuario').textContent = usuario.nome || SEM_DADO; return; }
         const u = await r.json();
 
-        const campos = {
-            nomeUsuario:   u.nome,
-            emailUsuario:  u.email,
-            perfilUsuario: u.perfil,
-            tempoResposta: `${u.tempo_resposta_ms} ms`,
-            scrollUsuario: `${u.velocidade_scroll_px_s} px/s`,
-        };
-        Object.entries(campos).forEach(([id, valor]) => {
-            const el = $(id);
-            if (el && valor != null) el.textContent = valor;
-        });
+        $('nomeUsuario').textContent  = u.nome  || SEM_DADO;
+        $('emailUsuario').textContent = u.email || SEM_DADO;
     } catch (e) {
         console.warn('[KaIA] Erro ao carregar dados do perfil:', e);
+        $('nomeUsuario').textContent = usuario.nome || SEM_DADO;
     }
 }
 
@@ -1144,8 +1157,15 @@ async function iniciarDashboard() {
 // Cada `registrar*` é no-op nas páginas que não têm os elementos, então este
 // bloco pode rodar em qualquer HTML. A sessão NÃO nasce aqui: só ao iniciar
 // uma missão (criarSessao em startMission).
+// Textura de papel: aplica a preferência (localStorage) em TODA página. O toggle
+// que grava a preferência vive nas Configurações do perfil. Desligada por padrão.
+function aplicarTexturaPapel() {
+    document.body.classList.toggle('textura-papel', localStorage.getItem('kaia_textura_papel') === '1');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     montarRail();
+    aplicarTexturaPapel();
     registrarHobbies();
     registrarLuz();
     registrarSensores();

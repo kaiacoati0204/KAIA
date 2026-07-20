@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Optional
 
@@ -200,23 +201,70 @@ def pergunta_ia(dados: dict = Body(default={})):
 
 
 # ================== API: TEMAS de uma matéria ===============================
+# Cache em `temas_cache` (materia PK, temas jsonb): a geração dos temas custa 1
+# requisição ao Gemini (free tier: 20/dia). Cacheado, cada matéria gasta no
+# máximo 1 chamada na vida — e a tela de temas passa a abrir instantânea.
 @app.post("/temas")
-def temas(dados: dict = Body(default={})):
-    materia = dados.get("materia", "")
+async def temas(request: Request, refresh: bool = False, dados: dict = Body(default={})):
+    materia = (dados.get("materia") or "").strip()
+    pool = request.app.state.pool
+
+    async def ler_cache():
+        if pool is None or not materia:
+            return None
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("select temas from temas_cache where materia = $1", materia)
+        if not row:
+            return None
+        cache = row["temas"]
+        if isinstance(cache, str):   # jsonb volta como string no asyncpg
+            cache = json.loads(cache)
+        return cache or None
+
+    # 1) Cache hit → devolve sem tocar no Gemini (salvo ?refresh=true).
+    if not refresh:
+        cache = await ler_cache()
+        if cache:
+            return {"temas": cache, "fonte": "cache"}
+
+    # 2) Miss (ou refresh) → chama a IA. run_in_threadpool: chamar_gemini é
+    # bloqueante (requests) e a rota é async — não pode travar o event loop.
     prompt = (
         f"Liste exatamente 6 temas de estudo de {materia} para o ensino médio "
         "brasileiro. Responda APENAS com um array JSON de strings, sem texto extra."
     )
     try:
-        lista = extrair_json(chamar_gemini(prompt))
-        if not isinstance(lista, list):
-            lista = []
-        return {"temas": lista}
+        lista = extrair_json(await run_in_threadpool(chamar_gemini, prompt))
+        if not isinstance(lista, list) or not lista:
+            raise ValueError("resposta sem lista de temas")
     except Exception as e:
         print("[KaIA] erro /temas:", e)
+        # 2b) IA falhou, mas há cache antigo → devolve o cache (salva os testes
+        # quando a quota do Gemini estoura).
+        cache = await ler_cache()
+        if cache:
+            return {"temas": cache, "fonte": "cache_stale"}
         return JSONResponse(
             {"temas": [], "erro": "Não foi possível carregar os temas."}, status_code=502
         )
+
+    # 3) Grava/atualiza o cache (best-effort: não derruba a resposta se falhar).
+    if pool is not None and materia:
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    insert into temas_cache (materia, temas, updated_at)
+                    values ($1, $2::jsonb, now())
+                    on conflict (materia) do update set
+                        temas = excluded.temas, updated_at = now()
+                    """,
+                    materia, json.dumps(lista, ensure_ascii=False),
+                )
+        except Exception as e:
+            print("[KaIA] aviso: não foi possível gravar o cache de temas:", e)
+
+    return {"temas": lista, "fonte": "ia"}
 
 
 # ================== API: GERAR QUESTÃO objetiva =============================
@@ -1395,6 +1443,29 @@ def _turma_rotulo(ano, turno):
     return f"{ano}º ano · {turno}" if ano is not None else "—"
 
 
+# Faixas de status por % de atenção. Cortes fixos, validados contra a
+# distribuição real do dataset (mediana ~0.65): < 50% = em risco ·
+# 50–70% = atenção · ≥ 70% = bem. Espalha ~30/25/45 (vs. 82% em "bem" com
+# cortes de 20/30%, que escondiam quase todo mundo).
+def _status_atencao(media):
+    if media is None:
+        return None
+    if media < 0.50:
+        return "risco"
+    if media < 0.70:
+        return "atencao"
+    return "bem"
+
+
+def _distribuicao_status(valores):
+    d = {"bem": 0, "atencao": 0, "risco": 0}
+    for v in valores:
+        s = _status_atencao(v)
+        if s:
+            d[s] += 1
+    return d
+
+
 @app.get("/responsavel/painel")
 async def painel_responsavel(request: Request, email: Optional[str] = None):
     pool = request.app.state.pool
@@ -1440,6 +1511,29 @@ async def painel_responsavel(request: Request, email: Optional[str] = None):
                 """,
                 prof["escola_id"], prof["materia"], semana,
             )
+            # Gráficos: barras de atenção por turma (na matéria do professor) e
+            # evolução semanal (média de atenção por semana, 1..8).
+            turmas_rows = await conn.fetch(
+                """
+                select t.ano, t.turno, avg(r.media_atencao_turma) as atencao
+                from resumo_turma_semanal r
+                join turmas t on t.turma_id = r.turma_id
+                where r.escola_id = $1 and r.materia = $2 and r.semana = $3
+                group by t.turma_id, t.ano, t.turno
+                order by t.ano, t.turno
+                """,
+                prof["escola_id"], prof["materia"], semana,
+            )
+            evo_rows = await conn.fetch(
+                """
+                select semana, avg(media_atencao) as atencao
+                from desempenho_semanal
+                where escola_id = $1 and materia = $2
+                group by semana order by semana
+                """,
+                prof["escola_id"], prof["materia"],
+            )
+            atencoes = [float(r["media_atencao"]) for r in linhas]
             return {
                 "role": "professor",
                 "semana": semana,
@@ -1451,9 +1545,21 @@ async def painel_responsavel(request: Request, email: Optional[str] = None):
                         "media_atencao": round(float(r["media_atencao"]), 3),
                         "taxa_acerto": round(float(r["taxa_acerto"]), 3),
                         "minutos": int(r["minutos_estudados"]),
+                        "status": _status_atencao(float(r["media_atencao"])),
                     }
                     for r in linhas
                 ],
+                "graficos": {
+                    "status": _distribuicao_status(atencoes),
+                    "atencao_turma": [
+                        {"turma": _turma_rotulo(r["ano"], r["turno"]), "atencao": round(float(r["atencao"]), 3)}
+                        for r in turmas_rows
+                    ],
+                    "evolucao": [
+                        {"semana": int(r["semana"]), "atencao": round(float(r["atencao"]), 3)}
+                        for r in evo_rows
+                    ],
+                },
             }
 
         # ---------- COORDENADOR: resumo de todas as turmas da escola ----------
@@ -1487,6 +1593,26 @@ async def painel_responsavel(request: Request, email: Optional[str] = None):
                 """,
                 coord["escola_id"], semana,
             )
+            # Gráficos: status por ALUNO da escola (média entre matérias),
+            # barras por turma (reaproveita `linhas`) e evolução semanal.
+            status_rows = await conn.fetch(
+                """
+                select aluno_id, avg(media_atencao) as atencao
+                from desempenho_semanal
+                where escola_id = $1 and semana = $2
+                group by aluno_id
+                """,
+                coord["escola_id"], semana,
+            )
+            evo_rows = await conn.fetch(
+                """
+                select semana, avg(media_atencao) as atencao
+                from desempenho_semanal
+                where escola_id = $1
+                group by semana order by semana
+                """,
+                coord["escola_id"],
+            )
             return {
                 "role": "coordenador",
                 "semana": semana,
@@ -1504,6 +1630,17 @@ async def painel_responsavel(request: Request, email: Optional[str] = None):
                     }
                     for r in linhas
                 ],
+                "graficos": {
+                    "status": _distribuicao_status([float(r["atencao"]) for r in status_rows]),
+                    "atencao_turma": [
+                        {"turma": _turma_rotulo(r["ano"], r["turno"]), "atencao": round(float(r["media_atencao"]), 3)}
+                        for r in linhas
+                    ],
+                    "evolucao": [
+                        {"semana": int(r["semana"]), "atencao": round(float(r["atencao"]), 3)}
+                        for r in evo_rows
+                    ],
+                },
             }
 
         # ---------- PAI: desempenho dos filhos vinculados ----------

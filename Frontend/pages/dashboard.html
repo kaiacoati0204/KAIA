@@ -10,12 +10,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <!-- CSS COMPARTILHADO (a seção "DASHBOARD INTERNO" vive no final do style.css) -->
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="../css/style.css">
 
 <!-- Chart.js (necessário só nesta página) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
-<script src="./config.js"></script>
+<script src="../config.js"></script>
 <!-- Proteção de rota: sem login volta ao login; não-admin sai do dashboard.
      Este redirect é CONVENIÊNCIA (o front pode ser alterado no DevTools). O gate
      REAL é o 403 do backend em /dashboard/dados, que checa perfis.role. -->
@@ -198,6 +198,6 @@
 </div><!-- /shell -->
 
 <!-- JS COMPARTILHADO (a seção "DASHBOARD INTERNO" vive no final do script.js) -->
-<script src="js/script.js"></script>
+<script src="../js/script.js"></script>
 </body>
 </html>

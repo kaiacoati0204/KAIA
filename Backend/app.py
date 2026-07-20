@@ -211,20 +211,6 @@ def perguntar(dados: dict = Body(default={})):
         return JSONResponse({"resposta": "A IA retornou um formato inesperado."}, status_code=502)
 
 
-# ================== API: PERGUNTA-IA (prompt cru, usada nos hobbies) =========
-@app.post("/pergunta-ia")
-def pergunta_ia(dados: dict = Body(default={})):
-    prompt = (dados.get("prompt") or "").strip()
-    if not prompt:
-        return JSONResponse({"respostaDaIA": "Nenhum prompt enviado."}, status_code=400)
-    try:
-        resposta = chamar_gemini(prompt)
-        return {"respostaDaIA": resposta}
-    except Exception as e:
-        print("[KaIA] erro /pergunta-ia:", e)
-        return JSONResponse({"respostaDaIA": "Erro ao conectar com a IA."}, status_code=502)
-
-
 # ================== API: TEMAS de uma matéria ===============================
 # Cache em `temas_cache` (materia PK, temas jsonb): a geração dos temas custa 1
 # requisição ao Gemini (free tier: 20/dia). Cacheado, cada matéria gasta no

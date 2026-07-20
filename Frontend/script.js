@@ -1394,7 +1394,9 @@ function _renderAlunos(linhas) {
     // pi = verde, pe = âmbar, pf = azul. Cobre os planos (demo) e os perfis da base sintética.
     const cls = {
         Free:'pf', Essencial:'pe', Intensivo:'pi',
-        'Focado':'pi', 'Cansaço':'pe', 'Distraído Gradual':'pe', 'Distraído Imediato':'pf'
+        'Focado':'pi', 'Cansaço':'pe', 'Distraído Gradual':'pe', 'Distraído Imediato':'pf',
+        // Estados preditos (dashboard sobre Supabase): verde/âmbar para engajado/distraído.
+        'Engajado':'pi', 'Distraído':'pe', 'Muito distr.':'pf'
     };
     _preencher('alunos-recentes', linhas.map(a =>
         `<tr><td>${esc(a.aluno)}</td><td><span class="pp ${cls[a.plano] || 'pf'}">${esc(a.plano)}</span></td>
@@ -1443,15 +1445,45 @@ function _renderSaude(linhas) {
 function _renderFonte(D) {
     const el = $('fonte-dados');
     if (!el) return;
-    if (D?.fonte === 'base_sintetica') el.textContent = `BASE SINTÉTICA · ${D.total_sessoes} SESSÕES · ${D.periodo}`;
+    if (D?.fonte === 'supabase') el.textContent = `SUPABASE · ${D.total_sessoes} SESSÕES · ${D.periodo}`;
+    else if (D?.fonte === 'base_sintetica') el.textContent = `BASE SINTÉTICA · ${D.total_sessoes} SESSÕES · ${D.periodo}`;
     else if (D?.fonte === 'planilha_manual') el.textContent = 'PLANILHA MANUAL';
     else el.textContent = 'DADOS DE DEMONSTRAÇÃO';
+}
+
+// Aviso explícito de amostra pequena: com poucas sessões, médias e distribuições
+// (ainda mais as predições do RF) não são estatisticamente confiáveis. Injeta uma
+// faixa no topo do corpo do dashboard em vez de mostrar 3 pontos como se fosse tendência.
+function _avisoAmostra(D) {
+    if (!D || !D.amostra_pequena) return;
+    const body = document.querySelector('.db-body');
+    if (!body || $('db-amostra')) return;
+    const n = D.total_sessoes ?? 0;
+    const pred = D.sessoes_preditas;
+    const faixa = document.createElement('div');
+    faixa.id = 'db-amostra';
+    faixa.className = 'db-amostra';
+    faixa.textContent = `⚠ Amostra pequena: ${n} sessões`
+        + (pred != null ? ` (${pred} com predição do modelo)` : '')
+        + ' — médias e distribuições têm baixa confiança estatística.';
+    body.prepend(faixa);
+}
+
+// Estado de acesso negado (403): o backend barrou por não ser admin.
+function _dashboardNegado() {
+    const shell = document.querySelector('.shell');
+    if (shell) shell.innerHTML =
+        '<div class="db-negado"><h1>Acesso restrito</h1>'
+        + '<p>O dashboard interno é exclusivo da equipe (perfil admin).</p>'
+        + '<a href="index.html">Voltar ao início</a></div>';
 }
 
 // ── GRÁFICOS (Chart.js) ──
 function _buildCharts(D) {
     if (typeof Chart === 'undefined') return;
     const { azul: AZ, ouro: GR, verde: VD, bege: BE, vermelho: RE } = DASH_COR;
+    // Cor do vão entre fatias = fundo do card (--card), NUNCA branco puro (regra fixa).
+    const CARD = getComputedStyle(document.documentElement).getPropertyValue('--card').trim() || '#fbf6ec';
 
     const tk   = { color:'#aaa', font:{ size:10, family:'Plus Jakarta Sans' } };
     const gr   = { color:'rgba(26,43,76,.05)' };
@@ -1468,7 +1500,7 @@ function _buildCharts(D) {
 
     const pl = _bloco(D, 'planos');
     _renderLegenda('lg-planos', pl.map(p => `${p.plano} ${p.percentual}%`), [AZ, GR, VD, BE]);
-    new Chart($('c2'), { type:'doughnut', data:{ labels:lab(pl,'plano'), datasets:[{ data:col(pl,'percentual'), backgroundColor:[AZ,GR,VD,BE], borderWidth:3, borderColor:'#fff', hoverOffset:6 }]}, options:rosca });
+    new Chart($('c2'), { type:'doughnut', data:{ labels:lab(pl,'plano'), datasets:[{ data:col(pl,'percentual'), backgroundColor:[AZ,GR,VD,BE], borderWidth:3, borderColor:CARD, hoverOffset:6 }]}, options:rosca });
 
     const s14 = _bloco(D, 'sessoes_14dias');
     new Chart($('c3'), { type:'line', data:{ labels:lab(s14,'data'), datasets:[
@@ -1485,7 +1517,7 @@ function _buildCharts(D) {
 
     const df = _bloco(D, 'distribuicao_foco');
     _renderLegenda('lg-foco', df.map(f => `${f.faixa} ${f.percentual}%`), [VD, GR, RE]);
-    new Chart($('c5'), { type:'doughnut', data:{ labels:lab(df,'faixa'), datasets:[{ data:col(df,'percentual'), backgroundColor:[VD,GR,RE], borderWidth:3, borderColor:'#fff', hoverOffset:6 }]}, options:rosca });
+    new Chart($('c5'), { type:'doughnut', data:{ labels:lab(df,'faixa'), datasets:[{ data:col(df,'percentual'), backgroundColor:[VD,GR,RE], borderWidth:3, borderColor:CARD, hoverOffset:6 }]}, options:rosca });
 
     const fhr = _bloco(D, 'foco_hora');
     new Chart($('c6'), { type:'line', data:{ labels:lab(fhr,'hora'), datasets:[{ data:col(fhr,'foco'), borderColor:VD, backgroundColor:'rgba(87,217,121,.1)', fill:true, tension:.4, pointRadius:0, borderWidth:2 }]},
@@ -1513,17 +1545,23 @@ function _dashClock() {
 }
 
 async function iniciarDashboard() {
-    // 1) busca os dados da planilha (via backend); tolera falha → FALLBACK
+    // 1) busca os dados reais (via backend); tolera falha → FALLBACK.
+    // Manda a identidade que o front afirma (uuid do perfil) no header. É o que o
+    // backend usa para checar perfis.role == 'admin' e responder 403 se não for.
     let D = {};
     try {
-        const r = await fetch(`${API_URL}/dashboard/dados`);
+        const r = await fetch(`${API_URL}/dashboard/dados`, {
+            headers: { 'X-Kaia-User': userId }
+        });
+        if (r.status === 403) { _dashboardNegado(); return; }
         if (r.ok) D = await r.json();
     } catch (e) {
-        console.warn('[KaIA Dashboard] backend/planilha indisponível — usando dados demo:', e);
+        console.warn('[KaIA Dashboard] backend indisponível — usando dados demo:', e);
     }
 
     // 2) tabelas, listas e KPIs
     _renderFonte(D);
+    _avisoAmostra(D);
     _renderKPIs(_bloco(D, 'kpis'));
     _renderAlunos(_bloco(D, 'alunos_recentes'));
     _renderAlertas(_bloco(D, 'alertas_recentes'));

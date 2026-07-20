@@ -1087,83 +1087,80 @@ canvas {
    DASHBOARD INTERNO — ativado por <body class="dashboard-page">
    ========================================================================== */
 .dashboard-page .shell {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 20px;
+  /* Largura cheia como as outras telas — não mais um painel centralizado
+     estreito. A mesma respiração lateral da .main-content/.conteudo. */
+  padding: 40px 48px;
 }
 .dashboard-page .frame {
+  /* Sem card externo e sem bloco azul: o conteúdo fica direto sobre o marfim. */
+  background: transparent;
+}
+/* Aviso de amostra pequena (Etapa 10): honestidade estatística com poucos dados. */
+.dashboard-page .db-amostra {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--alerta-bg);
+  color: var(--alerta-tx);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+/* Tela de acesso negado (403 do backend). */
+.dashboard-page .db-negado {
+  max-width: 520px;
+  margin: 80px auto;
+  padding: 40px;
+  text-align: center;
   border-radius: 18px;
-  background: var(--profundo);
-  overflow: hidden;
+  background: var(--card);
+  color: var(--tinta);
+}
+.dashboard-page .db-negado h1 {
+  color: var(--profundo);
+  margin-bottom: 10px;
+}
+.dashboard-page .db-negado a {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: var(--gravata-kinrou);
+  color: var(--profundo);
+  font-weight: 700;
+  text-decoration: none;
 }
 
-/* --- TOPBAR --- */
-.dashboard-page .topbar {
-  padding: 18px 48px 0;
+/* --- CABEÇALHO (estilo das outras telas, marfim liso) --- */
+.dashboard-page .db-header {
+  margin-bottom: 20px;
 }
-.dashboard-page .topbar-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.dashboard-page .db-header h2 {
+  color: var(--profundo);
 }
-.dashboard-page .logo {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  color: var(--prox-br);
+.dashboard-page .db-header p {
+  margin-top: 4px;
+  color: var(--tinta);
 }
-.dashboard-page .logo em {
-  color: var(--gravata-kinrou);
-  font-style: normal;
-}
+/* Etiqueta da fonte (SUPABASE · N SESSÕES) — discreta, sobre marfim. */
 .dashboard-page .db-tag {
-  margin-left: 10px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgba(196, 161, 134, 0.15);
-  color: var(--bege);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  vertical-align: middle;
-}
-.dashboard-page .meta {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-.dashboard-page .live {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--profundo) 8%, transparent);
+  color: var(--profundo);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.07em;
-  color: var(--vd-uniao);
-}
-.dashboard-page .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--vd-uniao);
-  animation: blink 2s ease infinite;
-}
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  55%      { opacity: 0.2; }
-}
-.dashboard-page .clk {
-  font-size: 11px;
-  color: rgba(230, 225, 218, 0.35);
-  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
-/* --- TABS --- */
+/* --- ABAS (simples sobre o fundo; ativo = traço amarelo) --- */
 .dashboard-page .tabs {
   display: flex;
-  padding-top: 2px;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
 }
 .dashboard-page .tab {
   display: flex;
@@ -1173,7 +1170,7 @@ canvas {
   border: none;
   border-bottom: 2.5px solid transparent;
   background: transparent;
-  color: rgba(230, 225, 218, 0.38);
+  color: color-mix(in srgb, var(--tinta) 55%, transparent);
   font-family: inherit;
   font-size: 10px;
   font-weight: 700;
@@ -1181,12 +1178,13 @@ canvas {
   cursor: pointer;
   transition: 0.18s;
 }
+/* Ativo: texto legível em --profundo; o AMARELO é só o traço (acento). */
 .dashboard-page .tab.on {
-  color: var(--gravata-kinrou);
+  color: var(--profundo);
   border-bottom-color: var(--gravata-kinrou);
 }
 .dashboard-page .tab:hover:not(.on) {
-  color: rgba(230, 225, 218, 0.72);
+  color: var(--profundo);
 }
 
 /* Todos os ícones SVG do dashboard compartilham o mesmo traçado */
@@ -1209,8 +1207,9 @@ canvas {
 
 /* --- BODY / GRIDS --- */
 .dashboard-page .db-body {
-  padding: 22px;
-  background: var(--surface);
+  /* Conteúdo direto sobre o marfim; a margem lateral vem do .shell. */
+  padding: 0;
+  background: transparent;
 }
 .dashboard-page .view {
   display: none;

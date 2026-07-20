@@ -16,10 +16,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
 <script src="./config.js"></script>
-<!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+<!-- Proteção de rota: sem login volta ao login; não-admin sai do dashboard.
+     Este redirect é CONVENIÊNCIA (o front pode ser alterado no DevTools). O gate
+     REAL é o 403 do backend em /dashboard/dados, que checa perfis.role. -->
 <script>
     const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
     if (!usuario) window.location.href = 'login.html';
+    else if (usuario.role !== 'admin') window.location.href = 'index.html';
 </script>
 </head>
 
@@ -30,37 +33,31 @@
 <div class="shell">
 <div class="frame">
 
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div class="topbar-row">
-      <div>
-        <span class="logo">Ka<em>IA</em></span>
-        <!-- preenchido pelo JS: base sintética / planilha manual / demo -->
-        <span class="db-tag" id="fonte-dados">CARREGANDO…</span>
-      </div>
-      <div class="meta">
-        <div class="live"><div class="dot"></div>AO VIVO</div>
-        <div class="clk" id="clk">—</div>
-      </div>
-    </div>
-    <div class="tabs">
-      <button class="tab on" onclick="sv('geral',this)">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        VISÃO GERAL
-      </button>
-      <button class="tab" onclick="sv('sessoes',this)">
-        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        SESSÕES
-      </button>
-      <button class="tab" onclick="sv('atencao',this)">
-        <svg viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>
-        ATENÇÃO
-      </button>
-      <button class="tab" onclick="sv('fin',this)">
-        <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-        FINANCEIRO
-      </button>
-    </div>
+  <!-- Cabeçalho no estilo das outras telas: marfim liso, sem moldura azul -->
+  <header class="content-header db-header">
+    <h2>Dashboard Interno</h2>
+    <p>Monitoramento de dados da KaIA — uso da equipe.
+      <span class="db-tag" id="fonte-dados">CARREGANDO…</span></p>
+  </header>
+
+  <!-- Abas simples sobre o fundo; item ativo marcado por um traço amarelo -->
+  <div class="tabs">
+    <button class="tab on" onclick="sv('geral',this)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      VISÃO GERAL
+    </button>
+    <button class="tab" onclick="sv('sessoes',this)">
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      SESSÕES
+    </button>
+    <button class="tab" onclick="sv('atencao',this)">
+      <svg viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04"/></svg>
+      ATENÇÃO
+    </button>
+    <button class="tab" onclick="sv('fin',this)">
+      <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+      FINANCEIRO
+    </button>
   </div>
 
   <!-- BODY -->
@@ -75,7 +72,7 @@
       <div class="card">
         <div class="ch">
           <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>SESSÕES POR HORA DO DIA</div>
-          <div class="chint">barras = sessões · linha = muito distraído</div>
+          <div class="chint">barras = sessões · linha = muito distraído (predição)</div>
         </div>
         <!-- legenda: sempre fixa aqui -->
         <div class="lg">
@@ -87,9 +84,13 @@
       </div>
       <div class="card">
         <div class="ch">
-          <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>PERFIS DE ALUNO</div>
+          <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>ALUNOS POR ESCOLA</div>
         </div>
-        <!-- legenda gerada pelo JS (bloco "planos" = perfis na base sintética) -->
+        <!-- NOTA DE CONCEITO: este slot já foi "perfil de comportamento do aluno"
+             (persona da base sintética). O schema real não tem persona, então
+             passou a mostrar distribuição administrativa: alunos por escola
+             (bloco "planos", agora vindo de perfis). Reverter se um dia houver
+             persona de aluno no banco. -->
         <div class="lg" id="lg-planos"></div>
         <div class="cw" style="height:200px"><canvas id="c2" role="img" aria-label="Distribuição de perfis de aluno">Distribuição de perfis.</canvas></div>
       </div>
@@ -104,7 +105,7 @@
         <!-- dados: bloco "alunos_recentes" -->
         <table class="tbl">
           <colgroup><col style="width:22%"><col style="width:32%"><col style="width:16%"><col style="width:30%"></colgroup>
-          <thead><tr><th>Sessão</th><th>Perfil</th><th>Acertos</th><th>Atividade</th></tr></thead>
+          <thead><tr><th>Sessão</th><th>Estado</th><th>Acertos</th><th>Matéria</th></tr></thead>
           <tbody id="alunos-recentes"></tbody>
         </table>
       </div>
@@ -131,7 +132,7 @@
       <div class="cw" style="height:200px"><canvas id="c3" role="img" aria-label="Sessões iniciadas e concluídas por dia">Sessões por dia.</canvas></div>
     </div>
     <div class="card">
-      <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>TIPOS DE ATIVIDADE</div></div>
+      <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>MATÉRIAS ESTUDADAS</div></div>
       <!-- dados: bloco "temas_estudados" -->
       <div class="cw" style="height:195px"><canvas id="c4" role="img" aria-label="Sessões por tipo de atividade">Sessões por tipo de atividade.</canvas></div>
     </div>
@@ -144,7 +145,7 @@
 
     <div class="r2">
       <div class="card">
-        <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>DISTRIBUIÇÃO DO TARGET</div><div class="chint">rótulo de ML</div></div>
+        <div class="ch"><div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>DISTRIBUIÇÃO DO TARGET</div><div class="chint">predição do modelo (RF)</div></div>
         <!-- legenda gerada pelo JS (bloco "distribuicao_foco" = target) -->
         <div class="lg" id="lg-foco"></div>
         <div class="cw" style="height:200px"><canvas id="c5" role="img" aria-label="Distribuição do target: engajado, distraído, muito distraído">Engajado, Distraído, Muito distraído.</canvas></div>

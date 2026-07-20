@@ -1300,6 +1300,8 @@ DASHBOARD_XLSX = os.path.join(os.path.dirname(__file__), "dados_dashboard.xlsx")
 # Rótulos amigáveis para o `target` (mantém a ordem verde → amarelo → vermelho,
 # que é a mesma ordem das cores do gráfico de rosca no frontend).
 _TARGETS = [("engajado", "Engajado"), ("distraido", "Distraído"), ("muito_distraido", "Muito distraído")]
+# Rótulo curto do estado (predito pelo RF) para a coluna "Estado" das sessões recentes.
+_EST_ROT = {"engajado": "Engajado", "distraido": "Distraído", "muito_distraido": "Muito distr."}
 
 # Sinais de dispersão exibidos como barras: rótulo -> coluna da base.
 # Cada um vira "intensidade média" = média / máximo observado (0–100%).
@@ -1445,8 +1447,197 @@ def _agregar_base_sintetica(df):
     }
 
 
-@app.get("/dashboard/dados")
-def dashboard_dados():
+async def _role_do_usuario(pool, user_id):
+    """Papel do usuário (perfis.role) pelo user_id que o front envia. Retorna
+    None se o id for inválido/inexistente."""
+    try:
+        async with pool.acquire() as conn:
+            return await conn.fetchval("select role from perfis where user_id = $1::uuid", user_id)
+    except Exception:
+        return None  # uuid malformado, etc. → tratado como não-admin
+
+
+async def _agregar_supabase(conn, modelo, scaler):
+    """Monta os blocos do dashboard a partir dos dados REAIS do Supabase.
+    MEDIDO: contagens, médias de session_features, sessões por dia/hora, matérias.
+    PREDITO: os blocos de 'target' (engajado/distraído) NÃO são medidos — o banco
+    não guarda rótulo; são PREVISTOS pelo RandomForest (mesmo do /diagnose), por
+    isso vêm marcados como predição no front. Financeiro não existe no banco → é
+    omitido (o front cai no demo rotulado)."""
+    from collections import defaultdict
+
+    sessions = await conn.fetch(
+        "select session_id, session_start_ts, session_end_ts from sessions order by session_start_ts")
+    total = len(sessions)
+    pct = lambda n: round(100.0 * n / total, 1) if total else 0.0
+    media = lambda v: float(v) if v is not None else 0.0
+
+    # --- RF por sessão (PREDIÇÃO) ---
+    estado_por_sessao = {}
+    if modelo is not None and scaler is not None:
+        for s in sessions:
+            res = await predizer_estado(modelo, scaler, conn, str(s["session_id"]))
+            if res:
+                estado_por_sessao[s["session_id"]] = res["estado"]
+    preditas = len(estado_por_sessao)
+    cont = defaultdict(int)
+    for e in estado_por_sessao.values():
+        cont[e] += 1
+    pct_pred = lambda chave: round(100.0 * cont.get(chave, 0) / preditas, 1) if preditas else 0.0
+
+    # --- sessões por hora + "muito distraído"/engajamento por hora (predição) ---
+    sess_hora, muito_hora = defaultdict(int), defaultdict(int)
+    eng_hora = defaultdict(lambda: [0, 0])  # [engajadas, total_preditas]
+    for s in sessions:
+        h = s["session_start_ts"].hour
+        sess_hora[h] += 1
+        est = estado_por_sessao.get(s["session_id"])
+        if est is not None:
+            eng_hora[h][1] += 1
+            if est == "muito_distraido":
+                muito_hora[h] += 1
+            if est == "engajado":
+                eng_hora[h][0] += 1
+    sessoes_hora = [{"hora": f"{h}h", "sessoes": sess_hora.get(h, 0), "alertas": muito_hora.get(h, 0)}
+                    for h in range(24)]
+    foco_hora = [{"hora": f"{h}h",
+                  "foco": round(100.0 * eng_hora[h][0] / eng_hora[h][1], 1) if eng_hora[h][1] else 0.0}
+                 for h in range(24)]
+
+    # --- médias de session_features (MEDIDO) ---
+    f = await conn.fetchrow("""
+        select avg(acertos_questoes) acertos, avg(tempo_resposta_ms) tresp,
+               avg(nivel_dificuldade_atividade) dif, avg(tempo_fora_foco_s) fora
+        from session_features""")
+
+    # --- duração média + "sem término" (proxy de abandono) + dias cobertos ---
+    dur = await conn.fetchrow("""
+        select avg(extract(epoch from (session_end_ts - session_start_ts)) / 60.0) minutos,
+               count(*) filter (where session_end_ts is null) sem_fim,
+               count(distinct date(session_start_ts)) dias
+        from sessions""")
+    abandono_pct = round(100.0 * (dur["sem_fim"] or 0) / total) if total else 0
+
+    # --- sinais de dispersão: média ÷ pico (MEDIDO) ---
+    eventos = []
+    for rotulo, col in _SINAIS:
+        row = await conn.fetchrow(f"select avg({col}) m, max({col}) p from session_features")
+        pico, m = media(row["p"]), media(row["m"])
+        eventos.append({"tipo": rotulo, "percentual": round(100.0 * m / pico) if pico else 0})
+
+    # --- sessões recentes (MEDIDO + estado predito) ---
+    recentes = await conn.fetch("""
+        select s.session_id, s.session_start_ts,
+               (select avg(acertos_questoes) from session_features sf where sf.session_id = s.session_id) acertos,
+               (select payload->>'materia' from session_events se
+                 where se.session_id = s.session_id and se.event_type = 'session_start' limit 1) materia
+        from sessions s order by s.session_start_ts desc limit 6""")
+    alunos_recentes = [{
+        "aluno": str(r["session_id"])[:8],
+        "plano": _EST_ROT.get(estado_por_sessao.get(r["session_id"]), "—"),
+        "foco": f"{r['acertos']:.0f}" if r["acertos"] is not None else "—",
+        "tema": MATERIAS.get(r["materia"], r["materia"] or "—"),
+    } for r in recentes]
+
+    # --- sessões mais dispersas (MEDIDO) → cor pelo estado predito ---
+    piores = await conn.fetch("""
+        select s.session_id, s.session_start_ts,
+               max(sf.mudancas_aba) aba, max(sf.tempo_fora_foco_s) fora
+        from sessions s join session_features sf on sf.session_id = s.session_id
+        group by s.session_id, s.session_start_ts
+        order by aba desc nulls last, fora desc nulls last limit 4""")
+    nivel = {"muito_distraido": "vermelho", "distraido": "amarelo", "engajado": "verde"}
+    alertas_recentes = [{
+        "nivel": nivel.get(estado_por_sessao.get(r["session_id"]), "amarelo"),
+        "mensagem": f"{str(r['session_id'])[:8]} — {int(r['aba'] or 0)} trocas de aba · {media(r['fora']):.0f}s fora de foco",
+        "tempo": r["session_start_ts"].strftime("%d/%m %H:%M"),
+    } for r in piores]
+
+    # --- sessões por dia: iniciadas vs. concluídas (com session_end_ts) ---
+    por_dia = await conn.fetch("""
+        select date(session_start_ts) dia, count(*) iniciadas,
+               count(*) filter (where session_end_ts is not null) concluidas
+        from sessions group by 1 order by 1""")
+    sessoes_dia = [{"data": r["dia"].strftime("%d/%m"), "iniciadas": r["iniciadas"],
+                    "concluidas": r["concluidas"]} for r in por_dia]
+
+    # --- matérias estudadas (de session_events; sigla → nome via MATERIAS) ---
+    mats = await conn.fetch("""
+        select payload->>'materia' sigla, count(*) n from session_events
+        where event_type = 'session_start' and payload ? 'materia'
+        group by 1 order by n desc""")
+    materias_estudadas = [{"tema": MATERIAS.get(r["sigla"], r["sigla"] or "—"), "sessoes": r["n"]} for r in mats]
+
+    # --- distribuição do target (PREDIÇÃO) ---
+    distribuicao = [{"faixa": rot, "percentual": pct_pred(chave)} for chave, rot in _TARGETS]
+
+    # --- alunos por escola (REAPROVEITA o slot da rosca 'planos'; ver nota) ---
+    # NOTA DE CONCEITO: antes esta rosca era o "perfil de comportamento" do aluno
+    # (persona da base sintética). O schema real NÃO tem persona de aluno, então
+    # o slot passa a mostrar DISTRIBUIÇÃO ADMINISTRATIVA (alunos por escola). Se um
+    # dia existir persona de aluno no banco, vale reverter para o significado antigo.
+    escolas = await conn.fetch("""
+        select coalesce(e.nome, case when p.escola_id is null then 'Sem escola'
+                                     else 'Escola ' || left(p.escola_id::text, 4) end) nome,
+               count(*) n
+        from perfis p left join escolas e on e.escola_id = p.escola_id
+        where p.role = 'aluno' group by 1 order by n desc""")
+    total_al = sum(r["n"] for r in escolas) or 1
+    alunos_escola = [{"plano": r["nome"], "percentual": round(100.0 * r["n"] / total_al, 1)} for r in escolas]
+
+    kpis = [
+        {"view": "geral", "icone": "layers", "rotulo": "SESSÕES ANALISADAS", "valor": f"{total}", "subtexto": "no Supabase"},
+        {"view": "geral", "icone": "smile", "rotulo": "ENGAJAMENTO", "valor": f"{pct_pred('engajado')}%",
+         "subtexto": "predição do modelo", "cor": "verde"},
+        {"view": "geral", "icone": "check", "rotulo": "ACERTOS MÉDIOS",
+         "valor": f"{media(f['acertos']):.1f}".replace(".", ","), "subtexto": "por janela de sessão"},
+        {"view": "geral", "icone": "alert", "rotulo": "SEM TÉRMINO", "valor": f"{abandono_pct}%",
+         "subtexto": "sessões sem fim registrado", "cor": "vermelho"},
+
+        {"view": "sessoes", "icone": "clock", "rotulo": "DURAÇÃO MÉDIA", "valor": f"{media(dur['minutos']):.0f} min",
+         "subtexto": "sessões concluídas"},
+        {"view": "sessoes", "icone": "list", "rotulo": "TEMPO DE RESPOSTA",
+         "valor": f"{media(f['tresp']) / 1000:.1f}s".replace(".", ","), "subtexto": "média por janela"},
+        {"view": "sessoes", "icone": "target", "rotulo": "DIFICULDADE MÉDIA",
+         "valor": f"{media(f['dif']):.1f}/5".replace(".", ","), "subtexto": "nível da atividade"},
+        {"view": "sessoes", "icone": "calendar", "rotulo": "DIAS COBERTOS", "valor": f"{dur['dias'] or 0}",
+         "subtexto": "com sessão registrada"},
+
+        {"view": "atencao", "icone": "smile", "rotulo": "ENGAJADO", "valor": f"{pct_pred('engajado')}%",
+         "subtexto": "predição do modelo", "cor": "verde"},
+        {"view": "atencao", "icone": "meh", "rotulo": "DISTRAÍDO", "valor": f"{pct_pred('distraido')}%",
+         "subtexto": "predição do modelo", "cor": "amarelo"},
+        {"view": "atencao", "icone": "frown", "rotulo": "MUITO DISTRAÍDO", "valor": f"{pct_pred('muito_distraido')}%",
+         "subtexto": "predição do modelo", "cor": "vermelho"},
+        {"view": "atencao", "icone": "bolt", "rotulo": "TEMPO FORA DE FOCO", "valor": f"{media(f['fora']):.0f}s",
+         "subtexto": "média por janela"},
+    ]
+
+    periodo = ""
+    if total:
+        periodo = f"{sessions[0]['session_start_ts']:%d/%m/%Y} — {sessions[-1]['session_start_ts']:%d/%m/%Y}"
+
+    return {
+        "fonte": "supabase",
+        "total_sessoes": total,
+        "sessoes_preditas": preditas,
+        "amostra_pequena": total < 50,     # front avisa "amostra pequena" quando true
+        "periodo": periodo,
+        "kpis": kpis,
+        "sessoes_hora": sessoes_hora,
+        "planos": alunos_escola,           # slot reaproveitado: alunos por escola
+        "alunos_recentes": alunos_recentes,
+        "alertas_recentes": alertas_recentes,
+        "sessoes_14dias": sessoes_dia,
+        "temas_estudados": materias_estudadas,   # slot reaproveitado: matérias estudadas
+        "distribuicao_foco": distribuicao,
+        "eventos_tipo": eventos,
+        "foco_hora": foco_hora,
+    }
+
+
+def _dashboard_offline():
+    """Fallback SEM banco: base sintética (xlsx) → planilha manual → demo do front."""
     try:
         import pandas as pd
     except ImportError:
@@ -1455,7 +1646,6 @@ def dashboard_dados():
             status_code=500,
         )
 
-    # 1) Base experimental (prioridade)
     if os.path.exists(BASE_SINTETICA):
         try:
             df = pd.read_excel(BASE_SINTETICA)
@@ -1464,7 +1654,6 @@ def dashboard_dados():
             print("[KaIA] erro ao agregar a base sintética:", e)
             return JSONResponse({"erro": "Não foi possível ler a base sintética."}, status_code=500)
 
-    # 2) Planilha manual (uma aba por bloco)
     if os.path.exists(DASHBOARD_XLSX):
         try:
             planilhas = pd.read_excel(DASHBOARD_XLSX, sheet_name=None)
@@ -1479,8 +1668,34 @@ def dashboard_dados():
             saida[nome] = df.to_dict(orient="records")
         return saida
 
-    # 3) Nada encontrado → frontend usa o demo
     return {"vazio": True, "motivo": "nenhuma planilha encontrada"}
+
+
+@app.get("/dashboard/dados")
+async def dashboard_dados(request: Request):
+    # --- Porteiro de acesso (Etapa 10) ---------------------------------------
+    # SEGURANÇA: X-Kaia-User é a identidade que o FRONT AFIRMA sobre si (uuid do
+    # localStorage). Sem senha/JWT, isto é CONVENIÊNCIA, não proteção: alguém
+    # poderia enviar o uuid do admin e passar. O gate real só existirá com
+    # Supabase Auth. Ainda assim, a decisão vem do BANCO (perfis.role), nunca de
+    # e-mail hardcoded no código — é a estrutura correta, faltando só a credencial.
+    pool = request.app.state.pool
+    if pool is not None:
+        user_id = request.headers.get("X-Kaia-User")
+        if not user_id or await _role_do_usuario(pool, user_id) != "admin":
+            return JSONResponse({"erro": "Acesso restrito ao dashboard interno."}, status_code=403)
+
+        # Dados reais do Supabase (prioridade quando há banco).
+        modelo, scaler = request.app.state.modelo, request.app.state.scaler
+        try:
+            async with pool.acquire() as conn:
+                return await _agregar_supabase(conn, modelo, scaler)
+        except Exception as e:
+            print("[KaIA] erro ao agregar dados do Supabase:", e)
+            # cai para o fallback offline (não derruba a página)
+
+    # Sem banco (dev) ou erro na agregação → base sintética / planilha / demo.
+    return _dashboard_offline()
 
 # ========================================= PERFIL =============================================
 @app.get("/perfil")

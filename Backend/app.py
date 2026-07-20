@@ -29,6 +29,23 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 ANON_USER = "00000000-0000-0000-0000-000000000000"
 
+# Sigla → nome da matéria. Fonte única: o frontend manda a SIGLA (ex.: "QUI") e
+# os prompts usam o NOME por extenso ("Química") — senão o Gemini teria que
+# adivinhar a sigla. A sigla continua sendo a chave do cache (temas_cache) e da
+# sessão. Para adicionar uma matéria, basta uma linha aqui + o card no frontend.
+MATERIAS = {
+    "MAT":  "Matemática",
+    "PORT": "Português",
+    "HIS":  "História",
+    "GEO":  "Geografia",
+    "BIO":  "Biologia",
+    "FIS":  "Física",
+    "QUI":  "Química",
+    "ING":  "Inglês",
+    "FIL":  "Filosofia",
+    "SOC":  "Sociologia",
+}
+
 # Resposta padrão quando o servidor está sem banco (pool = None).
 _SEM_BANCO = JSONResponse(
     {"erro": "Banco de dados indisponível. Configure DATABASE_URL no .env (string do Supabase)."},
@@ -229,9 +246,19 @@ async def temas(request: Request, refresh: bool = False, dados: dict = Body(defa
 
     # 2) Miss (ou refresh) → chama a IA. run_in_threadpool: chamar_gemini é
     # bloqueante (requests) e a rota é async — não pode travar o event loop.
+    # O prompt usa o NOME por extenso e pede os temas de MAIOR INCIDÊNCIA no
+    # ENEM, em formato curto (≤4 palavras, sem parênteses) p/ caber no card.
+    nome = MATERIAS.get(materia, materia)
     prompt = (
-        f"Liste exatamente 6 temas de estudo de {materia} para o ensino médio "
-        "brasileiro. Responda APENAS com um array JSON de strings, sem texto extra."
+        f"Liste os 6 temas de {nome} de MAIOR INCIDÊNCIA na prova do ENEM e nos "
+        "principais vestibulares brasileiros — os conteúdos que MAIS CAEM, não uma "
+        "lista genérica da matéria.\n"
+        "Regras de formato (siga à risca):\n"
+        "- No máximo 4 palavras por tema.\n"
+        "- SEM parênteses, SEM subtítulos, SEM exemplos ou listas dentro do tema.\n"
+        "- Nomes curtos e diretos. Ex.: \"Estequiometria\", \"Análise Sintática\", "
+        "\"Termoquímica\".\n"
+        "Responda APENAS com um array JSON de 6 strings, sem texto extra."
     )
     try:
         lista = extrair_json(await run_in_threadpool(chamar_gemini, prompt))
@@ -267,15 +294,84 @@ async def temas(request: Request, refresh: bool = False, dados: dict = Body(defa
     return {"temas": lista, "fonte": "ia"}
 
 
+# ================== API: ANOTAÇÕES (caderno do aluno por tema) ================
+# Canvas de anotações da tela de estudo (Etapa 9a — só texto). Uma linha por
+# (aluno_id, tema); os elementos ficam num array jsonb. Só o backend acessa a
+# tabela `anotacoes` (RLS ligado, SEM policy para a anon key) — o isolamento por
+# aluno é o `where aluno_id = $1` daqui. Sem Supabase Auth, é o mesmo modelo de
+# confiança do resto do app: convém, não é segurança forte (ver Etapa 10).
+@app.get("/anotacoes")
+async def obter_anotacoes(request: Request, aluno_id: str = "", tema: str = ""):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    aluno_id, tema = aluno_id.strip(), tema.strip()
+    if not aluno_id or not tema:
+        return JSONResponse({"erro": "aluno_id e tema são obrigatórios."}, status_code=400)
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "select elementos from anotacoes where aluno_id = $1 and tema = $2",
+                aluno_id, tema,
+            )
+    except Exception as e:
+        print("[KaIA] erro ao ler anotações:", e)
+        return JSONResponse(
+            {"elementos": [], "erro": "Falha ao carregar as anotações."}, status_code=502
+        )
+    elementos = row["elementos"] if row else []
+    if isinstance(elementos, str):   # jsonb volta como string no asyncpg
+        elementos = json.loads(elementos)
+    return {"elementos": elementos or []}
+
+
+class AnotacoesIn(BaseModel):
+    aluno_id: str
+    tema: str
+    elementos: list = []
+
+
+@app.put("/anotacoes")
+async def salvar_anotacoes(body: AnotacoesIn, request: Request):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    aluno_id, tema = body.aluno_id.strip(), body.tema.strip()
+    if not aluno_id or not tema:
+        return JSONResponse({"erro": "aluno_id e tema são obrigatórios."}, status_code=400)
+    # 9a é só texto: filtra defensivamente qualquer outro tipo. Imagem só entra
+    # no 9b, junto com o pipeline de Storage (bucket + signed URL).
+    elementos = [
+        e for e in (body.elementos or [])
+        if isinstance(e, dict) and e.get("tipo") == "texto"
+    ]
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                insert into anotacoes (aluno_id, tema, elementos, atualizado)
+                values ($1, $2, $3::jsonb, now())
+                on conflict (aluno_id, tema) do update set
+                    elementos = excluded.elementos, atualizado = now()
+                """,
+                aluno_id, tema, json.dumps(elementos, ensure_ascii=False),
+            )
+    except Exception as e:
+        print("[KaIA] erro ao salvar anotações:", e)
+        return JSONResponse({"ok": False, "erro": "Falha ao salvar."}, status_code=502)
+    return {"ok": True, "salvos": len(elementos)}
+
+
 # ================== API: GERAR QUESTÃO objetiva =============================
 @app.post("/gerar-questao")
 def gerar_questao(dados: dict = Body(default={})):
     materia = dados.get("materia", "")
+    nome = MATERIAS.get(materia, materia)
     tema = dados.get("tema", "")
     hobbies = dados.get("hobbies", [])
     lista = ", ".join(hobbies) if hobbies else "nenhum"
     prompt = f"""
-Crie UMA questão objetiva de múltipla escolha sobre "{tema}" ({materia}) para o
+Crie UMA questão objetiva de múltipla escolha sobre "{tema}" ({nome}) para o
 ensino médio. Personalize o enunciado usando, se possível, estes hobbies do
 aluno: {lista}.
 Responda APENAS com JSON no formato EXATO:

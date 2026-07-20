@@ -335,6 +335,21 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 25px;
 }
+/* Grade de matérias (não a de temas, que compartilha a classe): 5 colunas fixas
+   → sempre 5+5, sem o card órfão que aparecia em telas largas (era 9+1). Fica
+   ALINHADA À ESQUERDA (sem margin auto), acompanhando o cabeçalho e o campo de
+   pergunta. max-width 1500px deixa os cards largos o bastante p/ o subtítulo
+   caber em uma linha. Responsivo: 10 cards só fecham equilibrado em 5 ou 2
+   colunas (3/4 dariam órfão), então caímos direto para 2 em telas estreitas. */
+#menu-view .mission-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  max-width: 1500px;
+}
+@media (max-width: 1100px) {
+  #menu-view .mission-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .mission-card {
   padding: 30px;
   border-radius: 20px;
@@ -352,6 +367,14 @@ body {
   font-size: 3rem;
   margin-bottom: 20px;
   text-shadow: 1px 1px 1px var(--prox-br);
+}
+/* Ícones das matérias em SVG monocromático PREENCHIDO (estilo flat, como emoji
+   sólido): herdam --profundo e ficam consistentes, sem depender da fonte de
+   emoji do sistema. */
+.mission-card .icon svg {
+  width: 3rem;
+  height: 3rem;
+  fill: var(--profundo);
 }
 .mission-card h3 {
   font-size: 2rem;
@@ -1728,4 +1751,175 @@ body.textura-papel .conteudo {
 }
 .switch input:checked + .switch-slider::before {
   transform: translateX(20px);
+}
+
+/* ============================================================
+   CADERNO — canvas de anotações por tema (Etapa 9a, só texto)
+   ============================================================ */
+/* Split: questão | caderno. Fechado, a questão ocupa 100%; aberto, 50/50. */
+.quiz-nav-acoes {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.caderno-toggle {
+  border: 2px solid var(--profundo);
+  background: var(--card);
+  color: var(--profundo);
+  font-weight: 700;
+  padding: 0.35rem 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.caderno-toggle:hover,
+.caderno-toggle[aria-pressed="true"] {
+  background: var(--gravata-kinrou);
+  color: var(--profundo);
+}
+
+.quiz-split {
+  display: flex;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+.quiz-lado-questao {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.caderno {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.caderno[hidden] {
+  display: none;
+}
+
+.caderno-cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.caderno-titulo {
+  font-weight: 700;
+  color: var(--profundo);
+}
+.caderno-status {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.caderno-status[data-estado="salvo"] {
+  color: var(--acerto-tx);
+}
+.caderno-status[data-estado="salvando"] {
+  color: var(--tinta);
+  opacity: 0.55;
+}
+.caderno-status[data-estado="offline"] {
+  color: var(--erro-tx);
+}
+
+/* Fundo pontilhado BEGE: pontos discretos de --tinta sobre --card. */
+.caderno-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 420px;
+  border: 1px solid color-mix(in srgb, var(--profundo) 20%, transparent);
+  border-radius: 12px;
+  background-color: var(--card);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--tinta) 22%, transparent) 1.2px,
+    transparent 1.2px
+  );
+  background-size: 18px 18px;
+  overflow: hidden;
+  cursor: text;
+}
+.caderno-dica {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: color-mix(in srgb, var(--tinta) 65%, transparent);
+}
+.caderno-dica-img {
+  color: color-mix(in srgb, var(--tinta) 50%, transparent);
+}
+
+/* Aviso transitório (imagem grande, tema cheio, sem espaço). */
+.caderno-aviso {
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: var(--erro-bg);
+  color: var(--erro-tx);
+  display: none;
+}
+.caderno-aviso.visivel {
+  display: block;
+}
+
+/* Bloco de anotação: alça de arraste + área editável. */
+.cad-el {
+  position: absolute;
+  display: flex;
+  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--profundo) 25%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(26, 43, 76, 0.12);
+  overflow: hidden;
+}
+.cad-el.sel {
+  border-color: var(--profundo);
+  box-shadow: 0 0 0 2px var(--gravata-kinrou);
+}
+.cad-grip {
+  flex: 0 0 auto;
+  padding: 4px 3px;
+  line-height: 1;
+  cursor: grab;
+  color: color-mix(in srgb, var(--tinta) 55%, transparent);
+  user-select: none;
+  touch-action: none;
+}
+.cad-grip:active {
+  cursor: grabbing;
+}
+.cad-texto {
+  flex: 1 1 auto;
+  min-height: 1.4em;
+  padding: 5px 7px 5px 2px;
+  color: var(--tinta);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  outline: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.cad-texto:empty::before {
+  content: "escreva…";
+  color: color-mix(in srgb, var(--tinta) 40%, transparent);
+}
+
+/* Bloco de imagem: a img ocupa a largura do bloco (menos a alça). */
+.cad-el-img {
+  padding: 0;
+}
+.cad-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0 6px 6px 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Telas estreitas: o caderno desce para baixo da questão. */
+@media (max-width: 820px) {
+  .quiz-split {
+    flex-direction: column;
+  }
 }

@@ -616,6 +616,10 @@ const TEMAS_FALLBACK = {
     GEO:  ['Geopolítica', 'Climatologia', 'Cartografia', 'Urbanização', 'Regiões do Brasil', 'Globalização'],
     BIO:  ['Genética', 'Botânica', 'Ecologia', 'Citologia', 'Evolução', 'Corpo Humano'],
     FIS:  ['Mecânica', 'Eletromagnetismo', 'Óptica', 'Termodinâmica', 'Ondas', 'Cinemática'],
+    QUI:  ['Estequiometria', 'Química Orgânica', 'Termoquímica', 'Eletroquímica', 'Soluções', 'Ligações Químicas'],
+    ING:  ['Interpretação de Texto', 'Vocabulário em Contexto', 'Tempos Verbais', 'Falsos Cognatos', 'Conectivos', 'Ideia Central'],
+    FIL:  ['Filosofia Antiga', 'Ética e Moral', 'Filosofia Política', 'Teoria do Conhecimento', 'Filosofia Moderna', 'Existencialismo'],
+    SOC:  ['Trabalho e Sociedade', 'Movimentos Sociais', 'Cultura e Identidade', 'Cidadania e Direitos', 'Globalização', 'Desigualdade Social'],
 };
 
 const questaoFallback = (subject, tema) => ({
@@ -715,6 +719,11 @@ async function startMission(subject, tema) {
     questionShownAt = performance.now();
     iniciarIdleMonitor();
     iniciarPollIntervencao();
+
+    // Se o caderno está aberto, troca o canvas para o tema desta missão.
+    if (typeof cadAberto === 'function' && cadAberto() && cadTema !== tema) {
+        carregarCaderno(tema);
+    }
 }
 
 // 3) Resposta: registra o tempo, dá o feedback visual e encerra a sessão.
@@ -804,6 +813,385 @@ function resetSystem() {
 // Fechar/recarregar a aba no meio da missão também encerra a sessão.
 window.addEventListener('beforeunload', () => {
     if (isMissionActive) encerrarSessao();
+});
+
+// ============================================================
+//     CADERNO — canvas livre de anotações por tema (Etapa 9)
+// ============================================================
+// Cada tema tem seu canvas; cada aluno vê só o dele.
+//  · TEXTO: localStorage (anticrash, síncrono) + PUT /anotacoes com debounce →
+//    Supabase (cross-device). O servidor é a fonte de verdade do texto.
+//  · IMAGEM: SÓ no localStorage (base64). Nunca vai pro Supabase — o backend
+//    ainda filtra tipo!="texto" como 2ª barreira. Em outro dispositivo, o texto
+//    vem do servidor e as imagens simplesmente não aparecem.
+// Os caminhos de salvamento são ISOLADOS: gravar no localStorage nunca lança
+// (retorna bool), então uma imagem que estoure a cota jamais derruba o texto.
+const CAD_LARGURA_PADRAO = 200;          // px — largura inicial de um bloco de texto
+const CAD_IMG_MAX_LADO   = 1000;         // px — re-encode: maior lado da imagem
+const CAD_IMG_QUALIDADE  = 0.7;          // WebP
+const CAD_IMG_DISP_LARG  = 240;          // px — largura de exibição da imagem no canvas
+const CAD_TETO_IMG       = 500 * 1024;   // 500 KB por imagem (após re-encode)
+const CAD_TETO_TEMA      = 2.5 * 1024 * 1024;  // ~2,5 MB de imagens por tema (folga nos ~5 MB)
+let cadElementos = [];            // {id, tipo:'texto'|'imagem', x, y, w, h, z, conteudo}
+let cadTema      = null;          // tema do canvas carregado agora
+let cadSelecao   = null;          // id do bloco selecionado
+let cadZ         = 1;             // maior z em uso (ordem de sobreposição)
+let cadDirty     = false;         // há mudança de TEXTO ainda não confirmada no servidor
+let cadSaveTimer = null;
+let cadUltimoPonto = { x: 20, y: 20 };   // última posição do cursor sobre o canvas (p/ colar imagem)
+let cadAvisoTimer  = null;
+
+const cadChaveLocal = (tema) => `kaia_anotacoes_${userId}_${tema}`;
+
+function cadCanvas()  { return $('caderno-canvas'); }
+function cadAberto()  { const c = $('caderno'); return c && !c.hidden; }
+
+// Abre/fecha o painel. Ao abrir, carrega o caderno do tema atual.
+function toggleCaderno() {
+    const painel = $('caderno');
+    const botao  = $('caderno-toggle');
+    if (!painel) return;
+    const abrindo = painel.hidden;
+    painel.hidden = !abrindo;
+    if (botao) botao.setAttribute('aria-pressed', String(abrindo));
+    if (abrindo) carregarCaderno(currentTema);
+}
+
+// Troca o canvas para um tema (salva o anterior antes, se estiver sujo).
+async function carregarCaderno(tema) {
+    if (!cadCanvas() || !tema) return;
+    if (cadTema && cadTema !== tema && cadDirty) await pushCaderno();
+
+    cadTema = tema;
+    cadSelecao = null;
+    $('caderno-tema').innerText = tema;
+
+    // 1) Anticrash: o que estiver no localStorage é o ponto de partida.
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem(cadChaveLocal(tema)) || 'null'); } catch { }
+
+    // 2) Servidor (cross-device) — só TEXTO. As imagens vivem apenas no local.
+    let doServidor = null;
+    try {
+        const r = await fetch(`${API_URL}/anotacoes?aluno_id=${encodeURIComponent(userId)}&tema=${encodeURIComponent(tema)}`);
+        if (r.ok) doServidor = (await r.json()).elementos || [];
+    } catch (e) {
+        console.warn('[KaIA] /anotacoes indisponível, usando cópia local:', e);
+    }
+
+    const imagensLocais = (local?.elementos || []).filter(e => e.tipo === 'imagem');
+
+    if (local && local.dirty) {
+        // Edição local de texto ainda não confirmada vence; imagens já estão nela.
+        cadElementos = local.elementos || [];
+        cadDirty = true;
+        renderCaderno();
+        pushCaderno();                       // reconcilia o texto com o servidor
+    } else if (doServidor !== null) {
+        // Servidor manda no TEXTO; as imagens vêm do local (só existem aqui).
+        cadElementos = [...doServidor, ...imagensLocais];
+        cadDirty = false;
+        gravarLocal(false);                  // reespelha (texto do servidor + imagens locais)
+        renderCaderno();
+        marcarStatus('salvo');
+    } else {
+        // Offline: tudo do local.
+        cadElementos = local?.elementos || [];
+        cadDirty = !!(local && local.dirty);
+        renderCaderno();
+        marcarStatus(local ? 'offline' : 'salvo');
+    }
+    cadZ = cadElementos.reduce((m, e) => Math.max(m, e.z || 1), 1);
+}
+
+// Redesenha o canvas inteiro a partir de cadElementos.
+function renderCaderno() {
+    const canvas = cadCanvas();
+    if (!canvas) return;
+    canvas.innerHTML = '';
+    cadElementos.forEach(el => canvas.appendChild(montarBloco(el)));
+}
+
+// Cria o DOM de um bloco: alça de arraste + corpo (texto editável ou imagem).
+function montarBloco(el) {
+    const bloco = document.createElement('div');
+    bloco.className = 'cad-el' + (el.tipo === 'imagem' ? ' cad-el-img' : '');
+    bloco.dataset.id = el.id;
+    bloco.style.left  = `${el.x}px`;
+    bloco.style.top   = `${el.y}px`;
+    bloco.style.width = `${el.w || CAD_LARGURA_PADRAO}px`;
+    bloco.style.zIndex = el.z || 1;
+    if (el.id === cadSelecao) bloco.classList.add('sel');
+
+    const grip = document.createElement('div');
+    grip.className = 'cad-grip';
+    grip.title = 'Arrastar';
+    grip.textContent = '⠿';
+    grip.addEventListener('pointerdown', (ev) => iniciarArraste(ev, el, bloco));
+
+    let corpo;
+    if (el.tipo === 'imagem') {
+        corpo = document.createElement('img');
+        corpo.className = 'cad-img';
+        corpo.src = el.conteudo;               // base64 (só neste dispositivo)
+        corpo.alt = 'Anotação em imagem';
+        corpo.draggable = false;
+    } else {
+        corpo = document.createElement('div');
+        corpo.className = 'cad-texto';
+        corpo.contentEditable = 'true';
+        corpo.spellcheck = false;
+        corpo.textContent = el.conteudo || '';
+        corpo.addEventListener('input', () => {
+            el.conteudo = corpo.innerText;
+            agendarSalvar();
+        });
+        corpo.addEventListener('focus', () => selecionar(el.id));
+    }
+
+    bloco.addEventListener('pointerdown', () => selecionar(el.id));
+    bloco.append(grip, corpo);
+    return bloco;
+}
+
+function selecionar(id) {
+    cadSelecao = id;
+    $$('.cad-el', cadCanvas()).forEach(b => b.classList.toggle('sel', b.dataset.id === id));
+}
+
+// Clicar num espaço vazio cria um bloco novo já em edição.
+function novoBloco(x, y) {
+    const el = {
+        id: crypto.randomUUID(), tipo: 'texto',
+        x: Math.round(x), y: Math.round(y),
+        w: CAD_LARGURA_PADRAO, z: ++cadZ, conteudo: ''
+    };
+    cadElementos.push(el);
+    const bloco = montarBloco(el);
+    cadCanvas().appendChild(bloco);
+    selecionar(el.id);
+    bloco.querySelector('.cad-texto').focus();
+    agendarSalvar();
+}
+
+function removerSelecionado() {
+    if (!cadSelecao) return;
+    cadElementos = cadElementos.filter(e => e.id !== cadSelecao);
+    const alvo = $$('.cad-el', cadCanvas()).find(b => b.dataset.id === cadSelecao);
+    if (alvo) alvo.remove();
+    cadSelecao = null;
+    agendarSalvar();
+}
+
+// --- Imagens (Ctrl+V) — SÓ no localStorage ----------------------------------
+// Tamanho real (em bytes) que um data URL base64 ocupa depois de decodificado.
+function bytesDataUrl(dataUrl) {
+    const virgula = dataUrl.indexOf(',');
+    const b64 = virgula >= 0 ? dataUrl.slice(virgula + 1) : dataUrl;
+    const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
+    return Math.floor(b64.length * 3 / 4) - pad;
+}
+
+// Re-encode agressivo: WebP, maior lado ≤ 1000px, qualidade 0.7.
+async function reencodeParaWebP(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const escala = Math.min(1, CAD_IMG_MAX_LADO / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width  * escala));
+    const h = Math.max(1, Math.round(bitmap.height * escala));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    bitmap.close?.();
+    return { dataUrl: canvas.toDataURL('image/webp', CAD_IMG_QUALIDADE), w, h };
+}
+
+// Valida os tetos (com mensagens específicas) e, se passar, cola no canvas.
+async function colarImagemArquivo(blob) {
+    let out;
+    try {
+        out = await reencodeParaWebP(blob);
+    } catch (e) {
+        console.warn('[KaIA] não consegui processar a imagem:', e);
+        avisarCaderno('Não consegui processar essa imagem.');
+        return;
+    }
+
+    const bytes = bytesDataUrl(out.dataUrl);
+    if (bytes > CAD_TETO_IMG) {
+        avisarCaderno(`Imagem de ${Math.round(bytes / 1024)} KB — o limite por imagem é `
+            + `${Math.round(CAD_TETO_IMG / 1024)} KB. Recorte ou use uma menor.`);
+        return;
+    }
+
+    const imgs = cadElementos.filter(e => e.tipo === 'imagem');
+    const usados = imgs.reduce((s, e) => s + bytesDataUrl(e.conteudo), 0);
+    if (usados + bytes > CAD_TETO_TEMA) {
+        avisarCaderno(`Este tema já tem ${imgs.length} imagem${imgs.length === 1 ? '' : 's'} `
+            + `(${Math.round(usados / 1024)} KB) e não cabe mais. Apague alguma para colar uma nova.`);
+        return;
+    }
+
+    const dispW = Math.min(out.w, CAD_IMG_DISP_LARG);
+    const dispH = Math.round(dispW * out.h / out.w);
+    colarImagem(out.dataUrl, cadUltimoPonto.x, cadUltimoPonto.y, dispW, dispH);
+}
+
+// Adiciona a imagem; se estourar a cota, desfaz SÓ ela e o texto segue salvo.
+function colarImagem(dataUrl, x, y, w, h) {
+    const el = {
+        id: crypto.randomUUID(), tipo: 'imagem',
+        x: Math.round(x), y: Math.round(y), w, h, z: ++cadZ, conteudo: dataUrl
+    };
+    cadElementos.push(el);
+
+    if (!gravarLocal(true)) {                       // QuotaExceededError com a imagem nova
+        cadElementos = cadElementos.filter(e => e.id !== el.id);   // desfaz só a imagem
+        gravarLocal(true);                          // regrava SEM ela → texto preservado
+        avisarCaderno('Sem espaço neste dispositivo para a imagem. Seu texto foi salvo.');
+        return;
+    }
+    cadCanvas().appendChild(montarBloco(el));
+    selecionar(el.id);
+    agendarSalvar();                                // PUT só do texto (imagem nunca sobe)
+}
+
+// Aviso discreto e temporário no rodapé do caderno.
+function avisarCaderno(msg) {
+    let el = $('caderno-aviso');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'caderno-aviso';
+        el.className = 'caderno-aviso';
+        const painel = $('caderno');
+        if (painel) painel.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.add('visivel');
+    clearTimeout(cadAvisoTimer);
+    cadAvisoTimer = setTimeout(() => el.classList.remove('visivel'), 6000);
+}
+
+// Arraste pela alça: move o bloco acompanhando o ponteiro.
+function iniciarArraste(ev, el, bloco) {
+    ev.preventDefault();
+    // Tira o foco do bloco que estava em edição para o Delete apagar ESTE.
+    if (document.activeElement && document.activeElement.isContentEditable) {
+        document.activeElement.blur();
+    }
+    selecionar(el.id);
+    el.z = bloco.style.zIndex = ++cadZ;
+    const canvas = cadCanvas();
+    const rc = canvas.getBoundingClientRect();
+    const dx = ev.clientX - rc.left - el.x;
+    const dy = ev.clientY - rc.top  - el.y;
+
+    const mover = (e) => {
+        el.x = Math.max(0, Math.min(e.clientX - rc.left - dx, canvas.clientWidth  - 24));
+        el.y = Math.max(0, Math.min(e.clientY - rc.top  - dy, canvas.clientHeight - 24));
+        bloco.style.left = `${el.x}px`;
+        bloco.style.top  = `${el.y}px`;
+    };
+    const soltar = () => {
+        document.removeEventListener('pointermove', mover);
+        document.removeEventListener('pointerup', soltar);
+        agendarSalvar();
+    };
+    document.addEventListener('pointermove', mover);
+    document.addEventListener('pointerup', soltar);
+}
+
+// --- Persistência -----------------------------------------------------------
+// NUNCA lança: em QuotaExceededError (ou qualquer falha), devolve false. Assim
+// quem chama decide o que fazer (ex.: desfazer só a imagem) sem derrubar o texto.
+function gravarLocal(dirty) {
+    try {
+        localStorage.setItem(cadChaveLocal(cadTema),
+            JSON.stringify({ elementos: cadElementos, dirty }));
+        return true;
+    } catch (e) {
+        console.warn('[KaIA] localStorage recusou a gravação:', e?.name || e);
+        return false;
+    }
+}
+
+// Mudou algo: grava local na hora (anticrash) e agenda o PUT (debounce).
+function agendarSalvar() {
+    cadDirty = true;
+    gravarLocal(true);
+    marcarStatus('salvando');
+    clearTimeout(cadSaveTimer);
+    cadSaveTimer = setTimeout(pushCaderno, 800);
+}
+
+async function pushCaderno() {
+    if (!cadTema) return;
+    clearTimeout(cadSaveTimer);
+    // Só o texto sobe: imagem fica no dispositivo (não desperdiça banda com base64
+    // que o backend descartaria de qualquer forma).
+    const soTexto = cadElementos.filter(e => e.tipo === 'texto');
+    try {
+        const r = await fetch(`${API_URL}/anotacoes`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aluno_id: userId, tema: cadTema, elementos: soTexto })
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        cadDirty = false;
+        gravarLocal(false);
+        marcarStatus('salvo');
+    } catch (e) {
+        console.warn('[KaIA] falha ao salvar anotações (mantidas no dispositivo):', e);
+        marcarStatus('offline');   // o localStorage segue com tudo; tenta de novo na próxima mudança
+    }
+}
+
+function marcarStatus(estado) {
+    const el = $('caderno-status');
+    if (!el) return;
+    const rotulo = { salvo: 'salvo', salvando: 'salvando…', offline: 'não salvo' };
+    el.dataset.estado = estado;
+    el.innerText = rotulo[estado] || estado;
+}
+
+// Eventos do canvas: criar em área vazia, deselecionar, apagar com Delete.
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = cadCanvas();
+    if (!canvas) return;   // só existe em materias.html
+
+    canvas.addEventListener('pointerdown', (e) => {
+        if (e.target === canvas) {            // clicou no vazio, não num bloco
+            const rc = canvas.getBoundingClientRect();
+            novoBloco(e.clientX - rc.left, e.clientY - rc.top);
+        }
+    });
+    // Guarda a última posição do cursor sobre o canvas — a imagem cola ali.
+    canvas.addEventListener('pointermove', (e) => {
+        const rc = canvas.getBoundingClientRect();
+        cadUltimoPonto = {
+            x: Math.max(0, Math.min(e.clientX - rc.left, canvas.clientWidth  - 40)),
+            y: Math.max(0, Math.min(e.clientY - rc.top,  canvas.clientHeight - 40)),
+        };
+    });
+    // Ctrl+V com imagem: intercepta ANTES do contentEditable, re-encoda e cola.
+    document.addEventListener('paste', (e) => {
+        if (!cadAberto()) return;
+        const imgItem = [...(e.clipboardData?.items || [])].find(i => i.type?.startsWith('image/'));
+        if (!imgItem) return;                 // colar texto segue o fluxo normal
+        e.preventDefault();
+        const blob = imgItem.getAsFile();
+        if (blob) colarImagemArquivo(blob);
+    });
+    // Delete/Backspace apaga o bloco selecionado — só quando NÃO se está digitando.
+    document.addEventListener('keydown', (e) => {
+        const editando = document.activeElement && document.activeElement.isContentEditable;
+        if ((e.key === 'Delete' || e.key === 'Backspace')
+            && cadSelecao && cadAberto() && !editando) {
+            e.preventDefault();
+            removerSelecionado();
+        }
+    });
+    // Salva o que estiver pendente antes de sair.
+    window.addEventListener('beforeunload', () => { if (cadDirty) gravarLocal(true); });
 });
 
 // ============================================================

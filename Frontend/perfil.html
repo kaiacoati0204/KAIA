@@ -35,72 +35,56 @@
                 </div>
             </div>
 
-            <!-- Preenchido por carregarPerfil() (script.js) a partir de GET /perfil -->
-            <div class="cards-perfil">
-                <div class="card-perfil">
-                    <h2 id="tempoResposta">0 ms</h2>
-                    <p>Tempo médio de resposta</p>
-                </div>
-                <div class="card-perfil">
-                    <h2 id="acertos">0</h2>
-                    <p>Questões corretas</p>
-                </div>
-                <div class="card-perfil">
-                    <h2 id="duracaoSessao">0 min</h2>
-                    <p>Duração média da sessão</p>
-                </div>
-                <div class="card-perfil">
-                    <h2 id="sessoesDia">0</h2>
-                    <p>Sessões hoje</p>
+            <!-- BASE semanal (sempre visível, 224/224) — de desempenho_semanal.
+                 Preenchido por carregarPerfil() -> /perfil/estatisticas. -->
+            <div class="secao-perfil">
+                <h2>Seu desempenho</h2>
+                <p class="secao-sub" id="desempenhoSub">Média das últimas semanas</p>
+                <div class="cards-perfil">
+                    <div class="card-perfil">
+                        <h2 id="atencaoSemanal">—</h2>
+                        <p>Atenção média</p>
+                    </div>
+                    <div class="card-perfil">
+                        <h2 id="acertoSemanal">—</h2>
+                        <p>Acerto médio</p>
+                    </div>
+                    <div class="card-perfil">
+                        <h2 id="minSemana">—</h2>
+                        <p>Minutos por semana</p>
+                    </div>
                 </div>
             </div>
 
-            <div class="secao-perfil">
-                <h2>Hábitos de Estudo</h2>
-                <div class="linha-perfil">
-                    <span>Velocidade de Scroll</span>
-                    <span id="scrollUsuario">0 px/s</span>
+            <!-- COMPLEMENTO ao vivo: só aparece quando há session_features.
+                 Sem sessão, mostra uma mensagem — nunca uma fileira de "—". -->
+            <div class="secao-perfil" id="secaoUltimaSessao">
+                <h2>Sua última sessão <span class="secao-quando" id="ultimaQuando"></span></h2>
+                <div id="ultimaSessaoLista">
+                    <div class="linha-perfil">
+                        <span>Tempo de resposta</span>
+                        <span id="ultTempoResposta">—</span>
+                    </div>
+                    <div class="linha-perfil">
+                        <span>Velocidade de scroll</span>
+                        <span id="ultScroll">—</span>
+                    </div>
+                    <div class="linha-perfil">
+                        <span>Trocas de aba</span>
+                        <span id="ultAbas">—</span>
+                    </div>
+                    <div class="linha-perfil">
+                        <span>Tempo fora de foco</span>
+                        <span id="ultForaFoco">—</span>
+                    </div>
+                    <div class="linha-perfil">
+                        <span>Cliques fora da área</span>
+                        <span id="ultCliques">—</span>
+                    </div>
                 </div>
-                <div class="linha-perfil">
-                    <span>Pausas na Digitação</span>
-                    <span id="pausasUsuario">0 s</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Mudanças de Aba</span>
-                    <span id="abasUsuario">0</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Tempo Fora de Foco</span>
-                    <span id="tempoFocoUsuario">0 s</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Cliques Fora da Área</span>
-                    <span id="cliquesUsuario">0</span>
-                </div>
-            </div>
-
-            <div class="secao-perfil">
-                <h2>Resumo da Sessão</h2>
-                <div class="linha-perfil">
-                    <span>Tipo de atividade</span>
-                    <span id="atividadeUsuario">-</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Dificuldade</span>
-                    <span id="dificuldadeUsuario">-</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Horário de estudo</span>
-                    <span id="horarioUsuario">-</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Histórico de intervenções</span>
-                    <span id="intervencoesUsuario">-</span>
-                </div>
-                <div class="linha-perfil">
-                    <span>Taxa de abandono</span>
-                    <span id="abandonoUsuario">-</span>
-                </div>
+                <p class="secao-vazia" id="ultimaSessaoVazia" style="display:none">
+                    Nenhuma sessão registrada ainda. Comece uma missão em Matérias para ver seus sinais.
+                </p>
             </div>
 
             <div class="secao-perfil">
@@ -116,14 +100,10 @@
 
             <div class="secao-perfil">
                 <h2>Análise da KaIA</h2>
+                <!-- Preenchida por carregarPerfil() com frases derivadas do
+                     desempenho real (regras, sem IA). Nada de placeholder fixo. -->
                 <div class="analise-kaia" id="analiseIA">
-                    <p>Aqui aparecerá automaticamente uma análise gerada pela KaIA sobre o desempenho do estudante.</p>
-                    <p>Exemplo:</p>
-                    <ul>
-                        <li>✔ Excelente velocidade de resposta.</li>
-                        <li>✔ Poucas distrações durante a sessão.</li>
-                        <li>✔ Continue estudando neste horário.</li>
-                    </ul>
+                    <p>Carregando análise…</p>
                 </div>
             </div>
 

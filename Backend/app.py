@@ -27,6 +27,11 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Sessão sem NENHUM evento há mais de STALE_SESSAO_MIN minutos é encerrada pelo
+# sweep do scheduler (evita lixo de abas esquecidas/travadas). Ajustável por env
+# em produção sem tocar no código: STALE_SESSAO_MIN=30 no .env, por exemplo.
+STALE_SESSAO_MIN = int(os.getenv("STALE_SESSAO_MIN", "15"))
+
 ANON_USER = "00000000-0000-0000-0000-000000000000"
 
 # Sigla → nome da matéria. Fonte única: o frontend manda a SIGLA (ex.: "QUI") e
@@ -123,8 +128,11 @@ async def lifespan(app: FastAPI):
     if app.state.pool is not None:
         scheduler = AsyncIOScheduler()
         scheduler.add_job(job_agregacao, "interval", seconds=30, args=[app], id="agg_features")
+        # Sweep de sessões ociosas: mais leve, a cada 5 min.
+        scheduler.add_job(encerrar_sessoes_ociosas, "interval", minutes=5, args=[app], id="sweep_sessoes")
         scheduler.start()
-        print("[KaIA] Scheduler de agregação iniciado (a cada 30s).")
+        print(f"[KaIA] Scheduler iniciado (agregação 30s · sweep de sessões ociosas 5min, "
+              f"limiar {STALE_SESSAO_MIN}min).")
 
     yield
 
@@ -362,6 +370,100 @@ async def salvar_anotacoes(body: AnotacoesIn, request: Request):
     return {"ok": True, "salvos": len(elementos)}
 
 
+# ================== API: ESTATÍSTICAS DO PERFIL (Etapa 4.1 Parte 2) ==========
+# Modelo C (híbrido): BASE semanal (desempenho_semanal — cobertura ampla, 224/224)
+# + COMPLEMENTO ao vivo (session_features, só quando há sessão) + análise curta
+# baseada em REGRAS sobre os dados semanais (sem IA, sem placeholder).
+def _analise_regras(base, por_materia):
+    """Frases curtas e HONESTAS derivadas de desempenho_semanal (sem IA)."""
+    frases = []
+    at = base["atencao"]
+    if at >= 70:
+        frases.append(f"Sua atenção média está ótima: {at}%. Continue assim.")
+    elif at >= 50:
+        frases.append(f"Sua atenção média é {at}% — dá para melhorar com sessões mais curtas e focadas.")
+    else:
+        frases.append(f"Sua atenção média está baixa ({at}%). Tente blocos curtos com pausas guiadas.")
+
+    if por_materia:
+        melhor, pior = por_materia[0], por_materia[-1]
+        frases.append(f"Seu melhor tema é {melhor['materia']}: {melhor['acerto']}% de acerto.")
+        if len(por_materia) > 1 and pior["acerto"] < melhor["acerto"]:
+            frases.append(f"Ponto de atenção: {pior['materia']} ({pior['acerto']}% de acerto) — vale revisar.")
+    return frases
+
+
+@app.get("/perfil/estatisticas")
+async def perfil_estatisticas(request: Request, aluno_id: str = ""):
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    aluno_id = aluno_id.strip()
+    if not aluno_id:
+        return JSONResponse({"erro": "aluno_id é obrigatório."}, status_code=400)
+
+    try:
+        async with pool.acquire() as conn:
+            # BASE: agregado semanal (média de atenção/acerto, média de minutos/semana)
+            base = await conn.fetchrow(
+                """
+                select round(avg(media_atencao) * 100)::int atencao,
+                       round(avg(taxa_acerto)  * 100)::int acerto,
+                       -- minutos POR SEMANA: soma de todas as matérias ÷ nº de semanas
+                       round(sum(minutos_estudados)::numeric
+                             / nullif(count(distinct semana), 0))::int min_semana,
+                       count(distinct semana)  semanas,
+                       count(distinct materia) materias,
+                       count(*) linhas
+                from desempenho_semanal where aluno_id = $1::uuid
+                """,
+                aluno_id,
+            )
+            por_materia = await conn.fetch(
+                """
+                select materia, round(avg(taxa_acerto) * 100)::int acerto
+                from desempenho_semanal where aluno_id = $1::uuid
+                group by materia order by acerto desc
+                """,
+                aluno_id,
+            )
+            # COMPLEMENTO: última sessão ao vivo (ou nada)
+            ult = await conn.fetchrow(
+                """
+                select sf.tempo_resposta_ms, sf.velocidade_scroll_px_s, sf.mudancas_aba,
+                       sf.tempo_fora_foco_s, sf.cliques_fora_area_estudo, sf.window_ts
+                from session_features sf join sessions s on s.session_id = sf.session_id
+                where s.user_id = $1::uuid order by sf.window_ts desc limit 1
+                """,
+                aluno_id,
+            )
+    except Exception as e:
+        print("[KaIA] erro em /perfil/estatisticas:", e)
+        return JSONResponse({"erro": "Falha ao carregar estatísticas."}, status_code=502)
+
+    desempenho, analise = None, []
+    if base and base["linhas"]:
+        desempenho = {
+            "atencao": base["atencao"], "acerto": base["acerto"],
+            "min_semana": base["min_semana"], "semanas": base["semanas"],
+            "materias": base["materias"],
+        }
+        analise = _analise_regras(base, [dict(r) for r in por_materia])
+
+    ultima_sessao = None
+    if ult:
+        ultima_sessao = {
+            "tempo_resposta_ms": ult["tempo_resposta_ms"],
+            "velocidade_scroll_px_s": ult["velocidade_scroll_px_s"],
+            "mudancas_aba": ult["mudancas_aba"],
+            "tempo_fora_foco_s": ult["tempo_fora_foco_s"],
+            "cliques_fora_area_estudo": ult["cliques_fora_area_estudo"],
+            "quando": ult["window_ts"].strftime("%d/%m às %H:%M"),
+        }
+
+    return {"desempenho": desempenho, "ultima_sessao": ultima_sessao, "analise": analise}
+
+
 # ================== API: GERAR QUESTÃO objetiva =============================
 @app.post("/gerar-questao")
 def gerar_questao(dados: dict = Body(default={})):
@@ -479,6 +581,36 @@ async def agregar_features(pool, session_id):
         )
     print(f"[KaIA Features] {session_id} | aba:{mudancas_aba} scroll:{velocidade_scroll_px_s:.0f} "
           f"acertos:{acertos_questoes}")
+
+
+async def encerrar_sessoes_ociosas(app):
+    """Sweep: fecha sessões abertas sem evento há > STALE_SESSAO_MIN min, usando o
+    ÚLTIMO evento como fim (não now(), para não inflar a duração). Idempotente e
+    não toca em sessão com evento recente. Loga só quando fecha ≥1 (o silêncio já
+    diz 'nada fechado'; assim não vira ruído a cada execução)."""
+    pool = app.state.pool
+    if pool is None:
+        return
+    async with pool.acquire() as conn:
+        status = await conn.execute(
+            """
+            update sessions s set session_end_ts = coalesce(
+                (select max(ts) from session_events e where e.session_id = s.session_id),
+                s.session_start_ts)
+            where s.session_end_ts is null
+              and coalesce(
+                (select max(ts) from session_events e where e.session_id = s.session_id),
+                s.session_start_ts) < now() - ($1 || ' minutes')::interval
+            """,
+            str(STALE_SESSAO_MIN),
+        )
+    try:
+        n = int(status.split()[-1])   # status = 'UPDATE N'
+    except (ValueError, IndexError):
+        n = 0
+    if n:
+        print(f"[KaIA] Sweep: {n} sessão(ões) ociosa(s) encerrada(s) "
+              f"(> {STALE_SESSAO_MIN} min sem evento).")
 
 
 async def job_agregacao(app):

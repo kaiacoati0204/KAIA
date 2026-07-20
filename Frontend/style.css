@@ -1752,6 +1752,24 @@ body.textura-papel .conteudo {
   transform: translateX(20px);
 }
 
+/* --- Perfil: subtítulo de seção, marcador de "quando" e estado vazio --- */
+.secao-sub {
+  margin-top: -6px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--tinta) 60%, transparent);
+}
+.secao-quando {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: color-mix(in srgb, var(--tinta) 55%, transparent);
+}
+.secao-vazia {
+  color: color-mix(in srgb, var(--tinta) 65%, transparent);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 /* ============================================================
    CADERNO — canvas de anotações por tema (Etapa 9a, só texto)
    ============================================================ */

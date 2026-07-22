@@ -24,6 +24,8 @@ server.log
 
 # Artefatos gerados pelo notebook de pré-processamento (regeneráveis)
 ml/artifacts/*.pkl
+# ...exceto o scaler: é fixture dos testes (precisa existir no CI).
+!ml/artifacts/scaler.pkl
 # Estado de runtime do Thompson Sampling (alpha/beta mutáveis)
 ml/artifacts/thompson_params.json
 # checkpoints do Jupyter

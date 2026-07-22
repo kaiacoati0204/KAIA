@@ -41,6 +41,9 @@ jobs:
       - name: Instala dependências
         run: pip install -r Backend/requirements.txt
 
+      - name: Roda os testes (pytest + cobertura > 70%)
+        run: pytest tests/ -q --cov=app --cov=thompson --cov-fail-under=70
+
       - name: Sobe o FastAPI e confirma que /docs responde 200
         working-directory: Backend
         run: |

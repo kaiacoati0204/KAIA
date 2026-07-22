@@ -28,3 +28,8 @@ ml/artifacts/*.pkl
 ml/artifacts/thompson_params.json
 # checkpoints do Jupyter
 .ipynb_checkpoints/
+
+# Cobertura / cache do pytest
+.coverage
+.pytest_cache/
+htmlcov/

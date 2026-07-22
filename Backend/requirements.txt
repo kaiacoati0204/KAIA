@@ -19,3 +19,9 @@ jupyter
 # Seed da base sintética de visualização dos painéis (Backend/seed_sintetico.py)
 faker
 psycopg2-binary
+
+# Testes (Sprint 4 — unitários + integração)
+pytest
+pytest-asyncio
+pytest-cov
+httpx

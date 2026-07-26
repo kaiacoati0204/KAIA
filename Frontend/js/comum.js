@@ -5,6 +5,21 @@
 // DEPOIS do config.js (usa window.KAIA_CONFIG e window.supabaseClient).
 const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 
+// ============================================================
+//   BETA: gestão desligada (Acompanhar / Dashboard)
+// ============================================================
+// Durante o beta, os painéis de professor/responsável (responsaveis.html) e de
+// admin (dashboard.html) ficam SEM entrada na rail e SEM acesso por URL — para
+// TODOS, inclusive admin. Páginas e backend seguem intactos.
+// PARA REATIVAR: troque para false (volta o link na rail e o acesso).
+const BETA_SEM_GESTAO = true;
+const PAGINAS_GESTAO  = ['responsaveis.html', 'dashboard.html'];
+
+if (BETA_SEM_GESTAO) {
+    const _pg = location.pathname.split('/').pop() || 'index.html';
+    if (PAGINAS_GESTAO.includes(_pg)) location.replace('index.html');   // digitar a URL não entra
+}
+
 // --- Atalhos de DOM ---------------------------------------------------------
 const $  = (id) => document.getElementById(id);
 const $$ = (sel, raiz = document) => Array.from(raiz.querySelectorAll(sel));
@@ -89,10 +104,12 @@ function montarRail() {
 
     const item = (ic, tx) => `<span class="rail-ic">${ic}</span><span class="rail-tx">${tx}</span>`;
 
-    const links = MENU_LINKS.map(([href, rotulo]) => {
-        const ativo = href === atual ? ' ativo' : '';
-        return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
-    }).join('');
+    const links = MENU_LINKS
+        .filter(([href]) => !(BETA_SEM_GESTAO && PAGINAS_GESTAO.includes(href)))
+        .map(([href, rotulo]) => {
+            const ativo = href === atual ? ' ativo' : '';
+            return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
+        }).join('');
 
     // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
     const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');

@@ -25,6 +25,10 @@ function postJSON(rota, corpo, keepalive = false) {
 // user_id: identidade estável do aluno, vive no localStorage (até o Supabase Auth).
 let sessionId       = sessionStorage.getItem('kaia_session_id') || null;
 let isMissionActive = false;
+// Cobre a sessão de estudo INTEIRA (tema → questão → explicação), inclusive
+// depois de responder (quando isMissionActive já é false). Só zera em ABANDONAR
+// / Sair. É o gate do exit-intent — não confundir com isMissionActive (sensores).
+let sessaoDeEstudoAberta = false;
 let idleInterval    = null;
 
 let userId = localStorage.getItem('kaia_user_id');
@@ -566,6 +570,17 @@ function registrarSensores() {
         }
     });
 
+    // --- exit-intent: cursor cruzando a borda superior (rumo à barra de abas) ---
+    // Camada VISÍVEL da distração; o registro real continua no visibilitychange acima.
+    // relatedTarget nulo = o mouse saiu do documento; clientY numa faixa fina do
+    // topo (não exatamente 0) para pegar saídas RÁPIDAS, cujo último evento
+    // costuma reportar alguns px dentro da tela.
+    document.addEventListener('mouseout', (e) => {
+        if (!sessaoDeEstudoAberta) return;   // vale a sessão toda, inclusive na explicação
+        if (e.relatedTarget || e.clientY > EXIT_TOPO_PX) return;
+        mostrarAvisoSaida();
+    });
+
     // --- scroll: rajadas rápidas indicam rolagem sem leitura ---
     // Quem rola pode ser a janela OU um container interno, dependendo da página.
     // Listener em FASE DE CAPTURA no document pega o 'scroll' de QUALQUER elemento
@@ -749,6 +764,7 @@ async function startMission(subject, tema) {
 
     // zera os sensores para esta missão
     isMissionActive = true;
+    sessaoDeEstudoAberta = true;   // segue ativo na explicação, até ABANDONAR/próxima/Sair
     idleTime = 0;
     mudancasAba = 0;
     focusLostAt = null;
@@ -858,6 +874,7 @@ function proximaQuestao() {
 
 // "ABANDONAR" também encerra a sessão.
 function resetSystem() {
+    sessaoDeEstudoAberta = false;   // fecha o escopo do exit-intent antes de recarregar
     encerrarSessao();
     clearInterval(idleInterval);
     clearTimeout(keystrokeTimer);
@@ -868,6 +885,44 @@ function resetSystem() {
 window.addEventListener('beforeunload', () => {
     if (isMissionActive) encerrarSessao();
 });
+
+// ============================================================
+//        AVISO DE EXIT-INTENT (lembrete gentil, não bloqueia)
+// ============================================================
+// Balão na própria tela quando o cursor vai para a barra de abas durante a
+// missão. Some sozinho; no máximo 1 por janela de cooldown para não virar spam.
+const EXIT_AVISO_COOLDOWN_MS = 18000;   // reaparece a cada nova intenção, mín. ~18s entre avisos
+const EXIT_AVISO_DURACAO_MS  = 5000;    // some sozinho após 5s
+const EXIT_TOPO_PX           = 12;      // faixa do topo que conta como "saindo por cima"
+let _exitAvisoAte   = 0;                 // performance.now() até quando fica em cooldown
+let _exitAvisoTimer = null;
+
+function _garantirAvisoSaida() {
+    if ($('kaia-exit-aviso')) return;
+    const el = document.createElement('div');
+    el.id = 'kaia-exit-aviso';
+    el.setAttribute('role', 'status');       // anunciado sem roubar foco
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML =
+        `<strong class="kaia-exit-titulo">Atenção</strong>`
+        + `<p>Você está saindo da tela de estudo. Distrações contam no seu tempo de foco.</p>`;
+    document.body.appendChild(el);
+}
+
+function mostrarAvisoSaida() {
+    const agora = performance.now();
+    if (agora < _exitAvisoAte) return;                 // ainda em cooldown
+    _exitAvisoAte = agora + EXIT_AVISO_COOLDOWN_MS;
+
+    _garantirAvisoSaida();
+    const el = $('kaia-exit-aviso');
+    el.classList.add('visivel');
+    clearTimeout(_exitAvisoTimer);
+    _exitAvisoTimer = setTimeout(() => el.classList.remove('visivel'), EXIT_AVISO_DURACAO_MS);
+
+    // Sinal de distração para o Pomodoro adaptativo (paralelo ao tab_change).
+    logEvent('exit_intent', { origem: 'mouse_topo' });
+}
 
 // ============================================================
 //     CADERNO — canvas livre de anotações por tema (Etapa 9)

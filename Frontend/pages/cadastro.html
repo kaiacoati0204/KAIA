@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA | Criar conta</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../config.js"></script>
+</head>
+
+<body>
+
+    <div class="tela-login">
+        <!-- A luz foge do mouse e fica ATRÁS da caixa (ver registrarLuz no script.js) -->
+        <div class="luz-fundo" id="luzFundo"></div>
+
+        <form class="caixa-login" onsubmit="criarConta(event)">
+            <h1>Ka<span>IA</span></h1>
+            <p>Crie sua conta e comece a focar.</p>
+
+            <div class="grupo-input">
+                <label for="cad-nome">Nome</label>
+                <input id="cad-nome" type="text" placeholder="Seu nome" autocomplete="name">
+            </div>
+
+            <div class="grupo-input">
+                <label for="cad-email">Email</label>
+                <input id="cad-email" type="email" placeholder="Digite seu email" autocomplete="email">
+            </div>
+
+            <div class="grupo-input">
+                <label for="cad-senha">Senha</label>
+                <input id="cad-senha" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+            </div>
+
+            <!-- Preenchidos por criarConta() -->
+            <p id="cad-erro" class="erro-login" role="alert" aria-live="polite"></p>
+            <p id="cad-ok" class="erro-login" role="status" aria-live="polite" style="color: var(--acerto-tx, #2f5d3a);"></p>
+
+            <button type="submit" class="botao-login">Criar conta</button>
+            <a href="login.html" class="link-secundario">Já tenho conta</a>
+        </form>
+    </div>
+
+    <script src="../js/script.js"></script>
+</body>
+
+</html>

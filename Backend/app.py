@@ -1816,22 +1816,36 @@ async def dashboard_dados(request: Request):
     return _dashboard_offline()
 
 # ========================================= PERFIL =============================================
+# DÍVIDA: validar JWT do Supabase Auth no backend antes de ir para produção.
+# Hoje a autenticação (Supabase Auth) vive só no frontend; o backend confia no
+# user_id/email recebidos. O beta funciona assim; produção exige verificar o JWT.
 @app.get("/perfil")
-async def get_perfil(request: Request, email: str = None):
+async def get_perfil(request: Request, email: str = None, user_id: str = None):
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
-    if not email:
-        return JSONResponse({"status": "erro", "motivo": "email obrigatório"}, status_code=400)
+    if not user_id and not email:
+        return JSONResponse(
+            {"status": "erro", "motivo": "user_id ou email obrigatório"}, status_code=400
+        )
     try:
         async with pool.acquire() as conn:
-            row = await conn.fetchrow(
-                """
-                SELECT user_id, email, hobbies, nome, role, escola_id, turma_id
-                FROM perfis WHERE lower(email) = lower($1)
-                """,
-                email
-            )
+            if user_id:
+                row = await conn.fetchrow(
+                    """
+                    SELECT user_id, email, hobbies, nome, role, escola_id, turma_id
+                    FROM perfis WHERE user_id = $1::uuid
+                    """,
+                    user_id
+                )
+            else:
+                row = await conn.fetchrow(
+                    """
+                    SELECT user_id, email, hobbies, nome, role, escola_id, turma_id
+                    FROM perfis WHERE lower(email) = lower($1)
+                    """,
+                    email
+                )
         if not row:
             return JSONResponse({"status": "não encontrado"}, status_code=404)
 

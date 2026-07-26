@@ -286,6 +286,23 @@ async def test_get_perfil_404():
     assert r.status_code == 404
 
 
+async def test_get_perfil_por_user_id():
+    row = {"user_id": "u1", "email": "a@b.com", "nome": "Ana", "role": "aluno",
+           "escola_id": None, "turma_id": None, "hobbies": '["X"]'}
+    conn = FakeConn(fetchrow={"FROM perfis": row})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.get("/perfil", params={"user_id": "11111111-1111-1111-1111-111111111111"})
+    assert r.status_code == 200 and r.json()["user_id"] == "u1"
+
+
+async def test_get_perfil_sem_params():
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.get("/perfil")
+    assert r.status_code == 400
+
+
 async def test_intervencao_pendente_ok():
     row = {"intervention_id": "iv1", "intervention_type": "nudge_refoco",
            "triggered_at": datetime.now(timezone.utc)}

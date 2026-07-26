@@ -12,3 +12,12 @@ const KAIA_CONFIG = {
     SUPABASE_URL: 'https://SEU-PROJETO.supabase.co',
     SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_...',
 };
+
+// Expõe para o script.js (que lê window.KAIA_CONFIG).
+window.KAIA_CONFIG = KAIA_CONFIG;
+
+// Cliente do Supabase Auth. Só é criado nas páginas que carregam o supabase-js
+// via CDN (login/index/responsaveis) — nas demais fica null, sem quebrar nada.
+window.supabaseClient = (typeof supabase !== 'undefined')
+    ? supabase.createClient(KAIA_CONFIG.SUPABASE_URL, KAIA_CONFIG.SUPABASE_PUBLISHABLE_KEY)
+    : null;

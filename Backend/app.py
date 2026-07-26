@@ -544,7 +544,7 @@ async def agregar_features(pool, session_id):
         cliques_fora_area_estudo = len(cliques)
         tempo_resposta_ms = (sum(tr) / len(tr)) if tr else 0.0
         acertos_questoes = sum(1 for p in respostas if p.get("acertou") is True)
-        nivel_dificuldade_atividade = 1
+        nivel_dificuldade_atividade = NIVEL_DIFICULDADE_PADRAO
 
         sessoes_no_dia = 0
         if start_ev:
@@ -1423,6 +1423,8 @@ DASHBOARD_XLSX = os.path.join(os.path.dirname(__file__), "dados_dashboard.xlsx")
 _TARGETS = [("engajado", "Engajado"), ("distraido", "Distraído"), ("muito_distraido", "Muito distraído")]
 # Rótulo curto do estado (predito pelo RF) para a coluna "Estado" das sessões recentes.
 _EST_ROT = {"engajado": "Engajado", "distraido": "Distraído", "muito_distraido": "Muito distr."}
+# Cor do "nível" de dispersão nos alertas recentes do dashboard.
+_NIVEL_COR = {"muito_distraido": "vermelho", "distraido": "amarelo", "engajado": "verde"}
 
 # Sinais de dispersão exibidos como barras: rótulo -> coluna da base.
 # Cada um vira "intensidade média" = média / máximo observado (0–100%).
@@ -1467,7 +1469,7 @@ def _agregar_base_sintetica(df):
     ]
 
     # --- sessões com maior dispersão viram os "alertas recentes" ---
-    nivel = {"muito_distraido": "vermelho", "distraido": "amarelo", "engajado": "verde"}
+    nivel = _NIVEL_COR
     piores = df.sort_values(["mudancas_aba", "tempo_fora_foco_s"], ascending=False).head(4)
     alertas_recentes = [
         {
@@ -1667,7 +1669,7 @@ async def _agregar_supabase(conn, modelo, scaler):
         from sessions s join session_features sf on sf.session_id = s.session_id
         group by s.session_id, s.session_start_ts
         order by aba desc nulls last, fora desc nulls last limit 4""")
-    nivel = {"muito_distraido": "vermelho", "distraido": "amarelo", "engajado": "verde"}
+    nivel = _NIVEL_COR
     alertas_recentes = [{
         "nivel": nivel.get(estado_por_sessao.get(r["session_id"]), "amarelo"),
         "mensagem": f"{str(r['session_id'])[:8]} — {int(r['aba'] or 0)} trocas de aba · {media(r['fora']):.0f}s fora de foco",
@@ -1759,14 +1761,6 @@ async def _agregar_supabase(conn, modelo, scaler):
 
 def _dashboard_offline():
     """Fallback SEM banco: base sintética (xlsx) → planilha manual → demo do front."""
-    try:
-        import pandas as pd
-    except ImportError:
-        return JSONResponse(
-            {"erro": "pandas não instalado. Rode: pip install -r requirements.txt"},
-            status_code=500,
-        )
-
     if os.path.exists(BASE_SINTETICA):
         try:
             df = pd.read_excel(BASE_SINTETICA)

@@ -24,7 +24,7 @@ Tokens:
 
 - **E-mail é identificador, não credencial.** Nunca controlar acesso comparando strings de e-mail no código.
 - Controle de acesso via **`role` no banco (tabela `perfis`), verificado no backend** — nunca só em JavaScript.
-- **MVP sem autenticação real** (login sem senha). Dívida conhecida e **bloqueador de produção**. Cabeçalhos tipo `X-Kaia-User` são conveniência, não proteção.
+- **Autenticação: Supabase Auth (e-mail + senha).** O backend **valida o JWT** (`Backend/auth.py` → `Depends(usuario_autenticado)`) nas rotas de dados; o front envia o token via `apiFetch`. Dívida restante: nem toda rota está protegida (health, `/sessions/{id}/end` ficam abertas de propósito), e `X-Kaia-User` (gate do dashboard) é conveniência — use **junto** do JWT, não no lugar.
 
 ## Estilo de comentários
 

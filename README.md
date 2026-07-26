@@ -52,8 +52,8 @@ Frontend/
   config.js     → API_URL + credenciais do Supabase (NÃO vai pro Git — copie de config.example.js)
 Backend/
   app.py                → backend FastAPI (rotas da IA, sessões, painéis)
+  auth.py               → validação do JWT do Supabase Auth
   requirements.txt      → dependências Python
-  seed_logins.sql       → gera e-mails de professor/coordenador em `perfis`
   seed_sintetico.py     → popula sessões sintéticas para os painéis
   limpar_sintetico.sql  → apaga os dados sintéticos
   .env                  → variáveis de ambiente (NÃO vai pro Git)
@@ -135,9 +135,8 @@ Rode com um servidor local (ex.: extensão **Live Server** do VS Code). O ponto 
 
 ## 🧭 Problemas conhecidos / próximos passos
 
-> [!WARNING]
-> **MVP sem autenticação real.** O login é só por e-mail (sem senha). O controle de acesso vive no `role` do banco, verificado no backend — mas sem auth de verdade isso é conveniência, não proteção. **Bloqueador de produção.**
+> [!NOTE]
+> **Autenticação: Supabase Auth (e-mail + senha).** O backend valida o **JWT** nas rotas de dados (`Backend/auth.py`); o front envia o token via `apiFetch`. O controle de acesso continua no `role` do banco, verificado no backend.
 
-- [ ] Implementar autenticação real (senha / provedor de identidade).
-- [ ] Regenerar `ml/artifacts/scaler.pkl` (via `preprocessing.ipynb`) para as predições do Random Forest.
+- [ ] Estender a proteção por JWT às rotas ainda abertas (baixa sensibilidade) e revisar o gate `X-Kaia-User` do dashboard.
 - [ ] Dividir o `script.js` em um arquivo por página + um comum.

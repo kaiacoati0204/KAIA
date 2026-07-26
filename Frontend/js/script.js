@@ -210,13 +210,9 @@ function snapshotFeatures() {
         sessoes_no_dia:             perfil.sessoes_no_dia || 0,           // INTEGER — contador local
         dia_semana:                 dias[agora.getDay()],                 // ENUM    — do timestamp
         sequencia_dias_estudo:      perfil.sequencia_dias_estudo || 0,    // INTEGER — streak
-        ambiente_dispositivo:       perfil.ambiente_dispositivo || null,  // ENUM    — auto-declarado
         // minutos desde a última sessão registrada
         duracao_pausa_anterior_min: perfil.ultima_sessao_ts
-            ? parseFloat(((agora - perfil.ultima_sessao_ts) / 60000).toFixed(2)) : null,
-        // só existe se o aluno informou a data no onboarding
-        dias_para_prova: perfil.data_prova
-            ? Math.max(0, Math.ceil((new Date(perfil.data_prova) - agora) / 86400000)) : null
+            ? parseFloat(((agora - perfil.ultima_sessao_ts) / 60000).toFixed(2)) : null
     };
 }
 
@@ -243,9 +239,6 @@ function registrarInicioSessao() {
     return snapshotFeatures();
 }
 
-// Hooks de onboarding: 'silencioso' | 'ruido_moderado' | 'ruido_alto' e 'AAAA-MM-DD'
-const definirAmbiente  = (valor) => gravarPerfil({ ...lerPerfil(), ambiente_dispositivo: valor });
-const definirDataProva = (iso)   => gravarPerfil({ ...lerPerfil(), data_prova: iso });
 
 // Envia o pacote completo (login + hobbies + features) para o backend.
 function enviarPerfil(extra = {}) {
@@ -368,10 +361,10 @@ async function criarConta(event) {
 }
 
 // ============================================================
-//                    MENU LATERAL
+//                    NAVEGAÇÃO (rail)
 // ============================================================
-// Injetado por JS em toda página com <body data-menu> — assim o markup do menu
-// não fica copiado (e divergindo) em cada HTML.
+// MENU_LINKS alimenta a barra lateral estática (montarRail) — fica aqui para
+// o markup do menu não ser copiado (e divergir) em cada HTML.
 const MENU_LINKS = [
     ['index.html',        'Início'],
     ['perfil.html',       'Perfil'],

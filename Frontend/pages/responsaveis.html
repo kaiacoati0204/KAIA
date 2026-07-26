@@ -128,7 +128,7 @@
             painel.style.display = 'none';
 
             try {
-                const r = await fetch(`${API_URL}/responsavel/aluno?email=${encodeURIComponent(email)}`);
+                const r = await apiFetch(`/responsavel/aluno?email=${encodeURIComponent(email)}`);
                 const data = await r.json();
 
                 if (!r.ok) { status.textContent = data.erro || 'Erro ao buscar o aluno.'; return; }
@@ -187,7 +187,7 @@
         // Gráfico geral: hobbies de todos os usuários (Supabase via API)
         async function carregarGraficoHobbies() {
             try {
-                const r = await fetch(`${API_URL}/api/dados-grafico`);
+                const r = await apiFetch(`/api/dados-grafico`);
                 const dados = await r.json();   // { labels: [...], valores: [...] }
                 if (!dados.labels?.length) return;
 
@@ -341,7 +341,7 @@
             const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; renderGraficos(null); };
 
             try {
-                const r = await fetch(`${API_URL}/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
+                const r = await apiFetch(`/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
                 const d = await r.json();
                 if (!r.ok) return falhar(d.erro || 'Não foi possível carregar o painel.');
 

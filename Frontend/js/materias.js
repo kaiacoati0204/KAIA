@@ -1,8 +1,9 @@
 // ============================================================
-//  KaIA — script.js (lógica das páginas)
+//  KaIA — materias.js: página de estudo (sessão, sensores, missão/quiz,
+//  chat, pomodoro, caderno, intervenções)
 // ============================================================
-// Depende de comum.js (API_URL, $, $$, apiFetch, postJSON, userId), carregado
-// ANTES deste arquivo em todos os HTML.
+// Depende de comum.js (API_URL, $, $$, apiFetch, postJSON, userId, lerHobbies),
+// carregado ANTES deste arquivo. Só materias.html usa.
 
 // --- Estado da sessão -------------------------------------------------------
 // session_id: criado via POST /sessions, vive no sessionStorage (1 por aba).

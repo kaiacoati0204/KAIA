@@ -156,58 +156,6 @@ function iniciarPollIntervencao() {
 
 
 // ============================================================
-//                       HOBBIES
-// ============================================================
-// A lista vive aqui (e não no HTML) para que o backend e a página de onboarding
-// compartilhem a mesma fonte de verdade — os hobbies alimentam o prompt da IA.
-const HOBBIES = [
-    'Futebol', 'Basquete', 'Vôlei', 'Natação', 'Corrida', 'Ciclismo', 'Academia', 'Yoga', 'Dança',
-    'Tricô', 'Crochê', 'Costura', 'Pintar', 'Desenho', 'Escultura', 'Fotografia',
-    'RPG', 'Videogames', 'Jogos de Tabuleiro', 'Xadrez', 'Quebra-cabeças',
-    'Culinária', 'Confeitaria', 'Churrasco',
-    'Música', 'Cantar', 'Violão', 'Piano', 'Bateria',
-    'Leitura', 'Escrita', 'Poesia',
-    'Cinema/Filme', 'Séries', 'Anime', 'Mangá',
-    'Programação', 'Robótica', 'Modelagem 3D', 'Impressão 3D',
-    'Jardinagem', 'Pesca', 'Camping', 'Trilhas', 'Viagens', 'Astronomia',
-    'Colecionismo', 'Origami', 'Idiomas', 'Voluntariado',
-];
-
-let hobbiesSelecionados = JSON.parse(sessionStorage.getItem('hobbies') || '[]');
-
-function registrarHobbies() {
-    const box = document.querySelector('.botoes-hobbies');
-    if (!box) return;
-
-    box.innerHTML = '';
-    HOBBIES.forEach(nome => {
-        const botao = document.createElement('button');
-        botao.type = 'button';
-        botao.className = 'botao-hobbies';
-        botao.textContent = nome;
-        botao.classList.toggle('selecionado', hobbiesSelecionados.includes(nome));
-
-        botao.addEventListener('click', () => {
-            const jaTinha = hobbiesSelecionados.includes(nome);
-            hobbiesSelecionados = jaTinha
-                ? hobbiesSelecionados.filter(h => h !== nome)
-                : [...hobbiesSelecionados, nome];
-            botao.classList.toggle('selecionado', !jaTinha);
-        });
-
-        box.appendChild(botao);
-    });
-}
-
-function salvarHobbies() {
-    sessionStorage.setItem('hobbies', JSON.stringify(hobbiesSelecionados));
-    gravarPerfil({ ...lerPerfil(), hobbies: hobbiesSelecionados });
-    enviarPerfil({ tipo: 'hobbies' });
-    window.location.href = 'index.html';
-}
-
-
-// ============================================================
 //                  SENSORES DE COMPORTAMENTO
 // ============================================================
 // Escreve o estado da missão na sidebar + no overlay de inatividade.
@@ -355,7 +303,7 @@ async function enviarPergunta() {
     try {
         const data = await postJSON('/perguntar', {
             pergunta: $('pergunta').value,
-            hobbies: hobbiesSelecionados
+            hobbies: lerHobbies()
         });
         respostas.innerHTML = data.resposta;
     } catch (erro) {
@@ -443,7 +391,7 @@ async function startMission(subject, tema) {
 
     try {
         currentQuestion = await postJSON('/gerar-questao', {
-            materia: subject, tema, hobbies: hobbiesSelecionados
+            materia: subject, tema, hobbies: lerHobbies()
         });
         if (!currentQuestion || currentQuestion.erro || !Array.isArray(currentQuestion.opts)) {
             throw new Error(currentQuestion?.erro || 'formato inválido');
@@ -1143,7 +1091,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // uma missão (criarSessao em startMission).
 document.addEventListener('DOMContentLoaded', () => {
     // montarRail() e aplicarTexturaPapel() agora rodam no init do comum.js.
-    registrarHobbies();
     registrarSensores();
     retomarPomodoroSePendente();   // pausa em andamento reaparece ao recarregar/reabrir
     console.log('[KaIA] Página pronta. Session ID:', sessionId);

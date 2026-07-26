@@ -44,6 +44,10 @@ if (!userId) {
 const lerPerfil    = () => JSON.parse(localStorage.getItem('kaia_perfil') || '{}');
 const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p));
 
+// Hobbies selecionados (sessionStorage 'hobbies'): a página de hobbies grava, e
+// matérias/perfil leem para mandar ao backend (alimentam o prompt da IA).
+const lerHobbies = () => JSON.parse(sessionStorage.getItem('hobbies') || '[]');
+
 // ============================================================
 //                    NAVEGAÇÃO (rail)
 // ============================================================
@@ -184,7 +188,7 @@ function enviarPerfil(extra = {}) {
         user_id:    userId,
         ts:         new Date().toISOString(),
         perfil:     lerPerfil(),
-        hobbies:    JSON.parse(sessionStorage.getItem('hobbies') || '[]'),
+        hobbies:    lerHobbies(),
         features:   snapshotFeatures(),
         ...extra
     }, true).catch(e => console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e));

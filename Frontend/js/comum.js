@@ -126,3 +126,66 @@ function montarRail() {
         window.location.href = 'login.html';
     });
 }
+
+// ============================================================
+//        CAMADA DE DADOS — PERFIL + FEATURES (Supabase-ready)
+// ============================================================
+// Persistido em localStorage sob 'kaia_perfil' e espelhado no backend (/perfil).
+// Para plugar o Supabase, basta trocar `enviarPerfil` por um upsert em `perfis`.
+
+// Snapshot NÃO-mutável das features (só leitura, para enviar junto dos dados).
+function snapshotFeatures() {
+    const agora  = new Date();
+    const perfil = lerPerfil();
+    const dias   = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+    const hora   = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+
+    return {
+        horario_inicio:             hora,                                 // TIME    — do relógio
+        sessoes_no_dia:             perfil.sessoes_no_dia || 0,           // INTEGER — contador local
+        dia_semana:                 dias[agora.getDay()],                 // ENUM    — do timestamp
+        sequencia_dias_estudo:      perfil.sequencia_dias_estudo || 0,    // INTEGER — streak
+        // minutos desde a última sessão registrada
+        duracao_pausa_anterior_min: perfil.ultima_sessao_ts
+            ? parseFloat(((agora - perfil.ultima_sessao_ts) / 60000).toFixed(2)) : null
+    };
+}
+
+// Mutável: chamado quando uma sessão de ESTUDO começa (atualiza streak/contadores).
+function registrarInicioSessao() {
+    const agora   = new Date();
+    const perfil  = lerPerfil();
+    const hojeStr = agora.toISOString().slice(0, 10);
+
+    if (perfil.ultimo_dia_estudo === hojeStr) {
+        perfil.sessoes_no_dia = (perfil.sessoes_no_dia || 0) + 1;
+    } else {
+        const ontem = new Date(agora);
+        ontem.setDate(ontem.getDate() - 1);
+        // manteve o hábito se estudou ontem; senão zera o streak
+        perfil.sequencia_dias_estudo = (perfil.ultimo_dia_estudo === ontem.toISOString().slice(0, 10))
+            ? (perfil.sequencia_dias_estudo || 0) + 1 : 1;
+        perfil.sessoes_no_dia = 1;
+    }
+
+    perfil.ultimo_dia_estudo = hojeStr;
+    perfil.ultima_sessao_ts  = agora.getTime();
+    gravarPerfil(perfil);
+    return snapshotFeatures();
+}
+
+
+// Envia o pacote completo (login + hobbies + features) para o backend.
+// Lê session_id/hobbies do sessionStorage (não de globais de página) para ser
+// autocontido no comum.js — mesmo valor que os globais sessionId/hobbiesSelecionados.
+function enviarPerfil(extra = {}) {
+    return postJSON('/perfil', {
+        session_id: sessionStorage.getItem('kaia_session_id') || null,
+        user_id:    userId,
+        ts:         new Date().toISOString(),
+        perfil:     lerPerfil(),
+        hobbies:    JSON.parse(sessionStorage.getItem('hobbies') || '[]'),
+        features:   snapshotFeatures(),
+        ...extra
+    }, true).catch(e => console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e));
+}

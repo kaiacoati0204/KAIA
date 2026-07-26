@@ -10,14 +10,28 @@ const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 const $  = (id) => document.getElementById(id);
 const $$ = (sel, raiz = document) => Array.from(raiz.querySelectorAll(sel));
 
-// POST em JSON. Quem chama decide se trata o erro — nada aqui derruba a UI.
-function postJSON(rota, corpo, keepalive = false) {
-    return fetch(`${API_URL}${rota}`, {
+// Helper CENTRAL de chamada ao backend: anexa o JWT do Supabase
+// (Authorization: Bearer <token>) automaticamente em toda requisição. Sem
+// sessão/token, segue sem o header — a rota do backend decide (401 se exigir).
+async function apiFetch(rota, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    try {
+        const sess = await window.supabaseClient?.auth.getSession();
+        const token = sess?.data?.session?.access_token;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+    } catch (_) { /* sem token → segue sem ele */ }
+    return fetch(`${API_URL}${rota}`, { ...options, headers });
+}
+
+// POST em JSON, já com o token anexado. Quem chama decide se trata o erro.
+async function postJSON(rota, corpo, keepalive = false) {
+    const r = await apiFetch(rota, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(corpo),
-        keepalive
-    }).then(r => r.json());
+        keepalive,
+    });
+    return r.json();
 }
 
 // --- Estado da sessão -------------------------------------------------------
@@ -165,7 +179,7 @@ function iniciarPollIntervencao() {
         if (!isMissionActive) { clearInterval(intervencaoInterval); return; }
         if (intervencaoAtual || !sessionId) return;   // já há uma aguardando feedback
         try {
-            const r = await fetch(`${API_URL}/intervencao/pendente?session_id=${sessionId}`);
+            const r = await apiFetch(`/intervencao/pendente?session_id=${sessionId}`);
             const data = await r.json();
             if (data && data.pendente) mostrarIntervencao(data.pendente);
         } catch (_) { /* silencioso */ }
@@ -256,9 +270,9 @@ const ROTA_POR_ROLE = {
 // busca o perfil no backend (por id; fallback por email), guarda a sessão do
 // app e redireciona por role.
 async function finalizarLogin(authUser, falhar) {
-    let r = await fetch(`${API_URL}/perfil?user_id=${encodeURIComponent(authUser.id)}`);
+    let r = await apiFetch(`/perfil?user_id=${encodeURIComponent(authUser.id)}`);
     if (r.status === 404 && authUser.email) {
-        r = await fetch(`${API_URL}/perfil?email=${encodeURIComponent(authUser.email)}`);
+        r = await apiFetch(`/perfil?email=${encodeURIComponent(authUser.email)}`);
     }
     if (!r.ok) return falhar('Login feito, mas seu perfil não foi encontrado. Fale com o suporte.');
     const u = await r.json();
@@ -927,7 +941,7 @@ async function carregarCaderno(tema) {
     // 2) Servidor (cross-device) — só TEXTO. As imagens vivem apenas no local.
     let doServidor = null;
     try {
-        const r = await fetch(`${API_URL}/anotacoes?aluno_id=${encodeURIComponent(userId)}&tema=${encodeURIComponent(tema)}`);
+        const r = await apiFetch(`/anotacoes?aluno_id=${encodeURIComponent(userId)}&tema=${encodeURIComponent(tema)}`);
         if (r.ok) doServidor = (await r.json()).elementos || [];
     } catch (e) {
         console.warn('[KaIA] /anotacoes indisponível, usando cópia local:', e);
@@ -1184,7 +1198,7 @@ async function pushCaderno() {
     // que o backend descartaria de qualquer forma).
     const soTexto = cadElementos.filter(e => e.tipo === 'texto');
     try {
-        const r = await fetch(`${API_URL}/anotacoes`, {
+        const r = await apiFetch(`/anotacoes`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ aluno_id: userId, tema: cadTema, elementos: soTexto })
@@ -1268,7 +1282,7 @@ async function carregarPerfil() {
     let alunoId = usuario?.user_id || null;
     if (usuario?.email) {
         try {
-            const r = await fetch(`${API_URL}/perfil?email=${encodeURIComponent(usuario.email)}`);
+            const r = await apiFetch(`/perfil?email=${encodeURIComponent(usuario.email)}`);
             if (r.ok) {
                 const u = await r.json();
                 $('nomeUsuario').textContent  = u.nome  || SEM_DADO;
@@ -1290,7 +1304,7 @@ async function carregarEstatisticasPerfil(alunoId) {
 
     let D = null;
     try {
-        const r = await fetch(`${API_URL}/perfil/estatisticas?aluno_id=${encodeURIComponent(alunoId)}`);
+        const r = await apiFetch(`/perfil/estatisticas?aluno_id=${encodeURIComponent(alunoId)}`);
         if (r.ok) D = await r.json();
     } catch (e) { console.warn('[KaIA] estatísticas do perfil:', e); }
 
@@ -1661,7 +1675,7 @@ async function iniciarDashboard() {
     // backend usa para checar perfis.role == 'admin' e responder 403 se não for.
     let D = {};
     try {
-        const r = await fetch(`${API_URL}/dashboard/dados`, {
+        const r = await apiFetch(`/dashboard/dados`, {
             headers: { 'X-Kaia-User': userId }
         });
         if (r.status === 403) { _dashboardNegado(); return; }

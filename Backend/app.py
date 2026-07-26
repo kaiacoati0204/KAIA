@@ -12,9 +12,10 @@ import pandas as pd
 import requests
 
 from thompson import ThompsonSampling, INTERVENCOES
+from auth import usuario_autenticado
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
-from fastapi import FastAPI, Body, Request
+from fastapi import FastAPI, Body, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -192,7 +193,7 @@ Pergunta: {pergunta}
 
 
 # ================== API: PERGUNTAR (chat livre) ==============================
-@app.post("/perguntar")
+@app.post("/perguntar", dependencies=[Depends(usuario_autenticado)])
 def perguntar(dados: dict = Body(default={})):
     pergunta = (dados.get("pergunta") or "").strip()
     hobbies = dados.get("hobbies", [])
@@ -215,7 +216,7 @@ def perguntar(dados: dict = Body(default={})):
 # Cache em `temas_cache` (materia PK, temas jsonb): a geração dos temas custa 1
 # requisição ao Gemini (free tier: 20/dia). Cacheado, cada matéria gasta no
 # máximo 1 chamada na vida — e a tela de temas passa a abrir instantânea.
-@app.post("/temas")
+@app.post("/temas", dependencies=[Depends(usuario_autenticado)])
 async def temas(request: Request, refresh: bool = False, dados: dict = Body(default={})):
     materia = (dados.get("materia") or "").strip()
     pool = request.app.state.pool
@@ -294,7 +295,7 @@ async def temas(request: Request, refresh: bool = False, dados: dict = Body(defa
 # tabela `anotacoes` (RLS ligado, SEM policy para a anon key) — o isolamento por
 # aluno é o `where aluno_id = $1` daqui. Sem Supabase Auth, é o mesmo modelo de
 # confiança do resto do app: convém, não é segurança forte (ver Etapa 10).
-@app.get("/anotacoes")
+@app.get("/anotacoes", dependencies=[Depends(usuario_autenticado)])
 async def obter_anotacoes(request: Request, aluno_id: str = "", tema: str = ""):
     pool = request.app.state.pool
     if pool is None:
@@ -325,7 +326,7 @@ class AnotacoesIn(BaseModel):
     elementos: list = []
 
 
-@app.put("/anotacoes")
+@app.put("/anotacoes", dependencies=[Depends(usuario_autenticado)])
 async def salvar_anotacoes(body: AnotacoesIn, request: Request):
     pool = request.app.state.pool
     if pool is None:
@@ -379,7 +380,7 @@ def _analise_regras(base, por_materia):
     return frases
 
 
-@app.get("/perfil/estatisticas")
+@app.get("/perfil/estatisticas", dependencies=[Depends(usuario_autenticado)])
 async def perfil_estatisticas(request: Request, aluno_id: str = ""):
     pool = request.app.state.pool
     if pool is None:
@@ -451,7 +452,7 @@ async def perfil_estatisticas(request: Request, aluno_id: str = ""):
 
 
 # ================== API: GERAR QUESTÃO objetiva =============================
-@app.post("/gerar-questao")
+@app.post("/gerar-questao", dependencies=[Depends(usuario_autenticado)])
 def gerar_questao(dados: dict = Body(default={})):
     materia = dados.get("materia", "")
     nome = MATERIAS.get(materia, materia)
@@ -817,8 +818,10 @@ async def predizer_estado(modelo, scaler, conn, session_id):
 
 
 # ================== API: DIAGNOSE (predição do estado via RF) ===============
+# Protegido por JWT (Supabase Auth): exige Authorization: Bearer <token> válido.
 @app.get("/diagnose")
-async def diagnose(request: Request, session_id: str):
+async def diagnose(request: Request, session_id: str,
+                   _uid: str = Depends(usuario_autenticado)):
     """Prediz o estado de atenção da sessão (engajado/distraido/muito_distraido)
     usando o RandomForest v1 carregado no startup. As features são o vetor
     CUMULATIVO da sessão (montar_features_sessao), na ordem exata do treino."""
@@ -851,7 +854,7 @@ class FeedbackIn(BaseModel):
     feedback_usuario: Optional[str] = None
 
 
-@app.get("/intervencao/pendente")
+@app.get("/intervencao/pendente", dependencies=[Depends(usuario_autenticado)])
 async def intervencao_pendente(request: Request, session_id: str):
     """Frontend consulta a intervenção recém-disparada (sem reward ainda) nos
     últimos 5 min. É a 'flag' que substitui o WebSocket: o front faz polling."""
@@ -881,7 +884,7 @@ async def intervencao_pendente(request: Request, session_id: str):
     }}
 
 
-@app.post("/intervencao/feedback")
+@app.post("/intervencao/feedback", dependencies=[Depends(usuario_autenticado)])
 async def intervencao_feedback(body: FeedbackIn, request: Request):
     """Recebe o feedback do aluno, grava o reward na intervenção mais recente
     (dessa sessão+tipo ainda sem reward) e atualiza o bandit (thompson.update)."""
@@ -939,7 +942,7 @@ class SessionIn(BaseModel):
     app_version: str = "mvp-0.1"
 
 
-@app.post("/sessions")
+@app.post("/sessions", dependencies=[Depends(usuario_autenticado)])
 async def criar_sessao(body: SessionIn, request: Request):
     pool = request.app.state.pool
     if pool is None:
@@ -1009,7 +1012,7 @@ class EventIn(BaseModel):
     ts: Optional[str] = None   # ISO 8601 vindo do frontend; default = now() no banco
 
 
-@app.post("/events")
+@app.post("/events", dependencies=[Depends(usuario_autenticado)])
 async def receber_evento(body: EventIn, request: Request):
     pool = request.app.state.pool
     if pool is None:
@@ -1057,7 +1060,7 @@ def _to_date(s):
         return None
 
 
-@app.post("/perfil")
+@app.post("/perfil", dependencies=[Depends(usuario_autenticado)])
 async def perfil(request: Request, dados: dict = Body(default={})):
     user_id = dados.get("user_id")
     if not user_id:
@@ -1173,7 +1176,7 @@ def _demo_aluno(email):
     }
 
 
-@app.get("/responsavel/aluno")
+@app.get("/responsavel/aluno", dependencies=[Depends(usuario_autenticado)])
 async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Optional[str] = None):
     """Painel do responsável: resolve o aluno por e-mail (ou user_id) e devolve a
     evolução diária das features de atenção/desempenho + uma leitura de tendência
@@ -1789,7 +1792,7 @@ def _dashboard_offline():
     return {"vazio": True, "motivo": "nenhuma planilha encontrada"}
 
 
-@app.get("/dashboard/dados")
+@app.get("/dashboard/dados", dependencies=[Depends(usuario_autenticado)])
 async def dashboard_dados(request: Request):
     # --- Porteiro de acesso (Etapa 10) ---------------------------------------
     # SEGURANÇA: X-Kaia-User é a identidade que o FRONT AFIRMA sobre si (uuid do
@@ -1816,10 +1819,11 @@ async def dashboard_dados(request: Request):
     return _dashboard_offline()
 
 # ========================================= PERFIL =============================================
-# DÍVIDA: validar JWT do Supabase Auth no backend antes de ir para produção.
-# Hoje a autenticação (Supabase Auth) vive só no frontend; o backend confia no
-# user_id/email recebidos. O beta funciona assim; produção exige verificar o JWT.
-@app.get("/perfil")
+# AUTH: a validação de JWT do Supabase existe em auth.py (dependência
+# usuario_autenticado) e já protege o /diagnose. DÍVIDA: estender o Depends às
+# demais rotas de dados — depende do frontend passar a enviar Authorization:
+# Bearer <token> em todas as páginas (hoje várias não carregam o supabase-js).
+@app.get("/perfil", dependencies=[Depends(usuario_autenticado)])
 async def get_perfil(request: Request, email: str = None, user_id: str = None):
     pool = request.app.state.pool
     if pool is None:
@@ -1909,7 +1913,7 @@ def _distribuicao_status(valores):
     return d
 
 
-@app.get("/responsavel/painel")
+@app.get("/responsavel/painel", dependencies=[Depends(usuario_autenticado)])
 async def painel_responsavel(request: Request, email: Optional[str] = None):
     pool = request.app.state.pool
     if pool is None:

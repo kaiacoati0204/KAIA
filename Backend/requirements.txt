@@ -20,6 +20,9 @@ jupyter
 faker
 psycopg2-binary
 
+# Auth — validação do JWT do Supabase (ES256 via JWKS)
+pyjwt[crypto]
+
 # Testes (Sprint 4 — unitários + integração)
 pytest
 pytest-asyncio

@@ -38,6 +38,8 @@ def _prep(modelo=MODELO, scaler=SCALER):
     app_mod.app.state.pool = FakePool()
     app_mod.app.state.modelo = modelo
     app_mod.app.state.scaler = scaler
+    # /diagnose exige JWT válido; nos testes trocamos a dependência por um stub.
+    app_mod.app.dependency_overrides[app_mod.usuario_autenticado] = lambda: "test-user"
 
 
 async def test_diagnose_sem_session_id():

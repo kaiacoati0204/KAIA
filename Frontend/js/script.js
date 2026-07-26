@@ -537,7 +537,7 @@ function calculateReadingTime(text, options) {
 function iniciarIdleMonitor() {
     clearInterval(idleInterval);
     idleInterval = setInterval(() => {
-        if (!isMissionActive) return;
+        if (!isMissionActive || pausaAtiva) return;   // descanso não conta como inatividade
         idleTime++;
         const timer = $('timer');
         if (timer) timer.innerText = idleTime;
@@ -557,7 +557,7 @@ function registrarSensores() {
 
     // --- trocas de aba ---
     document.addEventListener('visibilitychange', () => {
-        if (!isMissionActive) return;
+        if (!isMissionActive || pausaAtiva) return;   // trocar de aba na pausa não é distração
         if (document.hidden) {
             focusLostAt = performance.now();
             mudancasAba++;
@@ -576,7 +576,7 @@ function registrarSensores() {
     // topo (não exatamente 0) para pegar saídas RÁPIDAS, cujo último evento
     // costuma reportar alguns px dentro da tela.
     document.addEventListener('mouseout', (e) => {
-        if (!sessaoDeEstudoAberta) return;   // vale a sessão toda, inclusive na explicação
+        if (!sessaoDeEstudoAberta || pausaAtiva) return;   // não avisa durante o descanso
         if (e.relatedTarget || e.clientY > EXIT_TOPO_PX) return;
         mostrarAvisoSaida();
     });
@@ -765,6 +765,7 @@ async function startMission(subject, tema) {
     // zera os sensores para esta missão
     isMissionActive = true;
     sessaoDeEstudoAberta = true;   // segue ativo na explicação, até ABANDONAR/próxima/Sair
+    iniciarPomodoro();             // liga (ou retoma) o ciclo foco/pausa da sessão
     idleTime = 0;
     mudancasAba = 0;
     focusLostAt = null;
@@ -875,6 +876,8 @@ function proximaQuestao() {
 // "ABANDONAR" também encerra a sessão.
 function resetSystem() {
     sessaoDeEstudoAberta = false;   // fecha o escopo do exit-intent antes de recarregar
+    pararPomodoro();
+    _limparPomodoro();              // fim deliberado da sessão: zera o ciclo
     encerrarSessao();
     clearInterval(idleInterval);
     clearTimeout(keystrokeTimer);
@@ -922,6 +925,144 @@ function mostrarAvisoSaida() {
 
     // Sinal de distração para o Pomodoro adaptativo (paralelo ao tab_change).
     logEvent('exit_intent', { origem: 'mouse_topo' });
+}
+
+// ============================================================
+//        POMODORO (fixo por enquanto; adaptação vem depois)
+// ============================================================
+// Ciclo foco → pausa durante a sessão de estudo. A pausa PERSISTE por timestamp
+// absoluto (localStorage): recarregar, trocar de aba ou fechar/reabrir não zera —
+// o tempo corre mesmo com a aba oculta (anti-burla). O botão "Estou concentrado"
+// pula a pausa (registrado para a fase adaptativa). Durante a pausa, os sensores
+// de distração ficam suspensos (descanso não é distração).
+const POMODORO_FOCO_MS  = 15000;   // FOCO — teste; produção ~25 min
+const POMODORO_PAUSA_MS = 15000;   // PAUSA — teste; produção ~5 min
+const POMODORO_KEY      = 'kaia_pomodoro';
+
+let pausaAtiva      = false;
+let pomodoroTicker  = null;
+
+function _lerPomodoro()  { try { return JSON.parse(localStorage.getItem(POMODORO_KEY)); } catch { return null; } }
+function _gravarPomodoro(o) { localStorage.setItem(POMODORO_KEY, JSON.stringify(o)); }
+function _limparPomodoro() { localStorage.removeItem(POMODORO_KEY); }
+
+function _iniciarFoco() {
+    const st = _lerPomodoro() || {};
+    _gravarPomodoro({ fase: 'foco', fimTs: Date.now() + POMODORO_FOCO_MS, ciclo: (st.ciclo || 0) + 1 });
+}
+
+// Liga o ciclo no começo da missão. Se houver estado válido (recarregou no meio),
+// RETOMA de onde parou em vez de reiniciar.
+function iniciarPomodoro() {
+    const st = _lerPomodoro();
+    const focoValido  = st && st.fase === 'foco'  && st.fimTs - Date.now() > 0;
+    const pausaValida = st && st.fase === 'pausa' && st.fimTs - Date.now() > 0;
+    if (pausaValida) {
+        pausaAtiva = true;
+        _mostrarPausa(st.fimTs - Date.now());
+    } else if (!focoValido) {
+        _limparPomodoro();
+        _iniciarFoco();
+    }
+    _ligarTicker();
+}
+
+function _ligarTicker() {
+    clearInterval(pomodoroTicker);
+    pomodoroTicker = setInterval(_tickPomodoro, 500);
+}
+
+function pararPomodoro() {
+    clearInterval(pomodoroTicker);
+    pomodoroTicker = null;
+}
+
+function _tickPomodoro() {
+    if (!sessaoDeEstudoAberta && !pausaAtiva) { pararPomodoro(); return; }
+    const st = _lerPomodoro();
+    if (!st) { _iniciarFoco(); return; }
+    const restante = st.fimTs - Date.now();
+    if (st.fase === 'foco') {
+        if (restante <= 0) _entrarPausa();
+    } else {
+        if (restante <= 0) _concluirPausa();
+        else _mostrarPausa(restante);
+    }
+}
+
+function _entrarPausa() {
+    const st = _lerPomodoro() || {};
+    const ciclo = st.ciclo || 1;
+    _gravarPomodoro({ fase: 'pausa', fimTs: Date.now() + POMODORO_PAUSA_MS, ciclo });
+    pausaAtiva = true;                       // suspende exit-intent/idle/tab_change
+    logEvent('pomodoro_pausa_inicio', { ciclo, foco_s: POMODORO_FOCO_MS / 1000 });
+    _mostrarPausa(POMODORO_PAUSA_MS);
+}
+
+function _concluirPausa() {
+    const st = _lerPomodoro() || {};
+    logEvent('pomodoro_pausa_fim', { ciclo: st.ciclo });
+    _fecharPausaERetomarFoco();
+}
+
+// Botão "Estou concentrado, continuar": registra o skip (sinal para a adaptação)
+// e volta ao foco. A saída sempre funciona — a pausa nunca prende de vez.
+function pularPausa() {
+    const st = _lerPomodoro() || {};
+    const restante_s = Math.max(0, Math.round(((st.fimTs || Date.now()) - Date.now()) / 1000));
+    logEvent('pomodoro_skip', { ciclo: st.ciclo, foco_s: POMODORO_FOCO_MS / 1000, restante_s });
+    _fecharPausaERetomarFoco();
+}
+
+function _fecharPausaERetomarFoco() {
+    pausaAtiva = false;
+    _esconderPausa();
+    idleTime = 0;                            // retoma sensores sem contar o descanso
+    if (isMissionActive) setEstado('ESTUDANDO');
+    _iniciarFoco();
+}
+
+function _garantirOverlayPausa() {
+    if ($('kaia-pausa')) return;
+    const el = document.createElement('div');
+    el.id = 'kaia-pausa';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-labelledby', 'kaia-pausa-titulo');
+    el.innerHTML =
+        `<div class="kaia-pausa-card">`
+        + `<div class="kaia-pausa-tomate" aria-hidden="true">🍅</div>`
+        + `<h2 id="kaia-pausa-titulo">Hora de uma pausa</h2>`
+        + `<p class="kaia-pausa-sub">Respire um pouco. Você volta rendendo mais.</p>`
+        + `<div class="kaia-pausa-contagem"><span id="kaia-pausa-seg">0</span>s</div>`
+        + `<button type="button" class="kaia-pausa-skip">Estou concentrado, continuar</button>`
+        + `</div>`;
+    document.body.appendChild(el);
+    el.querySelector('.kaia-pausa-skip').addEventListener('click', pularPausa);
+}
+
+function _mostrarPausa(restanteMs) {
+    _garantirOverlayPausa();
+    $('kaia-pausa').classList.add('aberto');
+    $('kaia-pausa-seg').innerText = Math.max(0, Math.ceil(restanteMs / 1000));
+}
+
+function _esconderPausa() {
+    const el = $('kaia-pausa');
+    if (el) el.classList.remove('aberto');
+}
+
+// Retoma uma pausa em andamento ao (re)carregar a tela de estudo — cobre fechar/
+// reabrir a aba durante a pausa. Só em materias.html; o timestamp já expirado é
+// descartado naturalmente (restante <= 0).
+function retomarPomodoroSePendente() {
+    if (!location.pathname.endsWith('materias.html')) return;
+    const st = _lerPomodoro();
+    if (st && st.fase === 'pausa' && st.fimTs - Date.now() > 0) {
+        pausaAtiva = true;
+        _mostrarPausa(st.fimTs - Date.now());
+        _ligarTicker();
+    }
 }
 
 // ============================================================
@@ -1761,6 +1902,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registrarHobbies();
     registrarLuz();
     registrarSensores();
+    retomarPomodoroSePendente();   // pausa em andamento reaparece ao recarregar/reabrir
     carregarPerfil();
     if (document.body.classList.contains('dashboard-page')) iniciarDashboard();
     console.log('[KaIA] Página pronta. Session ID:', sessionId);

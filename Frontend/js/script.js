@@ -1,38 +1,8 @@
 // ============================================================
-//  KaIA — script compartilhado por todas as páginas
+//  KaIA — script.js (lógica das páginas)
 // ============================================================
-// A configuração (API_URL + credenciais do Supabase) vive no config.js, que é
-// carregado ANTES deste arquivo em todas as páginas e não vai para o git.
-// O fallback mantém a página de pé se o config.js não existir.
-const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
-
-// --- Atalhos de DOM ---------------------------------------------------------
-const $  = (id) => document.getElementById(id);
-const $$ = (sel, raiz = document) => Array.from(raiz.querySelectorAll(sel));
-
-// Helper CENTRAL de chamada ao backend: anexa o JWT do Supabase
-// (Authorization: Bearer <token>) automaticamente em toda requisição. Sem
-// sessão/token, segue sem o header — a rota do backend decide (401 se exigir).
-async function apiFetch(rota, options = {}) {
-    const headers = { ...(options.headers || {}) };
-    try {
-        const sess = await window.supabaseClient?.auth.getSession();
-        const token = sess?.data?.session?.access_token;
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-    } catch (_) { /* sem token → segue sem ele */ }
-    return fetch(`${API_URL}${rota}`, { ...options, headers });
-}
-
-// POST em JSON, já com o token anexado. Quem chama decide se trata o erro.
-async function postJSON(rota, corpo, keepalive = false) {
-    const r = await apiFetch(rota, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(corpo),
-        keepalive,
-    });
-    return r.json();
-}
+// Depende de comum.js (API_URL, $, $$, apiFetch, postJSON, userId), carregado
+// ANTES deste arquivo em todos os HTML.
 
 // --- Estado da sessão -------------------------------------------------------
 // session_id: criado via POST /sessions, vive no sessionStorage (1 por aba).
@@ -44,12 +14,6 @@ let isMissionActive = false;
 // / Sair. É o gate do exit-intent — não confundir com isMissionActive (sensores).
 let sessaoDeEstudoAberta = false;
 let idleInterval    = null;
-
-let userId = localStorage.getItem('kaia_user_id');
-if (!userId) {
-    userId = crypto.randomUUID();
-    localStorage.setItem('kaia_user_id', userId);
-}
 
 // --- Estado dos sensores ----------------------------------------------------
 let idleTime        = 0;

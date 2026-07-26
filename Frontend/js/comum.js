@@ -189,3 +189,19 @@ function enviarPerfil(extra = {}) {
         ...extra
     }, true).catch(e => console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e));
 }
+
+// ============================================================
+//                    INIT COMPARTILHADO
+// ============================================================
+// Textura de papel: aplica a preferência (localStorage) em TODA página. O toggle
+// que grava a preferência vive nas Configurações do perfil. Desligada por padrão.
+function aplicarTexturaPapel() {
+    document.body.classList.toggle('textura-papel', localStorage.getItem('kaia_textura_papel') === '1');
+}
+
+// Roda em toda página (comum.js é carregado em todas). Ambas se auto-protegem:
+// sem <body data-rail> a rail é no-op — seguro em login/cadastro.
+document.addEventListener('DOMContentLoaded', () => {
+    montarRail();
+    aplicarTexturaPapel();
+});

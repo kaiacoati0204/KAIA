@@ -1581,15 +1581,8 @@ async function iniciarDashboard() {
 // Cada `registrar*` é no-op nas páginas que não têm os elementos, então este
 // bloco pode rodar em qualquer HTML. A sessão NÃO nasce aqui: só ao iniciar
 // uma missão (criarSessao em startMission).
-// Textura de papel: aplica a preferência (localStorage) em TODA página. O toggle
-// que grava a preferência vive nas Configurações do perfil. Desligada por padrão.
-function aplicarTexturaPapel() {
-    document.body.classList.toggle('textura-papel', localStorage.getItem('kaia_textura_papel') === '1');
-}
-
 document.addEventListener('DOMContentLoaded', () => {
-    montarRail();
-    aplicarTexturaPapel();
+    // montarRail() e aplicarTexturaPapel() agora rodam no init do comum.js.
     registrarHobbies();
     registrarSensores();
     retomarPomodoroSePendente();   // pausa em andamento reaparece ao recarregar/reabrir

@@ -481,7 +481,6 @@ function registrarHobbies() {
                 ? hobbiesSelecionados.filter(h => h !== nome)
                 : [...hobbiesSelecionados, nome];
             botao.classList.toggle('selecionado', !jaTinha);
-            console.log('Hobbies:', hobbiesSelecionados);
         });
 
         box.appendChild(botao);
@@ -537,7 +536,6 @@ function setEstado(texto, alertar = false) {
 function calculateReadingTime(text, options) {
     const palavras = (text + ' ' + options.join(' ')).split(/\s+/).length;
     const segundos = Math.ceil(palavras / 3.3) + 5;
-    console.log(`Palavras: ${palavras} | Tempo adaptado: ${segundos}s`);
     return segundos;
 }
 

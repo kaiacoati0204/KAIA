@@ -11,6 +11,12 @@
   --azul-coati: #2d4ba5;
   --bege: #c4a186;
   --creme-bg: #eae0d2;
+  /* RGB base para rgba() com alpha variável (mesma cor de --profundo/--bege) */
+  --profundo-rgb: 26, 43, 76;
+  --bege-rgb: 196, 161, 134;
+  /* largura da barra lateral (rail): colapsada e aberta */
+  --rail-col: 60px;
+  --rail-col-aberta: 180px;
   /* Fundo marfim (acessibilidade TEA/TDAH): off-white no lugar do bege escuro.
      Regra fixa do projeto: nunca #fff/#000 puros — off-white e quase-preto. */
   --marfim: #f4ecdd;   /* fundo das páginas */
@@ -31,7 +37,7 @@
   /* superfícies (dashboard e cards) */
   --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */
   --surface: #f6f2ec;
-  --border: rgba(26, 43, 76, 0.08);
+  --border: rgba(var(--profundo-rgb), 0.08);
   --sep: #f0ebe3;
   --muted: #8b8b8b;
   --raio: 12px;
@@ -450,7 +456,7 @@ body {
 .feedback-msg {
   font-size: 1rem;
   font-weight: 700;
-  color: var(--gravata-kinrou);
+  color: var(--profundo);
 }
 
 /* ===== Feedback da resposta (Etapa 7): explica o erro, sem sair da tela ===== */
@@ -621,7 +627,7 @@ body {
   margin: 30px 0;
   padding: 30px;
   border-radius: 20px;
-  border: 1px solid rgba(196, 161, 134, 0.2);
+  border: 1px solid rgba(var(--bege-rgb), 0.2);
   background: rgba(255, 255, 255, 0.25);
 }
 .coati-texto {
@@ -690,14 +696,14 @@ body {
   flex-direction: column;
   padding: 28px 24px;
   border-radius: 20px;
-  border: 1px solid rgba(196, 161, 134, 0.35);
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
   background: var(--card);
-  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.05);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.05);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 .plano:hover {
   transform: translateY(-6px);
-  box-shadow: 0 16px 36px rgba(26, 43, 76, 0.12);
+  box-shadow: 0 16px 36px rgba(var(--profundo-rgb), 0.12);
 }
 /* O destaque de cada faixa ganha a borda dourada da marca */
 .plano-destaque {
@@ -742,7 +748,7 @@ body {
 }
 .plano-alvo {
   padding-bottom: 16px;
-  border-bottom: 1px dashed rgba(196, 161, 134, 0.4);
+  border-bottom: 1px dashed rgba(var(--bege-rgb), 0.4);
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--bege);
@@ -790,7 +796,7 @@ body {
   color: var(--prox-br);
 }
 .plano-escolar .plano-btn:hover {
-  box-shadow: 0 10px 22px rgba(26, 43, 76, 0.35);
+  box-shadow: 0 10px 22px rgba(var(--profundo-rgb), 0.35);
 }
 
 /* =========================
@@ -831,9 +837,9 @@ body {
   width: 100%;
   padding: 40px;
   border-radius: 24px;
-  border: 1px solid rgba(196, 161, 134, 0.2);
+  border: 1px solid rgba(var(--bege-rgb), 0.2);
   background: var(--card);
-  box-shadow: 0 10px 30px rgba(26, 43, 76, 0.05);
+  box-shadow: 0 10px 30px rgba(var(--profundo-rgb), 0.05);
 }
 .perfil-avatar {
   flex-shrink: 0;
@@ -884,10 +890,10 @@ body {
   min-width: 220px;
   padding: 35px 25px;
   border-radius: 20px;
-  border: 1px solid rgba(196, 161, 134, 0.15);
+  border: 1px solid rgba(var(--bege-rgb), 0.15);
   background: var(--card);
   text-align: center;
-  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.04);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.04);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 .card-perfil:hover {
@@ -911,9 +917,9 @@ body {
   width: 100%;
   padding: 40px;
   border-radius: 24px;
-  border: 1px solid rgba(196, 161, 134, 0.15);
+  border: 1px solid rgba(var(--bege-rgb), 0.15);
   background: var(--card);
-  box-shadow: 0 8px 24px rgba(26, 43, 76, 0.04);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.04);
 }
 .secao-perfil h2 {
   font-size: 1.6rem;
@@ -928,7 +934,7 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 18px 0;
-  border-bottom: 1px dashed rgba(196, 161, 134, 0.25);
+  border-bottom: 1px dashed rgba(var(--bege-rgb), 0.25);
 }
 .linha-perfil:last-child {
   border-bottom: none;
@@ -953,7 +959,7 @@ body {
 .busca input {
   flex: 1;
   padding: 15px 20px;
-  border: 2px solid rgba(196, 161, 134, 0.4);
+  border: 2px solid rgba(var(--bege-rgb), 0.4);
   border-radius: 12px;
   background: var(--card);
   color: var(--profundo);
@@ -1008,7 +1014,7 @@ body {
   padding: 20px;
   margin-bottom: 20px;
   border-radius: 16px;
-  border: 1px solid rgba(196, 161, 134, 0.2);
+  border: 1px solid rgba(var(--bege-rgb), 0.2);
   background: var(--card);
 }
 .grafico h3 {
@@ -1520,10 +1526,6 @@ canvas {
    Começa estreita (só ícones) e expande ao clicar (ícones + texto).
    É uma COLUNA real (o body vira flex): empurra o conteúdo, não sobrepõe.
    ============================================================ */
-:root {
-  --rail-col: 60px;
-  --rail-col-aberta: 180px;
-}
 body[data-rail] {
   display: flex;
   align-items: stretch;
@@ -1707,7 +1709,7 @@ body.textura-papel .conteudo {
   top: 3px;
   border-radius: 50%;
   background: var(--card);
-  box-shadow: 0 1px 3px rgba(26, 43, 76, 0.25);
+  box-shadow: 0 1px 3px rgba(var(--profundo-rgb), 0.25);
   transition: 0.2s;
 }
 .switch input:checked + .switch-slider {
@@ -1851,7 +1853,7 @@ body.textura-papel .conteudo {
   background: var(--card);
   border: 1px solid color-mix(in srgb, var(--profundo) 25%, transparent);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(26, 43, 76, 0.12);
+  box-shadow: 0 1px 3px rgba(var(--profundo-rgb), 0.12);
   overflow: hidden;
 }
 .cad-el.sel {
@@ -1968,7 +1970,7 @@ body.textura-papel .conteudo {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(26, 43, 76, 0.32);   /* véu suave (profundo), nunca preto puro */
+  background: rgba(var(--profundo-rgb), 0.32);   /* véu suave (profundo), nunca preto puro */
 }
 #kaia-pausa.aberto {
   display: flex;
@@ -1981,7 +1983,7 @@ body.textura-papel .conteudo {
   background: var(--card);
   color: var(--tinta);
   text-align: center;
-  box-shadow: 0 18px 50px rgba(26, 43, 76, 0.22);
+  box-shadow: 0 18px 50px rgba(var(--profundo-rgb), 0.22);
 }
 .kaia-pausa-tomate {
   font-size: 3.4rem;

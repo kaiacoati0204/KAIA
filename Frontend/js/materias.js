@@ -498,6 +498,7 @@ function checkAnswer(idx, btn) {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
             acertou,
             opcao_escolhida: idx,
+            opcao_correta: currentQuestion.ans,
             tipo_questao: 'objetiva'
         });
     }

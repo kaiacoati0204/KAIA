@@ -340,6 +340,40 @@ const questaoFallback = (subject, tema) => ({
                      'Não é a alternativa correta.', 'Não é a alternativa correta.'],
 });
 
+// ============================================================
+//        LOTE DE QUESTÕES (economiza cota do Gemini)
+// ============================================================
+// Uma chamada ao /gerar-questao traz LOTE_QTD questões; consumimos uma por vez e
+// só pedimos outro lote quando a fila esvazia. Trocar de tema descarta o lote.
+let filaQuestoes     = [];
+let filaChave        = null;   // `${materia}::${tema}` do lote em memória
+let loteBloqueadoAte = 0;      // enquanto performance.now() < isto, não re-chama o backend
+const LOTE_QTD          = 5;
+const LOTE_COOLDOWN_MS  = 120000;   // após uma falha (ex.: cota estourada), 2 min sem re-tentar
+
+async function obterProximaQuestao(subject, tema) {
+    const chave = `${subject}::${tema}`;
+    if (filaChave !== chave) { filaQuestoes = []; filaChave = chave; }   // tema novo → lote antigo fora
+    if (!filaQuestoes.length) {
+        // Em cooldown após falha: serve fallback SEM re-chamar (não spamar endpoint que já falhou).
+        if (performance.now() < loteBloqueadoAte) return questaoFallback(subject, tema);
+        try {
+            const data = await postJSON('/gerar-questao', {
+                materia: subject, tema, hobbies: lerHobbies(), quantidade: LOTE_QTD
+            });
+            const lote = Array.isArray(data?.questoes) ? data.questoes : [];
+            filaQuestoes = lote.filter(q => q && Array.isArray(q.opts));
+            if (!filaQuestoes.length) throw new Error(data?.erro || 'lote vazio');
+            loteBloqueadoAte = 0;   // sucesso limpa o cooldown
+        } catch (e) {
+            console.warn('[KaIA] /gerar-questao (lote) indisponível, usando questão local:', e);
+            loteBloqueadoAte = performance.now() + LOTE_COOLDOWN_MS;
+            return questaoFallback(subject, tema);
+        }
+    }
+    return filaQuestoes.shift();
+}
+
 // Troca qual das três telas de materias.html está visível.
 function mostrarTela(id) {
     ['menu-view', 'temas-view', 'quiz-view'].forEach(tela => {
@@ -390,17 +424,7 @@ async function startMission(subject, tema) {
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
 
-    try {
-        currentQuestion = await postJSON('/gerar-questao', {
-            materia: subject, tema, hobbies: lerHobbies()
-        });
-        if (!currentQuestion || currentQuestion.erro || !Array.isArray(currentQuestion.opts)) {
-            throw new Error(currentQuestion?.erro || 'formato inválido');
-        }
-    } catch (e) {
-        console.warn('[KaIA] /gerar-questao indisponível, usando questão local:', e);
-        currentQuestion = questaoFallback(subject, tema);
-    }
+    currentQuestion = await obterProximaQuestao(subject, tema);   // vem da fila (lote); fallback interno
 
     // zera os sensores para esta missão
     isMissionActive = true;

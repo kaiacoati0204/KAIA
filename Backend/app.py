@@ -452,6 +452,25 @@ async def perfil_estatisticas(request: Request, aluno_id: str = ""):
 
 
 # ================== API: GERAR QUESTÃO objetiva =============================
+# Alinha porque_erradas a opts (o frontend acessa por índice) e garante explicacao.
+def _normalizar_questao(questao):
+    opts = questao.get("opts") or []
+    pe = questao.get("porque_erradas")
+    if not isinstance(pe, list) or len(pe) != len(opts):
+        questao["porque_erradas"] = [
+            (pe[i] if isinstance(pe, list) and i < len(pe) else "")
+            for i in range(len(opts))
+        ]
+    questao.setdefault("explicacao", "")
+    return questao
+
+# Formato EXATO de cada questão (string literal — as chaves NÃO são interpoladas).
+_FORMATO_QUESTAO = (
+    '{"q": "enunciado da questão", "opts": ["a", "b", "c", "d", "e"], "ans": 0,\n'
+    '  "explicacao": "por que a alternativa correta é a correta (1 a 2 frases)",\n'
+    '  "porque_erradas": ["por que a opção 0 está errada", "...opção 1...", "...", "...", "..."]}'
+)
+
 @app.post("/gerar-questao", dependencies=[Depends(usuario_autenticado)])
 def gerar_questao(dados: dict = Body(default={})):
     materia = dados.get("materia", "")
@@ -459,14 +478,37 @@ def gerar_questao(dados: dict = Body(default={})):
     tema = dados.get("tema", "")
     hobbies = dados.get("hobbies", [])
     lista = ", ".join(hobbies) if hobbies else "nenhum"
-    prompt = f"""
+
+    # quantidade AUSENTE = modo compatível (1 questão, objeto único, como antes).
+    # PRESENTE = LOTE numa só chamada ao Gemini — economiza cota na sessão contínua.
+    qtd_raw = dados.get("quantidade")
+    lote = qtd_raw is not None
+    try:
+        n = max(1, min(int(qtd_raw), 10)) if lote else 1
+    except (TypeError, ValueError):
+        lote, n = True, 5
+
+    if lote:
+        prompt = f"""
+Crie {n} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
+para o ensino médio. Personalize os enunciados usando, se possível, estes hobbies
+do aluno: {lista}.
+Responda APENAS com um ARRAY JSON de {n} objetos, cada um no formato EXATO:
+{_FORMATO_QUESTAO}
+Regras:
+- "ans" é o índice (0 a 4) da alternativa correta.
+- "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da
+  correta use string vazia "".
+- As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
+- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
+"""
+    else:
+        prompt = f"""
 Crie UMA questão objetiva de múltipla escolha sobre "{tema}" ({nome}) para o
 ensino médio. Personalize o enunciado usando, se possível, estes hobbies do
 aluno: {lista}.
 Responda APENAS com JSON no formato EXATO:
-{{"q": "enunciado da questão", "opts": ["a", "b", "c", "d", "e"], "ans": 0,
-  "explicacao": "por que a alternativa correta é a correta (1 a 2 frases)",
-  "porque_erradas": ["por que a opção 0 está errada", "...opção 1...", "...", "...", "..."]}}
+{_FORMATO_QUESTAO}
 Regras:
 - "ans" é o índice (0 a 4) da alternativa correta.
 - "porque_erradas" tem EXATAMENTE o mesmo tamanho e a mesma ordem de "opts";
@@ -474,18 +516,16 @@ Regras:
 - Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 """
     try:
-        questao = extrair_json(chamar_gemini(prompt))
-        # Normaliza porque_erradas para ficar SEMPRE alinhada a opts (o frontend
-        # acessa por índice). Se a IA devolveu tamanho errado ou omitiu, completa.
-        opts = questao.get("opts") or []
-        pe = questao.get("porque_erradas")
-        if not isinstance(pe, list) or len(pe) != len(opts):
-            questao["porque_erradas"] = [
-                (pe[i] if isinstance(pe, list) and i < len(pe) else "")
-                for i in range(len(opts))
-            ]
-        questao.setdefault("explicacao", "")
-        return questao
+        dados_ia = extrair_json(chamar_gemini(prompt))
+        if lote:
+            # aceita array puro OU {"questoes": [...]}
+            itens = dados_ia if isinstance(dados_ia, list) else dados_ia.get("questoes", [])
+            questoes = [_normalizar_questao(q) for q in itens
+                        if isinstance(q, dict) and q.get("opts")]
+            if not questoes:
+                raise ValueError("lote vazio ou malformado")
+            return {"questoes": questoes}
+        return _normalizar_questao(dados_ia)
     except Exception as e:
         print("[KaIA] erro /gerar-questao:", e)
         return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)

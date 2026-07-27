@@ -452,6 +452,34 @@ async def perfil_estatisticas(request: Request, aluno_id: str = ""):
 
 
 # ================== API: GERAR QUESTÃO objetiva =============================
+# ==== META DIÁRIA (questões respondidas hoje) ====
+META_QUESTOES_DIA = 10
+
+@app.get("/questoes/hoje", dependencies=[Depends(usuario_autenticado)])
+async def questoes_hoje(request: Request, user_id: str = ""):
+    """Conta as questões respondidas HOJE por um aluno (eventos question_answer),
+    para a barra de meta diária da página de estudo."""
+    pool = request.app.state.pool
+    if pool is None:
+        return {"respondidas_hoje": 0, "meta": META_QUESTOES_DIA}
+    user_id = user_id.strip()
+    if not user_id:
+        return JSONResponse({"erro": "user_id é obrigatório."}, status_code=400)
+    async with pool.acquire() as conn:
+        n = await conn.fetchval(
+            """
+            select count(*)
+            from session_events se
+            join sessions s on s.session_id = se.session_id
+            where s.user_id = $1::uuid
+              and se.event_type = 'question_answer'
+              and se.ts::date = current_date
+            """,
+            user_id,
+        )
+    return {"respondidas_hoje": int(n or 0), "meta": META_QUESTOES_DIA}
+
+
 # Alinha porque_erradas a opts (o frontend acessa por índice) e garante explicacao.
 def _normalizar_questao(questao):
     opts = questao.get("opts") or []

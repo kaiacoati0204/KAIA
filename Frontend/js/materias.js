@@ -414,17 +414,33 @@ async function abrirMateria(subject) {
     renderBotoes(temasBox, temas, (tema) => startMission(subject, tema));
 }
 
-// ==== SESSÃO CONTÍNUA (Parte 1) ====
-let questoesRespondidas = 0;    // respondidas NA sessão atual (contador "Questão X de N")
-const META_QUESTOES = 10;       // meta da sessão
+// ==== SESSÃO CONTÍNUA + META DIÁRIA (Partes 1 e 3) ====
+let questoesRespondidas = 0;    // respondidas NESTA sessão
+let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (vem do backend)
+let metaCelebrada       = false;
+const META_QUESTOES = 10;       // meta diária
+
+// Total do DIA = base do backend + as respondidas nesta sessão.
+const totalHoje = () => respondidasHojeBase + questoesRespondidas;
+
+// Baseline da barra de meta: quantas o aluno já respondeu hoje (antes desta sessão).
+async function carregarMetaHoje() {
+    respondidasHojeBase = 0;
+    try {
+        const r = await apiFetch(`/questoes/hoje?user_id=${encodeURIComponent(userId)}`);
+        if (r.ok) { const d = await r.json(); respondidasHojeBase = d.respondidas_hoje || 0; }
+    } catch (e) { console.warn('[KaIA] /questoes/hoje indisponível:', e); }
+}
 
 // Abre a sessão de estudo UMA vez — não por questão. Cria o session_id, atualiza
 // streak/contadores e liga o pomodoro; a sequência inteira usa ESTA sessão.
 async function iniciarSessaoEstudo(subject, tema) {
     sessaoDeEstudoAberta = true;
     questoesRespondidas = 0;
+    metaCelebrada = false;
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
+    await carregarMetaHoje();                   // baseline do dia para a barra de meta
     const features = registrarInicioSessao();
     logEvent('session_start', { materia: subject, tema, features });
     enviarPerfil({ tipo: 'session_start', materia: subject, tema });
@@ -481,10 +497,29 @@ async function startMission(subject, tema) {
     await carregarQuestao(subject, tema);
 }
 
-// Contador "Questão X de N" no topo do quiz.
-function atualizarContador() {
+// Barra da META DIÁRIA: "X de 10 questões hoje" + preenche a barra.
+function atualizarBarraMeta() {
+    const total = totalHoje();
     const el = $('contador-questoes');
-    if (el) el.textContent = `Questão ${Math.min(questoesRespondidas + 1, META_QUESTOES)} de ${META_QUESTOES}`;
+    if (el) el.textContent = `${Math.min(total, META_QUESTOES)} de ${META_QUESTOES} questões hoje`;
+    const fill = $('meta-fill');
+    if (fill) fill.style.width = `${Math.min(total / META_QUESTOES, 1) * 100}%`;
+}
+
+// Contador da SESSÃO ("Questão X") + a barra diária + a streak. Chamado ao carregar cada questão.
+function atualizarContador() {
+    const sess = $('contador-sessao');
+    if (sess) sess.textContent = `Questão ${questoesRespondidas + 1}`;
+    atualizarBarraMeta();
+    atualizarStreak();
+}
+
+// Streak "🔥 X dias" — lida do perfil (avança só na meta, via registrarMetaDiaria).
+function atualizarStreak() {
+    const el = $('streak-dias');
+    if (!el) return;
+    const dias = lerPerfil().sequencia_dias_estudo || 0;
+    el.textContent = dias > 0 ? `🔥 ${dias} ${dias === 1 ? 'dia' : 'dias'}` : '';
 }
 
 // 3) Resposta: registra o tempo e mostra o feedback. A SESSÃO CONTINUA (Parte 1) —
@@ -503,6 +538,7 @@ function checkAnswer(idx, btn) {
         });
     }
     questoesRespondidas++;
+    atualizarBarraMeta();      // só a barra diária sobe já na resposta (contador da sessão não muda aqui)
 
     // Pausa os sensores enquanto o aluno lê a explicação — mas NÃO encerra a sessão.
     isMissionActive = false;
@@ -549,21 +585,51 @@ function mostrarExplicacao(escolha, acertou) {
         bloco.appendChild(pErr);
     }
 
-    const proxima = document.createElement('button');
-    proxima.type = 'button';
-    proxima.className = 'botao-proxima';
-    proxima.textContent = (questoesRespondidas >= META_QUESTOES) ? 'Finalizar sessão →' : 'Próxima questão →';
-    proxima.addEventListener('click', proximaQuestao);
-
     fb.appendChild(bloco);
-    fb.appendChild(proxima);
+
+    // Ao BATER a meta do dia (uma vez por sessão): parabéns + escolher continuar/encerrar.
+    if (totalHoje() >= META_QUESTOES && !metaCelebrada) {
+        metaCelebrada = true;
+        const streak = registrarMetaDiaria();   // conta o dia na streak (idempotente) e atualiza o perfil
+        atualizarStreak();
+        const parabens = document.createElement('div');
+        parabens.className = 'meta-parabens';
+        const ph = document.createElement('h3');
+        ph.textContent = '🎉 Meta do dia batida!';
+        const pp = document.createElement('p');
+        const seq = streak > 0 ? ` 🔥 ${streak} ${streak === 1 ? 'dia' : 'dias'} seguidos!` : '';
+        pp.textContent = `Você respondeu ${totalHoje()} questões hoje.${seq} Quer continuar ou encerrar?`;
+        parabens.appendChild(ph);
+        parabens.appendChild(pp);
+        fb.appendChild(parabens);
+
+        const continuar = document.createElement('button');
+        continuar.type = 'button';
+        continuar.className = 'botao-proxima';
+        continuar.textContent = 'Continuar estudando';
+        continuar.addEventListener('click', proximaQuestao);
+        fb.appendChild(continuar);
+
+        const encerrar = document.createElement('button');
+        encerrar.type = 'button';
+        encerrar.className = 'botao-encerrar-meta';
+        encerrar.textContent = 'Encerrar';
+        encerrar.addEventListener('click', encerrarSessaoEstudo);
+        fb.appendChild(encerrar);
+    } else {
+        const proxima = document.createElement('button');
+        proxima.type = 'button';
+        proxima.className = 'botao-proxima';
+        proxima.textContent = 'Próxima questão →';
+        proxima.addEventListener('click', proximaQuestao);
+        fb.appendChild(proxima);
+    }
     fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// "Próxima questão": carrega a próxima da fila SEM criar sessão. Ao bater a meta,
-// encerra a sessão (a tela de resumo virá na Parte 5).
+// "Próxima questão" / "Continuar estudando": carrega a próxima da fila SEM criar
+// sessão. Bater a meta não encerra sozinho — a escolha é do aluno (ver mostrarExplicacao).
 function proximaQuestao() {
-    if (questoesRespondidas >= META_QUESTOES) { encerrarSessaoEstudo(); return; }
     carregarQuestao(currentSubject, currentTema);
 }
 

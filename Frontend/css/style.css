@@ -1762,12 +1762,72 @@ body.textura-papel .conteudo {
   color: var(--profundo);
 }
 
-/* Contador "Questão X de N" (Parte 1): rótulo discreto no meio do quiz-nav. */
+/* Grupo esquerdo do quiz-nav: matéria + contador da sessão. */
+.quiz-nav-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.quiz-contador-sessao {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--profundo);
+  opacity: 0.7;
+}
+/* Barra de meta diária (Parte 3): rótulo + trilho no meio do quiz-nav. */
 .quiz-contador {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--profundo);
   opacity: 0.85;
+}
+.meta-progresso {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.meta-barra {
+  width: 140px;
+  height: 8px;
+  border-radius: 50px;
+  background: var(--acerto-bg);   /* trilho macio */
+  overflow: hidden;
+}
+.meta-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 50px;
+  background: var(--vd-uniao);    /* verde estrutural */
+  transition: width 0.4s ease;
+}
+/* Streak "🔥 X dias" (Parte 4): âmbar suave; vazia quando não há streak. */
+.streak-dias {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--alerta-tx);
+}
+/* Parabéns ao bater a meta (Parte 3). */
+.meta-parabens {
+  margin-top: 12px;
+}
+.meta-parabens h3 {
+  color: var(--profundo);
+  margin-bottom: 4px;
+}
+.botao-encerrar-meta {
+  margin-left: 8px;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 50px;
+  background: transparent;
+  color: var(--profundo);
+  font-family: inherit;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+.botao-encerrar-meta:hover {
+  border-color: var(--gravata-kinrou);
+  color: var(--gravata-kinrou);
 }
 
 .quiz-split {

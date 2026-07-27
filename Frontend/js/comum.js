@@ -172,27 +172,38 @@ function snapshotFeatures() {
     };
 }
 
-// Mutável: chamado quando uma sessão de ESTUDO começa (atualiza streak/contadores).
+// Chamado quando uma sessão de ESTUDO começa. Atualiza só o bookkeeping da sessão
+// (sessões no dia + timestamp). A STREAK não é mais tocada aqui — ela conta um dia
+// só quando a meta diária é atingida (ver registrarMetaDiaria).
 function registrarInicioSessao() {
     const agora   = new Date();
     const perfil  = lerPerfil();
     const hojeStr = agora.toISOString().slice(0, 10);
 
-    if (perfil.ultimo_dia_estudo === hojeStr) {
-        perfil.sessoes_no_dia = (perfil.sessoes_no_dia || 0) + 1;
-    } else {
-        const ontem = new Date(agora);
-        ontem.setDate(ontem.getDate() - 1);
-        // manteve o hábito se estudou ontem; senão zera o streak
-        perfil.sequencia_dias_estudo = (perfil.ultimo_dia_estudo === ontem.toISOString().slice(0, 10))
-            ? (perfil.sequencia_dias_estudo || 0) + 1 : 1;
-        perfil.sessoes_no_dia = 1;
-    }
-
-    perfil.ultimo_dia_estudo = hojeStr;
+    perfil.sessoes_no_dia = (perfil.ultimo_dia_sessao === hojeStr)
+        ? (perfil.sessoes_no_dia || 0) + 1 : 1;
+    perfil.ultimo_dia_sessao = hojeStr;
     perfil.ultima_sessao_ts  = agora.getTime();
     gravarPerfil(perfil);
     return snapshotFeatures();
+}
+
+// Conta UM dia na streak — só quando a meta diária é atingida (não ao abrir a
+// sessão). Idempotente no dia: chamar de novo hoje não incrementa. Devolve a streak.
+function registrarMetaDiaria() {
+    const agora   = new Date();
+    const perfil  = lerPerfil();
+    const hojeStr = agora.toISOString().slice(0, 10);
+    if (perfil.ultimo_dia_estudo === hojeStr) return perfil.sequencia_dias_estudo || 0;   // já contou hoje
+
+    const ontem = new Date(agora);
+    ontem.setDate(ontem.getDate() - 1);
+    // manteve o hábito se bateu a meta ontem; senão recomeça em 1
+    perfil.sequencia_dias_estudo = (perfil.ultimo_dia_estudo === ontem.toISOString().slice(0, 10))
+        ? (perfil.sequencia_dias_estudo || 0) + 1 : 1;
+    perfil.ultimo_dia_estudo = hojeStr;
+    gravarPerfil(perfil);
+    return perfil.sequencia_dias_estudo;
 }
 
 

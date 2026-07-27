@@ -365,13 +365,16 @@ const LOTE_COOLDOWN_MS  = 120000;   // após uma falha (ex.: cota estourada), 2 
 
 async function obterProximaQuestao(subject, tema) {
     const chave = `${subject}::${tema}`;
-    if (filaChave !== chave) { filaQuestoes = []; filaChave = chave; }   // tema novo → lote antigo fora
+    if (filaChave !== chave) { devolverFila(); filaChave = chave; }   // tema novo → devolve o lote antigo
     if (!filaQuestoes.length) {
         // Em cooldown após falha: serve fallback SEM re-chamar (não spamar endpoint que já falhou).
         if (performance.now() < loteBloqueadoAte) return questaoFallback(subject, tema);
         try {
+            // Um hobbie aleatório por LOTE (não fixo na sessão): sorteia da lista do aluno.
+            const hobbiesAluno = lerHobbies();
+            const hobbie = hobbiesAluno.length ? hobbiesAluno[Math.floor(Math.random() * hobbiesAluno.length)] : null;
             const data = await postJSON('/gerar-questao', {
-                materia: subject, tema, hobbies: lerHobbies(), quantidade: LOTE_QTD, nivel: nivelDificuldade
+                materia: subject, tema, hobbie, user_id: userId, quantidade: LOTE_QTD, nivel: nivelDificuldade
             });
             const lote = Array.isArray(data?.questoes) ? data.questoes : [];
             filaQuestoes = lote.filter(q => q && Array.isArray(q.opts));
@@ -384,6 +387,17 @@ async function obterProximaQuestao(subject, tema) {
         }
     }
     return filaQuestoes.shift();
+}
+
+// Devolve ao pool as questões do lote que NÃO foram usadas (mudou de nível/tema
+// ou encerrou). Limpa a fila na hora; envia com keepalive p/ sobreviver a reload.
+function devolverFila() {
+    const ids = filaQuestoes.map(q => q && q.questao_id).filter(Boolean);
+    filaQuestoes = [];
+    if (ids.length) {
+        postJSON('/questoes/devolver', { user_id: userId, questao_ids: ids }, true)
+            .catch(e => console.warn('[KaIA] /questoes/devolver falhou:', e));
+    }
 }
 
 // Troca qual das três telas de materias.html está visível.
@@ -449,6 +463,7 @@ let errosSeguidos    = 0;
 const NIVEL_MIN = 1, NIVEL_MAX = 5;
 
 function ajustarNivel(acertou) {
+    const antes = nivelDificuldade;
     if (acertou) {
         acertosSeguidos++; errosSeguidos = 0;
         if (acertosSeguidos >= 2 && nivelDificuldade < NIVEL_MAX) { nivelDificuldade++; acertosSeguidos = 0; }
@@ -456,6 +471,7 @@ function ajustarNivel(acertou) {
         errosSeguidos++; acertosSeguidos = 0;
         if (errosSeguidos >= 2 && nivelDificuldade > NIVEL_MIN) { nivelDificuldade--; errosSeguidos = 0; }
     }
+    if (nivelDificuldade !== antes) devolverFila();   // nível mudou → devolve o lote (novo nível na próxima)
     atualizarNivel();
 }
 
@@ -763,6 +779,7 @@ function encerrarSessaoComResumo() {
     pararPomodoro();
     _limparPomodoro();
     encerrarSessao();          // POST /sessions/{id}/end
+    devolverFila();            // devolve o que sobrou na fila
     clearInterval(idleInterval);
     clearTimeout(keystrokeTimer);
 
@@ -847,6 +864,7 @@ function resetSystem() {
     pararPomodoro();
     _limparPomodoro();              // fim deliberado da sessão: zera o ciclo
     encerrarSessao();
+    devolverFila();
     clearInterval(idleInterval);
     clearTimeout(keystrokeTimer);
     location.reload();

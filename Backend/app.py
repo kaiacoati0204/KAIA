@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import re
 import json
+import asyncio
 import pickle
 import uuid
 
@@ -508,73 +509,222 @@ _NIVEIS_DIF = {
     5: "muito difícil — pegadinhas e raciocínio elaborado",
 }
 
+# Formato com a marca usa_hobbie (para o cache saber quais salvar com hobbie).
+_FORMATO_QUESTAO_HOBBIE = (
+    '{"q": "enunciado", "opts": ["a","b","c","d","e"], "ans": 0,\n'
+    '  "explicacao": "por que a correta é a correta (1 a 2 frases)",\n'
+    '  "porque_erradas": ["por que a opção 0 erra", "...", "...", "...", "..."],\n'
+    '  "usa_hobbie": true}'
+)
+
+# Linha do cache -> formato que o frontend consome (inclui questao_id).
+def _row_para_questao(row):
+    return {
+        "questao_id": str(row["questao_id"]),
+        "q": row["enunciado"],
+        "opts": json.loads(row["alternativas"]),
+        "ans": row["resposta_correta"],
+        "explicacao": row["explicacao"],
+        "porque_erradas": json.loads(row["porque_erradas"]),
+    }
+
+# Só os campos que o frontend precisa (tira usa_hobbie e afins).
+def _frontend_q(q):
+    return {
+        "q": q.get("q", ""),
+        "opts": q.get("opts", []),
+        "ans": q.get("ans", 0),
+        "explicacao": q.get("explicacao", ""),
+        "porque_erradas": q.get("porque_erradas", []),
+    }
+
+# Gera `n` questões no Gemini (roda em thread p/ não travar o loop). Com hobbie,
+# instrui ~60% a usá-lo e a marcar "usa_hobbie" (Parte 5).
+async def _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel):
+    dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
+    if hobbie:
+        proporcao = max(1, round(n * 0.6))
+        formato = _FORMATO_QUESTAO_HOBBIE
+        regra_hobbie = (
+            f'- Use o hobbie "{hobbie}" no enunciado de aproximadamente {proporcao} das {n} '
+            f'questões; nas outras, faça enunciados genéricos (sem citar o hobbie).\n'
+            f'- Em CADA questão inclua o booleano "usa_hobbie" indicando se usou o hobbie.\n'
+        )
+    else:
+        formato = _FORMATO_QUESTAO
+        regra_hobbie = ''
+    prompt = f"""
+Crie {n} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
+para o ensino médio.
+Responda APENAS com um ARRAY JSON de {n} objetos, cada um no formato EXATO:
+{formato}
+Regras:
+- "ans" é o índice (0 a 4) da alternativa correta.
+- "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da correta use "".
+- As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
+- Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre a esse nível.
+{regra_hobbie}- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
+"""
+    try:
+        dados_ia = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
+        itens = dados_ia if isinstance(dados_ia, list) else dados_ia.get("questoes", [])
+        return [_normalizar_questao(q) for q in itens if isinstance(q, dict) and q.get("opts")]
+    except Exception as e:
+        print("[KaIA] erro Gemini /gerar-questao:", e)
+        return []
+
+# Busca no cache até `limite` questões (materia+tema+nivel+hobbie) NÃO vistas pelo aluno.
+async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite):
+    if limite <= 0:
+        return []
+    base = """
+        select questao_id, enunciado, alternativas, resposta_correta, explicacao, porque_erradas
+        from questoes_cache c
+        where materia = $1 and tema = $2 and nivel = $3 and {cond}
+          and not exists (select 1 from questoes_vistas v
+                          where v.aluno_id = ${uid}::uuid and v.questao_id = c.questao_id)
+        order by random() limit ${lim}
+    """
+    if hobbie is not None:
+        rows = await conn.fetch(base.format(cond="hobbie = $4", uid=5, lim=6),
+                                materia, tema, nivel, hobbie, user_id, limite)
+    else:
+        rows = await conn.fetch(base.format(cond="hobbie is null", uid=4, lim=5),
+                                materia, tema, nivel, user_id, limite)
+    return [_row_para_questao(r) for r in rows]
+
+# Salva no cache as questões geradas (Parte 4). Erro ao salvar NÃO bloqueia a entrega.
+# usa_hobbie decide salvar com o hobbie ou como genérica (hobbie NULL) — Parte 5.
+async def _salvar_no_cache(conn, materia, tema, nivel, hobbie_sessao, questoes):
+    salvas = []
+    for q in questoes:
+        usou = bool(q.get("usa_hobbie")) if hobbie_sessao else False
+        hob = hobbie_sessao if usou else None
+        item = _frontend_q(q)
+        try:
+            qid = await conn.fetchval(
+                """insert into questoes_cache
+                     (materia, tema, nivel, hobbie, enunciado, alternativas,
+                      resposta_correta, explicacao, porque_erradas)
+                   values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb)
+                   returning questao_id""",
+                materia, tema, nivel, hob, item["q"], json.dumps(item["opts"]),
+                item["ans"], item["explicacao"], json.dumps(item["porque_erradas"]))
+            item["questao_id"] = str(qid)
+        except Exception as e:
+            print("[KaIA] erro ao salvar no cache:", e)   # entrega mesmo assim
+        salvas.append(item)
+    return salvas
+
+# Marca as questões entregues como vistas pelo aluno (ignora as sem questao_id).
+async def _marcar_vistas(conn, user_id, questoes):
+    ids = [q["questao_id"] for q in questoes if q.get("questao_id")]
+    if not ids:
+        return
+    try:
+        await conn.execute(
+            "insert into questoes_vistas (aluno_id, questao_id) "
+            "select $1::uuid, x from unnest($2::uuid[]) as x on conflict do nothing",
+            user_id, ids)
+    except Exception as e:
+        print("[KaIA] erro ao marcar vistas:", e)
+
+# Esgotou as questões da combinação? Libera as vistas há +30 dias (Parte 7).
+async def _resetar_vistas_antigas(conn, user_id, materia, tema, nivel):
+    try:
+        await conn.execute("""
+            delete from questoes_vistas v
+            using questoes_cache c
+            where v.questao_id = c.questao_id and v.aluno_id = $1::uuid
+              and c.materia = $2 and c.tema = $3 and c.nivel = $4
+              and v.visto_em < now() - interval '30 days'
+        """, user_id, materia, tema, nivel)
+    except Exception as e:
+        print("[KaIA] erro ao resetar vistas antigas:", e)
+
+
 @app.post("/gerar-questao", dependencies=[Depends(usuario_autenticado)])
-def gerar_questao(dados: dict = Body(default={})):
+async def gerar_questao(request: Request, dados: dict = Body(default={})):
     materia = dados.get("materia", "")
     nome = MATERIAS.get(materia, materia)
     tema = dados.get("tema", "")
-    hobbies = dados.get("hobbies", [])
-    lista = ", ".join(hobbies) if hobbies else "nenhum"
+    hobbie = dados.get("hobbie") or None                 # singular; None = genérica
+    user_id = (dados.get("user_id") or "").strip() or None
+    # compat com o formato antigo (lista "hobbies"): usa o 1º como hobbie.
+    if hobbie is None and isinstance(dados.get("hobbies"), list) and dados["hobbies"]:
+        hobbie = dados["hobbies"][0]
 
-    # quantidade AUSENTE = modo compatível (1 questão, objeto único, como antes).
-    # PRESENTE = LOTE numa só chamada ao Gemini — economiza cota na sessão contínua.
     qtd_raw = dados.get("quantidade")
     lote = qtd_raw is not None
     try:
         n = max(1, min(int(qtd_raw), 10)) if lote else 1
     except (TypeError, ValueError):
         lote, n = True, 5
-
-    # Nível de dificuldade 1..5 (Parte 6): calibra a complexidade das questões.
     try:
         nivel = max(1, min(int(dados.get("nivel", 3)), 5))
     except (TypeError, ValueError):
         nivel = 3
-    dificuldade = _NIVEIS_DIF[nivel]
 
-    if lote:
-        prompt = f"""
-Crie {n} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
-para o ensino médio. Personalize os enunciados usando, se possível, estes hobbies
-do aluno: {lista}.
-Responda APENAS com um ARRAY JSON de {n} objetos, cada um no formato EXATO:
-{_FORMATO_QUESTAO}
-Regras:
-- "ans" é o índice (0 a 4) da alternativa correta.
-- "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da
-  correta use string vazia "".
-- As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
-- Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre as {n} questões a esse nível.
-- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
-"""
-    else:
-        prompt = f"""
-Crie UMA questão objetiva de múltipla escolha sobre "{tema}" ({nome}) para o
-ensino médio. Personalize o enunciado usando, se possível, estes hobbies do
-aluno: {lista}.
-Responda APENAS com JSON no formato EXATO:
-{_FORMATO_QUESTAO}
-Regras:
-- "ans" é o índice (0 a 4) da alternativa correta.
-- "porque_erradas" tem EXATAMENTE o mesmo tamanho e a mesma ordem de "opts";
-  no índice da alternativa correta use string vazia "".
-- Dificuldade: nível {nivel}/5 ({dificuldade}).
-- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
-"""
+    pool = request.app.state.pool
+
+    # Sem banco ou sem user_id: sem cache — gera tudo no Gemini (comportamento antigo).
+    if pool is None or not user_id:
+        entregues = [_frontend_q(q) for q in await _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel)]
+        if not entregues:
+            return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
+        return {"questoes": entregues} if lote else entregues[0]
+
+    entregues = []
     try:
-        dados_ia = extrair_json(chamar_gemini(prompt))
-        if lote:
-            # aceita array puro OU {"questoes": [...]}
-            itens = dados_ia if isinstance(dados_ia, list) else dados_ia.get("questoes", [])
-            questoes = [_normalizar_questao(q) for q in itens
-                        if isinstance(q, dict) and q.get("opts")]
-            if not questoes:
-                raise ValueError("lote vazio ou malformado")
-            return {"questoes": questoes}
-        return _normalizar_questao(dados_ia)
+        async with pool.acquire() as conn:
+            # 1) cache com o hobbie da vez
+            if hobbie:
+                entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n)
+            # 2) completa com genéricas (hobbie NULL)
+            if len(entregues) < n:
+                entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues))
+            # 3) esgotou? libera as vistas antigas (>30d) e tenta o cache de novo (Parte 7)
+            if len(entregues) < n:
+                await _resetar_vistas_antigas(conn, user_id, materia, tema, nivel)
+                if hobbie:
+                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n - len(entregues))
+                if len(entregues) < n:
+                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues))
+            # 4) ainda falta -> Gemini + salva no cache
+            if n - len(entregues) > 0:
+                novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel)
+                entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
+            # 5) marca as entregues como vistas
+            await _marcar_vistas(conn, user_id, entregues)
     except Exception as e:
-        print("[KaIA] erro /gerar-questao:", e)
+        print("[KaIA] erro no cache /gerar-questao:", e)
+
+    if not entregues:
         return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
+    return {"questoes": entregues} if lote else entregues[0]
+
+
+# Devolve ao pool as questões que o aluno recebeu mas NÃO usou (mudou de nível,
+# trocou de tema ou encerrou) — remove de questoes_vistas (Parte 6). Ignora ids
+# ausentes (questões de fallback/pré-cache).
+@app.post("/questoes/devolver", dependencies=[Depends(usuario_autenticado)])
+async def devolver_questoes(request: Request, dados: dict = Body(default={})):
+    pool = request.app.state.pool
+    if pool is None:
+        return {"devolvidas": 0}
+    user_id = (dados.get("user_id") or "").strip()
+    ids = [x for x in (dados.get("questao_ids") or []) if x]
+    if not user_id or not ids:
+        return {"devolvidas": 0}
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "delete from questoes_vistas where aluno_id = $1::uuid and questao_id = any($2::uuid[])",
+                user_id, ids)
+        return {"devolvidas": len(ids)}
+    except Exception as e:
+        print("[KaIA] erro /questoes/devolver:", e)
+        return {"devolvidas": 0}
 
 
 # ================== AGREGAÇÃO: session_events -> session_features ===========

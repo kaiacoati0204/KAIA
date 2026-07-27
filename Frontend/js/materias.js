@@ -371,7 +371,7 @@ async function obterProximaQuestao(subject, tema) {
         if (performance.now() < loteBloqueadoAte) return questaoFallback(subject, tema);
         try {
             const data = await postJSON('/gerar-questao', {
-                materia: subject, tema, hobbies: lerHobbies(), quantidade: LOTE_QTD
+                materia: subject, tema, hobbies: lerHobbies(), quantidade: LOTE_QTD, nivel: nivelDificuldade
             });
             const lote = Array.isArray(data?.questoes) ? data.questoes : [];
             filaQuestoes = lote.filter(q => q && Array.isArray(q.opts));
@@ -434,6 +434,39 @@ let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (backend
 let metaDiariaContada   = false;// já contou a meta diária na streak nesta sessão?
 const META_QUESTOES = 10;       // meta = 10 (por rodada e por dia)
 
+// Revisão de erros (Parte 7): guarda as questões erradas da sessão + estado da revisão.
+let errosSessao = [];
+let emRevisao   = false;
+let revisaoFila = [];
+let revisaoTotal = 0;
+let revisaoRespondidas = 0;
+
+// Dificuldade adaptativa (Parte 6): começa em 2; +1 a cada 2 acertos seguidos
+// (máx 5), -1 a cada 2 erros seguidos (mín 1). Passa no /gerar-questao.
+let nivelDificuldade = 2;
+let acertosSeguidos  = 0;
+let errosSeguidos    = 0;
+const NIVEL_MIN = 1, NIVEL_MAX = 5;
+
+function ajustarNivel(acertou) {
+    if (acertou) {
+        acertosSeguidos++; errosSeguidos = 0;
+        if (acertosSeguidos >= 2 && nivelDificuldade < NIVEL_MAX) { nivelDificuldade++; acertosSeguidos = 0; }
+    } else {
+        errosSeguidos++; acertosSeguidos = 0;
+        if (errosSeguidos >= 2 && nivelDificuldade > NIVEL_MIN) { nivelDificuldade--; errosSeguidos = 0; }
+    }
+    atualizarNivel();
+}
+
+// Indicador discreto do nível (●●○○○) no quiz-nav.
+function atualizarNivel() {
+    const el = $('nivel-dif');
+    if (!el) return;
+    el.textContent = 'Nível ' + '●'.repeat(nivelDificuldade) + '○'.repeat(NIVEL_MAX - nivelDificuldade);
+    el.title = `Dificuldade ${nivelDificuldade} de ${NIVEL_MAX}`;
+}
+
 // Total do DIA = base do backend + as respondidas nesta sessão.
 const totalHoje = () => respondidasHojeBase + questoesRespondidas;
 
@@ -454,6 +487,11 @@ async function iniciarSessaoEstudo(subject, tema) {
     acertosSessao = 0;
     questoesNaRodada = 0;
     metaDiariaContada = false;
+    errosSessao = [];
+    emRevisao = false;
+    nivelDificuldade = 2;
+    acertosSeguidos = 0;
+    errosSeguidos = 0;
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
     await carregarMetaHoje();                   // baseline do dia (contador diário)
@@ -555,6 +593,7 @@ function atualizarContador() {
     if (el) el.textContent = `Questão ${n} de ${META_QUESTOES}`;
     atualizarBarraRodada();
     atualizarStreak();
+    atualizarNivel();
 }
 
 // Streak "🔥 X dias" — lida do perfil (avança só na meta, via registrarMetaDiaria).
@@ -571,6 +610,16 @@ function checkAnswer(idx, btn) {
     if (!isMissionActive) return;
     const acertou = (idx === currentQuestion.ans);
 
+    // Modo REVISÃO: só mostra a explicação — não conta nada nem chama o backend.
+    if (emRevisao) {
+        isMissionActive = false;
+        clearInterval(idleInterval);
+        revisaoRespondidas++;
+        atualizarBarraRevisao();     // a barra enche ao longo da revisão
+        mostrarExplicacao(idx, acertou);
+        return;
+    }
+
     if (questionShownAt > 0) {
         logEvent('question_answer', {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
@@ -582,7 +631,9 @@ function checkAnswer(idx, btn) {
     }
     questoesRespondidas++;
     if (acertou) acertosSessao++;
+    else errosSessao.push(currentQuestion);   // guarda para a revisão (Parte 7)
     questoesNaRodada++;
+    ajustarNivel(acertou);        // dificuldade adaptativa (Parte 6)
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
     if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {
@@ -643,7 +694,10 @@ function mostrarExplicacao(escolha, acertou) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'botao-proxima';
-    if (questoesNaRodada >= META_QUESTOES) {
+    if (emRevisao) {
+        btn.textContent = revisaoFila.length > 0 ? 'Próxima (revisão) →' : 'Voltar ao resumo →';
+        btn.addEventListener('click', carregarQuestaoRevisao);
+    } else if (questoesNaRodada >= META_QUESTOES) {
         btn.textContent = 'Ver resultado da rodada →';
         btn.addEventListener('click', abrirModalRodada);
     } else {
@@ -686,8 +740,10 @@ function abrirModalRodada() {
     preencherResumo();
     $('resumo-titulo').hidden = true;
     $('resumo-frase').hidden  = true;
+    $('resumo-erros').hidden  = true;
     $('btn-continuar').hidden = false;
     $('btn-encerrar').hidden  = false;
+    $('btn-revisar').hidden   = true;
     $('btn-voltar').hidden    = true;
     $('resumo-overlay').hidden = false;
 }
@@ -715,6 +771,7 @@ function encerrarSessaoComResumo() {
     $('resumo-titulo').hidden = false;
     $('resumo-frase').textContent = FRASES_RESUMO[Math.floor(Math.random() * FRASES_RESUMO.length)];
     $('resumo-frase').hidden  = false;
+    preencherErros();          // lista de erradas + botão "Revisar erros" (Parte 7)
     $('btn-continuar').hidden = true;
     $('btn-encerrar').hidden  = true;
     $('btn-voltar').hidden    = false;
@@ -724,6 +781,64 @@ function encerrarSessaoComResumo() {
 // "Voltar às matérias": recarrega mostrando o menu de matérias.
 function voltarDoResumo() {
     location.reload();
+}
+
+// ==== REVISÃO DE ERROS (Parte 7) ====
+// Popula a lista de questões erradas + o botão "Revisar erros" no resumo final.
+function preencherErros() {
+    const sec = $('resumo-erros'), lista = $('resumo-erros-lista'), btn = $('btn-revisar');
+    if (!sec || !lista || !btn) return;
+    if (!errosSessao.length) { sec.hidden = true; btn.hidden = true; return; }
+    lista.innerHTML = '';
+    errosSessao.forEach(q => {
+        const li = document.createElement('li');
+        li.textContent = `${q.q} — correta: ${q.opts[q.ans]}`;
+        lista.appendChild(li);
+    });
+    sec.hidden = false;
+    btn.textContent = `Revisar erros (${errosSessao.length})`;
+    btn.hidden = false;
+}
+
+// "Revisar erros": mini-sessão só com as erradas, reusando os objetos (sem Gemini).
+function iniciarRevisao() {
+    if (!errosSessao.length) return;
+    emRevisao = true;
+    revisaoFila = errosSessao.slice();
+    revisaoTotal = errosSessao.length;
+    revisaoRespondidas = 0;
+    $('resumo-overlay').hidden = true;
+    mostrarTela('quiz-view');
+    carregarQuestaoRevisao();
+}
+
+// Contador/barra da REVISÃO ("Revisão X de X") — reaproveita a barra do topo, zerada.
+function atualizarBarraRevisao() {
+    const fill = $('meta-fill');
+    if (fill) fill.style.width = revisaoTotal ? `${(revisaoRespondidas / revisaoTotal) * 100}%` : '0%';
+}
+function atualizarContadorRevisao() {
+    const el = $('contador-questoes');
+    if (el) el.textContent = `Revisão ${Math.min(revisaoRespondidas + 1, revisaoTotal)} de ${revisaoTotal}`;
+    atualizarBarraRevisao();
+}
+
+// Próxima questão da revisão; quando acabam, volta ao resumo (encerramento).
+function carregarQuestaoRevisao() {
+    if (!revisaoFila.length) {
+        emRevisao = false;
+        $('resumo-overlay').hidden = false;   // volta ao resumo
+        return;
+    }
+    currentQuestion = revisaoFila.shift();
+    const fb = $('feedback');
+    if (fb) { fb.className = 'feedback-msg'; fb.innerHTML = ''; }
+    const subjectEl = $('current-subject');
+    if (subjectEl) subjectEl.innerText = 'Revisão de erros';
+    atualizarContadorRevisao();
+    $('question-display').innerText = currentQuestion.q;
+    renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
+    isMissionActive = true;
 }
 
 // "ABANDONAR" também encerra a sessão.

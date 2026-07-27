@@ -1766,6 +1766,14 @@ body.textura-papel .conteudo {
 .quiz-nav-info {
   display: flex;
   align-items: center;
+  gap: 0.6rem;
+}
+/* Indicador de dificuldade adaptativa (●●○○○). */
+.nivel-dif {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--profundo);
+  letter-spacing: 1px;
 }
 /* Meta diária na tela de matérias. */
 .meta-diaria-menu {
@@ -1896,6 +1904,28 @@ body.textura-papel .conteudo {
   color: var(--tinta);
   font-style: italic;
   line-height: 1.5;
+}
+/* Lista de questões erradas no resumo final (Parte 7). */
+.resumo-erros {
+  margin-bottom: 20px;
+  max-height: 160px;
+  overflow-y: auto;
+  text-align: left;
+}
+.resumo-erros h3 {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  color: var(--profundo);
+}
+.resumo-erros ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.resumo-erros li {
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: var(--tinta);
+  line-height: 1.4;
 }
 .resumo-acoes {
   display: flex;

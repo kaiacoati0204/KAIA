@@ -499,6 +499,15 @@ _FORMATO_QUESTAO = (
     '  "porque_erradas": ["por que a opção 0 está errada", "...opção 1...", "...", "...", "..."]}'
 )
 
+# Descrição da dificuldade por nível (1..5) para o prompt do Gemini (Parte 6).
+_NIVEIS_DIF = {
+    1: "muito fácil — conceito básico, direto ao ponto",
+    2: "fácil",
+    3: "médio, no padrão do ENEM",
+    4: "difícil — exige interpretação e mais de um passo",
+    5: "muito difícil — pegadinhas e raciocínio elaborado",
+}
+
 @app.post("/gerar-questao", dependencies=[Depends(usuario_autenticado)])
 def gerar_questao(dados: dict = Body(default={})):
     materia = dados.get("materia", "")
@@ -516,6 +525,13 @@ def gerar_questao(dados: dict = Body(default={})):
     except (TypeError, ValueError):
         lote, n = True, 5
 
+    # Nível de dificuldade 1..5 (Parte 6): calibra a complexidade das questões.
+    try:
+        nivel = max(1, min(int(dados.get("nivel", 3)), 5))
+    except (TypeError, ValueError):
+        nivel = 3
+    dificuldade = _NIVEIS_DIF[nivel]
+
     if lote:
         prompt = f"""
 Crie {n} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
@@ -528,6 +544,7 @@ Regras:
 - "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da
   correta use string vazia "".
 - As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
+- Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre as {n} questões a esse nível.
 - Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 """
     else:
@@ -541,6 +558,7 @@ Regras:
 - "ans" é o índice (0 a 4) da alternativa correta.
 - "porque_erradas" tem EXATAMENTE o mesmo tamanho e a mesma ordem de "opts";
   no índice da alternativa correta use string vazia "".
+- Dificuldade: nível {nivel}/5 ({dificuldade}).
 - Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 """
     try:

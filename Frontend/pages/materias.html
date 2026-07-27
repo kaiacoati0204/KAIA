@@ -106,6 +106,7 @@
             <div class="quiz-nav">
                 <div class="quiz-nav-info">
                     <span id="current-subject">MISSÃO</span>
+                    <span id="nivel-dif" class="nivel-dif"></span>
                 </div>
                 <div id="meta-progresso" class="meta-progresso">
                     <div class="meta-barra"><div id="meta-fill" class="meta-fill"></div></div>
@@ -164,9 +165,14 @@
                 <div class="resumo-stat"><span id="resumo-xp">0 XP</span><small>ganhos</small></div>
             </div>
             <p id="resumo-frase" class="resumo-frase" hidden>…</p>
+            <div id="resumo-erros" class="resumo-erros" hidden>
+                <h3>Questões que você errou</h3>
+                <ul id="resumo-erros-lista"></ul>
+            </div>
             <div class="resumo-acoes">
                 <button type="button" class="botao-proxima" id="btn-continuar" onclick="continuarRodada()">Continuar estudando</button>
                 <button type="button" class="botao-encerrar-modal" id="btn-encerrar" onclick="encerrarSessaoComResumo()">Encerrar sessão</button>
+                <button type="button" class="botao-encerrar-modal" id="btn-revisar" onclick="iniciarRevisao()" hidden>Revisar erros</button>
                 <button type="button" class="botao-proxima" id="btn-voltar" onclick="voltarDoResumo()" hidden>Voltar às matérias</button>
             </div>
         </div>

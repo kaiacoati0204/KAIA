@@ -38,6 +38,7 @@
             <header class="content-header">
                 <h2>Selecione uma matéria para estudar</h2>
                 <p>Escolha um domínio para iniciar o ciclo de aprendizado ativo.</p>
+                <p id="meta-diaria-menu" class="meta-diaria-menu"></p>
             </header>
 
             <div class="mission-grid">
@@ -105,7 +106,6 @@
             <div class="quiz-nav">
                 <div class="quiz-nav-info">
                     <span id="current-subject">MISSÃO</span>
-                    <span id="contador-sessao" class="quiz-contador-sessao"></span>
                 </div>
                 <div id="meta-progresso" class="meta-progresso">
                     <div class="meta-barra"><div id="meta-fill" class="meta-fill"></div></div>
@@ -152,6 +152,25 @@
         <div id="respostas"></div>
 
     </main>
+
+    <!-- Modal de rodada / resumo: parabéns ao bater 10 (Continuar/Encerrar) e,
+         no Encerrar, o resumo completo com a frase. -->
+    <div id="resumo-overlay" class="resumo-overlay" hidden>
+        <div class="resumo-card">
+            <h2 id="resumo-titulo">🎉 Meta de 10 batida!</h2>
+            <div class="resumo-stats">
+                <div class="resumo-stat resumo-stat-largo"><span id="resumo-acerto">0 de 0</span><small>acertos</small></div>
+                <div class="resumo-stat"><span id="resumo-streak">🔥 0</span><small>dias seguidos</small></div>
+                <div class="resumo-stat"><span id="resumo-xp">0 XP</span><small>ganhos</small></div>
+            </div>
+            <p id="resumo-frase" class="resumo-frase" hidden>…</p>
+            <div class="resumo-acoes">
+                <button type="button" class="botao-proxima" id="btn-continuar" onclick="continuarRodada()">Continuar estudando</button>
+                <button type="button" class="botao-encerrar-modal" id="btn-encerrar" onclick="encerrarSessaoComResumo()">Encerrar sessão</button>
+                <button type="button" class="botao-proxima" id="btn-voltar" onclick="voltarDoResumo()" hidden>Voltar às matérias</button>
+            </div>
+        </div>
+    </div>
 
     <script src="../js/comum.js"></script>
     <script src="../js/materias.js"></script>

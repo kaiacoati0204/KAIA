@@ -82,11 +82,23 @@ const INTERVENCOES_MSG = {
     comparacao_social:     { emoji: '📊', titulo: 'Bora acompanhar',    texto: 'Outros alunos como você já avançaram hoje. Sua vez!' },
 };
 
+// Pilha de notificações no canto inferior direito (card de intervenção + avisos):
+// novas entram embaixo e empurram as antigas pra cima (não se sobrepõem).
+function _pilhaNotif() {
+    let c = $('kaia-notificacoes');
+    if (!c) {
+        c = document.createElement('div');
+        c.id = 'kaia-notificacoes';
+        document.body.appendChild(c);
+    }
+    return c;
+}
+
 function _garantirCardIntervencao() {
     if ($('kaia-intervencao')) return;
     const css = document.createElement('style');
     css.textContent = `
-      #kaia-intervencao{position:fixed;right:20px;bottom:20px;max-width:320px;z-index:9999;
+      #kaia-intervencao{max-width:320px;
         background:#1f2937;color:#f9fafb;border-radius:14px;padding:16px 18px;
         box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:inherit;display:none;animation:kaiaIn .25s ease}
       #kaia-intervencao h4{margin:0 0 6px;font-size:15px}
@@ -106,7 +118,7 @@ function _garantirCardIntervencao() {
         <button class="k2" data-r="0.5">Mais ou menos</button>
         <button class="k3" data-r="0.0">Não 👎</button>
       </div>`;
-    document.body.appendChild(card);
+    _pilhaNotif().appendChild(card);
     $$('#kaia-intervencao button').forEach(b =>
         b.addEventListener('click', () => enviarFeedbackIntervencao(intervencaoAtual, parseFloat(b.dataset.r))));
 }
@@ -414,16 +426,18 @@ async function abrirMateria(subject) {
     renderBotoes(temasBox, temas, (tema) => startMission(subject, tema));
 }
 
-// ==== SESSÃO CONTÍNUA + META DIÁRIA (Partes 1 e 3) ====
-let questoesRespondidas = 0;    // respondidas NESTA sessão
-let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (vem do backend)
-let metaCelebrada       = false;
-const META_QUESTOES = 10;       // meta diária
+// ==== SESSÃO CONTÍNUA + META POR RODADA + META DIÁRIA ====
+let questoesRespondidas = 0;    // respondidas NESTA sessão (para o resumo)
+let acertosSessao       = 0;    // acertos NESTA sessão (resumo/XP)
+let questoesNaRodada    = 0;    // respondidas na RODADA atual (0..META); zera a cada rodada
+let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (backend)
+let metaDiariaContada   = false;// já contou a meta diária na streak nesta sessão?
+const META_QUESTOES = 10;       // meta = 10 (por rodada e por dia)
 
 // Total do DIA = base do backend + as respondidas nesta sessão.
 const totalHoje = () => respondidasHojeBase + questoesRespondidas;
 
-// Baseline da barra de meta: quantas o aluno já respondeu hoje (antes desta sessão).
+// Baseline diário: quantas o aluno já respondeu hoje (antes desta sessão).
 async function carregarMetaHoje() {
     respondidasHojeBase = 0;
     try {
@@ -437,10 +451,12 @@ async function carregarMetaHoje() {
 async function iniciarSessaoEstudo(subject, tema) {
     sessaoDeEstudoAberta = true;
     questoesRespondidas = 0;
-    metaCelebrada = false;
+    acertosSessao = 0;
+    questoesNaRodada = 0;
+    metaDiariaContada = false;
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
-    await carregarMetaHoje();                   // baseline do dia para a barra de meta
+    await carregarMetaHoje();                   // baseline do dia (contador diário)
     const features = registrarInicioSessao();
     logEvent('session_start', { materia: subject, tema, features });
     enviarPerfil({ tipo: 'session_start', materia: subject, tema });
@@ -497,20 +513,47 @@ async function startMission(subject, tema) {
     await carregarQuestao(subject, tema);
 }
 
-// Barra da META DIÁRIA: "X de 10 questões hoje" + preenche a barra.
-function atualizarBarraMeta() {
-    const total = totalHoje();
-    const el = $('contador-questoes');
-    if (el) el.textContent = `${Math.min(total, META_QUESTOES)} de ${META_QUESTOES} questões hoje`;
+// Só a barra da rodada (preenche conforme as respostas). Chamada ao responder.
+function atualizarBarraRodada() {
     const fill = $('meta-fill');
-    if (fill) fill.style.width = `${Math.min(total / META_QUESTOES, 1) * 100}%`;
+    if (fill) fill.style.width = `${Math.min(questoesNaRodada / META_QUESTOES, 1) * 100}%`;
 }
 
-// Contador da SESSÃO ("Questão X") + a barra diária + a streak. Chamado ao carregar cada questão.
+// Meta diária na TELA DE MATÉRIAS: "Faltam X questões para a meta de hoje".
+async function mostrarMetaDiariaMenu() {
+    const el = $('meta-diaria-menu');
+    if (!el) return;
+    let hoje = 0;
+    try {
+        const r = await apiFetch(`/questoes/hoje?user_id=${encodeURIComponent(userId)}`);
+        if (r.ok) { const d = await r.json(); hoje = d.respondidas_hoje || 0; }
+    } catch (e) { console.warn('[KaIA] /questoes/hoje indisponível:', e); }
+    const faltam = Math.max(META_QUESTOES - hoje, 0);
+    el.textContent = faltam > 0
+        ? `Faltam ${faltam} ${faltam === 1 ? 'questão' : 'questões'} para a meta de hoje.`
+        : '✓ Meta de hoje concluída — mandou bem!';
+}
+
+// Aviso gentil (na pilha do canto) quando a meta diária é alcançada.
+function notificarMetaDiaria() {
+    const el = document.createElement('div');
+    el.className = 'meta-toast';
+    el.setAttribute('role', 'status');
+    el.textContent = '🎯 Meta de hoje alcançada — 10 questões!';
+    _pilhaNotif().appendChild(el);
+    requestAnimationFrame(() => el.classList.add('visivel'));
+    setTimeout(() => {
+        el.classList.remove('visivel');
+        setTimeout(() => el.remove(), 400);   // remove da pilha após o fade
+    }, 5000);
+}
+
+// Contador da RODADA ("Questão X de 10") + barra + streak. Chamado ao carregar a questão.
 function atualizarContador() {
-    const sess = $('contador-sessao');
-    if (sess) sess.textContent = `Questão ${questoesRespondidas + 1}`;
-    atualizarBarraMeta();
+    const n = Math.min(questoesNaRodada + 1, META_QUESTOES);
+    const el = $('contador-questoes');
+    if (el) el.textContent = `Questão ${n} de ${META_QUESTOES}`;
+    atualizarBarraRodada();
     atualizarStreak();
 }
 
@@ -538,7 +581,16 @@ function checkAnswer(idx, btn) {
         });
     }
     questoesRespondidas++;
-    atualizarBarraMeta();      // só a barra diária sobe já na resposta (contador da sessão não muda aqui)
+    if (acertou) acertosSessao++;
+    questoesNaRodada++;
+    atualizarBarraRodada();       // a barra da rodada sobe já na resposta
+    // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
+    if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {
+        registrarMetaDiaria();
+        atualizarStreak();
+        notificarMetaDiaria();
+        metaDiariaContada = true;
+    }
 
     // Pausa os sensores enquanto o aluno lê a explicação — mas NÃO encerra a sessão.
     isMissionActive = false;
@@ -587,43 +639,91 @@ function mostrarExplicacao(escolha, acertou) {
 
     fb.appendChild(bloco);
 
-    // Ao BATER a meta do dia (uma vez por sessão): parabéns + escolher continuar/encerrar.
-    if (totalHoje() >= META_QUESTOES && !metaCelebrada) {
-        metaCelebrada = true;
-        const streak = registrarMetaDiaria();   // conta o dia na streak (idempotente) e atualiza o perfil
-        atualizarStreak();
-        const parabens = document.createElement('div');
-        parabens.className = 'meta-parabens';
-        const ph = document.createElement('h3');
-        ph.textContent = '🎉 Meta do dia batida!';
-        const pp = document.createElement('p');
-        const seq = streak > 0 ? ` 🔥 ${streak} ${streak === 1 ? 'dia' : 'dias'} seguidos!` : '';
-        pp.textContent = `Você respondeu ${totalHoje()} questões hoje.${seq} Continue no seu ritmo — ou pare quando quiser.`;
-        parabens.appendChild(ph);
-        parabens.appendChild(pp);
-        fb.appendChild(parabens);
-
-        const continuar = document.createElement('button');
-        continuar.type = 'button';
-        continuar.className = 'botao-proxima';
-        continuar.textContent = 'Continuar estudando';
-        continuar.addEventListener('click', proximaQuestao);
-        fb.appendChild(continuar);
+    // Rodada completa (10 respondidas) → o botão abre o modal de parabéns; senão, próxima.
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'botao-proxima';
+    if (questoesNaRodada >= META_QUESTOES) {
+        btn.textContent = 'Ver resultado da rodada →';
+        btn.addEventListener('click', abrirModalRodada);
     } else {
-        const proxima = document.createElement('button');
-        proxima.type = 'button';
-        proxima.className = 'botao-proxima';
-        proxima.textContent = 'Próxima questão →';
-        proxima.addEventListener('click', proximaQuestao);
-        fb.appendChild(proxima);
+        btn.textContent = 'Próxima questão →';
+        btn.addEventListener('click', proximaQuestao);
     }
+    fb.appendChild(btn);
     fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// "Próxima questão" / "Continuar estudando": carrega a próxima da fila SEM criar
-// sessão. Bater a meta não encerra sozinho — a escolha é do aluno (ver mostrarExplicacao).
+// "Próxima questão": carrega a próxima da fila SEM criar sessão.
 function proximaQuestao() {
     carregarQuestao(currentSubject, currentTema);
+}
+
+// ==== MODAL DE RODADA / RESUMO (meta = limite sugerido) ====
+const FRASES_RESUMO = [
+    'Cada questão te deixa mais perto do seu objetivo. Continue no seu ritmo!',
+    'O que importa é a constância — você apareceu e se dedicou hoje.',
+    'Errar faz parte de aprender. Seu esforço é o que conta.',
+    'Mais um passo dado. Pode se orgulhar de ter estudado hoje!',
+    'Foco e paciência: você está construindo seu progresso aos poucos.',
+    'Boa sessão! Descansar também faz parte de aprender bem.',
+];
+
+// Preenche os stats do resumo (acerto com o total embutido, streak, XP).
+function preencherResumo() {
+    const total   = questoesRespondidas;
+    const acertos = acertosSessao;
+    const xp      = acertos * 10 + (total - acertos) * 5;   // 10 por acerto, 5 por erro (só exibe)
+    const streak  = lerPerfil().sequencia_dias_estudo || 0;
+    const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
+    set('resumo-acerto', `${acertos} de ${total}`);
+    set('resumo-streak', `🔥 ${streak}`);
+    set('resumo-xp',     `${xp} XP`);
+}
+
+// Ao completar a rodada de 10: modal SEM título — só o resumo rápido + escolha.
+function abrirModalRodada() {
+    preencherResumo();
+    $('resumo-titulo').hidden = true;
+    $('resumo-frase').hidden  = true;
+    $('btn-continuar').hidden = false;
+    $('btn-encerrar').hidden  = false;
+    $('btn-voltar').hidden    = true;
+    $('resumo-overlay').hidden = false;
+}
+
+// "Continuar estudando": nova rodada — zera contador/barra, mantém sessão e sensores.
+function continuarRodada() {
+    $('resumo-overlay').hidden = true;
+    questoesNaRodada = 0;
+    atualizarContador();       // "Questão 1 de 10", barra zerada
+    carregarQuestao(currentSubject, currentTema);
+}
+
+// "Encerrar sessão": encerra de fato e vira a tela de resumo COMPLETO (com frase).
+function encerrarSessaoComResumo() {
+    sessaoDeEstudoAberta = false;
+    isMissionActive = false;
+    pararPomodoro();
+    _limparPomodoro();
+    encerrarSessao();          // POST /sessions/{id}/end
+    clearInterval(idleInterval);
+    clearTimeout(keystrokeTimer);
+
+    preencherResumo();
+    $('resumo-titulo').textContent = 'Sessão concluída!';
+    $('resumo-titulo').hidden = false;
+    $('resumo-frase').textContent = FRASES_RESUMO[Math.floor(Math.random() * FRASES_RESUMO.length)];
+    $('resumo-frase').hidden  = false;
+    $('btn-continuar').hidden = true;
+    $('btn-encerrar').hidden  = true;
+    $('btn-voltar').hidden    = false;
+    $('resumo-overlay').hidden = false;
+}
+
+// "Voltar às matérias": recarrega mostrando o menu de matérias.
+function voltarDoResumo() {
+    location.reload();
 }
 
 // "ABANDONAR" também encerra a sessão.
@@ -689,8 +789,8 @@ function mostrarAvisoSaida() {
 // o tempo corre mesmo com a aba oculta (anti-burla). O botão "Estou concentrado"
 // pula a pausa (registrado para a fase adaptativa). Durante a pausa, os sensores
 // de distração ficam suspensos (descanso não é distração).
-const POMODORO_FOCO_MS  = 15000;   // FOCO — teste; produção ~25 min
-const POMODORO_PAUSA_MS = 15000;   // PAUSA — teste; produção ~5 min
+const POMODORO_FOCO_MS  = 25 * 60 * 1000;   // FOCO 25 min
+const POMODORO_PAUSA_MS = 5 * 60 * 1000;    // PAUSA 5 min
 const POMODORO_KEY      = 'kaia_pomodoro';
 
 let pausaAtiva      = false;
@@ -1208,5 +1308,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // montarRail() e aplicarTexturaPapel() agora rodam no init do comum.js.
     registrarSensores();
     retomarPomodoroSePendente();   // pausa em andamento reaparece ao recarregar/reabrir
+    mostrarMetaDiariaMenu();       // "faltam X para a meta de hoje" na tela de matérias
     console.log('[KaIA] Página pronta. Session ID:', sessionId);
 });

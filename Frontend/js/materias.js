@@ -598,7 +598,7 @@ function mostrarExplicacao(escolha, acertou) {
         ph.textContent = '🎉 Meta do dia batida!';
         const pp = document.createElement('p');
         const seq = streak > 0 ? ` 🔥 ${streak} ${streak === 1 ? 'dia' : 'dias'} seguidos!` : '';
-        pp.textContent = `Você respondeu ${totalHoje()} questões hoje.${seq} Quer continuar ou encerrar?`;
+        pp.textContent = `Você respondeu ${totalHoje()} questões hoje.${seq} Continue no seu ritmo — ou pare quando quiser.`;
         parabens.appendChild(ph);
         parabens.appendChild(pp);
         fb.appendChild(parabens);
@@ -609,13 +609,6 @@ function mostrarExplicacao(escolha, acertou) {
         continuar.textContent = 'Continuar estudando';
         continuar.addEventListener('click', proximaQuestao);
         fb.appendChild(continuar);
-
-        const encerrar = document.createElement('button');
-        encerrar.type = 'button';
-        encerrar.className = 'botao-encerrar-meta';
-        encerrar.textContent = 'Encerrar';
-        encerrar.addEventListener('click', encerrarSessaoEstudo);
-        fb.appendChild(encerrar);
     } else {
         const proxima = document.createElement('button');
         proxima.type = 'button';
@@ -631,20 +624,6 @@ function mostrarExplicacao(escolha, acertou) {
 // sessão. Bater a meta não encerra sozinho — a escolha é do aluno (ver mostrarExplicacao).
 function proximaQuestao() {
     carregarQuestao(currentSubject, currentTema);
-}
-
-// Encerramento "limpo" da sessão contínua ao atingir a meta: volta ao menu de
-// matérias. A Parte 5 porá a tela de resumo aqui antes de voltar.
-function encerrarSessaoEstudo() {
-    if (!sessaoDeEstudoAberta) return;
-    sessaoDeEstudoAberta = false;
-    isMissionActive = false;
-    pararPomodoro();
-    _limparPomodoro();
-    encerrarSessao();
-    clearInterval(idleInterval);
-    clearTimeout(keystrokeTimer);
-    location.reload();   // materias.html recarrega mostrando o menu de matérias
 }
 
 // "ABANDONAR" também encerra a sessão.

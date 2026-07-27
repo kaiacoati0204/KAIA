@@ -1762,6 +1762,14 @@ body.textura-papel .conteudo {
   color: var(--profundo);
 }
 
+/* Contador "Questão X de N" (Parte 1): rótulo discreto no meio do quiz-nav. */
+.quiz-contador {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--profundo);
+  opacity: 0.85;
+}
+
 .quiz-split {
   display: flex;
   gap: 1.25rem;

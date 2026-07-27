@@ -414,11 +414,26 @@ async function abrirMateria(subject) {
     renderBotoes(temasBox, temas, (tema) => startMission(subject, tema));
 }
 
-// 2) A IA gera a questão e a missão começa.
-async function startMission(subject, tema) {
+// ==== SESSÃO CONTÍNUA (Parte 1) ====
+let questoesRespondidas = 0;    // respondidas NA sessão atual (contador "Questão X de N")
+const META_QUESTOES = 10;       // meta da sessão
+
+// Abre a sessão de estudo UMA vez — não por questão. Cria o session_id, atualiza
+// streak/contadores e liga o pomodoro; a sequência inteira usa ESTA sessão.
+async function iniciarSessaoEstudo(subject, tema) {
+    sessaoDeEstudoAberta = true;
+    questoesRespondidas = 0;
+    iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
+    await criarSessao();                        // 1 session_id para toda a série
+    const features = registrarInicioSessao();
+    logEvent('session_start', { materia: subject, tema, features });
+    enviarPerfil({ tipo: 'session_start', materia: subject, tema });
+}
+
+// Carrega e renderiza UMA questão da fila. NÃO cria sessão (a sessão é contínua).
+async function carregarQuestao(subject, tema) {
     currentSubject = subject;
     currentTema = tema;
-    mostrarTela('quiz-view');
     const fb = $('feedback');
     if (fb) { fb.className = 'feedback-msg'; fb.innerHTML = ''; }
     $('question-display').innerText = 'KaIA criando sua questão...';
@@ -426,10 +441,8 @@ async function startMission(subject, tema) {
 
     currentQuestion = await obterProximaQuestao(subject, tema);   // vem da fila (lote); fallback interno
 
-    // zera os sensores para esta missão
+    // zera os sensores para esta questão
     isMissionActive = true;
-    sessaoDeEstudoAberta = true;   // segue ativo na explicação, até ABANDONAR/próxima/Sair
-    iniciarPomodoro();             // liga (ou retoma) o ciclo foco/pausa da sessão
     idleTime = 0;
     mudancasAba = 0;
     focusLostAt = null;
@@ -438,14 +451,9 @@ async function startMission(subject, tema) {
     lastScrollTime = performance.now();
     clearTimeout(keystrokeTimer);
 
-    // 1 sessão por missão: gera um session_id novo e atualiza streak/contadores
-    await criarSessao();
-    const features = registrarInicioSessao();
-    logEvent('session_start', { materia: subject, tema, features });
-    enviarPerfil({ tipo: 'session_start', materia: subject, tema });
-
     const subjectEl = $('current-subject');
     if (subjectEl) subjectEl.innerText = `${subject} · ${tema}`;
+    atualizarContador();
 
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
     $('question-display').innerText = currentQuestion.q;
@@ -455,13 +463,32 @@ async function startMission(subject, tema) {
     iniciarIdleMonitor();
     iniciarPollIntervencao();
 
-    // Se o caderno está aberto, troca o canvas para o tema desta missão.
+    // Se o caderno está aberto, troca o canvas para o tema desta questão.
     if (typeof cadAberto === 'function' && cadAberto() && cadTema !== tema) {
         carregarCaderno(tema);
     }
 }
 
-// 3) Resposta: registra o tempo, dá o feedback visual e encerra a sessão.
+// Entrada ao escolher um tema: abre a sessão (se ainda não aberta) e carrega a 1ª
+// questão. Trocar de matéria/tema no meio NÃO encerra — só muda as próximas questões.
+async function startMission(subject, tema) {
+    currentSubject = subject;
+    currentTema = tema;
+    mostrarTela('quiz-view');
+    $('question-display').innerText = 'KaIA criando sua questão...';
+    $('options-display').innerHTML  = '';
+    if (!sessaoDeEstudoAberta) await iniciarSessaoEstudo(subject, tema);
+    await carregarQuestao(subject, tema);
+}
+
+// Contador "Questão X de N" no topo do quiz.
+function atualizarContador() {
+    const el = $('contador-questoes');
+    if (el) el.textContent = `Questão ${Math.min(questoesRespondidas + 1, META_QUESTOES)} de ${META_QUESTOES}`;
+}
+
+// 3) Resposta: registra o tempo e mostra o feedback. A SESSÃO CONTINUA (Parte 1) —
+// só encerra na meta ou no "Encerrar sessão".
 function checkAnswer(idx, btn) {
     if (!isMissionActive) return;
     const acertou = (idx === currentQuestion.ans);
@@ -474,12 +501,12 @@ function checkAnswer(idx, btn) {
             tipo_questao: 'objetiva'
         });
     }
+    questoesRespondidas++;
 
-    // A missão termina, mas a TELA NÃO SAI: o aluno lê a explicação no ritmo dele.
+    // Pausa os sensores enquanto o aluno lê a explicação — mas NÃO encerra a sessão.
     isMissionActive = false;
     clearInterval(idleInterval);
     setEstado('RESPONDIDA');   // também baixa o overlay de inatividade, se estava visível
-    encerrarSessao();
 
     mostrarExplicacao(idx, acertou);
 }
@@ -524,7 +551,7 @@ function mostrarExplicacao(escolha, acertou) {
     const proxima = document.createElement('button');
     proxima.type = 'button';
     proxima.className = 'botao-proxima';
-    proxima.textContent = 'Próxima questão →';
+    proxima.textContent = (questoesRespondidas >= META_QUESTOES) ? 'Finalizar sessão →' : 'Próxima questão →';
     proxima.addEventListener('click', proximaQuestao);
 
     fb.appendChild(bloco);
@@ -532,9 +559,25 @@ function mostrarExplicacao(escolha, acertou) {
     fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// "Próxima questão": gera outra no MESMO tema (mantém o fluxo de estudo em série).
+// "Próxima questão": carrega a próxima da fila SEM criar sessão. Ao bater a meta,
+// encerra a sessão (a tela de resumo virá na Parte 5).
 function proximaQuestao() {
-    startMission(currentSubject, currentTema);
+    if (questoesRespondidas >= META_QUESTOES) { encerrarSessaoEstudo(); return; }
+    carregarQuestao(currentSubject, currentTema);
+}
+
+// Encerramento "limpo" da sessão contínua ao atingir a meta: volta ao menu de
+// matérias. A Parte 5 porá a tela de resumo aqui antes de voltar.
+function encerrarSessaoEstudo() {
+    if (!sessaoDeEstudoAberta) return;
+    sessaoDeEstudoAberta = false;
+    isMissionActive = false;
+    pararPomodoro();
+    _limparPomodoro();
+    encerrarSessao();
+    clearInterval(idleInterval);
+    clearTimeout(keystrokeTimer);
+    location.reload();   // materias.html recarrega mostrando o menu de matérias
 }
 
 // "ABANDONAR" também encerra a sessão.
@@ -548,9 +591,10 @@ function resetSystem() {
     location.reload();
 }
 
-// Fechar/recarregar a aba no meio da missão também encerra a sessão.
+// Fechar/recarregar a aba com a sessão contínua aberta também a encerra
+// (mesmo durante a explicação, quando isMissionActive já é false).
 window.addEventListener('beforeunload', () => {
-    if (isMissionActive) encerrarSessao();
+    if (sessaoDeEstudoAberta) encerrarSessao();
 });
 
 // ============================================================

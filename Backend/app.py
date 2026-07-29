@@ -567,30 +567,46 @@ Regras:
 """
     try:
         dados_ia = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
-        itens = dados_ia if isinstance(dados_ia, list) else dados_ia.get("questoes", [])
+        if isinstance(dados_ia, list):
+            itens = dados_ia
+        elif isinstance(dados_ia, dict) and "questoes" in dados_ia:
+            itens = dados_ia["questoes"]
+        elif isinstance(dados_ia, dict) and dados_ia.get("opts"):
+            itens = [dados_ia]                      # resposta de questão única
+        else:
+            itens = []
         return [_normalizar_questao(q) for q in itens if isinstance(q, dict) and q.get("opts")]
     except Exception as e:
         print("[KaIA] erro Gemini /gerar-questao:", e)
         return []
 
-# Busca no cache até `limite` questões (materia+tema+nivel+hobbie) NÃO vistas pelo aluno.
-async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite):
+# Busca no cache até `limite` questões (materia+tema+nivel+hobbie) NÃO vistas pelo
+# aluno. `excluir`: ids já coletados nesta mesma chamada (evita duplicar no lote).
+async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, excluir=None):
     if limite <= 0:
         return []
-    base = """
-        select questao_id, enunciado, alternativas, resposta_correta, explicacao, porque_erradas
+    params = [materia, tema, nivel]
+    cond_hobbie = "c.hobbie is null"
+    if hobbie is not None:
+        params.append(hobbie)
+        cond_hobbie = f"c.hobbie = ${len(params)}"
+    params.append(user_id)
+    uid = len(params)
+    excl_sql = ""
+    if excluir:
+        params.append(list(excluir))
+        excl_sql = f"and c.questao_id <> all(${len(params)}::uuid[])"
+    params.append(limite)
+    lim = len(params)
+    rows = await conn.fetch(f"""
+        select c.questao_id, c.enunciado, c.alternativas, c.resposta_correta, c.explicacao, c.porque_erradas
         from questoes_cache c
-        where materia = $1 and tema = $2 and nivel = $3 and {cond}
+        where c.materia = $1 and c.tema = $2 and c.nivel = $3 and {cond_hobbie}
           and not exists (select 1 from questoes_vistas v
                           where v.aluno_id = ${uid}::uuid and v.questao_id = c.questao_id)
+          {excl_sql}
         order by random() limit ${lim}
-    """
-    if hobbie is not None:
-        rows = await conn.fetch(base.format(cond="hobbie = $4", uid=5, lim=6),
-                                materia, tema, nivel, hobbie, user_id, limite)
-    else:
-        rows = await conn.fetch(base.format(cond="hobbie is null", uid=4, lim=5),
-                                materia, tema, nivel, user_id, limite)
+    """, *params)
     return [_row_para_questao(r) for r in rows]
 
 # Salva no cache as questões geradas (Parte 4). Erro ao salvar NÃO bloqueia a entrega.
@@ -665,7 +681,7 @@ async def gerar_questao(request: Request, dados: dict = Body(default={})):
     except (TypeError, ValueError):
         nivel = 3
 
-    pool = request.app.state.pool
+    pool = getattr(request.app.state, "pool", None)
 
     # Sem banco ou sem user_id: sem cache — gera tudo no Gemini (comportamento antigo).
     if pool is None or not user_id:
@@ -683,13 +699,16 @@ async def gerar_questao(request: Request, dados: dict = Body(default={})):
             # 2) completa com genéricas (hobbie NULL)
             if len(entregues) < n:
                 entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues))
-            # 3) esgotou? libera as vistas antigas (>30d) e tenta o cache de novo (Parte 7)
+            # 3) esgotou? libera as vistas antigas (>30d) e tenta o cache de novo (Parte 7).
+            #    `excluir` os ids já coletados evita repetir a mesma questão no lote.
             if len(entregues) < n:
                 await _resetar_vistas_antigas(conn, user_id, materia, tema, nivel)
                 if hobbie:
-                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n - len(entregues))
+                    ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
+                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n - len(entregues), ja)
                 if len(entregues) < n:
-                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues))
+                    ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
+                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues), ja)
             # 4) ainda falta -> Gemini + salva no cache
             if n - len(entregues) > 0:
                 novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel)

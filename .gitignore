@@ -35,3 +35,6 @@ ml/artifacts/thompson_params.json
 .coverage
 .pytest_cache/
 htmlcov/
+
+# Documentação pessoal (explicação da arquitetura) — não versionar, é só da dona do projeto
+docs/

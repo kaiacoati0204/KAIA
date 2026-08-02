@@ -448,6 +448,11 @@ let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (backend
 let metaDiariaContada   = false;// já contou a meta diária na streak nesta sessão?
 const META_QUESTOES = 10;       // meta = 10 (por rodada e por dia)
 
+// Probe de self-report (rótulo real de atenção p/ o ML): 1 por rodada, numa questão
+// sorteada da 5ª à 9ª — baseline de RT já aquecido e antes do fim da rodada.
+let probeAlvoRodada = 0;
+function sortearAlvoProbe() { probeAlvoRodada = 5 + Math.floor(Math.random() * 5); }  // 5..9
+
 // Revisão de erros (Parte 7): guarda as questões erradas da sessão + estado da revisão.
 let errosSessao = [];
 let emRevisao   = false;
@@ -503,6 +508,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     acertosSessao = 0;
     questoesNaRodada = 0;
     metaDiariaContada = false;
+    sortearAlvoProbe();
     errosSessao = [];
     emRevisao = false;
     nivelDificuldade = 2;
@@ -651,6 +657,7 @@ function checkAnswer(idx, btn) {
     questoesNaRodada++;
     ajustarNivel(acertou);        // dificuldade adaptativa (Parte 6)
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
+    if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // probe de self-report (1/rodada, 5ª–9ª)
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
     if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {
         registrarMetaDiaria();
@@ -726,7 +733,66 @@ function mostrarExplicacao(escolha, acertou) {
 
 // "Próxima questão": carrega a próxima da fila SEM criar sessão.
 function proximaQuestao() {
+    esconderProbe();   // o probe é sobre a questão que acabou — não deixa vazar pra próxima
     carregarQuestao(currentSubject, currentTema);
+}
+
+// ============================================================
+//        PROBE DE ATENÇÃO (self-report — rótulo real p/ o ML)
+// ============================================================
+// Pergunta discreta ("sua mente estava na questão?") pareada com o momento.
+// 3 opções = as 3 classes do modelo. Vira evento 'probe_atencao' no /events.
+let probeTimeout = null;
+
+function _garantirCardProbe() {
+    if ($('kaia-probe')) return;
+    const st = document.createElement('style');
+    st.textContent = `
+      #kaia-probe{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;
+        max-width:340px;width:calc(100% - 32px);background:var(--card);color:var(--tinta);
+        border:1px solid var(--border);border-radius:14px;padding:14px 16px;
+        box-shadow:0 8px 30px rgba(var(--profundo-rgb),.14);display:none}
+      #kaia-probe .probe-q{margin:0 0 10px;font-size:14px;color:var(--profundo);font-weight:600}
+      #kaia-probe .probe-btns{display:flex;flex-direction:column;gap:6px}
+      #kaia-probe button{border:1px solid var(--border);background:var(--marfim);color:var(--tinta);
+        border-radius:9px;padding:8px 10px;font-size:13px;cursor:pointer;text-align:left}
+      #kaia-probe button:hover{border-color:var(--profundo)}
+    `;
+    document.head.appendChild(st);
+    const card = document.createElement('div');
+    card.id = 'kaia-probe';
+    card.innerHTML =
+        '<p class="probe-q">Rapidinho: sua mente estava na questão agora?</p>'
+        + '<div class="probe-btns">'
+        + '<button type="button" data-estado="engajado">Sim, estava focado</button>'
+        + '<button type="button" data-estado="distraido">Minha mente estava viajando</button>'
+        + '<button type="button" data-estado="muito_distraido">Fui ver outra coisa</button>'
+        + '</div>';
+    document.body.appendChild(card);
+    $$('#kaia-probe button').forEach(b =>
+        b.addEventListener('click', () => responderProbe(b.dataset.estado)));
+}
+
+function dispararProbe() {
+    _garantirCardProbe();
+    $('kaia-probe').style.display = 'block';
+    clearTimeout(probeTimeout);
+    probeTimeout = setTimeout(esconderProbe, 25000);   // o momento passa se for ignorado
+}
+
+function esconderProbe() {
+    clearTimeout(probeTimeout);
+    const c = $('kaia-probe');
+    if (c) c.style.display = 'none';
+}
+
+function responderProbe(estado) {
+    logEvent('probe_atencao', {
+        estado,
+        questao_na_rodada: questoesNaRodada,
+        questoes_respondidas: questoesRespondidas,
+    });
+    esconderProbe();
 }
 
 // ==== MODAL DE RODADA / RESUMO (meta = limite sugerido) ====
@@ -768,6 +834,7 @@ function abrirModalRodada() {
 function continuarRodada() {
     $('resumo-overlay').hidden = true;
     questoesNaRodada = 0;
+    sortearAlvoProbe();
     atualizarContador();       // "Questão 1 de 10", barra zerada
     carregarQuestao(currentSubject, currentTema);
 }

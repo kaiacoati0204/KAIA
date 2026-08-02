@@ -891,7 +891,13 @@ async def rodar_intervencao(app, session_id):
 
     async with app.state.pool.acquire() as conn:
         res = await predizer_estado(modelo, scaler, conn, session_id)
-        if res is None or res["estado"] not in ESTADOS_QUE_INTERVEM:
+        if res is None:
+            return
+        # Reward implícito: fecha intervenções passadas cuja janela já expirou,
+        # comparando o estado de então com o atual. Roda mesmo se agora está engajado
+        # (o sucesso é justamente ter virado engajado).
+        await resolver_rewards(conn, thompson, session_id, res["estado"])
+        if res["estado"] not in ESTADOS_QUE_INTERVEM:
             return
 
         try:
@@ -921,12 +927,54 @@ async def rodar_intervencao(app, session_id):
 
         await conn.execute(
             """
-            insert into interventions (session_id, intervention_type, triggered_at)
-            values ($1::uuid, $2, now())
+            insert into interventions (session_id, intervention_type, triggered_at, estado_antes)
+            values ($1::uuid, $2, now(), $3)
             """,
-            session_id, tipo,
+            session_id, tipo, res["estado"],
         )
         print(f"[KaIA Intervenção] {session_id} estado={res['estado']} -> {tipo}")
+
+
+async def resolver_rewards(conn, thompson, session_id, estado_atual):
+    """Fecha intervenções cuja janela de medição já passou e que ainda não têm
+    reward (o polegar tem prioridade: se o aluno já respondeu, reward != null e a
+    linha é ignorada). Calcula o reward pela transição estado_antes -> estado_atual
+    e atualiza o bandit. Silencioso se as colunas novas ainda não existirem."""
+    if thompson is None:
+        return
+    try:
+        pendentes = await conn.fetch(
+            """
+            select intervention_id, intervention_type, estado_antes
+              from interventions
+             where session_id = $1::uuid
+               and reward is null
+               and estado_antes is not null
+               and triggered_at <= now() - make_interval(mins => $2::int)
+            """,
+            session_id, INTERV_JANELA_REWARD_MIN,
+        )
+    except Exception as e:
+        print("[KaIA] colunas de reward ausentes (rode interventions_reward_estado.sql):", e)
+        return
+
+    for p in pendentes:
+        reward = reward_por_transicao(p["estado_antes"], estado_atual)
+        if reward is None:
+            continue
+        try:
+            thompson.update(p["intervention_type"], reward)
+            await conn.execute(
+                """
+                update interventions
+                   set reward = $2, estado_depois = $3, reward_origem = 'auto_estado'
+                 where intervention_id = $1
+                """,
+                p["intervention_id"], reward, estado_atual,
+            )
+            print(f"[KaIA Reward auto] {p['intervention_type']} {p['estado_antes']}->{estado_atual} r={reward}")
+        except Exception as e:
+            print("[KaIA] erro ao resolver reward", p["intervention_id"], ":", e)
 
 
 # ============ FEATURES PARA O MODELO (vetor cumulativo por sessão) ==========
@@ -955,6 +1003,23 @@ ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
 INTERV_COOLDOWN_MIN = 3        # tempo mínimo entre intervenções da mesma sessão
 INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
 ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
+INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a mudança de estado
+
+
+def reward_por_transicao(estado_antes, estado_depois):
+    """Reward implícito (0..1) pela transição de foco após a intervenção.
+    engajado é o melhor; muito_distraido o pior (ordem em ESTADOS).
+    Retorna None se algum estado for desconhecido (não resolve)."""
+    if estado_antes not in ESTADOS or estado_depois not in ESTADOS:
+        return None
+    if estado_depois == "engajado":
+        return 1.0                                     # re-focou de vez
+    melhora = ESTADOS.index(estado_depois) - ESTADOS.index(estado_antes)
+    if melhora < 0:
+        return 0.5                                     # melhorou, mas não até engajado
+    if melhora == 0:
+        return 0.2                                     # ficou igual
+    return 0.0                                         # piorou
 
 
 async def montar_features_sessao(conn, session_id):
@@ -1157,6 +1222,7 @@ async def intervencao_feedback(body: FeedbackIn, request: Request):
                 """
                 update interventions
                    set reward = $3,
+                       reward_origem = 'explicito',
                        tempo_ate_aceitar_s = coalesce($4::double precision, tempo_ate_aceitar_s),
                        feedback_usuario    = coalesce($5::text, feedback_usuario)
                  where intervention_id = (

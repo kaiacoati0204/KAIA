@@ -429,6 +429,36 @@ async def test_rodar_intervencao_cooldown(monkeypatch):
     assert conn.executed == []   # cooldown bloqueia
 
 
+@pytest.mark.parametrize("antes,depois,esperado", [
+    ("distraido", "engajado", 1.0),          # re-focou de vez
+    ("muito_distraido", "engajado", 1.0),
+    ("muito_distraido", "distraido", 0.5),   # melhorou parcial
+    ("distraido", "distraido", 0.2),         # ficou igual
+    ("distraido", "muito_distraido", 0.0),   # piorou
+    ("engajado", "distraido", 0.0),
+    ("distraido", "desconhecido", None),     # estado inválido -> não resolve
+])
+def test_reward_por_transicao(antes, depois, esperado):
+    assert app_mod.reward_por_transicao(antes, depois) == esperado
+
+
+async def test_resolver_rewards_estado_melhorou():
+    up = []
+    thompson = SimpleNamespace(update=lambda t, r: up.append((t, r)))
+    pend = [{"intervention_id": "iid", "intervention_type": "nudge_refoco", "estado_antes": "distraido"}]
+    conn = FakeConn(fetch={"select intervention_id": pend})
+    await app_mod.resolver_rewards(conn, thompson, "sid", "engajado")
+    assert up == [("nudge_refoco", 1.0)]                              # bandit atualizado com o reward certo
+    assert any("update interventions" in q for q, _ in conn.executed) # linha marcada como resolvida
+
+
+async def test_resolver_rewards_sem_thompson():
+    pend = [{"intervention_id": "iid", "intervention_type": "nudge_refoco", "estado_antes": "distraido"}]
+    conn = FakeConn(fetch={"select intervention_id": pend})
+    await app_mod.resolver_rewards(conn, None, "sid", "engajado")     # sem bandit: não faz nada
+    assert conn.executed == []
+
+
 # ============================================================ dashboard offline (base sintética)
 def test_dashboard_offline_base_sintetica():
     resultado = app_mod._dashboard_offline()   # lê o xlsx real -> _agregar_base_sintetica

@@ -167,6 +167,353 @@ function iniciarPollIntervencao() {
     }, 15000);
 }
 
+// ============================================================
+//        CAMADA DE DADOS — PERFIL + FEATURES (Supabase-ready)
+// ============================================================
+// Persistido em localStorage sob 'kaia_perfil' e espelhado no backend (/perfil).
+// Para plugar o Supabase, basta trocar `enviarPerfil` por um upsert em `perfis`.
+const lerPerfil    = () => JSON.parse(localStorage.getItem('kaia_perfil') || '{}');
+const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p));
+
+// Snapshot NÃO-mutável das features (só leitura, para enviar junto dos dados).
+function snapshotFeatures() {
+    const agora  = new Date();
+    const perfil = lerPerfil();
+    const dias   = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+    const hora   = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+
+    return {
+        horario_inicio:             hora,                                 // TIME    — do relógio
+        sessoes_no_dia:             perfil.sessoes_no_dia || 0,           // INTEGER — contador local
+        dia_semana:                 dias[agora.getDay()],                 // ENUM    — do timestamp
+        sequencia_dias_estudo:      perfil.sequencia_dias_estudo || 0,    // INTEGER — streak
+        ambiente_dispositivo:       perfil.ambiente_dispositivo || null,  // ENUM    — auto-declarado
+        // minutos desde a última sessão registrada
+        duracao_pausa_anterior_min: perfil.ultima_sessao_ts
+            ? parseFloat(((agora - perfil.ultima_sessao_ts) / 60000).toFixed(2)) : null,
+        // só existe se o aluno informou a data no onboarding
+        dias_para_prova: perfil.data_prova
+            ? Math.max(0, Math.ceil((new Date(perfil.data_prova) - agora) / 86400000)) : null
+    };
+}
+
+// Mutável: chamado quando uma sessão de ESTUDO começa (atualiza streak/contadores).
+function registrarInicioSessao() {
+    const agora   = new Date();
+    const perfil  = lerPerfil();
+    const hojeStr = agora.toISOString().slice(0, 10);
+
+    if (perfil.ultimo_dia_estudo === hojeStr) {
+        perfil.sessoes_no_dia = (perfil.sessoes_no_dia || 0) + 1;
+    } else {
+        const ontem = new Date(agora);
+        ontem.setDate(ontem.getDate() - 1);
+        // manteve o hábito se estudou ontem; senão zera o streak
+        perfil.sequencia_dias_estudo = (perfil.ultimo_dia_estudo === ontem.toISOString().slice(0, 10))
+            ? (perfil.sequencia_dias_estudo || 0) + 1 : 1;
+        perfil.sessoes_no_dia = 1;
+    }
+
+    perfil.ultimo_dia_estudo = hojeStr;
+    perfil.ultima_sessao_ts  = agora.getTime();
+    gravarPerfil(perfil);
+    return snapshotFeatures();
+}
+
+// Hooks de onboarding: 'silencioso' | 'ruido_moderado' | 'ruido_alto' e 'AAAA-MM-DD'
+const definirAmbiente  = (valor) => gravarPerfil({ ...lerPerfil(), ambiente_dispositivo: valor });
+const definirDataProva = (iso)   => gravarPerfil({ ...lerPerfil(), data_prova: iso });
+
+// Envia o pacote completo (login + hobbies + features) para o backend.
+function enviarPerfil(extra = {}) {
+    return postJSON('/perfil', {
+        session_id: sessionId,
+        user_id:    userId,
+        ts:         new Date().toISOString(),
+        perfil:     lerPerfil(),
+        hobbies:    hobbiesSelecionados,
+        features:   snapshotFeatures(),
+        ...extra
+    }, true).catch(e => console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e));
+}
+
+// Botão "Entrar" do login.html.
+// Autentica no Supabase Auth (email + senha) e, com o user.id do Auth, busca o
+// perfil (nome/role/hobbies) no backend. O cadastro é feito manualmente no
+// painel do Supabase — aqui o aluno só ENTRA.
+const ROTA_POR_ROLE = {
+    professor:   'responsaveis.html',
+    coordenador: 'responsaveis.html',
+    pai:         'responsaveis.html',
+};
+
+// Versão dos termos aceitos no cadastro: vai no metadata do signUp e o trigger
+// grava em perfis (termos_versao + termos_aceite_ts). Bumpar ao mudar o texto legal.
+const TERMOS_VERSAO = '2026-07-25';
+
+// Passos comuns ao login e ao cadastro: com o usuário já autenticado no Auth,
+// busca o perfil no backend (por id; fallback por email), guarda a sessão do
+// app e redireciona por role.
+async function finalizarLogin(authUser, falhar) {
+    let r = await apiFetch(`/perfil?user_id=${encodeURIComponent(authUser.id)}`);
+    if (r.status === 404 && authUser.email) {
+        r = await apiFetch(`/perfil?email=${encodeURIComponent(authUser.email)}`);
+    }
+    if (!r.ok) return falhar('Login feito, mas seu perfil não foi encontrado. Fale com o suporte.');
+    const u = await r.json();
+
+    sessionStorage.setItem('kaia_usuario', JSON.stringify({
+        user_id:   u.user_id,
+        email:     u.email,
+        nome:      u.nome,
+        role:      u.role,
+        escola_id: u.escola_id,
+        turma_id:  u.turma_id,
+    }));
+    // A identidade estável usada pelos sensores (sessions/events) é a do perfil real.
+    localStorage.setItem('kaia_user_id', u.user_id);
+
+    const hobbies = u.hobbies || [];
+    sessionStorage.setItem('hobbies', JSON.stringify(hobbies));
+    gravarPerfil({ ...lerPerfil(), email: u.email, hobbies });
+
+    if (u.role === 'aluno') {
+        window.location.href = hobbies.length ? 'index.html' : 'hobbies.html';
+    } else {
+        window.location.href = ROTA_POR_ROLE[u.role] || 'index.html';
+    }
+}
+
+async function salvarLogin(event) {
+    if (event) event.preventDefault();
+
+    const email = $('login-email')?.value.trim() || '';
+    const senha = $('login-senha')?.value || '';
+    const erro  = $('login-erro');
+    const falhar = (msg) => { if (erro) erro.textContent = msg; };
+
+    falhar('');
+    if (!email || !senha) return falhar('Preencha email e senha.');
+    if (!window.supabaseClient) return falhar('Autenticação indisponível (config.js sem Supabase).');
+
+    try {
+        const { data, error } = await window.supabaseClient.auth
+            .signInWithPassword({ email, password: senha });
+        if (error) return falhar('Email ou senha incorretos');
+        await finalizarLogin(data.user, falhar);
+    } catch (e) {
+        console.error('[KaIA] falha no login:', e);
+        falhar('Não foi possível conectar. Tente novamente.');
+    }
+}
+
+// Cadastro (auto-signup do aluno). Cria a conta no Supabase Auth com o nome no
+// metadata — o trigger no banco usa isso para preencher perfis.nome. Com a
+// confirmação de email DESLIGADA, o signUp já devolve sessão e entra direto; se
+// estiver LIGADA, avisa para confirmar por email antes de logar.
+async function criarConta(event) {
+    if (event) event.preventDefault();
+
+    const nome   = $('cad-nome')?.value.trim() || '';
+    const email  = $('cad-email')?.value.trim() || '';
+    const senha  = $('cad-senha')?.value || '';
+    const termos = $('cad-termos')?.checked || false;
+    const erro   = $('cad-erro');
+    const okmsg  = $('cad-ok');
+    const falhar = (msg) => { if (erro) erro.textContent = msg; if (okmsg) okmsg.textContent = ''; };
+
+    falhar('');
+    if (!nome || !email || !senha) return falhar('Preencha nome, email e senha.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return falhar('Digite um email válido.');
+    if (senha.length < 6) return falhar('A senha precisa ter ao menos 6 caracteres.');
+    if (!termos) return falhar('Para criar a conta, aceite os termos e a política de privacidade.');
+    if (!window.supabaseClient) return falhar('Cadastro indisponível (config.js sem Supabase).');
+
+    try {
+        // termos_versao vai no metadata → o trigger criar_perfil_no_signup grava o
+        // consentimento em perfis (termos_versao + termos_aceite_ts), atômico com a conta.
+        const { data, error } = await window.supabaseClient.auth.signUp({
+            email, password: senha, options: { data: { nome, termos_versao: TERMOS_VERSAO } },
+        });
+        if (error) {
+            const jaExiste = /registered|already/i.test(error.message || '');
+            return falhar(jaExiste ? 'Este email já tem conta. Faça login.'
+                                   : 'Não foi possível criar a conta. Tente outro email.');
+        }
+        if (data.session) {
+            // Confirmação de email desligada → já entra.
+            await finalizarLogin(data.user, falhar);
+        } else if (okmsg) {
+            // Confirmação ligada → precisa confirmar por email antes de logar.
+            okmsg.textContent = 'Conta criada! Confirme pelo email e depois faça login.';
+        }
+    } catch (e) {
+        console.error('[KaIA] falha no cadastro:', e);
+        falhar('Não foi possível conectar. Tente novamente.');
+    }
+}
+
+// ============================================================
+//                    MENU LATERAL
+// ============================================================
+// Injetado por JS em toda página com <body data-menu> — assim o markup do menu
+// não fica copiado (e divergindo) em cada HTML.
+const MENU_LINKS = [
+    ['index.html',        'Início'],
+    ['perfil.html',       'Perfil'],
+    ['materias.html',     'Matérias'],
+    ['meu-coati.html',    'Meu Coati'],
+    ['responsaveis.html', 'Acompanhar'],
+    ['dashboard.html',    'Dashboard'],
+];
+
+// O menu lateral antigo (☰) e a saudação flutuante foram substituídos pela
+// barra estática (montarRail, abaixo). MENU_LINKS agora alimenta a rail.
+
+// ============================================================
+//              BARRA LATERAL ESTÁTICA (rail)
+// ============================================================
+// Injetada nas páginas com <body data-rail>. Começa estreita (só ícones) e
+// expande ao clicar no ícone de menu (classe rail-aberta no body). É uma COLUNA
+// real do layout (o body vira flex): empurra o conteúdo em vez de sobrepor.
+const RAIL_ICONES = {
+    menu:                '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+    'index.html':        '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
+    'login.html':        '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
+    'perfil.html':       '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
+    'materias.html':     '<svg viewBox="0 0 24 24"><path d="M4 4h13a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M4 4v14"/></svg>',
+    'meu-coati.html':    '<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg>',
+    'responsaveis.html': '<svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>',
+    'dashboard.html':    '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    sair:                '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+};
+
+function montarRail() {
+    if (!document.body.hasAttribute('data-rail')) return;
+    const atual = location.pathname.split('/').pop() || 'index.html';
+
+    const item = (ic, tx) => `<span class="rail-ic">${ic}</span><span class="rail-tx">${tx}</span>`;
+
+    const links = MENU_LINKS.map(([href, rotulo]) => {
+        const ativo = href === atual ? ' ativo' : '';
+        return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
+    }).join('');
+
+    // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
+    const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    const nome = u ? (u.nome || u.email || '').trim() : '';
+    const inicial = nome ? nome[0].toUpperCase() : '·';
+    const saudacao = nome
+        ? `<div class="rail-item rail-user"><span class="rail-ic rail-avatar">${inicial}</span><span class="rail-tx">Olá, ${nome}</span></div>`
+        : '';
+    const rodape =
+        `<div class="rail-rodape">${saudacao}`
+        + `<button class="rail-item rail-sair" type="button">${item(RAIL_ICONES.sair, 'Sair')}</button>`
+        + `</div>`;
+
+    const rail = document.createElement('nav');
+    rail.className = 'railnav';
+    rail.setAttribute('aria-label', 'Navegação');
+    rail.innerHTML =
+        `<button class="rail-item rail-toggle" type="button" aria-label="Expandir ou recolher o menu">${item(RAIL_ICONES.menu, 'Menu')}</button>`
+        + `<div class="rail-links">${links}</div>`
+        + rodape;
+    document.body.prepend(rail);
+
+    // Estado (aberta/colapsada) lembrado entre páginas via localStorage.
+    if (localStorage.getItem('kaia_rail_aberta') === '1') document.body.classList.add('rail-aberta');
+    rail.querySelector('.rail-toggle').addEventListener('click', () => {
+        const aberta = document.body.classList.toggle('rail-aberta');
+        localStorage.setItem('kaia_rail_aberta', aberta ? '1' : '0');
+    });
+
+    // Sair: encerra a sessão do Supabase Auth, limpa o sessionStorage e volta ao
+    // login. O signOut é best-effort (não trava o logout se o cliente faltar).
+    rail.querySelector('.rail-sair').addEventListener('click', async () => {
+        try { await window.supabaseClient?.auth.signOut(); } catch (_) {}
+        sessionStorage.clear();
+        window.location.href = 'login.html';
+    });
+}
+
+// ============================================================
+//                       HOBBIES
+// ============================================================
+// A lista vive aqui (e não no HTML) para que o backend e a página de onboarding
+// compartilhem a mesma fonte de verdade — os hobbies alimentam o prompt da IA.
+const HOBBIES = [
+    'Futebol', 'Basquete', 'Vôlei', 'Natação', 'Corrida', 'Ciclismo', 'Academia', 'Yoga', 'Dança',
+    'Tricô', 'Crochê', 'Costura', 'Pintar', 'Desenho', 'Escultura', 'Fotografia',
+    'RPG', 'Videogames', 'Jogos de Tabuleiro', 'Xadrez', 'Quebra-cabeças',
+    'Culinária', 'Confeitaria', 'Churrasco',
+    'Música', 'Cantar', 'Violão', 'Piano', 'Bateria',
+    'Leitura', 'Escrita', 'Poesia',
+    'Cinema/Filme', 'Séries', 'Anime', 'Mangá',
+    'Programação', 'Robótica', 'Modelagem 3D', 'Impressão 3D',
+    'Jardinagem', 'Pesca', 'Camping', 'Trilhas', 'Viagens', 'Astronomia',
+    'Colecionismo', 'Origami', 'Idiomas', 'Voluntariado',
+];
+
+let hobbiesSelecionados = JSON.parse(sessionStorage.getItem('hobbies') || '[]');
+
+function registrarHobbies() {
+    const box = document.querySelector('.botoes-hobbies');
+    if (!box) return;
+
+    box.innerHTML = '';
+    HOBBIES.forEach(nome => {
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'botao-hobbies';
+        botao.textContent = nome;
+        botao.classList.toggle('selecionado', hobbiesSelecionados.includes(nome));
+
+        botao.addEventListener('click', () => {
+            const jaTinha = hobbiesSelecionados.includes(nome);
+            hobbiesSelecionados = jaTinha
+                ? hobbiesSelecionados.filter(h => h !== nome)
+                : [...hobbiesSelecionados, nome];
+            botao.classList.toggle('selecionado', !jaTinha);
+            console.log('Hobbies:', hobbiesSelecionados);
+        });
+
+        box.appendChild(botao);
+    });
+}
+
+function salvarHobbies() {
+    sessionStorage.setItem('hobbies', JSON.stringify(hobbiesSelecionados));
+    gravarPerfil({ ...lerPerfil(), hobbies: hobbiesSelecionados });
+    enviarPerfil({ tipo: 'hobbies' });
+    window.location.href = 'index.html';
+}
+
+// ============================================================
+//                     FAÇA-SE A LUZ
+// ============================================================
+// A luz foge do mouse. Só liga na página que tem o elemento (login).
+function registrarLuz() {
+    const luz = $('luzFundo');
+    const container = document.querySelector('.tela-login');
+    if (!luz || !container) return;
+
+    const raioFuga = 300;
+    let luzX = window.innerWidth / 2;
+    let luzY = window.innerHeight / 2;
+
+    container.addEventListener('mousemove', (e) => {
+        const dx = luzX - e.clientX;
+        const dy = luzY - e.clientY;
+        const distancia = Math.hypot(dx, dy);
+        if (distancia >= raioFuga || distancia === 0) return;
+
+        const forca = (raioFuga - distancia) / raioFuga;
+        luzX = Math.max(50, Math.min(window.innerWidth  - 50, luzX + (dx / distancia) * forca * 30));
+        luzY = Math.max(50, Math.min(window.innerHeight - 50, luzY + (dy / distancia) * forca * 30));
+        luz.style.left = `${luzX}px`;
+        luz.style.top  = `${luzY}px`;
+    });
+}
 
 // ============================================================
 //                  SENSORES DE COMPORTAMENTO

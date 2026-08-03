@@ -20,7 +20,7 @@
         <!-- A luz foge do mouse e fica ATRÁS da caixa (ver registrarLuz no script.js) -->
         <div class="luz-fundo" id="luzFundo"></div>
 
-        <form class="caixa-login" onsubmit="criarConta(event)">
+        <form class="caixa-login" onsubmit="criarConta(event)" novalidate>
             <h1>Ka<span>IA</span></h1>
             <p>Crie sua conta e comece a focar.</p>
 
@@ -39,12 +39,19 @@
                 <input id="cad-senha" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
             </div>
 
+            <div class="grupo-termos">
+                <input id="cad-termos" type="checkbox">
+                <label for="cad-termos">Li e aceito os
+                    <a href="termos.html" target="_blank" rel="noopener">termos de uso</a> e a
+                    <a href="privacidade.html" target="_blank" rel="noopener">política de privacidade</a>.</label>
+            </div>
+
             <!-- Preenchidos por criarConta() -->
             <p id="cad-erro" class="erro-login" role="alert" aria-live="polite"></p>
             <p id="cad-ok" class="erro-login" role="status" aria-live="polite" style="color: var(--acerto-tx, #2f5d3a);"></p>
 
             <button type="submit" class="botao-login">Criar conta</button>
-            <a href="login.html" class="link-secundario">Já tenho conta</a>
+            <a href="login.html" class="link-secundario">Já tem conta? Entrar</a>
         </form>
     </div>
 

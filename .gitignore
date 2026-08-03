@@ -38,3 +38,6 @@ htmlcov/
 
 # Documentação pessoal (explicação da arquitetura) — não versionar, é só da dona do projeto
 docs/
+
+# Instruções pessoais do Claude Code — não versionar (fica só local)
+/CLAUDE.md

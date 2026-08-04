@@ -47,45 +47,70 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 Frontend/
   pages/        → os .html (login, index, hobbies, materias, perfil, meu-coati, dashboard, responsaveis)
   css/          → style.css
-  js/           → script.js (lógica do front: hobbies, missões, IA, sensores, caderno, rail)
+  js/           → módulos do front: comum.js (base/rail/apiFetch), login.js (auth/cadastro),
+                  materias.js (missões/sensores/pomodoro), hobbies.js, perfil.js, dashboard.js
   assets/       → Coati.jpg, Coati_3d.glb
-  config.js     → API_URL + credenciais do Supabase (NÃO vai pro Git — copie de config.example.js)
+  config.js     → API_URL + Supabase (NÃO vai pro Git — copie de config.example.js)
 Backend/
   app.py                → backend FastAPI (rotas da IA, sessões, painéis)
-  auth.py               → validação do JWT do Supabase Auth
+  auth.py               → validação do JWT do Supabase Auth (JWKS)
   requirements.txt      → dependências Python
+  migrations/           → schema/trigger do banco (rode em ordem numérica; nunca apague)
+  seed_contas_teste.py  → cria as contas @teste.kaia (senha teste1234)
   seed_sintetico.py     → popula sessões sintéticas para os painéis
-  limpar_sintetico.sql  → apaga os dados sintéticos
-  .env                  → variáveis de ambiente (NÃO vai pro Git)
+  limpar_*.{py,sql}     → desfazem os seeds
+  .env                  → variáveis de ambiente (NÃO vai pro Git — copie de .env.example)
 ml/                     → treino e pré-processamento do Random Forest
 CLAUDE.md               → convenções do projeto (cores, acessibilidade, segurança, estilo)
 ```
 
 ---
 
-## 🚀 Como rodar
+# 🚀 Como rodar
 
-### 1. Instalar as dependências do backend
+### 1. Pré-requisitos e dependências
+
+- **Python 3.11+** (backend FastAPI).
+- **VS Code + extensão Live Server** (ou qualquer servidor estático) para o frontend.
+- **Não precisa de Node nem build:** o frontend é HTML/CSS/JS puro; libs (Supabase, Chart.js) entram via CDN.
 
 ```bash
 pip install -r Backend/requirements.txt
 ```
 
-### 2. Criar o arquivo `.env`
+### 2. Configuração — criar o `.env`
 
-Na pasta `Backend/`, crie um arquivo `.env` com as variáveis abaixo (sem aspas, sem espaços em volta do `=`):
+`Backend/.env` está no `.gitignore` (não vem no clone). Crie o arquivo e cole o bloco abaixo, preenchendo os valores (sem aspas, sem espaço em volta do `=`):
 
+```bash
+# Chave do Google Gemini (Google AI Studio) — gera as questões.
+API_KEY=
+
+# Postgres do Supabase: Settings → Database → Connection string (URI).
+# Troque [YOUR-PASSWORD] pela senha do banco. É o ÚNICO segredo do backend.
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.<PROJECT_ID>.supabase.co:5432/postgres
+
+# URL pública do projeto (Settings → General → Project ID).
+# OBRIGATÓRIA: sem ela o auth.py não valida o JWT e o login falha ("perfil não encontrado").
+SUPABASE_URL=https://<PROJECT_ID>.supabase.co
+
+# Opcional — minutos até encerrar sessão ociosa (padrão: 15).
+STALE_SESSAO_MIN=15
 ```
-API_KEY=          # chave do Google Gemini (gerada no Google AI Studio)
-DATABASE_URL=     # string de conexão do Supabase (Settings → Database)
-STALE_SESSAO_MIN= # opcional; minutos até encerrar sessão ociosa (padrão: 15)
-```
 
-> Nunca coloque a chave `service_role` do Supabase aqui nem no frontend — ela ignora RLS.
+> O backend **não usa** chave de API do Supabase — só a `DATABASE_URL` (o único segredo) e a `SUPABASE_URL` (pública). **Nunca** coloque a chave secret (`sb_secret_`) aqui nem no frontend.
 
 ### 3. Criar o `config.js` do frontend
 
-Copie `Frontend/config.example.js` para `Frontend/config.js` e preencha os valores (use sempre a chave **publishable/anon**, nunca a `service_role`).
+`config.js` está no `.gitignore` e **não vem no clone**. Copie `Frontend/config.example.js` para `Frontend/config.js` e preencha:
+
+```js
+SUPABASE_URL: 'https://<PROJECT_ID>.supabase.co',
+SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_...',   // Supabase → Settings → API Keys → publishable
+```
+
+> No frontend vai **só a publishable** (é pública; o RLS protege os dados). **Nunca** a secret.
+> Onde achar o `<PROJECT_ID>`: Supabase → Settings → General (a URL é `https://<PROJECT_ID>.supabase.co`).
 
 ### 4. Subir o backend
 
@@ -104,6 +129,30 @@ Rode com um servidor local (ex.: extensão **Live Server** do VS Code). O ponto 
 
 - Se abriu a pasta do repositório: `http://127.0.0.1:5500/Frontend/pages/login.html`
 - Se abriu a pasta `Frontend/`: `http://127.0.0.1:5500/pages/login.html`
+
+### 6. Entrar com uma conta de teste
+
+Senha de todas: **`teste1234`**.
+
+| E-mail | Papel |
+|--------|-------|
+| `aluno1@teste.kaia` | aluno |
+| `aluno2@teste.kaia` | aluno |
+| `aluno.individual@teste.kaia` | aluno (sem escola) |
+| `professor@teste.kaia` | professor |
+| `coordenador@teste.kaia` | coordenador |
+
+Login OK = cai na tela do aluno. Conferência técnica: DevTools → Network → `GET /perfil` retorna **200**.
+
+### 7. Banco de dados (montar do zero)
+
+Scripts em `Backend/` e `Backend/migrations/`. Ordem:
+
+1. **`Backend/migrations/0001_perfil_signup_termos.sql`** — schema + trigger de consentimento no signup. Rode uma vez no Supabase → SQL Editor.
+2. **`python Backend/seed_contas_teste.py --commit`** — cria as contas de teste acima (sem `--commit` = dry-run). Rode de dentro de `Backend/`.
+3. *(opcional)* **`python Backend/seed_sintetico.py --commit`** — popula sessões sintéticas para dar volume ao dashboard.
+
+Limpeza (antes de produção / quando entrarem alunos reais): `Backend/limpar_sintetico.sql` e `python Backend/limpar_contas_teste.py --commit`.
 
 ---
 

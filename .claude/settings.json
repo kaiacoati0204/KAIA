@@ -6,7 +6,13 @@
       "Bash(grep -n \"apiFetch\\('/perfil\\\\|apiFetch\\(\\\\`/perfil\" Frontend/js/login.js)",
       "Bash(sed 's/=$//')",
       "Bash(git reset *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(node --check Frontend/config.example.js)",
+      "Bash(python check_setup.py)",
+      "Bash(python fill_setup.py)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\vitor\\OneDrive\\Documentos"
     ]
   }
 }

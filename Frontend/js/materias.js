@@ -26,6 +26,9 @@ let lastScrollTime  = 0;
 let lastKeystroke   = 0;
 let keystrokeTimer  = null;
 let questionShownAt = 0;
+let firstInteractionAt = 0;   // 1ª interação com a questão → tempo_iniciacao_resposta_ms
+let mouseSamples = [];        // trajeto do mouse na questão: [dt_ms, x, y] (features de mouse no Incr. B)
+let lastMouseSampleAt = 0;    // throttle da amostragem do mouse
 let currentQuestion = null;
 let currentSubject  = null;   // matéria/tema da questão atual — para "Próxima questão"
 let currentTema     = null;
@@ -547,11 +550,17 @@ function iniciarIdleMonitor() {
 function registrarSensores() {
     const quizView = $('quiz-view');
 
-    // --- mouse: qualquer movimento zera a ociosidade ---
-    quizView?.addEventListener('mousemove', () => {
+    // --- mouse: zera ociosidade + captura 1ª interação e o trajeto (features de mouse) ---
+    quizView?.addEventListener('mousemove', (e) => {
         if (!isMissionActive) return;
         idleTime = 0;
         setEstado('ESTUDANDO');
+        const agora = performance.now();
+        if (firstInteractionAt === 0 && questionShownAt > 0) firstInteractionAt = agora;   // initiation time
+        if (agora - lastMouseSampleAt >= 100) {   // amostra o trajeto ~10x/s (throttle p/ não inundar)
+            lastMouseSampleAt = agora;
+            mouseSamples.push([Math.round(agora - questionShownAt), e.clientX, e.clientY]);
+        }
     });
 
     // --- trocas de aba ---
@@ -580,65 +589,8 @@ function registrarSensores() {
         mostrarAvisoSaida();
     });
 
-    // --- scroll: rajadas rápidas indicam rolagem sem leitura ---
-    // Quem rola pode ser a janela OU um container interno, dependendo da página.
-    // Listener em FASE DE CAPTURA no document pega o 'scroll' de QUALQUER elemento
-    // (scroll não borbulha, mas é capturado na descida). Lemos a posição do alvo.
-    const posDoAlvo = (t) =>
-        (!t || t === document || t === document.documentElement || t === document.body || t === window)
-            ? (window.scrollY || document.documentElement.scrollTop || 0)
-            : (t.scrollTop || 0);
-    lastScrollY    = window.scrollY || 0;
-    lastScrollTime = performance.now();
-    let ultimoBurst = 0;   // throttle: no máximo 1 scroll_burst por segundo
-    document.addEventListener('scroll', (e) => {
-        if (!isMissionActive) return;
-        const y      = posDoAlvo(e.target);
-        const agora  = performance.now();
-        const deltaT = (agora - lastScrollTime) / 1000;
-        const px_s   = deltaT > 0 ? Math.abs(y - lastScrollY) / deltaT : 0;
-        lastScrollY    = y;      // posição atualizada SEMPRE (velocidade contínua)
-        lastScrollTime = agora;
-
-        // O evento 'scroll' dispara a cada frame; sem throttle uma rolagem vira
-        // centenas de eventos. Registramos no máximo 1 scroll_burst por segundo.
-        if (px_s > 300 && (agora - ultimoBurst) >= 1000) {
-            ultimoBurst = agora;
-            logEvent('scroll_burst', {
-                px_s: parseFloat(px_s.toFixed(1)),
-                duracao_s: parseFloat(deltaT.toFixed(2)),
-                rolagem_sem_leitura: (px_s > 500 && deltaT > 2)
-            });
-        }
-    }, { capture: true, passive: true });
-
-    // --- teclado: pausas longas e taxa de backspace ---
-    let totalTeclas = 0;
-    let totalBackspace = 0;
-    const taxaBackspace = () =>
-        totalTeclas > 0 ? parseFloat((totalBackspace / totalTeclas).toFixed(3)) : 0;
-
-    document.addEventListener('keydown', (e) => {
-        if (!isMissionActive) return;
-        const agora   = performance.now();
-        const pausa_s = (agora - lastKeystroke) / 1000;
-        totalTeclas++;
-        if (e.key === 'Backspace') totalBackspace++;
-
-        if (lastKeystroke > 0 && pausa_s > 3) {
-            logEvent('keystroke_pause', {
-                duracao_s: parseFloat(pausa_s.toFixed(2)),
-                taxa_backspace: taxaBackspace()
-            });
-        }
-        lastKeystroke = agora;
-
-        // 30s parado depois de digitar também é uma pausa
-        clearTimeout(keystrokeTimer);
-        keystrokeTimer = setTimeout(() => {
-            if (isMissionActive) logEvent('keystroke_pause', { duracao_s: 30, taxa_backspace: taxaBackspace() });
-        }, 30000);
-    });
+    // (v2: scroll removido — múltipla escolha não rola, feature velocidade_scroll saiu)
+    // (v2: keystroke_pause removido — quase não há digitação, feature pausas_digitacao saiu)
 
     // --- cliques fora da área da questão ---
     document.addEventListener('click', (e) => {
@@ -899,6 +851,8 @@ async function carregarQuestao(subject, tema) {
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
     questionShownAt = performance.now();
+    firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
+    mouseSamples = [];
     iniciarIdleMonitor();
     iniciarPollIntervencao();
 
@@ -992,6 +946,9 @@ function checkAnswer(idx, btn) {
     if (questionShownAt > 0) {
         logEvent('question_answer', {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
+            tempo_iniciacao_resposta_ms: firstInteractionAt ? Math.round(firstInteractionAt - questionShownAt) : null,
+            nivel_dificuldade: nivelDificuldade,   // dificuldade REAL (adaptativa), não mais constante
+            mouse_track: mouseSamples,             // trajeto [dt_ms, x, y] → features de mouse no Incr. B
             acertou,
             opcao_escolhida: idx,
             opcao_correta: currentQuestion.ans,

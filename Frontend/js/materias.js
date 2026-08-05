@@ -21,11 +21,12 @@ let idleTime        = 0;
 let dynamicLimit    = 10;
 let focusLostAt     = null;
 let mudancasAba     = 0;
-let lastScrollY     = 0;
-let lastScrollTime  = 0;
-let lastKeystroke   = 0;
-let keystrokeTimer  = null;
 let questionShownAt = 0;
+let firstInteractionAt = 0;   // 1ª interação com a questão → tempo_iniciacao_resposta_ms
+let mouseSamples = [];        // trajeto do mouse na questão: [dt_ms, x, y] (features de mouse no Incr. B)
+let lastMouseSampleAt = 0;    // throttle da amostragem do mouse
+let tempoOciosoMs = 0;  // tempo ocioso COM a aba focada, na questão (proxy do estado interno)
+let mexeuDesdeUltimoTick = false;  // houve mousemove desde o último tick do idle?
 let currentQuestion = null;
 let currentSubject  = null;   // matéria/tema da questão atual — para "Próxima questão"
 let currentTema     = null;
@@ -168,6 +169,214 @@ function iniciarPollIntervencao() {
 }
 
 // ============================================================
+//        CAMADA DE DADOS — PERFIL + FEATURES
+// ============================================================
+// lerPerfil/gravarPerfil/snapshotFeatures/registrarInicioSessao/enviarPerfil
+// vivem SO no comum.js (carregado antes) — a copia daqui duplicava e quebrava
+// o materias.js. So os hooks de onboarding abaixo continuam locais.
+const definirAmbiente  = (valor) => gravarPerfil({ ...lerPerfil(), ambiente_dispositivo: valor });
+const definirDataProva = (iso)   => gravarPerfil({ ...lerPerfil(), data_prova: iso });
+
+// Botão "Entrar" do login.html.
+// Autentica no Supabase Auth (email + senha) e, com o user.id do Auth, busca o
+// perfil (nome/role/hobbies) no backend. O cadastro é feito manualmente no
+// painel do Supabase — aqui o aluno só ENTRA.
+const ROTA_POR_ROLE = {
+    professor:   'responsaveis.html',
+    coordenador: 'responsaveis.html',
+    pai:         'responsaveis.html',
+};
+
+// Versão dos termos aceitos no cadastro: vai no metadata do signUp e o trigger
+// grava em perfis (termos_versao + termos_aceite_ts). Bumpar ao mudar o texto legal.
+const TERMOS_VERSAO = '2026-07-25';
+
+// Passos comuns ao login e ao cadastro: com o usuário já autenticado no Auth,
+// busca o perfil no backend (por id; fallback por email), guarda a sessão do
+// app e redireciona por role.
+async function finalizarLogin(authUser, falhar) {
+    let r = await apiFetch(`/perfil?user_id=${encodeURIComponent(authUser.id)}`);
+    if (r.status === 404 && authUser.email) {
+        r = await apiFetch(`/perfil?email=${encodeURIComponent(authUser.email)}`);
+    }
+    if (!r.ok) return falhar('Login feito, mas seu perfil não foi encontrado. Fale com o suporte.');
+    const u = await r.json();
+
+    sessionStorage.setItem('kaia_usuario', JSON.stringify({
+        user_id:   u.user_id,
+        email:     u.email,
+        nome:      u.nome,
+        role:      u.role,
+        escola_id: u.escola_id,
+        turma_id:  u.turma_id,
+    }));
+    // A identidade estável usada pelos sensores (sessions/events) é a do perfil real.
+    localStorage.setItem('kaia_user_id', u.user_id);
+
+    const hobbies = u.hobbies || [];
+    sessionStorage.setItem('hobbies', JSON.stringify(hobbies));
+    gravarPerfil({ ...lerPerfil(), email: u.email, hobbies });
+
+    if (u.role === 'aluno') {
+        window.location.href = hobbies.length ? 'index.html' : 'hobbies.html';
+    } else {
+        window.location.href = ROTA_POR_ROLE[u.role] || 'index.html';
+    }
+}
+
+async function salvarLogin(event) {
+    if (event) event.preventDefault();
+
+    const email = $('login-email')?.value.trim() || '';
+    const senha = $('login-senha')?.value || '';
+    const erro  = $('login-erro');
+    const falhar = (msg) => { if (erro) erro.textContent = msg; };
+
+    falhar('');
+    if (!email || !senha) return falhar('Preencha email e senha.');
+    if (!window.supabaseClient) return falhar('Autenticação indisponível (config.js sem Supabase).');
+
+    try {
+        const { data, error } = await window.supabaseClient.auth
+            .signInWithPassword({ email, password: senha });
+        if (error) return falhar('Email ou senha incorretos');
+        await finalizarLogin(data.user, falhar);
+    } catch (e) {
+        console.error('[KaIA] falha no login:', e);
+        falhar('Não foi possível conectar. Tente novamente.');
+    }
+}
+
+// Cadastro (auto-signup do aluno). Cria a conta no Supabase Auth com o nome no
+// metadata — o trigger no banco usa isso para preencher perfis.nome. Com a
+// confirmação de email DESLIGADA, o signUp já devolve sessão e entra direto; se
+// estiver LIGADA, avisa para confirmar por email antes de logar.
+async function criarConta(event) {
+    if (event) event.preventDefault();
+
+    const nome   = $('cad-nome')?.value.trim() || '';
+    const email  = $('cad-email')?.value.trim() || '';
+    const senha  = $('cad-senha')?.value || '';
+    const termos = $('cad-termos')?.checked || false;
+    const erro   = $('cad-erro');
+    const okmsg  = $('cad-ok');
+    const falhar = (msg) => { if (erro) erro.textContent = msg; if (okmsg) okmsg.textContent = ''; };
+
+    falhar('');
+    if (!nome || !email || !senha) return falhar('Preencha nome, email e senha.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return falhar('Digite um email válido.');
+    if (senha.length < 6) return falhar('A senha precisa ter ao menos 6 caracteres.');
+    if (!termos) return falhar('Para criar a conta, aceite os termos e a política de privacidade.');
+    if (!window.supabaseClient) return falhar('Cadastro indisponível (config.js sem Supabase).');
+
+    try {
+        // termos_versao vai no metadata → o trigger criar_perfil_no_signup grava o
+        // consentimento em perfis (termos_versao + termos_aceite_ts), atômico com a conta.
+        const { data, error } = await window.supabaseClient.auth.signUp({
+            email, password: senha, options: { data: { nome, termos_versao: TERMOS_VERSAO } },
+        });
+        if (error) {
+            const jaExiste = /registered|already/i.test(error.message || '');
+            return falhar(jaExiste ? 'Este email já tem conta. Faça login.'
+                                   : 'Não foi possível criar a conta. Tente outro email.');
+        }
+        if (data.session) {
+            // Confirmação de email desligada → já entra.
+            await finalizarLogin(data.user, falhar);
+        } else if (okmsg) {
+            // Confirmação ligada → precisa confirmar por email antes de logar.
+            okmsg.textContent = 'Conta criada! Confirme pelo email e depois faça login.';
+        }
+    } catch (e) {
+        console.error('[KaIA] falha no cadastro:', e);
+        falhar('Não foi possível conectar. Tente novamente.');
+    }
+}
+
+// MENU LATERAL + rail (MENU_LINKS / RAIL_ICONES / montarRail): removidos daqui.
+// Vivem so no comum.js (carregado antes). A copia duplicada quebrava o materias.js
+// inteiro com "MENU_LINKS has already been declared".
+
+// ============================================================
+//                       HOBBIES
+// ============================================================
+// A lista vive aqui (e não no HTML) para que o backend e a página de onboarding
+// compartilhem a mesma fonte de verdade — os hobbies alimentam o prompt da IA.
+const HOBBIES = [
+    'Futebol', 'Basquete', 'Vôlei', 'Natação', 'Corrida', 'Ciclismo', 'Academia', 'Yoga', 'Dança',
+    'Tricô', 'Crochê', 'Costura', 'Pintar', 'Desenho', 'Escultura', 'Fotografia',
+    'RPG', 'Videogames', 'Jogos de Tabuleiro', 'Xadrez', 'Quebra-cabeças',
+    'Culinária', 'Confeitaria', 'Churrasco',
+    'Música', 'Cantar', 'Violão', 'Piano', 'Bateria',
+    'Leitura', 'Escrita', 'Poesia',
+    'Cinema/Filme', 'Séries', 'Anime', 'Mangá',
+    'Programação', 'Robótica', 'Modelagem 3D', 'Impressão 3D',
+    'Jardinagem', 'Pesca', 'Camping', 'Trilhas', 'Viagens', 'Astronomia',
+    'Colecionismo', 'Origami', 'Idiomas', 'Voluntariado',
+];
+
+let hobbiesSelecionados = JSON.parse(sessionStorage.getItem('hobbies') || '[]');
+
+function registrarHobbies() {
+    const box = document.querySelector('.botoes-hobbies');
+    if (!box) return;
+
+    box.innerHTML = '';
+    HOBBIES.forEach(nome => {
+        const botao = document.createElement('button');
+        botao.type = 'button';
+        botao.className = 'botao-hobbies';
+        botao.textContent = nome;
+        botao.classList.toggle('selecionado', hobbiesSelecionados.includes(nome));
+
+        botao.addEventListener('click', () => {
+            const jaTinha = hobbiesSelecionados.includes(nome);
+            hobbiesSelecionados = jaTinha
+                ? hobbiesSelecionados.filter(h => h !== nome)
+                : [...hobbiesSelecionados, nome];
+            botao.classList.toggle('selecionado', !jaTinha);
+            console.log('Hobbies:', hobbiesSelecionados);
+        });
+
+        box.appendChild(botao);
+    });
+}
+
+function salvarHobbies() {
+    sessionStorage.setItem('hobbies', JSON.stringify(hobbiesSelecionados));
+    gravarPerfil({ ...lerPerfil(), hobbies: hobbiesSelecionados });
+    enviarPerfil({ tipo: 'hobbies' });
+    window.location.href = 'index.html';
+}
+
+// ============================================================
+//                     FAÇA-SE A LUZ
+// ============================================================
+// A luz foge do mouse. Só liga na página que tem o elemento (login).
+function registrarLuz() {
+    const luz = $('luzFundo');
+    const container = document.querySelector('.tela-login');
+    if (!luz || !container) return;
+
+    const raioFuga = 300;
+    let luzX = window.innerWidth / 2;
+    let luzY = window.innerHeight / 2;
+
+    container.addEventListener('mousemove', (e) => {
+        const dx = luzX - e.clientX;
+        const dy = luzY - e.clientY;
+        const distancia = Math.hypot(dx, dy);
+        if (distancia >= raioFuga || distancia === 0) return;
+
+        const forca = (raioFuga - distancia) / raioFuga;
+        luzX = Math.max(50, Math.min(window.innerWidth  - 50, luzX + (dx / distancia) * forca * 30));
+        luzY = Math.max(50, Math.min(window.innerHeight - 50, luzY + (dy / distancia) * forca * 30));
+        luz.style.left = `${luzX}px`;
+        luz.style.top  = `${luzY}px`;
+    });
+}
+
+// ============================================================
 //                  SENSORES DE COMPORTAMENTO
 // ============================================================
 // Escreve o estado da missão na sidebar + no overlay de inatividade.
@@ -190,6 +399,11 @@ function iniciarIdleMonitor() {
     idleInterval = setInterval(() => {
         if (!isMissionActive || pausaAtiva) return;   // descanso não conta como inatividade
         idleTime++;
+        // ocioso COM a aba focada (sem movimento no último segundo) → proxy do estado interno.
+        // A tela escurecida ainda conta (segue parado); dispensá-la com o mouse só interrompe a
+        // contagem daqui pra frente, não apaga o acumulado.
+        if (!document.hidden && !mexeuDesdeUltimoTick) tempoOciosoMs += 1000;
+        mexeuDesdeUltimoTick = false;
         const timer = $('timer');
         if (timer) timer.innerText = idleTime;
         if (idleTime >= dynamicLimit) setEstado('FALTA DE INTERAÇÃO', true);
@@ -199,11 +413,18 @@ function iniciarIdleMonitor() {
 function registrarSensores() {
     const quizView = $('quiz-view');
 
-    // --- mouse: qualquer movimento zera a ociosidade ---
-    quizView?.addEventListener('mousemove', () => {
+    // --- mouse: zera ociosidade + captura 1ª interação e o trajeto (features de mouse) ---
+    quizView?.addEventListener('mousemove', (e) => {
         if (!isMissionActive) return;
         idleTime = 0;
+        mexeuDesdeUltimoTick = true;
         setEstado('ESTUDANDO');
+        const agora = performance.now();
+        if (firstInteractionAt === 0 && questionShownAt > 0) firstInteractionAt = agora;   // initiation time
+        if (agora - lastMouseSampleAt >= 100) {   // amostra o trajeto ~10x/s (throttle p/ não inundar)
+            lastMouseSampleAt = agora;
+            mouseSamples.push([Math.round(agora - questionShownAt), e.clientX, e.clientY]);
+        }
     });
 
     // --- trocas de aba ---
@@ -232,65 +453,8 @@ function registrarSensores() {
         mostrarAvisoSaida();
     });
 
-    // --- scroll: rajadas rápidas indicam rolagem sem leitura ---
-    // Quem rola pode ser a janela OU um container interno, dependendo da página.
-    // Listener em FASE DE CAPTURA no document pega o 'scroll' de QUALQUER elemento
-    // (scroll não borbulha, mas é capturado na descida). Lemos a posição do alvo.
-    const posDoAlvo = (t) =>
-        (!t || t === document || t === document.documentElement || t === document.body || t === window)
-            ? (window.scrollY || document.documentElement.scrollTop || 0)
-            : (t.scrollTop || 0);
-    lastScrollY    = window.scrollY || 0;
-    lastScrollTime = performance.now();
-    let ultimoBurst = 0;   // throttle: no máximo 1 scroll_burst por segundo
-    document.addEventListener('scroll', (e) => {
-        if (!isMissionActive) return;
-        const y      = posDoAlvo(e.target);
-        const agora  = performance.now();
-        const deltaT = (agora - lastScrollTime) / 1000;
-        const px_s   = deltaT > 0 ? Math.abs(y - lastScrollY) / deltaT : 0;
-        lastScrollY    = y;      // posição atualizada SEMPRE (velocidade contínua)
-        lastScrollTime = agora;
-
-        // O evento 'scroll' dispara a cada frame; sem throttle uma rolagem vira
-        // centenas de eventos. Registramos no máximo 1 scroll_burst por segundo.
-        if (px_s > 300 && (agora - ultimoBurst) >= 1000) {
-            ultimoBurst = agora;
-            logEvent('scroll_burst', {
-                px_s: parseFloat(px_s.toFixed(1)),
-                duracao_s: parseFloat(deltaT.toFixed(2)),
-                rolagem_sem_leitura: (px_s > 500 && deltaT > 2)
-            });
-        }
-    }, { capture: true, passive: true });
-
-    // --- teclado: pausas longas e taxa de backspace ---
-    let totalTeclas = 0;
-    let totalBackspace = 0;
-    const taxaBackspace = () =>
-        totalTeclas > 0 ? parseFloat((totalBackspace / totalTeclas).toFixed(3)) : 0;
-
-    document.addEventListener('keydown', (e) => {
-        if (!isMissionActive) return;
-        const agora   = performance.now();
-        const pausa_s = (agora - lastKeystroke) / 1000;
-        totalTeclas++;
-        if (e.key === 'Backspace') totalBackspace++;
-
-        if (lastKeystroke > 0 && pausa_s > 3) {
-            logEvent('keystroke_pause', {
-                duracao_s: parseFloat(pausa_s.toFixed(2)),
-                taxa_backspace: taxaBackspace()
-            });
-        }
-        lastKeystroke = agora;
-
-        // 30s parado depois de digitar também é uma pausa
-        clearTimeout(keystrokeTimer);
-        keystrokeTimer = setTimeout(() => {
-            if (isMissionActive) logEvent('keystroke_pause', { duracao_s: 30, taxa_backspace: taxaBackspace() });
-        }, 30000);
-    });
+    // (v2: scroll removido — múltipla escolha não rola, feature velocidade_scroll saiu)
+    // (v2: keystroke_pause removido — quase não há digitação, feature pausas_digitacao saiu)
 
     // --- cliques fora da área da questão ---
     document.addEventListener('click', (e) => {
@@ -537,10 +701,6 @@ async function carregarQuestao(subject, tema) {
     idleTime = 0;
     mudancasAba = 0;
     focusLostAt = null;
-    lastKeystroke = 0;
-    lastScrollY = window.scrollY;
-    lastScrollTime = performance.now();
-    clearTimeout(keystrokeTimer);
 
     const subjectEl = $('current-subject');
     if (subjectEl) subjectEl.innerText = `${subject} · ${tema}`;
@@ -551,6 +711,9 @@ async function carregarQuestao(subject, tema) {
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
     questionShownAt = performance.now();
+    firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
+    mouseSamples = [];
+    tempoOciosoMs = 0;
     iniciarIdleMonitor();
     iniciarPollIntervencao();
 
@@ -644,6 +807,10 @@ function checkAnswer(idx, btn) {
     if (questionShownAt > 0) {
         logEvent('question_answer', {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
+            tempo_iniciacao_resposta_ms: firstInteractionAt ? Math.round(firstInteractionAt - questionShownAt) : null,
+            nivel_dificuldade: nivelDificuldade,   // dificuldade REAL (adaptativa), não mais constante
+            mouse_track: mouseSamples,             // trajeto [dt_ms, x, y] → features de mouse no Incr. B
+            tempo_ocioso_s: Math.round(tempoOciosoMs / 1000),   // ocioso c/ aba focada
             acertou,
             opcao_escolhida: idx,
             opcao_correta: currentQuestion.ans,
@@ -847,7 +1014,6 @@ function encerrarSessaoComResumo() {
     encerrarSessao();          // POST /sessions/{id}/end
     devolverFila();            // devolve o que sobrou na fila
     clearInterval(idleInterval);
-    clearTimeout(keystrokeTimer);
 
     preencherResumo();
     $('resumo-titulo').textContent = 'Sessão concluída!';
@@ -932,7 +1098,6 @@ function resetSystem() {
     encerrarSessao();
     devolverFila();
     clearInterval(idleInterval);
-    clearTimeout(keystrokeTimer);
     location.reload();
 }
 

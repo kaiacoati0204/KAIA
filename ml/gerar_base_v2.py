@@ -46,16 +46,16 @@ MOUSE_KEYS = ["velocidade_mouse_media", "variabilidade_velocidade_mouse",
 # desvio-alvo (em sigma) das internas geradas direto; engajado=baseline=0
 # deslocamentos MENORES + episódios fracos deixam engajado↔distraído genuinamente fuzzy
 DESVIO = {
-    "variabilidade_tempo_resposta": {"engajado": 0, "distraido": 0.65, "muito_distraido": 0.45},
-    "tempo_resposta_ms":            {"engajado": 0, "distraido": 0.65, "muito_distraido": 0.35},
-    "tempo_iniciacao_resposta_ms":  {"engajado": 0, "distraido": 0.65, "muito_distraido": 0.8},
-    "tempo_dwell_sem_responder_s":  {"engajado": 0, "distraido": 0.65, "muito_distraido": 0.25},
-    "tempo_ocioso_s":               {"engajado": 0, "distraido": 0.8, "muito_distraido": -0.4},
-    "tendencia_desempenho_sessao":  {"engajado": 0, "distraido": -0.3, "muito_distraido": -0.25},
+    "variabilidade_tempo_resposta": {"engajado": 0, "distraido": 0.9, "muito_distraido": 0.5},
+    "tempo_resposta_ms":            {"engajado": 0, "distraido": 0.8, "muito_distraido": 0.4},
+    "tempo_iniciacao_resposta_ms":  {"engajado": 0, "distraido": 0.8, "muito_distraido": 0.8},
+    "tempo_dwell_sem_responder_s":  {"engajado": 0, "distraido": 0.8, "muito_distraido": 0.3},
+    "tempo_ocioso_s":               {"engajado": 0, "distraido": 1.0, "muito_distraido": -0.4},
+    "tendencia_desempenho_sessao":  {"engajado": 0, "distraido": -0.45, "muito_distraido": -0.25},
 }
 CONTAGEM = {  # médias de contagens (Poisson) por estado
-    "contagem_lapsos_rt": {"engajado": 0.3, "distraido": 1.4, "muito_distraido": 0.9},
-    "erros_sem_offtask":  {"engajado": 0.2, "distraido": 0.9, "muito_distraido": 0.4},
+    "contagem_lapsos_rt": {"engajado": 0.3, "distraido": 1.8, "muito_distraido": 0.9},
+    "erros_sem_offtask":  {"engajado": 0.2, "distraido": 1.0, "muito_distraido": 0.4},
 }
 
 # ---- mouse ----
@@ -91,25 +91,36 @@ def gerar_aluno():
 def gerar_sessao(estado, aluno, base_mouse):
     z = random.uniform(0.1, 1.5)                 # intensidade latente; perto de 0 = episódio fraco (parece engajado)
     dif = random.randint(1, 5)
-    f = {}
+    # ~15% dos muito são "leves": o aluno saiu tão de leve que o COMPORTAMENTO parece presente.
+    # O rótulo continua muito_distraído, mas as features não têm assinatura → o modelo às vezes
+    # erra e NADA dá 100% (o realista). estado_efetivo (ef) gera as features; o rótulo é o `estado`.
+    # fronteira distraído↔muito borrada nos DOIS sentidos (nada fica separável demais):
+    #  - alguns muito são "leves" e parecem distraído (saiu de leve, sem assinatura)
+    #  - alguns distraído são "pesados" e parecem muito (lapsou E trocou de aba umas vezes)
+    ef = estado
+    if estado == "muito_distraido" and random.random() < 0.08:
+        ef = "distraido"
+    elif estado == "distraido" and random.random() < 0.05:
+        ef = "muito_distraido"
 
+    f = {}
     # internas relativas geradas direto (sigma); z faz co-variar
     for nome, m in DESVIO.items():
-        val = m[estado] * z + random.gauss(0, 0.8)
+        val = m[ef] * z + random.gauss(0, 0.8)
         if nome == "tempo_resposta_ms":
             val += 0.30 * (dif - 3)               # dificuldade -> mais lento que o normal
         f[nome] = round(val, 3)
 
     # contagens (Poisson), com efeito de dificuldade nos erros
-    lam_l = CONTAGEM["contagem_lapsos_rt"][estado] * (0.6 + 0.4 * z)
+    lam_l = CONTAGEM["contagem_lapsos_rt"][ef] * (0.6 + 0.4 * z)
     f["contagem_lapsos_rt"] = int(np.random.poisson(max(0.01, lam_l)))
-    lam_e = CONTAGEM["erros_sem_offtask"][estado] * (0.7 + 0.15 * (dif - 3))
+    lam_e = CONTAGEM["erros_sem_offtask"][ef] * (0.7 + 0.15 * (dif - 3))
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
 
     # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno
-    if estado == "engajado":
+    if ef == "engajado":
         erratic, n = aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
-    elif estado == "distraido":
+    elif ef == "distraido":
         erratic, n = aluno["erratic_base"] + 0.32 * z, random.randint(30, 70)
     else:                                        # muito_distraído: pouca mexida
         erratic, n = aluno["erratic_base"], random.randint(3, 10)
@@ -118,21 +129,21 @@ def gerar_sessao(estado, aluno, base_mouse):
         mu, sd = base_mouse[k]
         f[k] = round((mf[k] - mu) / sd, 3)
 
-    # externas absolutas — engajado E distraído "presentes" (blip 12%); muito = frequente+longo
-    if estado == "muito_distraido":
+    # externas absolutas — muito_distraído = frequente+longo; presente (eng/dist) = blip ocasional
+    if ef == "muito_distraido":
         f["mudancas_aba"] = max(2, int(np.random.poisson(4)))
-        f["tempo_fora_foco_s"] = round(max(20, random.gauss(70, 30)), 1)
+        f["tempo_fora_foco_s"] = round(max(15, random.gauss(60, 30)), 1)
         f["cliques_fora_area_estudo"] = int(np.random.poisson(3))
     else:
-        blip = random.random() < 0.12           # 12% dá 1 troca breve (engajado e distraído iguais)
+        blip = random.random() < 0.13
         f["mudancas_aba"] = 1 if blip else 0
-        f["tempo_fora_foco_s"] = round(random.uniform(2, 8), 1) if blip else 0.0
+        f["tempo_fora_foco_s"] = round(random.uniform(2, 10), 1) if blip else 0.0
         f["cliques_fora_area_estudo"] = 1 if random.random() < 0.10 else 0
     f["taxa_abandono_sessao"] = round(min(1.0, max(0.0, aluno["distraibilidade"] + random.gauss(0, 0.1))), 3)
 
     # contexto absolutas
     f["nivel_dificuldade_atividade"] = dif
-    dist_ctx = {"engajado": 0, "distraido": 1, "muito_distraido": 1}[estado]
+    dist_ctx = {"engajado": 0, "distraido": 1, "muito_distraido": 1}[ef]
     f["duracao_sessao_min"] = round(max(3, random.gauss(18 + 4 * dist_ctx, 8)), 1)
     f["hora_do_dia"] = round(min(23.9, max(7, random.gauss(15 + 3 * dist_ctx, 4))), 2)
     f["tempo_estudo_acumulado_dia_min"] = round(max(0, random.gauss(40 + 20 * dist_ctx, 30)), 1)

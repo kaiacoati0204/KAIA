@@ -28,6 +28,9 @@ ml/artifacts/*.pkl
 !ml/artifacts/scaler.pkl
 # Estado de runtime do Thompson Sampling (alpha/beta mutáveis)
 ml/artifacts/thompson_params.json
+# v2 é regenerável pelo gerador (seed fixa) — versiona só o gerador, não os artefatos.
+ml/models/modelo_rf_v2.pkl
+ml/artifacts/metricas_v2.json
 # checkpoints do Jupyter
 .ipynb_checkpoints/
 

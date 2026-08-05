@@ -11,7 +11,9 @@
       "Bash(python check_setup.py)",
       "Bash(python fill_setup.py)",
       "Bash(python -c ' *)",
-      "Bash(grep -v \"//\")"
+      "Bash(grep -v \"//\")",
+      "Bash(python -m pytest tests/test_mouse_features.py -q)",
+      "Bash(python -m pytest -q)"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

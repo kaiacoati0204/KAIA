@@ -10,7 +10,8 @@
       "Bash(node --check Frontend/config.example.js)",
       "Bash(python check_setup.py)",
       "Bash(python fill_setup.py)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(grep -v \"//\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

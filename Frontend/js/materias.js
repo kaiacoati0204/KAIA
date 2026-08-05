@@ -21,14 +21,12 @@ let idleTime        = 0;
 let dynamicLimit    = 10;
 let focusLostAt     = null;
 let mudancasAba     = 0;
-let lastScrollY     = 0;
-let lastScrollTime  = 0;
-let lastKeystroke   = 0;
-let keystrokeTimer  = null;
 let questionShownAt = 0;
 let firstInteractionAt = 0;   // 1ª interação com a questão → tempo_iniciacao_resposta_ms
 let mouseSamples = [];        // trajeto do mouse na questão: [dt_ms, x, y] (features de mouse no Incr. B)
 let lastMouseSampleAt = 0;    // throttle da amostragem do mouse
+let tempoOciosoMs = 0;  // tempo ocioso COM a aba focada, na questão (proxy do estado interno)
+let mexeuDesdeUltimoTick = false;  // houve mousemove desde o último tick do idle?
 let currentQuestion = null;
 let currentSubject  = null;   // matéria/tema da questão atual — para "Próxima questão"
 let currentTema     = null;
@@ -401,6 +399,11 @@ function iniciarIdleMonitor() {
     idleInterval = setInterval(() => {
         if (!isMissionActive || pausaAtiva) return;   // descanso não conta como inatividade
         idleTime++;
+        // ocioso COM a aba focada (sem movimento no último segundo) → proxy do estado interno.
+        // A tela escurecida ainda conta (segue parado); dispensá-la com o mouse só interrompe a
+        // contagem daqui pra frente, não apaga o acumulado.
+        if (!document.hidden && !mexeuDesdeUltimoTick) tempoOciosoMs += 1000;
+        mexeuDesdeUltimoTick = false;
         const timer = $('timer');
         if (timer) timer.innerText = idleTime;
         if (idleTime >= dynamicLimit) setEstado('FALTA DE INTERAÇÃO', true);
@@ -414,6 +417,7 @@ function registrarSensores() {
     quizView?.addEventListener('mousemove', (e) => {
         if (!isMissionActive) return;
         idleTime = 0;
+        mexeuDesdeUltimoTick = true;
         setEstado('ESTUDANDO');
         const agora = performance.now();
         if (firstInteractionAt === 0 && questionShownAt > 0) firstInteractionAt = agora;   // initiation time
@@ -697,10 +701,6 @@ async function carregarQuestao(subject, tema) {
     idleTime = 0;
     mudancasAba = 0;
     focusLostAt = null;
-    lastKeystroke = 0;
-    lastScrollY = window.scrollY;
-    lastScrollTime = performance.now();
-    clearTimeout(keystrokeTimer);
 
     const subjectEl = $('current-subject');
     if (subjectEl) subjectEl.innerText = `${subject} · ${tema}`;
@@ -713,6 +713,7 @@ async function carregarQuestao(subject, tema) {
     questionShownAt = performance.now();
     firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
     mouseSamples = [];
+    tempoOciosoMs = 0;
     iniciarIdleMonitor();
     iniciarPollIntervencao();
 
@@ -809,6 +810,7 @@ function checkAnswer(idx, btn) {
             tempo_iniciacao_resposta_ms: firstInteractionAt ? Math.round(firstInteractionAt - questionShownAt) : null,
             nivel_dificuldade: nivelDificuldade,   // dificuldade REAL (adaptativa), não mais constante
             mouse_track: mouseSamples,             // trajeto [dt_ms, x, y] → features de mouse no Incr. B
+            tempo_ocioso_s: Math.round(tempoOciosoMs / 1000),   // ocioso c/ aba focada
             acertou,
             opcao_escolhida: idx,
             opcao_correta: currentQuestion.ans,
@@ -1012,7 +1014,6 @@ function encerrarSessaoComResumo() {
     encerrarSessao();          // POST /sessions/{id}/end
     devolverFila();            // devolve o que sobrou na fila
     clearInterval(idleInterval);
-    clearTimeout(keystrokeTimer);
 
     preencherResumo();
     $('resumo-titulo').textContent = 'Sessão concluída!';
@@ -1097,7 +1098,6 @@ function resetSystem() {
     encerrarSessao();
     devolverFila();
     clearInterval(idleInterval);
-    clearTimeout(keystrokeTimer);
     location.reload();
 }
 

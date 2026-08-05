@@ -171,74 +171,13 @@ function iniciarPollIntervencao() {
 }
 
 // ============================================================
-//        CAMADA DE DADOS — PERFIL + FEATURES (Supabase-ready)
+//        CAMADA DE DADOS — PERFIL + FEATURES
 // ============================================================
-// Persistido em localStorage sob 'kaia_perfil' e espelhado no backend (/perfil).
-// Para plugar o Supabase, basta trocar `enviarPerfil` por um upsert em `perfis`.
-const lerPerfil    = () => JSON.parse(localStorage.getItem('kaia_perfil') || '{}');
-const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p));
-
-// Snapshot NÃO-mutável das features (só leitura, para enviar junto dos dados).
-function snapshotFeatures() {
-    const agora  = new Date();
-    const perfil = lerPerfil();
-    const dias   = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-    const hora   = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-
-    return {
-        horario_inicio:             hora,                                 // TIME    — do relógio
-        sessoes_no_dia:             perfil.sessoes_no_dia || 0,           // INTEGER — contador local
-        dia_semana:                 dias[agora.getDay()],                 // ENUM    — do timestamp
-        sequencia_dias_estudo:      perfil.sequencia_dias_estudo || 0,    // INTEGER — streak
-        ambiente_dispositivo:       perfil.ambiente_dispositivo || null,  // ENUM    — auto-declarado
-        // minutos desde a última sessão registrada
-        duracao_pausa_anterior_min: perfil.ultima_sessao_ts
-            ? parseFloat(((agora - perfil.ultima_sessao_ts) / 60000).toFixed(2)) : null,
-        // só existe se o aluno informou a data no onboarding
-        dias_para_prova: perfil.data_prova
-            ? Math.max(0, Math.ceil((new Date(perfil.data_prova) - agora) / 86400000)) : null
-    };
-}
-
-// Mutável: chamado quando uma sessão de ESTUDO começa (atualiza streak/contadores).
-function registrarInicioSessao() {
-    const agora   = new Date();
-    const perfil  = lerPerfil();
-    const hojeStr = agora.toISOString().slice(0, 10);
-
-    if (perfil.ultimo_dia_estudo === hojeStr) {
-        perfil.sessoes_no_dia = (perfil.sessoes_no_dia || 0) + 1;
-    } else {
-        const ontem = new Date(agora);
-        ontem.setDate(ontem.getDate() - 1);
-        // manteve o hábito se estudou ontem; senão zera o streak
-        perfil.sequencia_dias_estudo = (perfil.ultimo_dia_estudo === ontem.toISOString().slice(0, 10))
-            ? (perfil.sequencia_dias_estudo || 0) + 1 : 1;
-        perfil.sessoes_no_dia = 1;
-    }
-
-    perfil.ultimo_dia_estudo = hojeStr;
-    perfil.ultima_sessao_ts  = agora.getTime();
-    gravarPerfil(perfil);
-    return snapshotFeatures();
-}
-
-// Hooks de onboarding: 'silencioso' | 'ruido_moderado' | 'ruido_alto' e 'AAAA-MM-DD'
+// lerPerfil/gravarPerfil/snapshotFeatures/registrarInicioSessao/enviarPerfil
+// vivem SO no comum.js (carregado antes) — a copia daqui duplicava e quebrava
+// o materias.js. So os hooks de onboarding abaixo continuam locais.
 const definirAmbiente  = (valor) => gravarPerfil({ ...lerPerfil(), ambiente_dispositivo: valor });
 const definirDataProva = (iso)   => gravarPerfil({ ...lerPerfil(), data_prova: iso });
-
-// Envia o pacote completo (login + hobbies + features) para o backend.
-function enviarPerfil(extra = {}) {
-    return postJSON('/perfil', {
-        session_id: sessionId,
-        user_id:    userId,
-        ts:         new Date().toISOString(),
-        perfil:     lerPerfil(),
-        hobbies:    hobbiesSelecionados,
-        features:   snapshotFeatures(),
-        ...extra
-    }, true).catch(e => console.warn('[KaIA] /perfil indisponível (salvo só localmente):', e));
-}
 
 // Botão "Entrar" do login.html.
 // Autentica no Supabase Auth (email + senha) e, com o user.id do Auth, busca o
@@ -356,88 +295,9 @@ async function criarConta(event) {
     }
 }
 
-// ============================================================
-//                    MENU LATERAL
-// ============================================================
-// Injetado por JS em toda página com <body data-menu> — assim o markup do menu
-// não fica copiado (e divergindo) em cada HTML.
-const MENU_LINKS = [
-    ['index.html',        'Início'],
-    ['perfil.html',       'Perfil'],
-    ['materias.html',     'Matérias'],
-    ['meu-coati.html',    'Meu Coati'],
-    ['responsaveis.html', 'Acompanhar'],
-    ['dashboard.html',    'Dashboard'],
-];
-
-// O menu lateral antigo (☰) e a saudação flutuante foram substituídos pela
-// barra estática (montarRail, abaixo). MENU_LINKS agora alimenta a rail.
-
-// ============================================================
-//              BARRA LATERAL ESTÁTICA (rail)
-// ============================================================
-// Injetada nas páginas com <body data-rail>. Começa estreita (só ícones) e
-// expande ao clicar no ícone de menu (classe rail-aberta no body). É uma COLUNA
-// real do layout (o body vira flex): empurra o conteúdo em vez de sobrepor.
-const RAIL_ICONES = {
-    menu:                '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-    'index.html':        '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
-    'login.html':        '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
-    'perfil.html':       '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
-    'materias.html':     '<svg viewBox="0 0 24 24"><path d="M4 4h13a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M4 4v14"/></svg>',
-    'meu-coati.html':    '<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg>',
-    'responsaveis.html': '<svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>',
-    'dashboard.html':    '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
-    sair:                '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
-};
-
-function montarRail() {
-    if (!document.body.hasAttribute('data-rail')) return;
-    const atual = location.pathname.split('/').pop() || 'index.html';
-
-    const item = (ic, tx) => `<span class="rail-ic">${ic}</span><span class="rail-tx">${tx}</span>`;
-
-    const links = MENU_LINKS.map(([href, rotulo]) => {
-        const ativo = href === atual ? ' ativo' : '';
-        return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
-    }).join('');
-
-    // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
-    const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
-    const nome = u ? (u.nome || u.email || '').trim() : '';
-    const inicial = nome ? nome[0].toUpperCase() : '·';
-    const saudacao = nome
-        ? `<div class="rail-item rail-user"><span class="rail-ic rail-avatar">${inicial}</span><span class="rail-tx">Olá, ${nome}</span></div>`
-        : '';
-    const rodape =
-        `<div class="rail-rodape">${saudacao}`
-        + `<button class="rail-item rail-sair" type="button">${item(RAIL_ICONES.sair, 'Sair')}</button>`
-        + `</div>`;
-
-    const rail = document.createElement('nav');
-    rail.className = 'railnav';
-    rail.setAttribute('aria-label', 'Navegação');
-    rail.innerHTML =
-        `<button class="rail-item rail-toggle" type="button" aria-label="Expandir ou recolher o menu">${item(RAIL_ICONES.menu, 'Menu')}</button>`
-        + `<div class="rail-links">${links}</div>`
-        + rodape;
-    document.body.prepend(rail);
-
-    // Estado (aberta/colapsada) lembrado entre páginas via localStorage.
-    if (localStorage.getItem('kaia_rail_aberta') === '1') document.body.classList.add('rail-aberta');
-    rail.querySelector('.rail-toggle').addEventListener('click', () => {
-        const aberta = document.body.classList.toggle('rail-aberta');
-        localStorage.setItem('kaia_rail_aberta', aberta ? '1' : '0');
-    });
-
-    // Sair: encerra a sessão do Supabase Auth, limpa o sessionStorage e volta ao
-    // login. O signOut é best-effort (não trava o logout se o cliente faltar).
-    rail.querySelector('.rail-sair').addEventListener('click', async () => {
-        try { await window.supabaseClient?.auth.signOut(); } catch (_) {}
-        sessionStorage.clear();
-        window.location.href = 'login.html';
-    });
-}
+// MENU LATERAL + rail (MENU_LINKS / RAIL_ICONES / montarRail): removidos daqui.
+// Vivem so no comum.js (carregado antes). A copia duplicada quebrava o materias.js
+// inteiro com "MENU_LINKS has already been declared".
 
 // ============================================================
 //                       HOBBIES

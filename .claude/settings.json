@@ -13,7 +13,9 @@
       "Bash(python -c ' *)",
       "Bash(grep -v \"//\")",
       "Bash(python -m pytest tests/test_mouse_features.py -q)",
-      "Bash(python -m pytest -q)"
+      "Bash(python -m pytest -q)",
+      "Bash(python ml/gerar_base_v2.py)",
+      "Bash(awk '{print $NF, $5\\\\\" bytes\\\\\"}')"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

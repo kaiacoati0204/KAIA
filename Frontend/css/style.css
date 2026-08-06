@@ -1635,6 +1635,10 @@ body[data-rail] > :not(.railnav) { flex: 1 1 auto; min-width: 0; }
   height: 24px;
   display: grid;
   place-items: center;
+  /* Dock (ativarDockRail no comum.js): a transição suaviza os saltos que o JS
+     escreve a cada frame — é o que aproxima a mola do Framer Motion do componente
+     original, sem carregar o Framer. Aqui só o deslocamento horizontal. */
+  transition: transform 0.14s ease-out;
 }
 .rail-ic svg {
   width: 20px;
@@ -1644,6 +1648,15 @@ body[data-rail] > :not(.railnav) { flex: 1 1 auto; min-width: 0; }
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* O crescimento vem daqui, não de transform: scale() — scale rasteriza e embaça
+     o traço; mudar a dimensão redesenha o vetor nítido. A caixa .rail-ic tem
+     tamanho fixo, então o svg maior só transborda (centralizado), sem reflow. */
+  transition: width 0.14s ease-out, height 0.14s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* O JS já nem liga o efeito nesse modo; isto é só garantia. */
+  .rail-ic,
+  .rail-ic svg { transition: none; }
 }
 
 /* rótulos: escondidos quando colapsada, aparecem ao expandir */
@@ -2268,4 +2281,99 @@ body.textura-papel .conteudo {
 }
 .kaia-pausa-skip:hover {
   border-color: var(--gravata-kinrou);
+}
+
+/* =========================
+   AI LOADER — espera da IA (temas e questão)
+   Porte do componente "AI Loader" do 21st.dev (@beratberkayg). A animação é
+   CSS no original também; os keyframes abaixo mantêm a geometria EXATA dele
+   (mesmos offsets/blur/spread de box-shadow, mesmos 5s lineares e 3s das letras).
+   O que mudou, de propósito:
+     - paleta: os seis azuis do original viraram os azuis do projeto. A
+       profundidade da esfera vem do contraste claro/escuro, então não dá para
+       usar um tom só: --profundo (#1a2b4c) é a sombra funda, --azul-coati
+       (#2d4ba5) o médio, e #6f97e8/#89adf0/#7ba3ec (derivados do coati) o brilho.
+     - INLINE, não overlay: o original é `fixed inset-0` com fundo em degradê até
+       o preto, cobrindo a página. Aqui a esfera ocupa só o lugar da mensagem de
+       espera, dentro da área da questão — sem fundo próprio, sem z-index, com o
+       resto da página visível atrás.
+     - letras: `text-white` virou --profundo. Sobre o marfim da página, branco
+       ficaria invisível (e #fff puro é proibido pela regra do projeto).
+     - prefers-reduced-motion: o original não trata; aqui para tudo (TEA/TDAH).
+   O markup vem da ilha React em js/ai-loader.js — ver CLAUDE.md.
+========================= */
+.kaia-ail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+}
+.kaia-ail__palco {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  user-select: none;
+}
+.kaia-ail__letra {
+  display: inline-block;
+  color: var(--profundo);
+  opacity: 0.4;
+  animation: kaia-ail-letra 3s infinite;
+}
+.kaia-ail__esfera {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: kaia-ail-esfera 5s linear infinite;
+}
+@keyframes kaia-ail-esfera {
+  0% {
+    transform: rotate(90deg);
+    box-shadow:
+      0 6px 12px 0 #6f97e8 inset,
+      0 12px 18px 0 #2d4ba5 inset,
+      0 36px 36px 0 #1a2b4c inset,
+      0 0 3px 1.2px rgba(111, 151, 232, 0.3),
+      0 0 6px 1.8px rgba(45, 75, 165, 0.2);
+  }
+  50% {
+    transform: rotate(270deg);
+    box-shadow:
+      0 6px 12px 0 #89adf0 inset,
+      0 12px 6px 0 #3a5cb8 inset,
+      0 24px 36px 0 #2d4ba5 inset,
+      0 0 3px 1.2px rgba(111, 151, 232, 0.3),
+      0 0 6px 1.8px rgba(45, 75, 165, 0.2);
+  }
+  100% {
+    transform: rotate(450deg);
+    box-shadow:
+      0 6px 12px 0 #7ba3ec inset,
+      0 12px 18px 0 #2d4ba5 inset,
+      0 36px 36px 0 #1a2b4c inset,
+      0 0 3px 1.2px rgba(111, 151, 232, 0.3),
+      0 0 6px 1.8px rgba(45, 75, 165, 0.2);
+  }
+}
+@keyframes kaia-ail-letra {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  20%      { opacity: 1;   transform: scale(1.15); }
+  40%      { opacity: 0.7; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kaia-ail__esfera {
+    animation: none;
+    box-shadow:
+      0 6px 12px 0 #6f97e8 inset,
+      0 12px 18px 0 #2d4ba5 inset,
+      0 36px 36px 0 #1a2b4c inset;
+  }
+  .kaia-ail__letra {
+    animation: none;
+    opacity: 0.85;
+  }
 }

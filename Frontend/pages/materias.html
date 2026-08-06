@@ -178,6 +178,14 @@
         </div>
     </div>
 
+    <!-- Ilha React do AI Loader — SÓ a animação de espera da IA, nunca lógica.
+         Ver CLAUDE.md. `defer` de propósito: não bloqueia o render nem atrasa o
+         materias.js. Os deferidos rodam depois destes dois, mas antes de qualquer
+         clique do aluno, e o materias.js só chama a ilha se ela existir — logo,
+         CDN fora do ar = texto simples de sempre, sem tela quebrada. -->
+    <script defer src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script defer src="../js/ai-loader.js"></script>
     <script src="../js/comum.js"></script>
     <script src="../js/materias.js"></script>
 </body>

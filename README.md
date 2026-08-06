@@ -59,7 +59,7 @@ Backend/
   seed_contas_teste.py  → cria as contas @teste.kaia (senha teste1234)
   seed_sintetico.py     → popula sessões sintéticas para os painéis
   limpar_*.{py,sql}     → desfazem os seeds
-  .env                  → variáveis de ambiente (NÃO vai pro Git — copie de .env.example)
+  .env                  → variáveis de ambiente (NÃO vai pro Git — veja "2. Configuração")
 ml/                     → treino e pré-processamento do Random Forest
 CLAUDE.md               → convenções do projeto (cores, acessibilidade, segurança, estilo)
 ```
@@ -67,6 +67,13 @@ CLAUDE.md               → convenções do projeto (cores, acessibilidade, segu
 ---
 
 # 🚀 Como rodar
+
+> [!IMPORTANT]
+> **Subindo numa máquina nova?** O banco fica no **Supabase (nuvem)** e todo mundo
+> usa o **mesmo projeto**: schema, contas de teste e dados **já estão lá**. Na
+> prática você só precisa de três coisas — **(1)** dependências, **(2)**
+> `Backend/.env`, **(3)** `Frontend/config.js` (passos 1 a 3 abaixo). **Não** precisa
+> recriar nem popular o banco; o passo 7 só serve para casos específicos.
 
 ### 1. Pré-requisitos e dependências
 
@@ -144,15 +151,35 @@ Senha de todas: **`teste1234`**.
 
 Login OK = cai na tela do aluno. Conferência técnica: DevTools → Network → `GET /perfil` retorna **200**.
 
-### 7. Banco de dados (montar do zero)
+### 7. Banco de dados
 
-Scripts em `Backend/` e `Backend/migrations/`. Ordem:
+O banco (schema **e** dados) vive no **Supabase, na nuvem**. Usando o **mesmo projeto**
+(mesma `DATABASE_URL`) — o caso normal, inclusive numa máquina nova — **o banco já está
+pronto: não precisa rodar nada aqui.** As contas de teste do passo 6 já existem, com as
+senhas certas.
 
-1. **`Backend/migrations/0001_perfil_signup_termos.sql`** — schema + trigger de consentimento no signup. Rode uma vez no Supabase → SQL Editor.
-2. **`python Backend/seed_contas_teste.py --commit`** — cria as contas de teste acima (sem `--commit` = dry-run). Rode de dentro de `Backend/`.
-3. *(opcional)* **`python Backend/seed_sintetico.py --commit`** — popula sessões sintéticas para dar volume ao dashboard.
+Você só mexe no banco nestes casos:
 
-Limpeza (antes de produção / quando entrarem alunos reais): `Backend/limpar_sintetico.sql` e `python Backend/limpar_contas_teste.py --commit`.
+- **Recriar/resetar as contas de teste** (ex.: alguém trocou as senhas e o login parou):
+  `python Backend/seed_contas_teste.py --commit` (sem `--commit` = dry-run, só mostra o
+  plano; rode de dentro de `Backend/`). Recria as 6 contas com senha `teste1234`.
+  ⚠️ **Depende do schema base já existir** (`escolas`, `turmas`, `professores`,
+  `coordenadores`) — ele *reaproveita* essas linhas, **não as cria**.
+- **Aplicar a migration de consentimento** (só se ainda não foi aplicada neste projeto):
+  rode `Backend/migrations/0001_perfil_signup_termos.sql` uma vez no Supabase → SQL Editor.
+- *(opcional)* **Dar volume ao dashboard**: `python Backend/seed_sintetico.py --commit`.
+
+Limpeza (antes de produção / quando entrarem alunos reais): `Backend/limpar_sintetico.sql`
+e `python Backend/limpar_contas_teste.py --commit`.
+
+> [!WARNING]
+> **O schema base NÃO está versionado no repositório.** Não há `CREATE TABLE` de
+> `perfis`, `escolas`, `turmas`, `professores`, `coordenadores`, `sessions`, `events`
+> etc. — essas tabelas existem só no projeto Supabase atual (a migration `0001` faz
+> `ALTER TABLE`, assume que `perfis` já existe). Enquanto todos usarem **o mesmo
+> projeto**, tudo funciona. Mas para **recriar o projeto do zero** (um Supabase novo)
+> faltaria exportar o schema — ex.: `pg_dump --schema-only` — e versioná-lo aqui.
+> Pendência conhecida; não bloqueia o uso atual.
 
 ---
 

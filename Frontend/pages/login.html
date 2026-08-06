@@ -16,6 +16,24 @@
 
 <body>
 
+    <!-- Preloader de entrada: fica no HTML (não injetado por JS) para aparecer já
+         no primeiro paint, sem piscar a tela de login antes. Sai sozinho pela
+         animação; o registrarPreloader do login.js garante a remoção e permite
+         pular com um clique ou tecla. -->
+    <div id="kaia-preloader" aria-hidden="true">
+        <div class="kaia-pre-saudacoes">
+            <p class="kaia-pre-item">Olá</p>
+            <p class="kaia-pre-item">Hello</p>
+            <p class="kaia-pre-item">Hola</p>
+            <p class="kaia-pre-item">Bonjour</p>
+            <p class="kaia-pre-item">Ciao</p>
+            <p class="kaia-pre-item">Hallo</p>
+            <p class="kaia-pre-item">Konnichiwa</p>
+            <p class="kaia-pre-item">Namaste</p>
+            <p class="kaia-pre-item">Kaiá</p>
+        </div>
+    </div>
+
     <div class="tela-login">
         <!-- A luz foge do mouse e fica ATRÁS da caixa (ver registrarLuz no script.js) -->
         <div class="luz-fundo" id="luzFundo"></div>

@@ -583,6 +583,30 @@ function mostrarTela(id) {
     });
 }
 
+// Liga/desliga o AI Loader (ilha React em js/ai-loader.js). `alvo` é o container
+// ESTÁVEL onde a ilha monta (.question-wrapper no quiz, #temas-view nos temas) —
+// nunca um que a lógica limpe. Devolve true se montou de fato: só nesse caso quem
+// chama apaga o texto de espera, então sem a ilha a tela fica com a mensagem de
+// sempre. Blindado: falha da ilha vira aviso no console e a geração segue normal,
+// inclusive o fallback. Ver CLAUDE.md.
+const areaQuestao = () => document.querySelector('.question-wrapper');
+
+function esperaIA(palavra, rotulo, alvo) {
+    try {
+        return !!(window.KaiaAILoader && window.KaiaAILoader.mostrar(palavra, rotulo, alvo));
+    } catch (e) {
+        console.warn('[KaIA] AI Loader indisponível:', e);
+        return false;
+    }
+}
+function esperaIAFim() {
+    try {
+        if (window.KaiaAILoader) window.KaiaAILoader.esconder();
+    } catch (e) {
+        console.warn('[KaIA] AI Loader não escondeu:', e);
+    }
+}
+
 // Cria a lista de botões (temas ou alternativas) dentro de um container.
 function renderBotoes(container, itens, aoClicar) {
     container.innerHTML = '';
@@ -600,6 +624,8 @@ async function abrirMateria(subject) {
     const temasBox = $('temas-display');
     mostrarTela('temas-view');
     temasBox.innerHTML = 'KaIA montando os temas...';
+    // Montou a ilha? então ela substitui o texto; senão o texto fica.
+    if (esperaIA('Montando', 'Montando os temas da matéria', $('temas-view'))) temasBox.innerHTML = '';
 
     let temas = [];
     try {
@@ -607,6 +633,8 @@ async function abrirMateria(subject) {
         temas = data.temas || [];
     } catch (e) {
         console.warn('[KaIA] /temas indisponível:', e);
+    } finally {
+        esperaIAFim();   // sai sempre: o overlay é de tela cheia
     }
     if (!temas.length) {
         temas = TEMAS_FALLBACK[subject] || ['Tema 1', 'Tema 2', 'Tema 3'];
@@ -705,8 +733,13 @@ async function carregarQuestao(subject, tema) {
     if (fb) { fb.className = 'feedback-msg'; fb.innerHTML = ''; }
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
+    if (esperaIA('Gerando', 'Preparando sua questão', areaQuestao())) $('question-display').innerText = '';
 
-    currentQuestion = await obterProximaQuestao(subject, tema);   // vem da fila (lote); fallback interno
+    try {
+        currentQuestion = await obterProximaQuestao(subject, tema);   // vem da fila (lote); fallback interno
+    } finally {
+        esperaIAFim();   // sai sempre: o overlay é de tela cheia
+    }
 
     // zera os sensores para esta questão
     isMissionActive = true;
@@ -745,8 +778,13 @@ async function startMission(subject, tema) {
     mostrarTela('quiz-view');
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
-    if (!sessaoDeEstudoAberta) await iniciarSessaoEstudo(subject, tema);
-    await carregarQuestao(subject, tema);
+    if (esperaIA('Gerando', 'Preparando sua questão', areaQuestao())) $('question-display').innerText = '';
+    try {
+        if (!sessaoDeEstudoAberta) await iniciarSessaoEstudo(subject, tema);
+        await carregarQuestao(subject, tema);
+    } finally {
+        esperaIAFim();   // sai sempre, inclusive se iniciarSessaoEstudo falhar
+    }
 }
 
 // Só a barra da rodada (preenche conforme as respostas). Chamada ao responder.

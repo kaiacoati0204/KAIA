@@ -485,17 +485,19 @@ function registrarSensores() {
 // ============================================================
 //                    PERGUNTAS - CHAT
 // ============================================================
+// textContent (não innerHTML) na resposta da IA: o Gemini não devolve HTML, e
+// assim um '<' no meio de uma conta ("se n < k") aparece em vez de virar tag.
 async function enviarPergunta() {
     const respostas = $('respostas');
-    respostas.innerHTML = 'KaIA pensando...';
+    respostas.textContent = 'KaIA pensando...';
     try {
         const data = await postJSON('/perguntar', {
             pergunta: $('pergunta').value,
             hobbies: lerHobbies()
         });
-        respostas.innerHTML = data.resposta;
+        respostas.textContent = data.resposta;
     } catch (erro) {
-        respostas.innerHTML = 'Erro ao conectar com a IA.';
+        respostas.textContent = 'Erro ao conectar com a IA.';
         console.error(erro);
     }
 }

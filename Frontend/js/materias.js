@@ -27,6 +27,8 @@ let mouseSamples = [];        // trajeto do mouse na questão: [dt_ms, x, y] (fe
 let lastMouseSampleAt = 0;    // throttle da amostragem do mouse
 let tempoOciosoMs = 0;  // tempo ocioso COM a aba focada, na questão (proxy do estado interno)
 let mexeuDesdeUltimoTick = false;  // houve mousemove desde o último tick do idle?
+let tempoDwellMs = 0;   // tempo com o cursor sobre as alternativas SEM responder (hesitação)
+let dwellEntrouEm = 0;  // performance.now() de quando o cursor entrou nas alternativas (0 = fora)
 let currentQuestion = null;
 let currentSubject  = null;   // matéria/tema da questão atual — para "Próxima questão"
 let currentTema     = null;
@@ -427,6 +429,16 @@ function registrarSensores() {
         }
     });
 
+    // --- dwell: tempo sobre as ALTERNATIVAS sem ainda responder (hesitação → estado interno) ---
+    // O container #options-display persiste (só o innerHTML troca), então basta 1 listener.
+    const opcoesArea = $('options-display');
+    opcoesArea?.addEventListener('mouseenter', () => {
+        if (isMissionActive) dwellEntrouEm = performance.now();
+    });
+    opcoesArea?.addEventListener('mouseleave', () => {
+        if (dwellEntrouEm) { tempoDwellMs += performance.now() - dwellEntrouEm; dwellEntrouEm = 0; }
+    });
+
     // --- trocas de aba ---
     document.addEventListener('visibilitychange', () => {
         if (!isMissionActive || pausaAtiva) return;   // trocar de aba na pausa não é distração
@@ -714,6 +726,8 @@ async function carregarQuestao(subject, tema) {
     firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
     mouseSamples = [];
     tempoOciosoMs = 0;
+    tempoDwellMs = 0;
+    dwellEntrouEm = 0;
     iniciarIdleMonitor();
     iniciarPollIntervencao();
 
@@ -804,6 +818,10 @@ function checkAnswer(idx, btn) {
         return;
     }
 
+    if (dwellEntrouEm) {   // respondeu com o cursor ainda sobre as alternativas → fecha o dwell
+        tempoDwellMs += performance.now() - dwellEntrouEm;
+        dwellEntrouEm = 0;
+    }
     if (questionShownAt > 0) {
         logEvent('question_answer', {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
@@ -811,6 +829,7 @@ function checkAnswer(idx, btn) {
             nivel_dificuldade: nivelDificuldade,   // dificuldade REAL (adaptativa), não mais constante
             mouse_track: mouseSamples,             // trajeto [dt_ms, x, y] → features de mouse no Incr. B
             tempo_ocioso_s: Math.round(tempoOciosoMs / 1000),   // ocioso c/ aba focada
+            tempo_dwell_sem_responder_s: Math.round(tempoDwellMs / 100) / 10,   // hesitação sobre as alternativas
             acertou,
             opcao_escolhida: idx,
             opcao_correta: currentQuestion.ans,

@@ -16,6 +16,7 @@ NÃO mexe na produção: salva como modelo_rf_v2.pkl / scaler_v2.pkl / metricas_
 """
 import os, sys, json, math, random, statistics
 import numpy as np
+import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -149,35 +150,67 @@ def gerar_sessao(estado, aluno, base_mouse):
     f["tempo_estudo_acumulado_dia_min"] = round(max(0, random.gauss(40 + 20 * dist_ctx, 30)), 1)
     return f
 
-# ---- monta a base ----
+MODELO_PATH = os.path.join(BASE, "models", "modelo_rf_v2.pkl")
+SCALER_PATH = os.path.join(BASE, "artifacts", "scaler_v2.pkl")
+METRICAS_PATH = os.path.join(BASE, "artifacts", "metricas_v2.json")
 N_ALUNOS, POR_ESTADO = 40, 220
-alunos = [dict(a, base_mouse=baseline_mouse(a["erratic_base"])) for a in (gerar_aluno() for _ in range(N_ALUNOS))]
 
-X, y = [], []
-for estado in ESTADOS:
-    for _ in range(POR_ESTADO):
-        al = random.choice(alunos)
-        feats = gerar_sessao(estado, al, al["base_mouse"])
-        X.append([feats[k] for k in FEATURE_ORDER])
-        y.append(ESTADOS.index(estado))
 
-X, y = np.array(X, float), np.array(y)
-Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-scaler = StandardScaler().fit(Xtr)
-modelo = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, class_weight="balanced")
-modelo.fit(scaler.transform(Xtr), ytr)
-acc = accuracy_score(yte, modelo.predict(scaler.transform(Xte)))
+def construir_base(n_alunos=N_ALUNOS, por_estado=POR_ESTADO):
+    """Base sintética v2 -> (X DataFrame nomeado, y array)."""
+    alunos = [dict(a, base_mouse=baseline_mouse(a["erratic_base"]))
+              for a in (gerar_aluno() for _ in range(n_alunos))]
+    X, y = [], []
+    for estado in ESTADOS:
+        for _ in range(por_estado):
+            al = random.choice(alunos)
+            feats = gerar_sessao(estado, al, al["base_mouse"])
+            X.append([feats[k] for k in FEATURE_ORDER])
+            y.append(ESTADOS.index(estado))
+    # DataFrame nomeado -> scaler/modelo guardam feature_names_in_ (valida a ordem no serving)
+    return pd.DataFrame(X, columns=FEATURE_ORDER, dtype=float), np.array(y)
 
-# salva OFFLINE (não toca no v1)
-with open(os.path.join(BASE, "models", "modelo_rf_v2.pkl"), "wb") as fp: pickle.dump(modelo, fp)
-with open(os.path.join(BASE, "artifacts", "scaler_v2.pkl"), "wb") as fp: pickle.dump(scaler, fp)
-rep = classification_report(yte, modelo.predict(scaler.transform(Xte)), target_names=ESTADOS, output_dict=True)
-with open(os.path.join(BASE, "artifacts", "metricas_v2.json"), "w", encoding="utf-8") as fp:
-    json.dump({"versao": "v2", "acuracia": acc, "n": len(X), "feature_order": FEATURE_ORDER,
-               "classification_report": rep}, fp, indent=2, ensure_ascii=False)
 
-print(f"acuracia teste: {acc:.3f}  (alvo ~0,80-0,90)")
-imp = sorted(zip(FEATURE_ORDER, modelo.feature_importances_), key=lambda t: -t[1])
-print("top importancias:")
-for n, v in imp[:8]:
-    print(f"  {v*100:5.1f}%  {n}")
+def treinar_e_salvar(X, y, X_real=None, y_real=None, peso_real=6.0):
+    """Treina o RF v2 e salva os artefatos. Rótulos REAIS (probe), se vierem,
+    entram no TREINO com peso maior e o TESTE passa a ser o real segregado
+    (mede o desempenho no que importa). Retorna (modelo, acc, rep, n_real_teste)."""
+    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    peso, n_real_teste = None, 0
+    if X_real is not None and len(X_real):
+        estratif = y_real if len(set(y_real)) > 1 and len(X_real) >= 6 else None
+        Xr_tr, Xr_te, yr_tr, yr_te = train_test_split(
+            X_real, y_real, test_size=0.3, random_state=42, stratify=estratif)
+        n_sint = len(Xtr)
+        Xtr = pd.concat([Xtr, Xr_tr], ignore_index=True)
+        ytr = np.concatenate([ytr, yr_tr])
+        peso = np.concatenate([np.ones(n_sint), np.full(len(Xr_tr), peso_real)])
+        if len(Xr_te):                       # avalia no REAL segregado
+            Xte, yte, n_real_teste = Xr_te, yr_te, len(Xr_te)
+
+    scaler = StandardScaler().fit(Xtr)
+    Xtr_s = pd.DataFrame(scaler.transform(Xtr), columns=FEATURE_ORDER)
+    Xte_s = pd.DataFrame(scaler.transform(Xte), columns=FEATURE_ORDER)
+    modelo = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, class_weight="balanced")
+    modelo.fit(Xtr_s, ytr, sample_weight=peso)
+    acc = accuracy_score(yte, modelo.predict(Xte_s))
+    rep = classification_report(yte, modelo.predict(Xte_s), target_names=ESTADOS,
+                                labels=[0, 1, 2], output_dict=True, zero_division=0)
+
+    with open(MODELO_PATH, "wb") as fp: pickle.dump(modelo, fp)
+    with open(SCALER_PATH, "wb") as fp: pickle.dump(scaler, fp)
+    with open(METRICAS_PATH, "w", encoding="utf-8") as fp:
+        json.dump({"versao": "v2", "acuracia": acc, "n": len(X),
+                   "n_real": int(len(X_real)) if X_real is not None else 0,
+                   "n_real_teste": n_real_teste, "feature_order": FEATURE_ORDER,
+                   "classification_report": rep}, fp, indent=2, ensure_ascii=False)
+    return modelo, acc, rep, n_real_teste
+
+
+if __name__ == "__main__":
+    Xb, yb = construir_base()
+    modelo, acc, _, _ = treinar_e_salvar(Xb, yb)
+    print(f"acuracia teste: {acc:.3f}  (alvo ~0,80-0,90)")
+    print("top importancias:")
+    for n, v in sorted(zip(FEATURE_ORDER, modelo.feature_importances_), key=lambda t: -t[1])[:8]:
+        print(f"  {v*100:5.1f}%  {n}")

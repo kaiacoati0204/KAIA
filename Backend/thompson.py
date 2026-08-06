@@ -31,8 +31,8 @@ ELEGIVEIS_POR_ESTADO = {
     "muito_distraido": ["troca_atividade", "pausa_ativa", "microlearning", "alerta_fadiga"],
 }
 
-# alerta_fadiga só é elegível a partir deste nº de sessões no dia.
-MIN_SESSOES_ALERTA_FADIGA = 3
+# alerta_fadiga só é elegível a partir de tanto tempo de estudo acumulado no dia.
+MIN_ESTUDO_ALERTA_FADIGA_MIN = 60
 
 # Caminho padrão dos parâmetros persistidos.
 PARAMS_PATH = Path(__file__).resolve().parent.parent / "ml" / "artifacts" / "thompson_params.json"
@@ -70,17 +70,17 @@ class ThompsonSampling:
         )
 
     # ------------------------------------------------------------------- seleção
-    def elegiveis(self, estado, sessoes_no_dia):
+    def elegiveis(self, estado, tempo_estudo_min):
         """Intervenções elegíveis para o estado, aplicando a regra do alerta_fadiga."""
         elig = list(ELEGIVEIS_POR_ESTADO.get(estado, []))
-        if sessoes_no_dia < MIN_SESSOES_ALERTA_FADIGA and "alerta_fadiga" in elig:
+        if tempo_estudo_min < MIN_ESTUDO_ALERTA_FADIGA_MIN and "alerta_fadiga" in elig:
             elig.remove("alerta_fadiga")
         return elig
 
-    def select(self, estado, sessoes_no_dia):
+    def select(self, estado, tempo_estudo_min):
         """Amostra Beta(alpha,beta) de cada elegível e devolve o de maior amostra.
         Retorna None se não houver intervenção elegível."""
-        elig = self.elegiveis(estado, sessoes_no_dia)
+        elig = self.elegiveis(estado, tempo_estudo_min)
         if not elig:
             return None
         melhor, melhor_amostra = None, -1.0

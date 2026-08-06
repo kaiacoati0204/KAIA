@@ -15,7 +15,17 @@
       "Bash(python -m pytest tests/test_mouse_features.py -q)",
       "Bash(python -m pytest -q)",
       "Bash(python ml/gerar_base_v2.py)",
-      "Bash(awk '{print $NF, $5\\\\\" bytes\\\\\"}')"
+      "Bash(awk '{print $NF, $5\\\\\" bytes\\\\\"}')",
+      "Bash(git commit -q -m ' *)",
+      "Bash(python -W error::UserWarning -c ' *)",
+      "Bash(rm -f ml/models/modelo_rf_v2.pkl ml/artifacts/scaler_v2.pkl)",
+      "Bash(python -m pytest tests/test_diagnose.py -q)",
+      "Bash(python -m pytest tests/ -q --cov=app --cov-report=term-missing)",
+      "Bash(awk -F- '$1>=1040 && $1<=1245')",
+      "Bash(awk -F: '$1>=1760 && $1<=1810')",
+      "Bash(awk -F: '$1>=1980 && $1<=2530')",
+      "Bash(awk -F: '$1>=560 && $1<=760')",
+      "Bash(python -c \"import sys;sys.path.insert\\(0,'ml'\\);sys.path.insert\\(0,'Backend'\\);import treinar_com_probe;print\\('treinar_com_probe importa OK'\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

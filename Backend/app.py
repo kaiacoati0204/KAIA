@@ -12,8 +12,11 @@ import asyncpg
 import pandas as pd
 import requests
 
+from statistics import mean, pstdev
+
 from thompson import ThompsonSampling, INTERVENCOES
 from auth import usuario_autenticado
+from mouse_features import features_mouse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
@@ -108,11 +111,11 @@ async def lifespan(app: FastAPI):
     app.state.scaler = None
     try:
         ROOT = Path(__file__).resolve().parent.parent
-        with open(ROOT / "ml" / "models" / "modelo_rf_v1.pkl", "rb") as f:
+        with open(ROOT / "ml" / "models" / "modelo_rf_v2.pkl", "rb") as f:
             app.state.modelo = pickle.load(f)
-        with open(ROOT / "ml" / "artifacts" / "scaler.pkl", "rb") as f:
+        with open(ROOT / "ml" / "artifacts" / "scaler_v2.pkl", "rb") as f:
             app.state.scaler = pickle.load(f)
-        print("[KaIA] Modelo RF v1 + scaler carregados no startup.")
+        print("[KaIA] Modelo RF v2 + scaler carregados no startup.")
     except Exception as e:
         print("[KaIA] AVISO: não foi possível carregar modelo/scaler:", e)
 
@@ -920,8 +923,8 @@ async def rodar_intervencao(app, session_id):
             if desde_min < INTERV_COOLDOWN_MIN:
                 return
 
-        sessoes_no_dia = int(res["feats"].get("sessoes_no_dia") or 0)
-        tipo = thompson.select(res["estado"], sessoes_no_dia)
+        tempo_estudo_min = float(res["feats"].get("tempo_estudo_acumulado_dia_min") or 0)
+        tipo = thompson.select(res["estado"], tempo_estudo_min)
         if not tipo:
             return
 
@@ -983,18 +986,31 @@ async def resolver_rewards(conn, thompson, session_id, estado_atual):
 # (cumulativo), NÃO sobre a janela de 30s de session_features (que continua
 # existindo apenas para o painel do responsável).
 
-# Ordem EXATA esperada pelo modelo/scaler (scaler.feature_names_in_). NÃO altere.
+# Ordem EXATA esperada pelo modelo/scaler v2 (scaler_v2.feature_names_in_). NÃO altere.
+# Mesma ordem do gerar_base_v2.py (ml/): internas relativas, externas e contexto absolutas.
 FEATURE_ORDER = [
-    "tempo_resposta_ms", "velocidade_scroll_px_s", "pausas_digitacao_s",
-    "acertos_questoes", "nivel_dificuldade_atividade", "duracao_sessao_min",
-    "historico_intervencoes", "taxa_abandono_sessao", "mudancas_aba",
-    "tempo_fora_foco_s", "cliques_fora_area_estudo", "sessoes_no_dia",
-    "hora_do_dia", "produtividade", "distracao_score",
+    # internas (relativas ao baseline do aluno, em sigma)
+    "variabilidade_tempo_resposta", "contagem_lapsos_rt", "tempo_resposta_ms",
+    "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
+    "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
+    "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
+    # externas (absolutas)
+    "mudancas_aba", "tempo_fora_foco_s", "cliques_fora_area_estudo", "taxa_abandono_sessao",
+    # contexto (absolutas)
+    "nivel_dificuldade_atividade", "duracao_sessao_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
 ]
-# Min/max de tempo_fora_foco_s na base de treino, para reproduzir a
-# normalização min-max do distracao_score (preprocessing.ipynb).
-TFF_MIN, TFF_MAX = 0.4, 299.9
-NIVEL_DIFICULDADE_PADRAO = 1  # importância ~0 no modelo; default seguro (CHECK 1..5)
+
+# Internas expressas como DESVIO (sigma) do baseline do aluno; o resto é bruto.
+# contagem_lapsos_rt/erros_sem_offtask são contagens (brutas), não relativizadas.
+INTERNAS_RELATIVAS = (
+    "variabilidade_tempo_resposta", "tempo_resposta_ms", "tempo_iniciacao_resposta_ms",
+    "tempo_dwell_sem_responder_s", "tempo_ocioso_s", "tendencia_desempenho_sessao",
+    "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
+    "entropia_trajetoria_mouse",
+)
+MIN_SESSOES_BASELINE = 3     # abaixo disso não dá pra personalizar -> desvio 0 (neutro)
+BASELINE_TTL_S = 600         # cache do baseline por aluno (sessões passadas não mudam)
+NIVEL_DIFICULDADE_PADRAO = 2  # fallback se a sessão ainda não tem resposta (CHECK 1..5)
 
 # Mapeamento do rótulo (int) -> estado, conforme encoding do treino.
 ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
@@ -1022,10 +1038,103 @@ def reward_por_transicao(estado_antes, estado_depois):
     return 0.0                                         # piorou
 
 
+async def _carregar_eventos(conn, session_id):
+    """Eventos de UMA sessão como lista de (event_type, payload_dict)."""
+    eventos = await conn.fetch(
+        "select event_type, payload from session_events where session_id = $1::uuid",
+        session_id,
+    )
+    return [(r["event_type"], json.loads(r["payload"])) for r in eventos]
+
+
+def _inclinacao(ys):
+    """Inclinação (mínimos quadrados) de ys vs. índice — tendência ao longo da sessão."""
+    n = len(ys)
+    if n < 2:
+        return 0.0
+    mx, my = (n - 1) / 2.0, sum(ys) / n
+    den = sum((i - mx) ** 2 for i in range(n))
+    if den == 0:
+        return 0.0
+    return sum((i - mx) * (y - my) for i, y in enumerate(ys)) / den
+
+
+def _internos_brutos(evs):
+    """Valores BRUTOS das internas de UMA sessão (média/desvio por questão).
+    NÃO relativiza — isso é feito depois contra o baseline do aluno.
+    Retorna None se a sessão não tem nenhuma resposta (não serve de amostra)."""
+    respostas = [p for et, p in evs if et == "question_answer"]
+    if not respostas:
+        return None
+    rts = [float(p["tempo_resposta_ms"]) for p in respostas if p.get("tempo_resposta_ms") is not None]
+    inis = [float(p["tempo_iniciacao_resposta_ms"]) for p in respostas if p.get("tempo_iniciacao_resposta_ms") is not None]
+    ocio = [float(p.get("tempo_ocioso_s") or 0) for p in respostas]
+    dwell = [float(p.get("tempo_dwell_sem_responder_s") or 0) for p in respostas]
+    mfs = [features_mouse(p.get("mouse_track") or []) for p in respostas]  # mesma fn da base v2
+
+    def _mm(k):
+        vs = [m[k] for m in mfs]
+        return mean(vs) if vs else 0.0
+
+    acertos = [1.0 if p.get("acertou") else 0.0 for p in respostas]
+    return {
+        "variabilidade_tempo_resposta": pstdev(rts) if len(rts) > 1 else 0.0,
+        "tempo_resposta_ms": mean(rts) if rts else 0.0,
+        "tempo_iniciacao_resposta_ms": mean(inis) if inis else 0.0,
+        "tempo_dwell_sem_responder_s": mean(dwell) if dwell else 0.0,   # hover nas alternativas sem responder
+        "tempo_ocioso_s": mean(ocio) if ocio else 0.0,
+        "tendencia_desempenho_sessao": _inclinacao(acertos),
+        "velocidade_mouse_media": _mm("velocidade_mouse_media"),
+        "variabilidade_velocidade_mouse": _mm("variabilidade_velocidade_mouse"),
+        "flips_cursor_xy": _mm("flips_cursor_xy"),
+        "entropia_trajetoria_mouse": _mm("entropia_trajetoria_mouse"),
+        "_rts": rts,
+        "_erros": sum(1 for a in acertos if a == 0.0),   # erros_sem_offtask (contagem bruta)
+        "_niveis": [int(p.get("nivel_dificuldade") or NIVEL_DIFICULDADE_PADRAO) for p in respostas],
+    }
+
+
+_BASELINE_CACHE = {}   # user_id -> (baseline_dict|None, computed_at)
+
+
+async def _baseline_aluno(conn, user_id, session_id):
+    """Baseline ENTRE-SESSÕES do aluno: (média, desvio) BRUTO de cada interna
+    sobre as sessões passadas encerradas. < MIN_SESSOES_BASELINE -> None
+    (cold-start: sem histórico não dá pra personalizar -> desvios 0). Cacheado
+    (BASELINE_TTL_S), pois sessões passadas não mudam."""
+    chave = str(user_id)
+    agora = datetime.now(timezone.utc)
+    cache = _BASELINE_CACHE.get(chave)
+    if cache and (agora - cache[1]).total_seconds() < BASELINE_TTL_S:
+        return cache[0]
+
+    rows = await conn.fetch(
+        "select session_id from sessions where user_id = $1::uuid "
+        "and session_end_ts is not null and session_id <> $2::uuid "
+        "order by session_start_ts desc limit 20",
+        user_id, session_id,
+    )
+    amostras, rts_pool = [], []
+    for r in rows:
+        raw = _internos_brutos(await _carregar_eventos(conn, r["session_id"]))
+        if raw:
+            amostras.append(raw)
+            rts_pool += raw["_rts"]
+
+    if len(amostras) < MIN_SESSOES_BASELINE:
+        base = None
+    else:
+        base = {k: (mean([a[k] for a in amostras]), pstdev([a[k] for a in amostras]) or 1.0)
+                for k in INTERNAS_RELATIVAS}
+        base["_rt"] = (mean(rts_pool), pstdev(rts_pool) or 1.0) if len(rts_pool) > 1 else None
+    _BASELINE_CACHE[chave] = (base, agora)
+    return base
+
+
 async def montar_features_sessao(conn, session_id):
-    """Monta o dict das 15 features (CUMULATIVO, sessão inteira), mesma
-    granularidade do treino. Retorna dict {feature: valor} ou None se a
-    sessão não existir."""
+    """Monta o dict das 20 features v2 (CUMULATIVO, sessão inteira). Internas
+    relativizadas pelo baseline do aluno (desvio em sigma); externas/contexto
+    brutas. Retorna na ordem FEATURE_ORDER, ou None se a sessão não existir."""
     sess = await conn.fetchrow(
         "select user_id, session_start_ts from sessions where session_id = $1::uuid",
         session_id,
@@ -1033,45 +1142,32 @@ async def montar_features_sessao(conn, session_id):
     if sess is None:
         return None
 
-    eventos = await conn.fetch(
-        "select event_type, payload from session_events where session_id = $1::uuid",
-        session_id,
-    )
-    evs = [(r["event_type"], json.loads(r["payload"])) for r in eventos]
+    evs = await _carregar_eventos(conn, session_id)
+    tab = [p for et, p in evs if et == "tab_change"]
+    cliques = [p for et, p in evs if et == "click_outside"]
+    brutos = _internos_brutos(evs)
+    base = await _baseline_aluno(conn, sess["user_id"], session_id)
 
-    def do_tipo(t):
-        return [p for et, p in evs if et == t]
+    f = {}
+    # internas relativas (desvio em sigma; cold-start ou sessão sem resposta -> 0)
+    for k in INTERNAS_RELATIVAS:
+        if brutos is None or base is None:
+            f[k] = 0.0
+        else:
+            mu, sd = base[k]
+            f[k] = round((brutos[k] - mu) / sd, 3)
+    # contagens brutas (não relativizadas, como no gerador v2)
+    if brutos and base and base.get("_rt"):
+        limite = base["_rt"][0] + 2 * base["_rt"][1]         # RT típico do aluno + 2σ = lapso
+        f["contagem_lapsos_rt"] = sum(1 for rt in brutos["_rts"] if rt > limite)
+    else:
+        f["contagem_lapsos_rt"] = 0
+    f["erros_sem_offtask"] = brutos["_erros"] if brutos else 0
 
-    tab, scroll = do_tipo("tab_change"), do_tipo("scroll_burst")
-    teclas, cliques = do_tipo("keystroke_pause"), do_tipo("click_outside")
-    respostas = do_tipo("question_answer")
-
-    mudancas_aba = len(tab)
-    cliques_fora_area_estudo = len(cliques)
-    tempo_fora_foco_s = sum(float(p.get("tempo_fora_foco_s") or 0) for p in tab)
-    pausas_digitacao_s = sum(float(p.get("duracao_s") or 0) for p in teclas)
-    px = [float(p.get("px_s") or 0) for p in scroll]
-    velocidade_scroll_px_s = (sum(px) / len(px)) if px else 0.0
-    tr = [float(p.get("tempo_resposta_ms") or 0) for p in respostas]
-    tempo_resposta_ms = (sum(tr) / len(tr)) if tr else 0.0
-    acertos_questoes = sum(1 for p in respostas if p.get("acertou") is True)
-
-    agora = datetime.now(timezone.utc)
-    duracao_sessao_min = max((agora - sess["session_start_ts"]).total_seconds() / 60.0, 1e-6)
-    local = datetime.now()
-    hora_do_dia = round(local.hour + local.minute / 60.0, 2)
-
-    sessoes_no_dia = 0
-    start = do_tipo("session_start")
-    if start:
-        sessoes_no_dia = int(((start[0] or {}).get("features") or {}).get("sessoes_no_dia") or 0)
-    if not sessoes_no_dia:
-        sessoes_no_dia = await conn.fetchval(
-            "select count(*) from sessions where user_id = $1::uuid "
-            "and date(session_start_ts) = current_date",
-            sess["user_id"],
-        ) or 0
-
+    # externas absolutas
+    f["mudancas_aba"] = len(tab)
+    f["tempo_fora_foco_s"] = round(sum(float(p.get("tempo_fora_foco_s") or 0) for p in tab), 1)
+    f["cliques_fora_area_estudo"] = len(cliques)
     ab = await conn.fetchrow(
         """
         select count(*) filter (where session_end_ts is null and session_id <> $2::uuid) as abandonadas,
@@ -1081,37 +1177,21 @@ async def montar_features_sessao(conn, session_id):
         """,
         sess["user_id"], session_id,
     )
-    taxa_abandono_sessao = (ab["abandonadas"] / ab["total"]) if ab and ab["total"] else 0.0
+    f["taxa_abandono_sessao"] = round((ab["abandonadas"] / ab["total"]) if ab and ab["total"] else 0.0, 3)
 
-    try:  # tabela interventions pode ainda não existir (Tarefa 4)
-        historico_intervencoes = await conn.fetchval(
-            "select count(*) from interventions where session_id = $1::uuid", session_id
-        ) or 0
-    except Exception:
-        historico_intervencoes = 0
+    # contexto absolutas
+    f["nivel_dificuldade_atividade"] = round(mean(brutos["_niveis"])) if (brutos and brutos["_niveis"]) else NIVEL_DIFICULDADE_PADRAO
+    agora = datetime.now(timezone.utc)
+    f["duracao_sessao_min"] = round(max((agora - sess["session_start_ts"]).total_seconds() / 60.0, 1e-6), 2)
+    local = datetime.now()
+    f["hora_do_dia"] = round(local.hour + local.minute / 60.0, 2)
+    f["tempo_estudo_acumulado_dia_min"] = round(float(await conn.fetchval(
+        "select coalesce(sum(extract(epoch from (coalesce(session_end_ts, now()) - session_start_ts))) / 60.0, 0) "
+        "from sessions where user_id = $1::uuid and date(session_start_ts) = current_date",
+        sess["user_id"],
+    ) or 0.0), 1)
 
-    produtividade = acertos_questoes / duracao_sessao_min
-    tff_norm = (tempo_fora_foco_s - TFF_MIN) / (TFF_MAX - TFF_MIN)
-    tff_norm = min(max(tff_norm, 0.0), 1.0)  # clamp p/ 0..1 como no treino
-    distracao_score = mudancas_aba * 0.4 + cliques_fora_area_estudo * 0.3 + tff_norm * 0.3
-
-    return {
-        "tempo_resposta_ms": tempo_resposta_ms,
-        "velocidade_scroll_px_s": velocidade_scroll_px_s,
-        "pausas_digitacao_s": pausas_digitacao_s,
-        "acertos_questoes": acertos_questoes,
-        "nivel_dificuldade_atividade": NIVEL_DIFICULDADE_PADRAO,
-        "duracao_sessao_min": duracao_sessao_min,
-        "historico_intervencoes": historico_intervencoes,
-        "taxa_abandono_sessao": taxa_abandono_sessao,
-        "mudancas_aba": mudancas_aba,
-        "tempo_fora_foco_s": tempo_fora_foco_s,
-        "cliques_fora_area_estudo": cliques_fora_area_estudo,
-        "sessoes_no_dia": sessoes_no_dia,
-        "hora_do_dia": hora_do_dia,
-        "produtividade": produtividade,
-        "distracao_score": distracao_score,
-    }
+    return {k: f[k] for k in FEATURE_ORDER}   # ordem exata do modelo
 
 
 def vetor_para_modelo(feats):
@@ -1143,7 +1223,7 @@ async def predizer_estado(modelo, scaler, conn, session_id):
 async def diagnose(request: Request, session_id: str,
                    _uid: str = Depends(usuario_autenticado)):
     """Prediz o estado de atenção da sessão (engajado/distraido/muito_distraido)
-    usando o RandomForest v1 carregado no startup. As features são o vetor
+    usando o RandomForest v2 carregado no startup. As features são o vetor
     CUMULATIVO da sessão (montar_features_sessao), na ordem exata do treino."""
     pool = request.app.state.pool
     if pool is None:
@@ -1366,9 +1446,35 @@ async def receber_evento(body: EventIn, request: Request):
                 """,
                 body.session_id, body.event_type, payload_json,
             )
+        # Probe = rótulo REAL do aluno -> vira exemplo supervisionado (fora da
+        # transação: falhar aqui não pode derrubar a ingestão do evento).
+        if body.event_type == "probe_atencao":
+            await _capturar_probe(conn, body.session_id, body.payload)
 
     print("[KaIA Event]", body.event_type, body.session_id)
     return {"status": "ok", "event_id": str(ev["event_id"])}
+
+
+async def _capturar_probe(conn, session_id, payload):
+    """Grava (features NO MOMENTO, rótulo declarado) em probe_labels — o dataset
+    real que tira o modelo do 100% sintético. Best-effort: erro não propaga
+    (tabela pode não existir ainda, sessão sem respostas etc.)."""
+    estado = (payload or {}).get("estado")
+    if estado not in ESTADOS:
+        return
+    try:
+        feats = await montar_features_sessao(conn, session_id)
+        if feats is None:
+            return
+        uid = await conn.fetchval(
+            "select user_id from sessions where session_id = $1::uuid", session_id)
+        await conn.execute(
+            "insert into probe_labels (session_id, user_id, estado, features) "
+            "values ($1::uuid, $2, $3, $4::jsonb)",
+            session_id, uid, estado, json.dumps(feats),
+        )
+    except Exception as e:
+        print("[KaIA] erro ao capturar probe:", e)
 
 
 # ================== API: PERFIL (login + hobbies, upsert em `perfis`) ========

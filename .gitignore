@@ -22,10 +22,8 @@ server.log
 # Dados locais antigos (antes do Supabase)
 *.jsonl
 
-# Artefatos gerados pelo notebook de pré-processamento (regeneráveis)
+# Artefatos de ML regeneráveis (o v2 vem do gerar_base_v2.py, seed fixa)
 ml/artifacts/*.pkl
-# ...exceto o scaler: é fixture dos testes (precisa existir no CI).
-!ml/artifacts/scaler.pkl
 # Estado de runtime do Thompson Sampling (alpha/beta mutáveis)
 ml/artifacts/thompson_params.json
 # v2 é regenerável pelo gerador (seed fixa) — versiona só o gerador, não os artefatos.

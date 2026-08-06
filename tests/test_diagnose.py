@@ -7,16 +7,18 @@ import httpx
 import app as app_mod
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELO = pickle.load(open(ROOT / "ml" / "models" / "modelo_rf_v1.pkl", "rb"))
-SCALER = pickle.load(open(ROOT / "ml" / "artifacts" / "scaler.pkl", "rb"))
+MODELO = pickle.load(open(ROOT / "ml" / "models" / "modelo_rf_v2.pkl", "rb"))
+SCALER = pickle.load(open(ROOT / "ml" / "artifacts" / "scaler_v2.pkl", "rb"))
 
-# Vetor de 15 features (perfil "distraído") na ordem que o modelo espera.
+# Vetor de 20 features v2 (perfil "distraído"): internas em sigma, externas/contexto brutas.
 FEATS_VALIDAS = {
-    "tempo_resposta_ms": 6000.0, "velocidade_scroll_px_s": 250.0, "pausas_digitacao_s": 4.0,
-    "acertos_questoes": 4.0, "nivel_dificuldade_atividade": 1.0, "duracao_sessao_min": 35.0,
-    "historico_intervencoes": 2.0, "taxa_abandono_sessao": 0.4, "mudancas_aba": 6.0,
-    "tempo_fora_foco_s": 90.0, "cliques_fora_area_estudo": 7.0, "sessoes_no_dia": 3.0,
-    "hora_do_dia": 21.0, "produtividade": 0.11, "distracao_score": 4.2,
+    "variabilidade_tempo_resposta": 0.8, "contagem_lapsos_rt": 2.0, "tempo_resposta_ms": 0.7,
+    "tempo_iniciacao_resposta_ms": 0.6, "tempo_dwell_sem_responder_s": 0.0, "tempo_ocioso_s": 0.9,
+    "velocidade_mouse_media": -0.2, "variabilidade_velocidade_mouse": 0.3, "flips_cursor_xy": 0.4,
+    "entropia_trajetoria_mouse": 0.5, "erros_sem_offtask": 1.0, "tendencia_desempenho_sessao": -0.4,
+    "mudancas_aba": 1.0, "tempo_fora_foco_s": 6.0, "cliques_fora_area_estudo": 1.0, "taxa_abandono_sessao": 0.3,
+    "nivel_dificuldade_atividade": 3.0, "duracao_sessao_min": 20.0, "hora_do_dia": 21.0,
+    "tempo_estudo_acumulado_dia_min": 50.0,
 }
 
 
@@ -80,3 +82,18 @@ async def test_estado_valido(monkeypatch):
     async with _client() as c:
         r = await c.get("/diagnose", params={"session_id": "abc"})
     assert r.json()["estado"] in {"engajado", "distraido", "muito_distraido"}
+
+
+async def test_diagnose_sem_modelo():
+    _prep(modelo=None, scaler=None)          # modelo não carregou -> 503
+    async with _client() as c:
+        r = await c.get("/diagnose", params={"session_id": "abc"})
+    assert r.status_code == 503
+
+
+async def test_diagnose_sem_banco():
+    _prep()
+    app_mod.app.state.pool = None            # sem pool -> 503 _SEM_BANCO
+    async with _client() as c:
+        r = await c.get("/diagnose", params={"session_id": "abc"})
+    assert r.status_code == 503

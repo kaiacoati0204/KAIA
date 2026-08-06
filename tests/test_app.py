@@ -131,7 +131,73 @@ def test_demo_aluno():
 
 def test_vetor_para_modelo_ordena():
     feats = {n: float(i) for i, n in enumerate(app_mod.FEATURE_ORDER)}
-    assert app_mod.vetor_para_modelo(feats) == [float(i) for i in range(15)]
+    assert app_mod.vetor_para_modelo(feats) == [float(i) for i in range(20)]
+
+
+async def test_dados_grafico_com_banco():
+    conn = FakeConn(fetch=[{"hobby": "Jogos", "n": 5}, {"hobby": "Música", "n": 3}])
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.get("/api/dados-grafico")
+    body = r.json()
+    assert body["labels"] == ["Jogos", "Música"] and body["valores"] == [5, 3]
+
+
+async def test_dados_grafico_demo_sem_banco():
+    _set_state(pool=None)                     # sem banco -> modo demonstração
+    async with _client() as c:
+        r = await c.get("/api/dados-grafico")
+    assert r.json()["demo"] is True
+
+
+def test_turma_rotulo():
+    assert app_mod._turma_rotulo(3, "manhã") == "3º ano · manhã"
+    assert app_mod._turma_rotulo(None, "x") == "—"
+
+
+def test_status_atencao():
+    assert app_mod._status_atencao(None) is None
+    assert app_mod._status_atencao(0.3) == "risco"
+    assert app_mod._status_atencao(0.6) == "atencao"
+    assert app_mod._status_atencao(0.8) == "bem"
+
+
+def test_distribuicao_status():
+    assert app_mod._distribuicao_status([0.3, 0.6, 0.8, None]) == {"bem": 1, "atencao": 1, "risco": 1}
+
+
+def test_dashboard_offline_vazio(monkeypatch):
+    monkeypatch.setattr(app_mod.os.path, "exists", lambda p: False)
+    assert app_mod._dashboard_offline() == {"vazio": True, "motivo": "nenhuma planilha encontrada"}
+
+
+# ---------------------------------------------- helpers de cache de questões
+async def test_buscar_cache_limite_zero():
+    assert await app_mod._buscar_cache(FakeConn(fetch=[]), "u", "mat", "tem", 2, "jogos", 0) == []
+
+
+async def test_buscar_cache_monta_query_com_hobbie_e_exclusao():
+    conn = FakeConn(fetch=[])                 # sem linhas -> [] (monta a query mesmo assim)
+    r = await app_mod._buscar_cache(conn, "u", "mat", "tem", 2, "jogos", 5, excluir=["id1"])
+    assert r == []
+
+
+async def test_marcar_vistas_com_ids():
+    conn = FakeConn()
+    await app_mod._marcar_vistas(conn, "u", [{"questao_id": "q1"}, {"sem_id": 1}])
+    assert any("questoes_vistas" in q for q, _ in conn.executed)
+
+
+async def test_marcar_vistas_sem_ids():
+    conn = FakeConn()
+    await app_mod._marcar_vistas(conn, "u", [{"sem_id": 1}])   # nenhum id -> não executa
+    assert conn.executed == []
+
+
+async def test_resetar_vistas_antigas():
+    conn = FakeConn()
+    await app_mod._resetar_vistas_antigas(conn, "u", "mat", "tem", 2)
+    assert any("delete from questoes_vistas" in q for q, _ in conn.executed)
 
 
 # ============================================================ rotas Gemini (mock)

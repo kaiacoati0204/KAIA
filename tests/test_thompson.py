@@ -11,12 +11,14 @@ def test_elegibilidade_engajado(tmp_path):
 
 
 def test_elegibilidade_distraido(tmp_path):
-    assert set(_ts(tmp_path).elegiveis("distraido", 3)) == {
+    # 90 min de estudo (>= 60) -> alerta_fadiga liberado
+    assert set(_ts(tmp_path).elegiveis("distraido", 90)) == {
         "nudge_refoco", "pausa_pomodoro", "mensagem_motivacional", "alerta_fadiga"}
 
 
 def test_alerta_fadiga_bloqueado(tmp_path):
-    assert "alerta_fadiga" not in _ts(tmp_path).elegiveis("distraido", 2)
+    # pouco tempo de estudo no dia (< 60 min) -> alerta_fadiga bloqueado
+    assert "alerta_fadiga" not in _ts(tmp_path).elegiveis("distraido", 20)
 
 
 def test_update_alpha_beta(tmp_path):
@@ -47,5 +49,5 @@ def test_persistencia(tmp_path):
 
 
 def test_muito_distraido(tmp_path):
-    assert set(_ts(tmp_path).elegiveis("muito_distraido", 3)) == {
+    assert set(_ts(tmp_path).elegiveis("muito_distraido", 90)) == {
         "troca_atividade", "pausa_ativa", "microlearning", "alerta_fadiga"}

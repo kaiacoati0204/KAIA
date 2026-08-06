@@ -1635,6 +1635,10 @@ body[data-rail] > :not(.railnav) { flex: 1 1 auto; min-width: 0; }
   height: 24px;
   display: grid;
   place-items: center;
+  /* Dock (ativarDockRail no comum.js): a transição suaviza os saltos que o JS
+     escreve a cada frame — é o que aproxima a mola do Framer Motion do componente
+     original, sem carregar o Framer. Aqui só o deslocamento horizontal. */
+  transition: transform 0.14s ease-out;
 }
 .rail-ic svg {
   width: 20px;
@@ -1644,6 +1648,15 @@ body[data-rail] > :not(.railnav) { flex: 1 1 auto; min-width: 0; }
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  /* O crescimento vem daqui, não de transform: scale() — scale rasteriza e embaça
+     o traço; mudar a dimensão redesenha o vetor nítido. A caixa .rail-ic tem
+     tamanho fixo, então o svg maior só transborda (centralizado), sem reflow. */
+  transition: width 0.14s ease-out, height 0.14s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* O JS já nem liga o efeito nesse modo; isto é só garantia. */
+  .rail-ic,
+  .rail-ic svg { transition: none; }
 }
 
 /* rótulos: escondidos quando colapsada, aparecem ao expandir */

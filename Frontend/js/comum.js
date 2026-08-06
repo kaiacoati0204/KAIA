@@ -225,6 +225,87 @@ function enviarPerfil(extra = {}) {
 // ============================================================
 //                    INIT COMPARTILHADO
 // ============================================================
+// ============================================================
+//        DOCK NA RAIL — magnificação por proximidade do cursor
+// ============================================================
+// Efeito inspirado na Dock do 21st.dev (@ibelick), refeito em JS puro: os ícones
+// perto do cursor crescem conforme a distância, com falloff suave.
+//
+// POR QUE NÃO O COMPONENTE ORIGINAL: ele é React + Framer Motion e RENDERIZA a
+// barra (exporta Dock/DockItem/DockIcon/DockLabel). Usá-lo obrigaria a reconstruir
+// a rail em React nas 6 páginas, reimplementando página ativa, gate do beta,
+// rodapé do usuário, toggle persistido e o logout do Supabase. Aqui a barra
+// continua sendo a do montarRail — este código só DECORA o DOM que já existe, e
+// navegação, rotas e logout ficam intocados. Ver CLAUDE.md.
+//
+// O efeito age no .rail-ic, NÃO no .rail-item: a caixa do ícone tem tamanho fixo
+// (flex: 0 0 24px), então nada aqui empurra os outros itens da coluna flex.
+//
+// SOBRE O DESFOQUE: o tamanho NÃO usa transform: scale(). Com scale() o navegador
+// rasteriza o ícone uma vez e estica o bitmap, embaçando o traço do SVG. Aqui o
+// width/height do <svg> é que muda, e o vetor é redesenhado nítido em cada tamanho.
+// O transform fica só para o deslocamento horizontal, que não sofre disso.
+const DOCK_RAIO      = 92;    // px de alcance no eixo Y (a rail é vertical, não horizontal)
+const DOCK_AMP       = 0.34;  // crescimento máximo, no centro (1.34x)
+const DOCK_DESLOC    = 10;    // px de deslocamento para a direita, no centro
+const DOCK_ICONE_PX  = 20;    // tamanho base do svg — igual ao .rail-ic svg do style.css
+
+function ativarDockRail() {
+    try {
+        const rail = document.querySelector('.railnav');
+        if (!rail) return;   // login/cadastro não têm rail
+        // Público TEA/TDAH: quem pediu menos movimento não recebe movimento ambiente.
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        const icones = () => rail.querySelectorAll('.rail-item .rail-ic');
+        let frame   = 0;
+        let cursorY = 0;
+
+        const aplicar = () => {
+            frame = 0;
+            icones().forEach((ic) => {
+                const r = ic.getBoundingClientRect();
+                const dist = Math.abs(cursorY - (r.top + r.height / 2));
+                const f = Math.max(0, 1 - dist / DOCK_RAIO);
+                const suave = f * f * (3 - 2 * f);   // smoothstep: curva em S, sem degrau
+
+                // Desloca para a direita (afasta da borda da rail, como a dock que
+                // "salta"). translate NÃO desfoca — só reposiciona.
+                ic.style.transform = `translateX(${(DOCK_DESLOC * suave).toFixed(2)}px)`;
+
+                // O tamanho muda no width/height do SVG, não em transform: scale().
+                // scale() faz o navegador rasterizar o ícone e esticar o bitmap, o
+                // que embaça o traço; mudando a dimensão, o vetor é redesenhado
+                // nítido em cada tamanho.
+                const svg = ic.querySelector('svg');
+                if (svg) {
+                    const px = (DOCK_ICONE_PX * (1 + DOCK_AMP * suave)).toFixed(2);
+                    svg.style.width  = `${px}px`;
+                    svg.style.height = `${px}px`;
+                }
+            });
+        };
+
+        rail.addEventListener('mousemove', (e) => {
+            cursorY = e.clientY;
+            if (!frame) frame = requestAnimationFrame(aplicar);   // no máximo 1 cálculo por frame
+        });
+
+        rail.addEventListener('mouseleave', () => {
+            cancelAnimationFrame(frame);
+            frame = 0;
+            icones().forEach((ic) => {
+                ic.style.transform = '';
+                const svg = ic.querySelector('svg');
+                if (svg) { svg.style.width = ''; svg.style.height = ''; }   // volta ao CSS
+            });
+        });
+    } catch (e) {
+        // Nunca deixa o efeito derrubar o init: a barra segue funcionando sem ele.
+        console.warn('[KaIA] dock da rail não ativou:', e);
+    }
+}
+
 // Textura de papel: aplica a preferência (localStorage) em TODA página. O toggle
 // que grava a preferência vive nas Configurações do perfil. Desligada por padrão.
 function aplicarTexturaPapel() {
@@ -235,5 +316,6 @@ function aplicarTexturaPapel() {
 // sem <body data-rail> a rail é no-op — seguro em login/cadastro.
 document.addEventListener('DOMContentLoaded', () => {
     montarRail();
+    ativarDockRail();      // só efeito visual, depois da rail montada; se falhar, avisa e segue
     aplicarTexturaPapel();
 });

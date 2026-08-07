@@ -138,4 +138,30 @@ function registrarLuz() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', registrarLuz);
+// ============================================================
+//        PRELOADER — garantia de saída
+// ============================================================
+// O visual (degradê + fades das saudações) é 100% CSS: #kaia-preloader no
+// style.css. Este JS NÃO anima nada — ele só garante que o overlay saia, porque
+// ele cobre o formulário e não pode prender o acesso em nenhum cenário: CSS que
+// não carregou, animação que não rodou, aba aberta em segundo plano.
+// Também deixa pular a abertura com um clique ou uma tecla — quem já viu não
+// precisa esperar de novo.
+// Acoplado ao CSS: precisa ficar DEPOIS do fim da animação (#kaia-preloader sai em
+// 10,3s + 0,7s de fade = 11,0s). Se mudar o ritmo no style.css, ajuste aqui também.
+const PRE_MS = 11200;
+
+function registrarPreloader() {
+    const pre = document.getElementById('kaia-preloader');
+    if (!pre) return;   // páginas sem preloader: no-op
+
+    const sair = () => { if (pre.parentNode) pre.remove(); };
+    setTimeout(sair, PRE_MS);                                  // rede de segurança
+    pre.addEventListener('click', sair);                       // pular clicando
+    document.addEventListener('keydown', sair, { once: true }); // ou com qualquer tecla
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    registrarLuz();
+    registrarPreloader();
+});

@@ -24,7 +24,7 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 - **Caderno de anotações**: canvas livre por tema (texto no Supabase, imagens só no dispositivo).
 - **Perfil com estatísticas**: desempenho semanal + sinais da última sessão + análise por regras.
 - **Painéis internos**: dashboard da equipe (acesso restrito por `role`) e painel de responsáveis.
-- **Monitoramento de foco**: sensores no front (troca de aba, scroll, teclado, ociosidade, etc.) registram eventos de atenção durante a missão.
+- **Monitoramento de foco (modelo v2)**: sensores no front (troca de aba, tempo fora de foco, trajetória do mouse, ociosidade, dwell nas alternativas, tempo de resposta) alimentam um Random Forest que estima o estado de atenção — `engajado`, `distraído` (mind-wandering interno) ou `muito_distraído` (off-task externo). Um **probe de autorrelato** (o aluno declara o próprio estado, 1×/rodada) coleta o **rótulo real** que valida e treina o modelo. Sinais de foco/atenção — **não é diagnóstico**.
 
 ---
 
@@ -36,7 +36,7 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 | Backend | Python + **FastAPI** (uvicorn) |
 | Banco | **Supabase** (PostgreSQL), via `asyncpg` |
 | IA | Google Gemini (`gemini-2.5-flash`) |
-| ML | scikit-learn (Random Forest) + pandas/numpy |
+| ML | scikit-learn (Random Forest v2 de atenção, 20 features) + pandas/numpy |
 | Agendamento | APScheduler (agregação + encerramento de sessões ociosas) |
 
 ---
@@ -52,16 +52,20 @@ Frontend/
   assets/       → Coati.jpg, Coati_3d.glb
   config.js     → API_URL + Supabase (NÃO vai pro Git — copie de config.example.js)
 Backend/
-  app.py                → backend FastAPI (rotas da IA, sessões, painéis)
+  app.py                → backend FastAPI (IA, sessões, /events, /diagnose, painéis)
   auth.py               → validação do JWT do Supabase Auth (JWKS)
+  mouse_features.py     → mouse_track bruto → features de mouse do modelo v2
   requirements.txt      → dependências Python
   migrations/           → schema/trigger do banco (rode em ordem numérica; nunca apague)
   seed_contas_teste.py  → cria as contas @teste.kaia (senha teste1234)
   seed_sintetico.py     → popula sessões sintéticas para os painéis
   limpar_*.{py,sql}     → desfazem os seeds
   .env                  → variáveis de ambiente (NÃO vai pro Git — veja "2. Configuração")
-ml/                     → treino e pré-processamento do Random Forest
-CLAUDE.md               → convenções do projeto (cores, acessibilidade, segurança, estilo)
+ml/
+  gerar_base_v2.py      → gera a base sintética + treina o modelo v2 (seed fixa; .pkl NÃO versionado)
+  treinar_com_probe.py  → valida/re-treina o modelo com os rótulos reais do probe
+sql/                    → migrations avulsas (probe_labels, cache de questões, reward das intervenções)
+CLAUDE.md               → convenções do projeto (cores, acessibilidade, segurança, modelo, estilo)
 ```
 
 ---
@@ -113,11 +117,18 @@ STALE_SESSAO_MIN=15
 
 ```js
 SUPABASE_URL: 'https://<PROJECT_ID>.supabase.co',
-SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_...',   // Supabase → Settings → API Keys → publishable
+SUPABASE_ANON_KEY: 'eyJ...',   // Supabase → Settings → API → Project API keys → anon public
 ```
 
-> No frontend vai **só a publishable** (é pública; o RLS protege os dados). **Nunca** a secret.
+> Use a chave **anon** (JWT, começa com `eyJ...`) — é pública por design (o RLS protege os dados).
+> **NÃO** use a `sb_publishable_...`: o supabase-js @2 do CDN não a envia como `apikey` e o login quebra com `400 "No API key found"`. **Nunca** a `service_role` (secret).
 > Onde achar o `<PROJECT_ID>`: Supabase → Settings → General (a URL é `https://<PROJECT_ID>.supabase.co`).
+
+> [!NOTE]
+> **Modelo de atenção (`/diagnose`):** o modelo v2 **não é versionado** — gere-o uma vez
+> (seed fixa, sempre igual): `python ml/gerar_base_v2.py`. Cria `modelo_rf_v2.pkl` +
+> `scaler_v2.pkl`. Sem eles o backend sobe normal, mas `/diagnose` responde 503. Para
+> gravar os rótulos do probe, rode `sql/probe_labels.sql` uma vez no Supabase.
 
 ### 4. Subir o backend
 
@@ -195,7 +206,8 @@ e `python Backend/limpar_contas_teste.py --commit`.
 | `/perfil` | GET/POST | Dados do aluno (login por e-mail; grava hobbies) |
 | `/perfil/estatisticas` | GET | Desempenho semanal + última sessão + análise |
 | `/sessions`, `/sessions/{id}/end` | POST | Abre e encerra sessões de estudo |
-| `/events` | POST | Registra os eventos de foco dos sensores |
+| `/events` | POST | Registra os eventos de foco dos sensores (e captura o rótulo do probe) |
+| `/diagnose` | GET | Estima o estado de atenção da sessão (modelo v2) |
 | `/intervencao/pendente`, `/intervencao/feedback` | GET/POST | Intervenções de atenção |
 | `/dashboard/dados` | GET | Dados do dashboard interno (acesso restrito por `role`) |
 | `/responsavel/aluno`, `/responsavel/painel` | GET | Painel de responsáveis |
@@ -215,4 +227,5 @@ e `python Backend/limpar_contas_teste.py --commit`.
 > **Autenticação: Supabase Auth (e-mail + senha).** O backend valida o **JWT** nas rotas de dados (`Backend/auth.py`); o front envia o token via `apiFetch`. O controle de acesso continua no `role` do banco, verificado no backend.
 
 - [ ] Estender a proteção por JWT às rotas ainda abertas (baixa sensibilidade) e revisar o gate `X-Kaia-User` do dashboard.
-- [ ] Dividir o `script.js` em um arquivo por página + um comum.
+- [ ] **Validar o modelo v2 com dado real**: hoje é 100% sintético (hipótese). Coletar probes → rodar `python ml/treinar_com_probe.py` (dá a acurácia real e re-treina híbrido).
+- [ ] Versionar o schema base do banco (`pg_dump --schema-only`) — hoje só existe no projeto Supabase.

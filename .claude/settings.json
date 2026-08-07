@@ -25,7 +25,10 @@
       "Bash(awk -F: '$1>=1760 && $1<=1810')",
       "Bash(awk -F: '$1>=1980 && $1<=2530')",
       "Bash(awk -F: '$1>=560 && $1<=760')",
-      "Bash(python -c \"import sys;sys.path.insert\\(0,'ml'\\);sys.path.insert\\(0,'Backend'\\);import treinar_com_probe;print\\('treinar_com_probe importa OK'\\)\")"
+      "Bash(python -c \"import sys;sys.path.insert\\(0,'ml'\\);sys.path.insert\\(0,'Backend'\\);import treinar_com_probe;print\\('treinar_com_probe importa OK'\\)\")",
+      "Read(//c/Users/vitor/.claude/projects/**)",
+      "Bash(python \"C:/Users/vitor/AppData/Local/Temp/claude/c--Users-vitor-OneDrive-Documentos-KAIA/33b6cb87-e253-46d3-8e90-e21822b642ea/scratchpad/limpar_materias.py\")",
+      "Bash(node --check js/materias.js)"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

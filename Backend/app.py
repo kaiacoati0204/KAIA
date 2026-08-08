@@ -181,41 +181,6 @@ def extrair_json(texto):
     return json.loads(texto.strip())
 
 
-def montar_prompt(pergunta, hobbies):
-    lista_hobbies = ", ".join(hobbies) if hobbies else "nenhum hobby informado"
-    return f"""
-Responda:
-    - de forma clara
-    - em português
-    - usando explicações simples
-    - usando exemplos
-
-Utilize destes hobbies do aluno para personalizar a explicação: {lista_hobbies}
-
-Pergunta: {pergunta}
-"""
-
-
-# ================== API: PERGUNTAR (chat livre) ==============================
-@app.post("/perguntar", dependencies=[Depends(usuario_autenticado)])
-def perguntar(dados: dict = Body(default={})):
-    pergunta = (dados.get("pergunta") or "").strip()
-    hobbies = dados.get("hobbies", [])
-
-    if not pergunta:
-        return JSONResponse({"resposta": "Nenhuma pergunta foi enviada."}, status_code=400)
-
-    try:
-        resposta = chamar_gemini(montar_prompt(pergunta, hobbies))
-        return {"resposta": resposta}
-    except requests.exceptions.RequestException as e:
-        print("[KaIA] Erro de conexão com o Gemini:", e)
-        return JSONResponse({"resposta": "Erro ao conectar com a IA."}, status_code=502)
-    except Exception as e:
-        print("[KaIA] Erro ao ler resposta do Gemini:", e)
-        return JSONResponse({"resposta": "A IA retornou um formato inesperado."}, status_code=502)
-
-
 # ================== API: TEMAS de uma matéria ===============================
 # Cache em `temas_cache` (materia PK, temas jsonb): a geração dos temas custa 1
 # requisição ao Gemini (free tier: 20/dia). Cacheado, cada matéria gasta no

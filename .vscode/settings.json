@@ -1,0 +1,14 @@
+{
+    // Live Server serve a raiz do repo, então vigia o projeto TODO. Sem isto, cada
+    // vez que o backend grava um arquivo (ex.: ml/artifacts/thompson_params.json no
+    // feedback de intervenção), o Live Server recarrega a página. Ignorar o backend/ml
+    // resolve — o auto-reload continua funcionando para mudanças no Frontend.
+    "liveServer.settings.ignoreFiles": [
+        "**/ml/**",
+        "**/Backend/**",
+        "**/.git/**",
+        "**/__pycache__/**",
+        "**/*.pkl",
+        "**/*.pyc"
+    ]
+}

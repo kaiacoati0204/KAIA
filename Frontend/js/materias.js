@@ -1,6 +1,6 @@
 // ============================================================
 //  KaIA — materias.js: página de estudo (sessão, sensores, missão/quiz,
-//  chat, pomodoro, caderno, intervenções)
+//  pomodoro, caderno, intervenções)
 // ============================================================
 // Depende de comum.js (API_URL, $, $$, apiFetch, postJSON, userId, lerHobbies),
 // carregado ANTES deste arquivo. Só materias.html usa.
@@ -74,13 +74,31 @@ let intervencaoInterval   = null;
 let intervencaoAtual      = null;   // tipo em exibição (evita duplicar)
 let intervencaoMostradaEm = 0;      // p/ calcular tempo_ate_aceitar_s
 
+// Sorteia uma variação (usado nas frases das intervenções — evita repetir sempre
+// a mesma, combatendo a habituação).
+const _variar = (a) => a[Math.floor(Math.random() * a.length)];
+
 // Copy dos braços que renderizam como CARD de texto. Os demais do alvo
 // (micro_refoco, pausa_ativa, troca_atividade, checkpoint, reancoragem) são AÇÃO —
-// mostrarIntervencao desvia antes deste lookup. auto_monitoramento reusa o
-// mecânico do probe (notar + microcompromisso).
+// mostrarIntervencao desvia antes deste lookup. `texto` é uma LISTA: sorteia uma
+// frase a cada disparo. Adicionar/editar frases aqui.
 const INTERVENCOES_MSG = {
-    auto_monitoramento: { emoji: '🧭', titulo: 'Como está seu foco?', texto: 'Se a mente vagou, tudo bem — perceber já ajuda. Bora focar nas próximas 3?' },
-    alerta_fadiga:      { emoji: '😴', titulo: 'Sinais de cansaço',   texto: 'Talvez seja hora de um descanso de verdade.' },
+    auto_monitoramento: {
+        emoji: '🧭', titulo: 'Como está seu foco?', texto: [
+            'Se a mente vagou, tudo bem — perceber já ajuda. Bora focar nas próximas 3?',
+            'Deu uma dispersada? Acontece. Reancora nas próximas 3 questões.',
+            'Notou que saiu do foco? Só de perceber você já voltou.',
+            'Tudo bem divagar. Respira e escolhe voltar pra questão.',
+        ],
+    },
+    alerta_fadiga: {
+        emoji: '😴', titulo: 'Sinais de cansaço', texto: [
+            'Talvez seja hora de um descanso de verdade.',
+            'Você já estudou bastante hoje — que tal uma pausa maior?',
+            'Cansaço é sinal de que rendeu. Vale descansar um pouco.',
+            'Seu foco pede uma pausa de verdade. Sem culpa.',
+        ],
+    },
 };
 
 // Pilha de notificações no canto inferior direito (card de intervenção + avisos):
@@ -115,13 +133,17 @@ function _garantirCardIntervencao() {
     card.id = 'kaia-intervencao';
     card.innerHTML = `<h4 id="kaia-int-titulo"></h4><p id="kaia-int-texto"></p>
       <div class="kaia-fb">
-        <button class="k1" data-r="1.0">Ajudou 👍</button>
-        <button class="k2" data-r="0.5">Mais ou menos</button>
-        <button class="k3" data-r="0.0">Não 👎</button>
+        <button type="button" class="k1" data-r="1.0">Ajudou 👍</button>
+        <button type="button" class="k2" data-r="0.5">Mais ou menos</button>
+        <button type="button" class="k3" data-r="0.0">Não 👎</button>
       </div>`;
     _pilhaNotif().appendChild(card);
     $$('#kaia-intervencao button').forEach(b =>
-        b.addEventListener('click', () => enviarFeedbackIntervencao(intervencaoAtual, parseFloat(b.dataset.r))));
+        b.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            enviarFeedbackIntervencao(intervencaoAtual, parseFloat(b.dataset.r));
+        }));
 }
 
 function mostrarIntervencao(intv) {
@@ -136,7 +158,7 @@ function mostrarIntervencao(intv) {
     const info = INTERVENCOES_MSG[intv.intervention_type]
               || { emoji: '💡', titulo: 'Dica', texto: 'Continue focado!' };
     $('kaia-int-titulo').innerText = `${info.emoji} ${info.titulo}`;
-    $('kaia-int-texto').innerText  = info.texto;
+    $('kaia-int-texto').innerText  = Array.isArray(info.texto) ? _variar(info.texto) : info.texto;
     $('kaia-intervencao').style.display = 'block';
 }
 
@@ -238,145 +260,243 @@ function encerrarSequenciaGuiada() {
 // Pausa ativa (movimento) — Passo 3.
 function iniciarPausaAtiva() {
     iniciarSequenciaGuiada({
-        titulo: '🤸 Pausa ativa',
+        titulo: _variar(['🤸 Pausa ativa', '🤸 Hora de mexer o corpo', '🤸 Levanta e respira']),
         passos: ['Levanta e alonga os ombros 🙆', 'Olha pra longe — janela, parede 👀',
                  'Bebe uma água 💧', 'Respira fundo, 3 vezes 🌬️'],
         duracaoMs: 90 * 1000, passoMs: 22.5 * 1000,
     });
 }
 
-// Micro-refoco (respiração-âncora) — Passo 4.
-function iniciarMicroRefoco() {
-    iniciarSequenciaGuiada({
-        titulo: '🧘 Respira e reancora',
-        passos: ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'],
-        duracaoMs: 30 * 1000, passoMs: 4 * 1000,
-    });
+// Micro-refoco (respiração) — Passo 4 · barra no TOPO: mensagem + barra que cai
+// linearmente com o tempo restante (sem números). Não usa o overlay central.
+let _mrInterval = null;
+
+function _garantirBarraMicroRefoco() {
+    if ($('kaia-mr')) return;
+    const css = document.createElement('style');
+    css.textContent = `
+      #kaia-mr{position:fixed;top:0;left:0;right:0;z-index:70;display:none;text-align:center;
+        background:var(--card,#fbf6ec);box-shadow:0 4px 20px rgba(26,43,76,.15);padding:12px 16px 10px}
+      #kaia-mr.aberto{display:block}
+      #kaia-mr .kaia-mr-msg{color:var(--profundo,#1a2b4c);font-size:15px;font-weight:600;margin-bottom:8px}
+      #kaia-mr .kaia-mr-track{height:6px;max-width:520px;margin:0 auto;border-radius:99px;overflow:hidden;background:var(--marfim,#f4ecdd)}
+      #kaia-mr .kaia-mr-fill{height:100%;width:100%;border-radius:99px;background:var(--vd-uniao,#57d979)}
+      #kaia-mr .kaia-mr-pular{position:absolute;top:8px;right:12px;border:0;background:transparent;
+        color:var(--tinta,#2b2a26);opacity:.6;font-size:13px;cursor:pointer;text-decoration:underline}
+      #kaia-mr .kaia-mr-pular:hover{opacity:1}`;
+    document.head.appendChild(css);
+    const el = document.createElement('div');
+    el.id = 'kaia-mr';
+    el.setAttribute('role', 'status');
+    el.innerHTML = `<button type="button" class="kaia-mr-pular" id="kaia-mr-pular">Pular</button>
+      <div class="kaia-mr-msg" id="kaia-mr-msg"></div>
+      <div class="kaia-mr-track"><div class="kaia-mr-fill" id="kaia-mr-fill"></div></div>`;
+    document.body.appendChild(el);
+    $('kaia-mr-pular').addEventListener('click', encerrarMicroRefoco);
 }
 
-// Troca de tema (intervenção com AÇÃO — Passo 5): NÃO troca sozinha — oferece a
-// ESCOLHA (dá agência ao aluno, menos intrusivo). Card com "Trocar" / "Continuar".
+function iniciarMicroRefoco() {
+    _garantirBarraMicroRefoco();
+    pausaAtiva = true;                         // suspende idle/aba/exit durante a respiração
+    const passos = ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'];
+    const dur = 30 * 1000, passoMs = 4 * 1000;
+    $('kaia-mr').classList.add('aberto');
+    $('kaia-mr-msg').innerText = passos[0];
+    // barra começa cheia e cai linearmente até 0 no fim (via transition CSS, sem números)
+    const fill = $('kaia-mr-fill');
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    void fill.offsetWidth;                     // reflow p/ reiniciar a queda a cada disparo
+    fill.style.transition = `width ${dur}ms linear`;
+    fill.style.width = '0%';
+    // a mensagem troca por fase da respiração
+    const inicio = performance.now();
+    clearInterval(_mrInterval);
+    _mrInterval = setInterval(() => {
+        const passado = performance.now() - inicio;
+        if (passado >= dur) return encerrarMicroRefoco();
+        $('kaia-mr-msg').innerText = passos[Math.floor(passado / passoMs) % passos.length];
+    }, 200);
+}
+
+function encerrarMicroRefoco() {
+    clearInterval(_mrInterval);
+    const el = $('kaia-mr');
+    if (el) el.classList.remove('aberto');
+    pausaAtiva = false;
+    idleTime = 0;                              // retoma sensores sem contar a respiração
+    if (isMissionActive) setEstado('ESTUDANDO');
+    esconderIntervencao();
+}
+
+// Troca de tema (intervenção com AÇÃO — Passo 5): modal CENTRAL (como a pausa
+// ativa, maior). Escolhe o tema-alvo ao aparecer e MOSTRA qual será; oferece a
+// ESCOLHA "Trocar" / "Continuar" (dá agência ao aluno).
+let _trocaTemaAlvo = null;
+
 function _garantirCardTroca() {
     if ($('kaia-troca')) return;
     const css = document.createElement('style');
     css.textContent = `
-      #kaia-troca{max-width:320px;background:var(--card,#fbf6ec);color:var(--tinta,#2b2a26);border-radius:14px;
-        padding:16px 18px;box-shadow:0 10px 30px rgba(26,43,76,.25);display:none}
-      #kaia-troca h4{margin:0 0 6px;font-size:15px;color:var(--profundo,#1a2b4c)}
-      #kaia-troca p{margin:0 0 12px;font-size:13px;line-height:1.4;opacity:.9}
-      #kaia-troca .kaia-troca-btns{display:flex;gap:8px}
-      #kaia-troca button{flex:1;border:0;border-radius:8px;padding:8px 0;font-size:13px;cursor:pointer}
+      #kaia-troca{position:fixed;inset:0;display:none;place-items:center;z-index:60;background:rgba(26,43,76,.45)}
+      #kaia-troca.aberto{display:grid}
+      #kaia-troca .kaia-troca-card{background:var(--card,#fbf6ec);color:var(--tinta,#2b2a26);max-width:440px;width:90%;
+        text-align:center;border-radius:16px;padding:26px 24px;box-shadow:0 12px 40px rgba(26,43,76,.25)}
+      #kaia-troca h2{margin:0 0 8px;font-size:19px;color:var(--profundo,#1a2b4c)}
+      #kaia-troca p{margin:0 0 10px;font-size:14px;line-height:1.5;opacity:.9}
+      #kaia-troca .kaia-troca-alvo{margin:14px 0 18px;font-size:15px;opacity:1}
+      #kaia-troca .kaia-troca-alvo strong{color:var(--profundo,#1a2b4c)}
+      #kaia-troca .kaia-troca-btns{display:flex;gap:10px}
+      #kaia-troca button{flex:1;border:0;border-radius:10px;padding:11px 0;font-size:14px;cursor:pointer}
       #kaia-troca .sim{background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c)}
       #kaia-troca .nao{background:transparent;color:var(--tinta,#2b2a26);border:1px solid var(--profundo,#1a2b4c)}`;
     document.head.appendChild(css);
-    const card = document.createElement('div');
-    card.id = 'kaia-troca';
-    card.innerHTML = `<h4>🔄 Que tal mudar de tema?</h4>
-      <p>Um assunto novo às vezes ajuda a reengajar. Quer trocar ou continuar aqui?</p>
-      <div class="kaia-troca-btns">
-        <button type="button" class="sim" id="kaia-troca-sim">Trocar de tema</button>
-        <button type="button" class="nao" id="kaia-troca-nao">Continuar aqui</button>
+    const el = document.createElement('div');
+    el.id = 'kaia-troca';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.innerHTML = `<div class="kaia-troca-card">
+        <h2>🔄 Que tal trocar de tema?</h2>
+        <p id="kaia-troca-sub"></p>
+        <p class="kaia-troca-alvo">Ir para: <strong id="kaia-troca-tema"></strong></p>
+        <div class="kaia-troca-btns">
+          <button type="button" class="sim" id="kaia-troca-sim">Trocar de tema</button>
+          <button type="button" class="nao" id="kaia-troca-nao">Continuar aqui</button>
+        </div>
       </div>`;
-    _pilhaNotif().appendChild(card);
+    document.body.appendChild(el);
     $('kaia-troca-sim').addEventListener('click', () => { _esconderTroca(); esconderIntervencao(); _trocarTema(); });
     $('kaia-troca-nao').addEventListener('click', () => { _esconderTroca(); esconderIntervencao(); });
 }
 
-function _esconderTroca() { const c = $('kaia-troca'); if (c) c.style.display = 'none'; }
+function _esconderTroca() { const c = $('kaia-troca'); if (c) c.classList.remove('aberto'); }
 
 function mostrarTrocaTema() {
     _garantirCardTroca();
-    $('kaia-troca').style.display = 'block';
+    const outros = temasAtuais.filter(t => t && t !== currentTema);
+    _trocaTemaAlvo = outros.length ? outros[Math.floor(Math.random() * outros.length)] : currentTema;
+    $('kaia-troca-sub').innerText = _variar([
+        'Um assunto novo às vezes ajuda a reengajar.',
+        'Que tal um tema diferente pra dar aquele gás?',
+        'Mudar de assunto pode renovar o foco.',
+        'Às vezes trocar de tema é o empurrãozinho que falta.',
+    ]);
+    $('kaia-troca-tema').innerText = (_trocaTemaAlvo !== currentTema)
+        ? _trocaTemaAlvo
+        : `outra questão de ${currentTema}`;
+    $('kaia-troca').classList.add('aberto');
 }
 
-// A troca em si — só quando o aluno ESCOLHE trocar. Reusa carregarQuestao
-// (atualiza tema/cabeçalho/fila). Sem outro tema, cai na próxima do mesmo.
+// A troca em si — usa o tema-alvo já mostrado. Reusa carregarQuestao (atualiza
+// tema/cabeçalho/fila). Sem outro tema, cai na próxima do mesmo.
 function _trocarTema() {
-    const outros = temasAtuais.filter(t => t && t !== currentTema);
-    const novo = outros.length ? outros[Math.floor(Math.random() * outros.length)] : currentTema;
-    carregarQuestao(currentSubject, novo);
+    carregarQuestao(currentSubject, _trocaTemaAlvo || currentTema);
 }
 
 // ============================================================
 //   CHECKPOINT DE RECUPERAÇÃO (intervenção com AÇÃO — Passo 6)
 // ============================================================
-// Melhor validação em pesquisa (teste interpolado, Szpunar 2013): uma micro-
-// pergunta de RETOMADA (reapresenta uma já respondida) quebra a divagação e
-// reancora na tarefa. Overlay próprio (não mexe na questão atual). Reusa
-// pausaAtiva. O warm-up já garante >=1 questão no histórico.
+// INLINE (não é modal escuro): um card CURTO aparece no topo da área de estudo,
+// com UMA pergunta do conteúdo RECENTE (últimas respondidas) — retrieval practice.
+// A questão atual fica atenuada; ao fechar, um REALCE de re-entrada volta o olho
+// pra ela (reduz o custo de retomada, alto no TEA/TDAH). Base: teste interpolado
+// (Szpunar 2013) + resumption lag. Reusa pausaAtiva; warm-up garante histórico.
 let _cpQuestao = null;
 
 function _questaoCheckpoint() {
-    return historicoQuestoes.length
-        ? historicoQuestoes[Math.floor(Math.random() * historicoQuestoes.length)] : null;
+    const recentes = historicoQuestoes.slice(-3);   // conteúdo RECENTE (últimas ~3 respondidas)
+    return recentes.length ? recentes[Math.floor(Math.random() * recentes.length)] : null;
 }
 
-function _garantirOverlayCheckpoint() {
-    if ($('kaia-cp')) return;
+function _garantirEstiloCheckpoint() {
+    if ($('kaia-cp-css')) return;
     const css = document.createElement('style');
+    css.id = 'kaia-cp-css';
     css.textContent = `
-      #kaia-cp{position:fixed;inset:0;display:none;place-items:center;z-index:60;background:rgba(26,43,76,.45)}
-      #kaia-cp.aberto{display:grid}
-      #kaia-cp .kaia-cp-card{background:var(--card,#fbf6ec);color:var(--tinta,#2b2a26);max-width:420px;width:90%;
-        border-radius:16px;padding:22px;box-shadow:0 12px 40px rgba(26,43,76,.25)}
-      #kaia-cp h4{margin:0 0 6px;color:var(--profundo,#1a2b4c);font-size:15px}
-      #kaia-cp .kaia-cp-q{margin:6px 0 12px;font-size:15px;line-height:1.4}
+      #kaia-cp{background:var(--card,#fbf6ec);border:1px solid var(--vd-uniao,#57d979);border-radius:14px;
+        padding:16px 18px;margin-bottom:16px;box-shadow:0 6px 24px rgba(26,43,76,.12)}
+      #kaia-cp .kaia-cp-topo{font-size:13px;font-weight:700;color:var(--profundo,#1a2b4c);margin-bottom:8px}
+      #kaia-cp .kaia-cp-q{margin:0 0 12px;font-size:15px;line-height:1.4;color:var(--tinta,#2b2a26)}
       #kaia-cp .kaia-cp-opts{display:flex;flex-direction:column;gap:8px}
       #kaia-cp .kaia-cp-opt{text-align:left;border:1px solid var(--profundo,#1a2b4c);background:var(--marfim,#f4ecdd);
         color:var(--tinta,#2b2a26);border-radius:8px;padding:9px 12px;font-size:14px;cursor:pointer}
       #kaia-cp .kaia-cp-opt:disabled{cursor:default;opacity:.7}
-      #kaia-cp .kaia-cp-fb{margin:12px 0 0;font-size:14px;min-height:1.3em}
-      #kaia-cp .kaia-cp-voltar{margin-top:12px;border:0;border-radius:10px;padding:9px 16px;display:none;
-        background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}`;
+      #kaia-cp .kaia-cp-fb{margin:10px 0 0;font-size:14px;min-height:1.2em}
+      #kaia-cp .kaia-cp-voltar{margin-top:10px;border:0;border-radius:10px;padding:9px 16px;display:none;
+        background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}
+      .question-wrapper.kaia-cp-dim{opacity:.35;transition:opacity .25s}
+      .question-wrapper.kaia-cp-realce{box-shadow:0 0 0 3px var(--vd-uniao,#57d979);border-radius:14px;transition:box-shadow .3s}`;
     document.head.appendChild(css);
-    const el = document.createElement('div');
-    el.id = 'kaia-cp';
-    el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-modal', 'true');
-    el.innerHTML = `<div class="kaia-cp-card">
-        <h4>🎯 Checkpoint rápido</h4>
-        <p class="kaia-cp-q" id="kaia-cp-q"></p>
-        <div class="kaia-cp-opts" id="kaia-cp-opts"></div>
-        <p class="kaia-cp-fb" id="kaia-cp-fb"></p>
-        <button type="button" class="kaia-cp-voltar" id="kaia-cp-voltar">Voltar às questões</button>
-      </div>`;
-    document.body.appendChild(el);
-    $('kaia-cp-voltar').addEventListener('click', encerrarCheckpoint);
 }
 
 function checkpointRecuperacao() {
     const q = _questaoCheckpoint();
-    if (!q || !Array.isArray(q.opts)) { esconderIntervencao(); return; }   // sem histórico -> não intervém
-    _garantirOverlayCheckpoint();
-    pausaAtiva = true;                       // suspende sensores durante o checkpoint
+    const lado = document.querySelector('.quiz-lado-questao');
+    if (!q || !Array.isArray(q.opts) || !lado) { esconderIntervencao(); return; }   // sem histórico -> não intervém
+    const antigo = $('kaia-cp');
+    if (antigo) antigo.remove();             // evita duplicar se re-disparar
+    _garantirEstiloCheckpoint();
+    pausaAtiva = true;                        // suspende sensores durante o checkpoint
     _cpQuestao = q;
-    $('kaia-cp-q').innerText = q.q;
-    $('kaia-cp-fb').innerText = '';
-    $('kaia-cp-voltar').style.display = 'none';
-    const box = $('kaia-cp-opts');
-    box.innerHTML = '';
+
+    const wrap = document.querySelector('.question-wrapper');
+    if (wrap) wrap.classList.add('kaia-cp-dim');   // atenua a questão atual (foco no checkpoint)
+
+    const card = document.createElement('div');
+    card.id = 'kaia-cp';
+    card.setAttribute('role', 'group');
+    const topo = document.createElement('div');
+    topo.className = 'kaia-cp-topo';
+    topo.textContent = _variar([
+        '🎯 Pausa relâmpago — recupere isto:',
+        '🎯 Rapidinho: você lembra desta?',
+        '🎯 Só pra fixar — responde essa:',
+        '🎯 Mini-check do que você já viu:',
+    ]);
+    const pq = document.createElement('p');
+    pq.className = 'kaia-cp-q';
+    pq.textContent = q.q;                     // textContent: sem injeção de HTML
+    const opts = document.createElement('div');
+    opts.className = 'kaia-cp-opts';
     q.opts.forEach((opt, i) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'kaia-cp-opt';
-        b.innerText = opt;
+        b.textContent = opt;
         b.addEventListener('click', () => _responderCheckpoint(i === q.ans));
-        box.appendChild(b);
+        opts.appendChild(b);
     });
-    $('kaia-cp').classList.add('aberto');
+    const fb = document.createElement('p');
+    fb.className = 'kaia-cp-fb';
+    fb.id = 'kaia-cp-fb';
+    const voltar = document.createElement('button');
+    voltar.type = 'button';
+    voltar.className = 'kaia-cp-voltar';
+    voltar.id = 'kaia-cp-voltar';
+    voltar.textContent = 'Voltar à questão';
+    voltar.addEventListener('click', encerrarCheckpoint);
+    card.append(topo, pq, opts, fb, voltar);
+    lado.prepend(card);                        // INLINE no topo da área de estudo
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function _responderCheckpoint(acertou) {
-    $('kaia-cp-fb').innerText = acertou
+    $('kaia-cp-fb').textContent = acertou
         ? 'Isso! 🎯 De volta pro foco.'
         : `Sem problema — era: ${_cpQuestao ? _cpQuestao.opts[_cpQuestao.ans] : ''}.`;
-    $$('#kaia-cp-opts .kaia-cp-opt').forEach(b => b.disabled = true);   // trava após responder
+    $$('#kaia-cp .kaia-cp-opt').forEach(b => b.disabled = true);   // trava após responder
     $('kaia-cp-voltar').style.display = 'inline-block';
 }
 
 function encerrarCheckpoint() {
-    const el = $('kaia-cp');
-    if (el) el.classList.remove('aberto');
+    const card = $('kaia-cp');
+    if (card) card.remove();
+    const wrap = document.querySelector('.question-wrapper');
+    if (wrap) {
+        wrap.classList.remove('kaia-cp-dim');
+        wrap.classList.add('kaia-cp-realce');          // cue de re-entrada: realça a questão atual
+        setTimeout(() => wrap.classList.remove('kaia-cp-realce'), 1500);
+    }
     pausaAtiva = false;
     idleTime = 0;                            // retoma os sensores sem contar o checkpoint
     if (isMissionActive) setEstado('ESTUDANDO');
@@ -530,26 +650,6 @@ function registrarSensores() {
             if (isMissionActive) logEvent('copy_paste', { action: tipo });
         });
     });
-}
-
-// ============================================================
-//                    PERGUNTAS - CHAT
-// ============================================================
-// textContent (não innerHTML) na resposta da IA: o Gemini não devolve HTML, e
-// assim um '<' no meio de uma conta ("se n < k") aparece em vez de virar tag.
-async function enviarPergunta() {
-    const respostas = $('respostas');
-    respostas.textContent = 'KaIA pensando...';
-    try {
-        const data = await postJSON('/perguntar', {
-            pergunta: $('pergunta').value,
-            hobbies: lerHobbies()
-        });
-        respostas.textContent = data.resposta;
-    } catch (erro) {
-        respostas.textContent = 'Erro ao conectar com a IA.';
-        console.error(erro);
-    }
 }
 
 // ============================================================

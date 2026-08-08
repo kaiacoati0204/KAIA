@@ -85,11 +85,6 @@ def test_extrair_json_com_cercas():
     assert app_mod.extrair_json('```json\n[1, 2, 3]\n```') == [1, 2, 3]
 
 
-def test_montar_prompt_com_e_sem_hobbies():
-    assert "Futebol" in app_mod.montar_prompt("q", ["Futebol"])
-    assert "nenhum hobby informado" in app_mod.montar_prompt("q", [])
-
-
 def test_to_date():
     assert app_mod._to_date("2026-07-19") == app_mod.date(2026, 7, 19)
     assert app_mod._to_date("") is None
@@ -207,27 +202,6 @@ async def test_resetar_vistas_antigas():
 
 
 # ============================================================ rotas Gemini (mock)
-async def test_perguntar_vazio():
-    async with _client() as c:
-        r = await c.post("/perguntar", json={"pergunta": "  "})
-    assert r.status_code == 400
-
-
-async def test_perguntar_ok(monkeypatch):
-    monkeypatch.setattr(app_mod, "chamar_gemini", lambda p: "resposta X")
-    async with _client() as c:
-        r = await c.post("/perguntar", json={"pergunta": "oi", "hobbies": ["RPG"]})
-    assert r.status_code == 200 and r.json()["resposta"] == "resposta X"
-
-
-async def test_perguntar_erro(monkeypatch):
-    def boom(p): raise RuntimeError("falhou")
-    monkeypatch.setattr(app_mod, "chamar_gemini", boom)
-    async with _client() as c:
-        r = await c.post("/perguntar", json={"pergunta": "oi"})
-    assert r.status_code == 502
-
-
 async def test_gerar_questao_ok(monkeypatch):
     questao = {"q": "?", "opts": ["a", "b", "c", "d", "e"], "ans": 0}
     monkeypatch.setattr(app_mod, "chamar_gemini", lambda p: json.dumps(questao))

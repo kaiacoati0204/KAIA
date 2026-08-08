@@ -576,56 +576,6 @@ body {
 }
 
 /* =========================
-   CHAT COM A KaIA
-========================= */
-.pergunts {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  gap: 15px;
-  margin-top: 40px;
-}
-.pergunts input {
-  flex: 1;
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background-color: var(--card);
-  color: var(--tinta);
-  font-family: inherit;
-  font-size: 1rem;
-  outline: none;
-  transition: 0.3s ease;
-}
-.pergunts input:focus {
-  border-color: var(--gravata-kinrou);
-  box-shadow: 0 0 10px rgba(243, 208, 9, 0.4);
-}
-.pergunts button {
-  padding: 18px 24px;
-  border: none;
-  border-radius: 14px;
-  background-color: var(--gravata-kinrou);
-  color: var(--profundo);
-  font-family: inherit;
-  font-weight: 800;
-  cursor: pointer;
-  transition: 0.3s ease;
-}
-.pergunts button:hover {
-  transform: scale(1.05);
-}
-#respostas {
-  margin-top: 30px;
-  padding: 25px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--profundo);
-  line-height: 1.6;
-  min-height: 15px;
-}
-
-/* =========================
    OVERLAY DE INATIVIDADE
 ========================= */
 #overlay {

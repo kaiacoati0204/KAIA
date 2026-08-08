@@ -70,6 +70,12 @@ def _set_state(pool=None, thompson=None, modelo=None, scaler=None):
     app_mod.app.state.scaler = scaler
 
 
+@pytest.fixture(autouse=True)
+def _limpa_streak():
+    app_mod._ESTADO_STREAK.clear()   # debounce por sessão é in-memory -> isola os testes
+    yield
+
+
 # ============================================================ helpers puros
 def test_extrair_json_cru():
     assert app_mod.extrair_json('{"a": 1}') == {"a": 1}
@@ -247,7 +253,7 @@ async def test_gerar_questao_erro(monkeypatch):
     ("get", "/perfil/estatisticas?aluno_id=a", {}),
     ("get", "/intervencao/pendente?session_id=s", {}),
     ("post", "/intervencao/feedback",
-     {"json": {"session_id": "s", "intervention_type": "nudge_refoco", "reward": 1.0}}),
+     {"json": {"session_id": "s", "intervention_type": "checkpoint", "reward": 1.0}}),
     ("post", "/sessions", {"json": {"user_id": "u"}}),
     ("post", "/sessions/abc/end", {}),
     ("post", "/events", {"json": {"session_id": "s", "event_type": "tab_change", "payload": {}}}),
@@ -370,13 +376,13 @@ async def test_get_perfil_sem_params():
 
 
 async def test_intervencao_pendente_ok():
-    row = {"intervention_id": "iv1", "intervention_type": "nudge_refoco",
+    row = {"intervention_id": "iv1", "intervention_type": "checkpoint",
            "triggered_at": datetime.now(timezone.utc)}
     conn = FakeConn(fetchrow={"from interventions": row})
     _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.get("/intervencao/pendente", params={"session_id": "s"})
-    assert r.json()["pendente"]["intervention_type"] == "nudge_refoco"
+    assert r.json()["pendente"]["intervention_type"] == "checkpoint"
 
 
 async def test_intervencao_pendente_vazio():
@@ -402,9 +408,9 @@ async def test_intervencao_feedback_ok():
     _set_state(pool=FakePool(conn), thompson=thompson)
     async with _client() as c:
         r = await c.post("/intervencao/feedback",
-                         json={"session_id": "s", "intervention_type": "nudge_refoco", "reward": 1.0})
+                         json={"session_id": "s", "intervention_type": "checkpoint", "reward": 1.0})
     assert r.status_code == 200 and r.json()["reward"] == 1.0
-    assert up == [("nudge_refoco", 1.0)]   # bandit atualizado
+    assert up == [("checkpoint", 1.0)]   # bandit atualizado
 
 
 # ============================================================ agregação/intervenção (direto)
@@ -463,19 +469,25 @@ async def test_rodar_intervencao_engajado(monkeypatch):
         return {"estado": "engajado", "score": 0.9, "feats": {"sessoes_no_dia": 1}}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn()
-    thompson = SimpleNamespace(select=lambda e, s: "nudge_refoco")
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
     assert conn.executed == []   # engajado não intervém
 
 
+def _feats_ok():                                        # passa o warm-up (sessão >= 3 min)
+    return {"duracao_sessao_min": 10.0}
+
+
 async def test_rodar_intervencao_dispara(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": {"sessoes_no_dia": 3}}
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}})
-    thompson = SimpleNamespace(select=lambda e, s: "nudge_refoco")
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}   # esta janela vira a 2ª (passa o debounce)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5})                  # já respondeu questões (warm-up ok)
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -484,15 +496,72 @@ async def test_rodar_intervencao_dispara(monkeypatch):
 
 async def test_rodar_intervencao_cooldown(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": {"sessoes_no_dia": 3}}
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # já passa o debounce
     agora = datetime.now(timezone.utc)
-    conn = FakeConn(fetchrow={"from interventions": {"n": 1, "ultima": agora}})  # recém-disparada
-    thompson = SimpleNamespace(select=lambda e, s: "nudge_refoco")
+    conn = FakeConn(fetchrow={"from interventions": {"n": 1, "ultima": agora}},  # recém-disparada
+                    fetchval={"question_answer": 5})
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
     assert conn.executed == []   # cooldown bloqueia
+
+
+async def test_rodar_intervencao_debounce(monkeypatch):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5})
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")   # 1ª janela -> streak=1 < 2
+    assert conn.executed == []                          # debounce bloqueia o blip
+
+
+async def test_rodar_intervencao_score_baixo(monkeypatch):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.4, "feats": _feats_ok()}   # < INTERV_SCORE_MIN
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # debounce já ok -> isola a confiança
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5})
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert conn.executed == []                          # confiança baixa bloqueia
+
+
+async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # passa debounce/score
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 0})                  # nenhuma questão respondida ainda
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert conn.executed == []                          # sem 1ª questão -> não intervém
+
+
+async def test_rodar_intervencao_warmup_cedo(monkeypatch):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": {"duracao_sessao_min": 1.0}}  # < 3 min
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5})                  # respondeu, mas cedo demais
+    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert conn.executed == []                          # timer segura mesmo com questão respondida
 
 
 @pytest.mark.parametrize("antes,depois,esperado", [
@@ -511,15 +580,15 @@ def test_reward_por_transicao(antes, depois, esperado):
 async def test_resolver_rewards_estado_melhorou():
     up = []
     thompson = SimpleNamespace(update=lambda t, r: up.append((t, r)))
-    pend = [{"intervention_id": "iid", "intervention_type": "nudge_refoco", "estado_antes": "distraido"}]
+    pend = [{"intervention_id": "iid", "intervention_type": "checkpoint", "estado_antes": "distraido"}]
     conn = FakeConn(fetch={"select intervention_id": pend})
     await app_mod.resolver_rewards(conn, thompson, "sid", "engajado")
-    assert up == [("nudge_refoco", 1.0)]                              # bandit atualizado com o reward certo
+    assert up == [("checkpoint", 1.0)]                              # bandit atualizado com o reward certo
     assert any("update interventions" in q for q, _ in conn.executed) # linha marcada como resolvida
 
 
 async def test_resolver_rewards_sem_thompson():
-    pend = [{"intervention_id": "iid", "intervention_type": "nudge_refoco", "estado_antes": "distraido"}]
+    pend = [{"intervention_id": "iid", "intervention_type": "checkpoint", "estado_antes": "distraido"}]
     conn = FakeConn(fetch={"select intervention_id": pend})
     await app_mod.resolver_rewards(conn, None, "sid", "engajado")     # sem bandit: não faz nada
     assert conn.executed == []

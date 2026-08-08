@@ -7,13 +7,13 @@ def _ts(tmp_path):
 
 
 def test_elegibilidade_engajado(tmp_path):
-    assert _ts(tmp_path).elegiveis("engajado", 5) == ["badge_foco"]
+    assert _ts(tmp_path).elegiveis("engajado", 5) == []   # engajado não intervém (poda)
 
 
 def test_elegibilidade_distraido(tmp_path):
-    # 90 min de estudo (>= 60) -> alerta_fadiga liberado
+    # 90 min de estudo (>= 60) -> alerta_fadiga liberado. Conjunto-alvo do distraído.
     assert set(_ts(tmp_path).elegiveis("distraido", 90)) == {
-        "nudge_refoco", "pausa_pomodoro", "mensagem_motivacional", "alerta_fadiga"}
+        "auto_monitoramento", "micro_refoco", "checkpoint", "reancoragem", "alerta_fadiga"}
 
 
 def test_alerta_fadiga_bloqueado(tmp_path):
@@ -23,16 +23,16 @@ def test_alerta_fadiga_bloqueado(tmp_path):
 
 def test_update_alpha_beta(tmp_path):
     ts = _ts(tmp_path)
-    ts.update("nudge_refoco", 1.0)
-    assert ts.params["nudge_refoco"] == {"alpha": 2.0, "beta": 1.0}   # só alpha subiu
-    ts.update("nudge_refoco", 0.0)
-    assert ts.params["nudge_refoco"] == {"alpha": 2.0, "beta": 2.0}   # só beta subiu
+    ts.update("checkpoint", 1.0)
+    assert ts.params["checkpoint"] == {"alpha": 2.0, "beta": 1.0}   # só alpha subiu
+    ts.update("checkpoint", 0.0)
+    assert ts.params["checkpoint"] == {"alpha": 2.0, "beta": 2.0}   # só beta subiu
 
 
 def test_update_reward_neutro(tmp_path):
     ts = _ts(tmp_path)
-    ts.update("badge_foco", 0.5)
-    assert ts.params["badge_foco"] == {"alpha": 1.5, "beta": 1.5}     # ambos +0.5
+    ts.update("auto_monitoramento", 0.5)
+    assert ts.params["auto_monitoramento"] == {"alpha": 1.5, "beta": 1.5}   # ambos +0.5
 
 
 def test_select_retorna_elegivel(tmp_path):
@@ -42,12 +42,12 @@ def test_select_retorna_elegivel(tmp_path):
 
 def test_persistencia(tmp_path):
     ts = _ts(tmp_path)
-    ts.update("microlearning", 1.0)
-    ts.update("microlearning", 0.5)
+    ts.update("pausa_ativa", 1.0)
+    ts.update("pausa_ativa", 0.5)
     ts2 = ThompsonSampling(params_path=tmp_path / "p.json", seed=42)   # recarrega do disco
-    assert ts2.params["microlearning"] == ts.params["microlearning"]
+    assert ts2.params["pausa_ativa"] == ts.params["pausa_ativa"]
 
 
 def test_muito_distraido(tmp_path):
     assert set(_ts(tmp_path).elegiveis("muito_distraido", 90)) == {
-        "troca_atividade", "pausa_ativa", "microlearning", "alerta_fadiga"}
+        "troca_atividade", "pausa_ativa", "alerta_fadiga"}

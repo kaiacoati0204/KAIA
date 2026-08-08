@@ -28,7 +28,8 @@
       "Bash(python -c \"import sys;sys.path.insert\\(0,'ml'\\);sys.path.insert\\(0,'Backend'\\);import treinar_com_probe;print\\('treinar_com_probe importa OK'\\)\")",
       "Read(//c/Users/vitor/.claude/projects/**)",
       "Bash(python \"C:/Users/vitor/AppData/Local/Temp/claude/c--Users-vitor-OneDrive-Documentos-KAIA/33b6cb87-e253-46d3-8e90-e21822b642ea/scratchpad/limpar_materias.py\")",
-      "Bash(node --check js/materias.js)"
+      "Bash(node --check js/materias.js)",
+      "WebSearch"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

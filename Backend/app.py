@@ -884,9 +884,11 @@ async def job_agregacao(app):
 
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
-    Regras: só para estado distraido/muito_distraido, respeitando cooldown de
-    INTERV_COOLDOWN_MIN e teto de INTERV_MAX_POR_SESSAO por sessão. Silencioso
-    se a tabela interventions ainda não existir (Tarefa 4)."""
+    Freios (evitam excesso): só distraido/muito_distraido; estado SUSTENTADO por
+    >= INTERV_MIN_JANELAS janelas (debounce); confiança >= INTERV_SCORE_MIN;
+    warm-up (>=1 questão respondida e sessão >= INTERV_WARMUP_MIN); cooldown por
+    estado (INTERV_COOLDOWN_MIN) e teto INTERV_MAX_POR_SESSAO por sessão.
+    Silencioso se a tabela interventions ainda não existir (Tarefa 4)."""
     thompson = app.state.thompson
     modelo, scaler = app.state.modelo, app.state.scaler
     if thompson is None or modelo is None or scaler is None:
@@ -900,7 +902,32 @@ async def rodar_intervencao(app, session_id):
         # comparando o estado de então com o atual. Roda mesmo se agora está engajado
         # (o sucesso é justamente ter virado engajado).
         await resolver_rewards(conn, thompson, session_id, res["estado"])
+
+        # Freio 1 (debounce): conta janelas consecutivas no mesmo estado. Atualiza
+        # SEMPRE (inclusive engajado) pra resetar quando o aluno reancora.
+        sid = str(session_id)
+        st = _ESTADO_STREAK.get(sid)
+        if st and st["estado"] == res["estado"]:
+            st["n"] += 1
+        else:
+            _ESTADO_STREAK[sid] = {"estado": res["estado"], "n": 1}
+        janelas = _ESTADO_STREAK[sid]["n"]
+
         if res["estado"] not in ESTADOS_QUE_INTERVEM:
+            return
+        if res["score"] < INTERV_SCORE_MIN:          # freio 3: confiança mínima
+            return
+        if janelas < INTERV_MIN_JANELAS:             # freio 1: estado sustentado (~60s)
+            return
+
+        # Freio 4 (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
+        # Questões de vestibular são longas — a leitura inicial não pode virar "distração";
+        # o timer segura caso a 1ª seja respondida rápido demais.
+        respondidas = await conn.fetchval(
+            "select count(*) from session_events where session_id = $1::uuid "
+            "and event_type = 'question_answer'", session_id) or 0
+        duracao_min = float(res["feats"].get("duracao_sessao_min") or 0)
+        if respondidas < 1 or duracao_min < INTERV_WARMUP_MIN:
             return
 
         try:
@@ -920,7 +947,7 @@ async def rodar_intervencao(app, session_id):
             return
         if stats["ultima"] is not None:
             desde_min = (datetime.now(timezone.utc) - stats["ultima"]).total_seconds() / 60.0
-            if desde_min < INTERV_COOLDOWN_MIN:
+            if desde_min < INTERV_COOLDOWN_MIN[res["estado"]]:   # freio 2: cooldown por estado
                 return
 
         tempo_estudo_min = float(res["feats"].get("tempo_estudo_acumulado_dia_min") or 0)
@@ -1016,9 +1043,16 @@ NIVEL_DIFICULDADE_PADRAO = 2  # fallback se a sessão ainda não tem resposta (C
 ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
 
 # Regras de disparo de intervenção (no scheduler de 30s).
-INTERV_COOLDOWN_MIN = 3        # tempo mínimo entre intervenções da mesma sessão
+# Cooldown por estado (min). Por ora 3 nos dois: a distração interna é quase
+# constante, então ~3 min já é responsivo sem naguear (10 min seria lento demais).
+# Estrutura por-estado pronta caso queira diferenciar depois.
+INTERV_COOLDOWN_MIN = {"distraido": 3, "muito_distraido": 3}
 INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
 ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
+INTERV_MIN_JANELAS = 2         # freio: estado sustentado por N janelas (~60s) antes de intervir
+INTERV_SCORE_MIN = 0.6         # freio: só intervir com confiança do modelo >= isto
+INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
+_ESTADO_STREAK = {}            # session_id -> {"estado", "n"}: janelas consecutivas no mesmo estado
 INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a mudança de estado
 
 

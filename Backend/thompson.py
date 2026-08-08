@@ -17,18 +17,23 @@ import numpy as np
 
 RANDOM_STATE = 42
 
-# As 9 intervenções do documento.
+# Braços do bandit (após poda: badge_foco e comparacao_social saíram — inertes/
+# desaconselhados p/ TEA-TDAH; pausa_pomodoro fica reservada, o timer automático
+# 25/5 já cobre e pode virar "antecipar pausa" depois).
+# Conjunto-alvo: 7 braços, todos com respaldo em pesquisa. Aposentados na limpeza
+# (nudge_refoco, mensagem_motivacional, microlearning, pausa_pomodoro, badge_foco,
+# comparacao_social). resolver_rewards tolera tipos antigos em voo (try/except),
+# então removê-los daqui é seguro.
 INTERVENCOES = [
-    "nudge_refoco", "pausa_pomodoro", "mensagem_motivacional",
-    "troca_atividade", "pausa_ativa", "microlearning",
-    "alerta_fadiga", "badge_foco", "comparacao_social",
+    "auto_monitoramento", "micro_refoco", "checkpoint", "reancoragem",
+    "troca_atividade", "pausa_ativa", "alerta_fadiga",
 ]
 
-# Elegibilidade por estado do aluno.
+# Elegibilidade por estado. engajado NÃO intervém (regra de acessibilidade —
+# não interromper aluno focado).
 ELEGIVEIS_POR_ESTADO = {
-    "engajado": ["badge_foco"],
-    "distraido": ["nudge_refoco", "pausa_pomodoro", "mensagem_motivacional", "alerta_fadiga"],
-    "muito_distraido": ["troca_atividade", "pausa_ativa", "microlearning", "alerta_fadiga"],
+    "distraido": ["auto_monitoramento", "micro_refoco", "checkpoint", "reancoragem", "alerta_fadiga"],
+    "muito_distraido": ["troca_atividade", "pausa_ativa", "alerta_fadiga"],
 }
 
 # alerta_fadiga só é elegível a partir de tanto tempo de estudo acumulado no dia.

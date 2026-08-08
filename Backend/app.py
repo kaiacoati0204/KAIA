@@ -898,7 +898,9 @@ async def rodar_intervencao(app, session_id):
         try:
             stats = await conn.fetchrow(
                 """
-                select count(*) as n, max(triggered_at) as ultima
+                select count(*) as n, max(triggered_at) as ultima,
+                       (select intervention_type from interventions
+                         where session_id = $1::uuid order by triggered_at desc limit 1) as ultimo_tipo
                 from interventions where session_id = $1::uuid
                 """,
                 session_id,
@@ -916,9 +918,19 @@ async def rodar_intervencao(app, session_id):
                 return
 
         tempo_estudo_min = float(res["feats"].get("tempo_estudo_acumulado_dia_min") or 0)
-        tipo = thompson.select(res["estado"], tempo_estudo_min)
+        evitar = [stats.get("ultimo_tipo")] if stats.get("ultimo_tipo") else []   # penalidade de recência
+        tipo = thompson.select(res["estado"], tempo_estudo_min, evitar=evitar)
         if not tipo:
             return
+
+        # A/B test (DESLIGADO por padrão): metade dos alunos é grupo CONTROLE — NÃO recebe
+        # intervenção; loga 'controle_ab' pra medir a recuperação SEM ajuda e comparar com
+        # o bandit. Ligar AB_TESTE_ATIVO por um tempo, coletar a prova, e desligar.
+        if AB_TESTE_ATIVO:
+            uid = await conn.fetchval(
+                "select user_id from sessions where session_id = $1::uuid", session_id)
+            if _grupo_ab(str(uid)) == "controle":
+                tipo = "controle_ab"
 
         await conn.execute(
             """
@@ -927,7 +939,8 @@ async def rodar_intervencao(app, session_id):
             """,
             session_id, tipo, res["estado"],
         )
-        print(f"[KaIA Intervenção] {session_id} estado={res['estado']} -> {tipo}")
+        if tipo != "controle_ab":
+            print(f"[KaIA Intervenção] {session_id} estado={res['estado']} -> {tipo}")
 
 
 async def resolver_rewards(conn, thompson, session_id, estado_atual):
@@ -958,7 +971,8 @@ async def resolver_rewards(conn, thompson, session_id, estado_atual):
         if reward is None:
             continue
         try:
-            thompson.update(p["intervention_type"], reward)
+            if p["intervention_type"] in INTERVENCOES:   # 'controle_ab' mede o reward mas NÃO treina o bandit
+                thompson.update(p["intervention_type"], reward)
             await conn.execute(
                 """
                 update interventions
@@ -1018,6 +1032,16 @@ INTERV_MIN_JANELAS = 2         # freio: estado sustentado por N janelas (~60s) a
 INTERV_SCORE_MIN = 0.6         # freio: só intervir com confiança do modelo >= isto
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
 _ESTADO_STREAK = {}            # session_id -> {"estado", "n"}: janelas consecutivas no mesmo estado
+AB_TESTE_ATIVO = False         # A/B: liga um teste com grupo CONTROLE (sem intervenção). Off por padrão.
+
+
+def _grupo_ab(user_id):
+    """Grupo A/B determinístico e estável por aluno (50/50): controle vs bandit."""
+    try:
+        h = int(str(user_id).replace("-", "")[:8], 16)
+    except (ValueError, TypeError):
+        h = 0
+    return "controle" if h % 2 == 0 else "bandit"
 INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a mudança de estado
 
 
@@ -1267,6 +1291,7 @@ async def intervencao_pendente(request: Request, session_id: str):
                 select intervention_id, intervention_type, triggered_at
                 from interventions
                 where session_id = $1::uuid and reward is null
+                  and intervention_type <> 'controle_ab'   -- grupo controle do A/B não vê card
                   and triggered_at >= now() - interval '5 minutes'
                 order by triggered_at desc limit 1
                 """,

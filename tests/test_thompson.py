@@ -11,13 +11,13 @@ def test_elegibilidade_engajado(tmp_path):
 
 
 def test_elegibilidade_distraido(tmp_path):
-    # 90 min de estudo (>= 60) -> alerta_fadiga liberado. Conjunto-alvo do distraído.
-    assert set(_ts(tmp_path).elegiveis("distraido", 90)) == {
+    # 120 min de estudo (>= 90) -> alerta_fadiga liberado. Conjunto-alvo do distraído.
+    assert set(_ts(tmp_path).elegiveis("distraido", 120)) == {
         "auto_monitoramento", "micro_refoco", "checkpoint", "reancoragem", "alerta_fadiga"}
 
 
 def test_alerta_fadiga_bloqueado(tmp_path):
-    # pouco tempo de estudo no dia (< 60 min) -> alerta_fadiga bloqueado
+    # pouco tempo de estudo no dia (< 90 min) -> alerta_fadiga bloqueado
     assert "alerta_fadiga" not in _ts(tmp_path).elegiveis("distraido", 20)
 
 
@@ -40,6 +40,12 @@ def test_select_retorna_elegivel(tmp_path):
     assert escolha in INTERVENCOES
 
 
+def test_select_com_recencia(tmp_path):
+    # penalizar o recém-usado não pode quebrar nem retornar algo fora dos elegíveis
+    escolha = _ts(tmp_path).select("distraido", 120, evitar=["checkpoint"])
+    assert escolha in INTERVENCOES
+
+
 def test_persistencia(tmp_path):
     ts = _ts(tmp_path)
     ts.update("pausa_ativa", 1.0)
@@ -49,5 +55,5 @@ def test_persistencia(tmp_path):
 
 
 def test_muito_distraido(tmp_path):
-    assert set(_ts(tmp_path).elegiveis("muito_distraido", 90)) == {
+    assert set(_ts(tmp_path).elegiveis("muito_distraido", 120)) == {
         "troca_atividade", "pausa_ativa", "alerta_fadiga"}

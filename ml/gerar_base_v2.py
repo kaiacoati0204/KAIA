@@ -24,8 +24,10 @@ from sklearn.metrics import accuracy_score, classification_report
 import pickle
 
 BASE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE)                              # p/ importar avaliar (mesma pasta)
 sys.path.insert(0, os.path.join(BASE, "..", "Backend"))
 from mouse_features import features_mouse
+from avaliar import relatorio, cv_agrupada
 
 random.seed(42); np.random.seed(42)
 
@@ -157,24 +159,35 @@ N_ALUNOS, POR_ESTADO = 40, 220
 
 
 def construir_base(n_alunos=N_ALUNOS, por_estado=POR_ESTADO):
-    """Base sintética v2 -> (X DataFrame nomeado, y array)."""
+    """Base sintética v2 -> (X DataFrame nomeado, y array, grupos por aluno)."""
     alunos = [dict(a, base_mouse=baseline_mouse(a["erratic_base"]))
               for a in (gerar_aluno() for _ in range(n_alunos))]
-    X, y = [], []
+    X, y, grupos = [], [], []
     for estado in ESTADOS:
         for _ in range(por_estado):
-            al = random.choice(alunos)
+            gi = random.randrange(len(alunos))       # id do aluno (p/ CV agrupada)
+            al = alunos[gi]
             feats = gerar_sessao(estado, al, al["base_mouse"])
             X.append([feats[k] for k in FEATURE_ORDER])
             y.append(ESTADOS.index(estado))
+            grupos.append(gi)
     # DataFrame nomeado -> scaler/modelo guardam feature_names_in_ (valida a ordem no serving)
-    return pd.DataFrame(X, columns=FEATURE_ORDER, dtype=float), np.array(y)
+    return pd.DataFrame(X, columns=FEATURE_ORDER, dtype=float), np.array(y), np.array(grupos)
 
 
-def treinar_e_salvar(X, y, X_real=None, y_real=None, peso_real=6.0):
+def _treinar_fold(Xtr, ytr):
+    """Treina scaler + RF v2 do zero (usado na CV agrupada de avaliar.cv_agrupada)."""
+    sc = StandardScaler().fit(Xtr)
+    m = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, class_weight="balanced")
+    m.fit(pd.DataFrame(sc.transform(Xtr), columns=FEATURE_ORDER), ytr)
+    return m, sc
+
+
+def treinar_e_salvar(X, y, grupos=None, X_real=None, y_real=None, peso_real=6.0):
     """Treina o RF v2 e salva os artefatos. Rótulos REAIS (probe), se vierem,
-    entram no TREINO com peso maior e o TESTE passa a ser o real segregado
-    (mede o desempenho no que importa). Retorna (modelo, acc, rep, n_real_teste)."""
+    entram no TREINO com peso maior e o TESTE passa a ser o real segregado.
+    `grupos` (id do aluno) liga a CV agrupada (só na base pura sintética).
+    Retorna (modelo, acc, rep, n_real_teste)."""
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     peso, n_real_teste = None, 0
     if X_real is not None and len(X_real):
@@ -193,9 +206,16 @@ def treinar_e_salvar(X, y, X_real=None, y_real=None, peso_real=6.0):
     Xte_s = pd.DataFrame(scaler.transform(Xte), columns=FEATURE_ORDER)
     modelo = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, class_weight="balanced")
     modelo.fit(Xtr_s, ytr, sample_weight=peso)
-    acc = accuracy_score(yte, modelo.predict(Xte_s))
-    rep = classification_report(yte, modelo.predict(Xte_s), target_names=ESTADOS,
-                                labels=[0, 1, 2], output_dict=True, zero_division=0)
+
+    # acc + por classe + confusão + baseline + brier (calibração)
+    rel = relatorio(yte, modelo.predict(Xte_s), ESTADOS, y_score=modelo.predict_proba(Xte_s))
+    acc = rel["acuracia"]
+    cv = None
+    if grupos is not None and X_real is None:              # CV agrupada só na base pura
+        try:
+            cv = cv_agrupada(X, y, grupos, _treinar_fold)
+        except Exception as e:
+            cv = {"media": None, "desvio": None, "por_fold": [], "obs": f"CV falhou: {e}"}
 
     with open(MODELO_PATH, "wb") as fp: pickle.dump(modelo, fp)
     with open(SCALER_PATH, "wb") as fp: pickle.dump(scaler, fp)
@@ -203,14 +223,25 @@ def treinar_e_salvar(X, y, X_real=None, y_real=None, peso_real=6.0):
         json.dump({"versao": "v2", "acuracia": acc, "n": len(X),
                    "n_real": int(len(X_real)) if X_real is not None else 0,
                    "n_real_teste": n_real_teste, "feature_order": FEATURE_ORDER,
-                   "classification_report": rep}, fp, indent=2, ensure_ascii=False)
-    return modelo, acc, rep, n_real_teste
+                   "cv_agrupada_por_aluno": cv, "holdout": rel}, fp, indent=2, ensure_ascii=False)
+    return modelo, acc, rel["classification_report"], n_real_teste
 
 
 if __name__ == "__main__":
-    Xb, yb = construir_base()
-    modelo, acc, _, _ = treinar_e_salvar(Xb, yb)
-    print(f"acuracia teste: {acc:.3f}  (alvo ~0,80-0,90)")
+    Xb, yb, gb = construir_base()
+    modelo, acc, _, _ = treinar_e_salvar(Xb, yb, grupos=gb)
+    m = json.load(open(METRICAS_PATH, encoding="utf-8"))
+    cv = m.get("cv_agrupada_por_aluno") or {}
+    print(f"holdout acuracia: {acc:.3f}  (alvo ~0,80-0,90)")
+    if cv.get("media") is not None:
+        folds = [round(a, 3) for a in cv["por_fold"]]
+        print(f"CV agrupada por aluno: {cv['media']:.3f} +/- {cv['desvio']:.3f}  folds={folds}")
+    print(f"baseline (chute majoritario): {m['holdout']['baseline_majoritario']:.3f}")
+    if "brier" in m["holdout"]:
+        print(f"brier (calibracao; 0=perfeito, so vale no real): {m['holdout']['brier']:.3f}")
+    print("matriz de confusao (linha=real, col=previsto) ->", ESTADOS)
+    for linha in m["holdout"]["matriz_confusao"]:
+        print("  ", linha)
     print("top importancias:")
     for n, v in sorted(zip(FEATURE_ORDER, modelo.feature_importances_), key=lambda t: -t[1])[:8]:
         print(f"  {v*100:5.1f}%  {n}")

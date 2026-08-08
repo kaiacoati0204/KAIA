@@ -36,8 +36,12 @@ ELEGIVEIS_POR_ESTADO = {
     "muito_distraido": ["troca_atividade", "pausa_ativa", "alerta_fadiga"],
 }
 
-# alerta_fadiga só é elegível a partir de tanto tempo de estudo acumulado no dia.
-MIN_ESTUDO_ALERTA_FADIGA_MIN = 60
+# alerta_fadiga só é elegível a partir de tanto tempo de estudo acumulado no dia (1h30).
+MIN_ESTUDO_ALERTA_FADIGA_MIN = 90
+
+# Braço recém-usado leva a amostra Beta multiplicada por isto na próxima escolha
+# (não repetir o mesmo card seguido -> combate a habituação, à la Duolingo).
+PENALIDADE_RECENCIA = 0.5
 
 # Caminho padrão dos parâmetros persistidos.
 PARAMS_PATH = Path(__file__).resolve().parent.parent / "ml" / "artifacts" / "thompson_params.json"
@@ -82,15 +86,19 @@ class ThompsonSampling:
             elig.remove("alerta_fadiga")
         return elig
 
-    def select(self, estado, tempo_estudo_min):
+    def select(self, estado, tempo_estudo_min, evitar=()):
         """Amostra Beta(alpha,beta) de cada elegível e devolve o de maior amostra.
-        Retorna None se não houver intervenção elegível."""
+        Braços em `evitar` (recém-usados) levam PENALIDADE_RECENCIA na amostra — não
+        somem, só ficam menos prováveis (se todos estiverem em evitar, ainda escolhe
+        o melhor). Retorna None se não houver intervenção elegível."""
         elig = self.elegiveis(estado, tempo_estudo_min)
         if not elig:
             return None
         melhor, melhor_amostra = None, -1.0
         for t in elig:
             amostra = float(self.rng.beta(self.params[t]["alpha"], self.params[t]["beta"]))
+            if t in evitar:
+                amostra *= PENALIDADE_RECENCIA
             if amostra > melhor_amostra:
                 melhor, melhor_amostra = t, amostra
         return melhor

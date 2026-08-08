@@ -443,7 +443,7 @@ async def test_rodar_intervencao_engajado(monkeypatch):
         return {"estado": "engajado", "score": 0.9, "feats": {"sessoes_no_dia": 1}}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn()
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -461,7 +461,7 @@ async def test_rodar_intervencao_dispara(monkeypatch):
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}   # esta janela vira a 2ª (passa o debounce)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})                  # já respondeu questões (warm-up ok)
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -476,7 +476,7 @@ async def test_rodar_intervencao_cooldown(monkeypatch):
     agora = datetime.now(timezone.utc)
     conn = FakeConn(fetchrow={"from interventions": {"n": 1, "ultima": agora}},  # recém-disparada
                     fetchval={"question_answer": 5})
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -489,7 +489,7 @@ async def test_rodar_intervencao_debounce(monkeypatch):
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")   # 1ª janela -> streak=1 < 2
@@ -503,7 +503,7 @@ async def test_rodar_intervencao_score_baixo(monkeypatch):
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # debounce já ok -> isola a confiança
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -517,7 +517,7 @@ async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # passa debounce/score
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 0})                  # nenhuma questão respondida ainda
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -531,7 +531,7 @@ async def test_rodar_intervencao_warmup_cedo(monkeypatch):
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})                  # respondeu, mas cedo demais
-    thompson = SimpleNamespace(select=lambda e, s: "checkpoint")
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")

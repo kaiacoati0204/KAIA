@@ -26,11 +26,13 @@ from dotenv import load_dotenv
 import asyncpg
 
 BASE = Path(__file__).resolve().parent
+sys.path.insert(0, str(BASE))                        # p/ importar avaliar/gerar_base_v2
 sys.path.insert(0, str(BASE.parent / "Backend"))
 load_dotenv(BASE.parent / "Backend" / ".env")
 
 from gerar_base_v2 import (  # noqa: E402
     construir_base, treinar_e_salvar, FEATURE_ORDER, ESTADOS, MODELO_PATH, SCALER_PATH)
+from avaliar import relatorio  # noqa: E402
 
 LIMIAR_RETREINO = 40   # abaixo disso: só valida (pouco dado real -> re-treinar overfita)
 
@@ -61,15 +63,20 @@ async def carregar_rotulos():
 
 
 def validar_modelo_atual(Xr, yr):
-    """Acurácia do modelo ATUAL (o do disco) nos rótulos reais — número honesto."""
+    """Métricas do modelo ATUAL (o do disco) nos rótulos reais — o número honesto.
+    Mesma avaliar() da base sintética: acurácia + baseline + matriz de confusão."""
     modelo = pickle.load(open(MODELO_PATH, "rb"))
     scaler = pickle.load(open(SCALER_PATH, "rb"))
-    pred = modelo.predict(pd.DataFrame(scaler.transform(Xr), columns=FEATURE_ORDER))
-    acc = accuracy_score(yr, pred)
+    Xs = pd.DataFrame(scaler.transform(Xr), columns=FEATURE_ORDER)
+    rel = relatorio(yr, modelo.predict(Xs), ESTADOS, y_score=modelo.predict_proba(Xs))
     print(f"\n== modelo ATUAL nos {len(yr)} rótulos reais ==")
-    print(f"acurácia real: {acc:.3f}")
-    print(classification_report(yr, pred, target_names=ESTADOS, labels=[0, 1, 2], zero_division=0))
-    return acc
+    print(f"acurácia real: {rel['acuracia']:.3f}   (baseline majoritário: {rel['baseline_majoritario']:.3f})")
+    if "brier" in rel:
+        print(f"calibração (brier, 0=perfeito): {rel['brier']:.3f}")
+    print("matriz de confusão (linha=real, col=previsto) ->", ESTADOS)
+    for linha in rel["matriz_confusao"]:
+        print("  ", linha)
+    return rel["acuracia"]
 
 
 def main():
@@ -91,7 +98,7 @@ def main():
         return
 
     print(f"\n>= {LIMIAR_RETREINO}: re-treinando HÍBRIDO (sintético + real up-weighted)...")
-    Xb, yb = construir_base()
+    Xb, yb, _ = construir_base()
     _, acc, _, n_real_te = treinar_e_salvar(Xb, yb, X_real=Xr, y_real=yr)
     alvo = " (real segregado)" if n_real_te else " (sintético)"
     print(f"novo modelo salvo. acurácia no teste{alvo}: {acc:.3f}")

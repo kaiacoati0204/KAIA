@@ -77,3 +77,11 @@ def _bearer(request):
 async def usuario_autenticado(request: Request):
     """Dependência FastAPI: exige um Bearer token válido; retorna o user_id (sub)."""
     return verificar_token(_bearer(request))["sub"]
+
+
+async def usuario_identidade(request: Request):
+    """Como usuario_autenticado, mas devolve a identidade completa e VERIFICADA do
+    token: {"sub", "email"}. Use para amarrar consultas ao dono real — nunca
+    confiar em user_id/email vindos do cliente."""
+    claims = verificar_token(_bearer(request))
+    return {"sub": claims.get("sub"), "email": claims.get("email")}

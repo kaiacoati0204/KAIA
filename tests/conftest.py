@@ -21,5 +21,8 @@ def _bypass_auth():
     """As rotas protegidas exigem JWT válido. Nos testes, trocamos a dependência
     usuario_autenticado por um stub (evita precisar de token real/rede)."""
     app_mod.app.dependency_overrides[app_mod.usuario_autenticado] = lambda: "test-user"
+    app_mod.app.dependency_overrides[app_mod.usuario_identidade] = lambda: {
+        "sub": "test-user", "email": "test@kaia.com"}
     yield
     app_mod.app.dependency_overrides.pop(app_mod.usuario_autenticado, None)
+    app_mod.app.dependency_overrides.pop(app_mod.usuario_identidade, None)

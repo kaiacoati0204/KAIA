@@ -15,7 +15,7 @@ import requests
 from statistics import mean, pstdev
 
 from thompson import ThompsonSampling, INTERVENCOES
-from auth import usuario_autenticado
+from auth import usuario_autenticado, usuario_identidade
 from mouse_features import features_mouse
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
@@ -149,9 +149,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="KaIA Backend", lifespan=lifespan)
+
+# CORS: só os domínios da app — nunca "*". Local (Live Server) por padrão;
+# produção via env KAIA_CORS_ORIGINS (lista separada por vírgula).
+_CORS_PADRAO = "http://127.0.0.1:5500,http://localhost:5500"
+CORS_ORIGINS = [o.strip() for o in os.getenv("KAIA_CORS_ORIGINS", _CORS_PADRAO).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -264,14 +269,15 @@ async def temas(request: Request, refresh: bool = False, dados: dict = Body(defa
 # tabela `anotacoes` (RLS ligado, SEM policy para a anon key) — o isolamento por
 # aluno é o `where aluno_id = $1` daqui. Sem Supabase Auth, é o mesmo modelo de
 # confiança do resto do app: convém, não é segurança forte (ver Etapa 10).
-@app.get("/anotacoes", dependencies=[Depends(usuario_autenticado)])
-async def obter_anotacoes(request: Request, aluno_id: str = "", tema: str = ""):
+@app.get("/anotacoes")
+async def obter_anotacoes(request: Request, tema: str = "",
+                          ident: dict = Depends(usuario_identidade)):
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
-    aluno_id, tema = aluno_id.strip(), tema.strip()
+    aluno_id, tema = (ident.get("sub") or "").strip(), tema.strip()   # dono = token, não cliente
     if not aluno_id or not tema:
-        return JSONResponse({"erro": "aluno_id e tema são obrigatórios."}, status_code=400)
+        return JSONResponse({"erro": "tema é obrigatório."}, status_code=400)
     try:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -295,14 +301,15 @@ class AnotacoesIn(BaseModel):
     elementos: list = []
 
 
-@app.put("/anotacoes", dependencies=[Depends(usuario_autenticado)])
-async def salvar_anotacoes(body: AnotacoesIn, request: Request):
+@app.put("/anotacoes")
+async def salvar_anotacoes(body: AnotacoesIn, request: Request,
+                          ident: dict = Depends(usuario_identidade)):
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
-    aluno_id, tema = body.aluno_id.strip(), body.tema.strip()
+    aluno_id, tema = (ident.get("sub") or "").strip(), body.tema.strip()   # dono = token, não body.aluno_id
     if not aluno_id or not tema:
-        return JSONResponse({"erro": "aluno_id e tema são obrigatórios."}, status_code=400)
+        return JSONResponse({"erro": "tema é obrigatório."}, status_code=400)
     # 9a é só texto: filtra defensivamente qualquer outro tipo. Imagem só entra
     # no 9b, junto com o pipeline de Storage (bucket + signed URL).
     elementos = [
@@ -349,14 +356,17 @@ def _analise_regras(base, por_materia):
     return frases
 
 
-@app.get("/perfil/estatisticas", dependencies=[Depends(usuario_autenticado)])
-async def perfil_estatisticas(request: Request, aluno_id: str = ""):
+@app.get("/perfil/estatisticas")
+async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_identidade)):
+    # Auto-consulta: o aluno só vê as PRÓPRIAS estatísticas. aluno_id vem do token
+    # (sub), nunca de query param — desempenho_semanal e sessions são chaveados por
+    # user_id == sub.
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
-    aluno_id = aluno_id.strip()
+    aluno_id = (ident.get("sub") or "").strip()
     if not aluno_id:
-        return JSONResponse({"erro": "aluno_id é obrigatório."}, status_code=400)
+        return JSONResponse({"erro": "identidade ausente no token."}, status_code=400)
 
     try:
         async with pool.acquire() as conn:
@@ -1367,12 +1377,12 @@ class SessionIn(BaseModel):
     app_version: str = "mvp-0.1"
 
 
-@app.post("/sessions", dependencies=[Depends(usuario_autenticado)])
-async def criar_sessao(body: SessionIn, request: Request):
+@app.post("/sessions")
+async def criar_sessao(body: SessionIn, request: Request, ident: dict = Depends(usuario_identidade)):
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
-    user_id = body.user_id or str(uuid.uuid4())
+    user_id = ident.get("sub") or str(uuid.uuid4())   # dono da sessão = usuário do token, não body.user_id
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Garante o aluno em `perfis` ANTES da sessão (FK sessions.user_id
@@ -1437,27 +1447,35 @@ class EventIn(BaseModel):
     ts: Optional[str] = None   # ISO 8601 vindo do frontend; default = now() no banco
 
 
-@app.post("/events", dependencies=[Depends(usuario_autenticado)])
-async def receber_evento(body: EventIn, request: Request):
+@app.post("/events")
+async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(usuario_identidade)):
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
     payload_json = json.dumps(body.payload, ensure_ascii=False)
+    sub = ident.get("sub")
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # Garante a sessão pai (FK session_events.session_id -> sessions).
-            # Fallback: se o evento chegar antes do /sessions, cria a sessão com
-            # o aluno ANÔNIMO (satisfaz a FK sessions.user_id -> perfis). No fluxo
-            # normal o /sessions já criou a sessão com o user_id real do aluno.
+            # Garante perfil + sessão pai do usuário AUTENTICADO (não mais anônimo).
+            # No fluxo normal o /sessions já criou a sessão; este é o fallback se o
+            # evento chegar antes.
+            await conn.execute(
+                "insert into perfis (user_id) values ($1::uuid) on conflict (user_id) do nothing", sub)
             await conn.execute(
                 """
                 insert into sessions (session_id, user_id, session_start_ts, platform, app_version)
                 values ($1::uuid, $2::uuid, now(), 'web', 'mvp-0.1')
                 on conflict (session_id) do nothing
                 """,
-                body.session_id, ANON_USER,
+                body.session_id, sub,
             )
+            # OWNERSHIP: o evento só entra na PRÓPRIA sessão — impede injeção na de
+            # outro aluno. Sessão anônima legada ainda é tolerada.
+            dono = await conn.fetchval(
+                "select user_id from sessions where session_id = $1::uuid", body.session_id)
+            if str(dono) != str(sub) and str(dono) != str(ANON_USER):
+                return JSONResponse({"erro": "Sessão não pertence ao usuário."}, status_code=403)
             # ts = now() do BANCO (autoritativo). NÃO usamos body.ts do frontend:
             # o relógio do navegador pode estar defasado e quebraria a janela de
             # tempo do job de agregação (session_features). Eventos chegam em
@@ -1627,8 +1645,13 @@ def _demo_aluno(email):
     }
 
 
-@app.get("/responsavel/aluno", dependencies=[Depends(usuario_autenticado)])
-async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Optional[str] = None):
+# Roles que podem consultar dados de ALUNOS. Um aluno comum não vê outro aluno.
+RESPONSAVEL_ROLES = {"professor", "coordenador", "pai", "admin"}
+
+
+@app.get("/responsavel/aluno")
+async def stats_aluno(request: Request, ident: dict = Depends(usuario_identidade),
+                      email: Optional[str] = None, user_id: Optional[str] = None):
     """Painel do responsável: resolve o aluno por e-mail (ou user_id) e devolve a
     evolução diária das features de atenção/desempenho + uma leitura de tendência
     (o filho está melhorando?)."""
@@ -1638,6 +1661,13 @@ async def stats_aluno(request: Request, email: Optional[str] = None, user_id: Op
     pool = request.app.state.pool
     if pool is None:
         return _demo_aluno(email or "demo@kaia.com")
+
+    # GATE: só um responsável (role) pode ver dados de um aluno — não outro aluno.
+    # Escopo fino ("este aluno é da turma deste professor") ainda é dívida.
+    papel = await _role_do_usuario(pool, ident.get("sub"), ident.get("email"))
+    if (papel or "").lower() not in RESPONSAVEL_ROLES:
+        return JSONResponse({"erro": "Acesso restrito a responsáveis."}, status_code=403)
+
     async with pool.acquire() as conn:
         if not user_id:
             row = await conn.fetchrow(
@@ -1732,6 +1762,12 @@ SEED_EMAIL = "teste@kaia.com"
 
 @app.post("/seed/aluno-teste")
 async def seed_aluno_teste(request: Request):
+    # Rota de DEV: desligada por padrão. Só roda com KAIA_SEED_ATIVO=1 no ambiente.
+    if os.getenv("KAIA_SEED_ATIVO") != "1":
+        return JSONResponse(
+            {"erro": "Rota de seed desativada. Defina KAIA_SEED_ATIVO=1 para usar em dev."},
+            status_code=403,
+        )
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
@@ -1826,7 +1862,7 @@ async def seed_aluno_teste(request: Request):
 # ================== API: DADOS DO GRÁFICO DE HOBBIES ========================
 # Conta quantas vezes cada hobby aparece nos perfis (coluna jsonb `hobbies`) e
 # devolve no formato { labels: [...], valores: [...] } que o Chart.js espera.
-@app.get("/api/dados-grafico")
+@app.get("/api/dados-grafico", dependencies=[Depends(usuario_autenticado)])
 async def dados_grafico(request: Request):
     pool = request.app.state.pool
     if pool is None:
@@ -2021,12 +2057,17 @@ def _agregar_base_sintetica(df):
     }
 
 
-async def _role_do_usuario(pool, user_id):
-    """Papel do usuário (perfis.role) pelo user_id que o front envia. Retorna
-    None se o id for inválido/inexistente."""
+async def _role_do_usuario(pool, user_id, email=None):
+    """Papel do usuário (perfis.role) pela identidade VERIFICADA do token: tenta o
+    user_id (sub) e cai para o email. None se não achar (→ tratado como não-admin)."""
     try:
         async with pool.acquire() as conn:
-            return await conn.fetchval("select role from perfis where user_id = $1::uuid", user_id)
+            role = None
+            if user_id:
+                role = await conn.fetchval("select role from perfis where user_id = $1::uuid", user_id)
+            if role is None and email:
+                role = await conn.fetchval("select role from perfis where lower(email) = lower($1)", email)
+            return role
     except Exception:
         return None  # uuid malformado, etc. → tratado como não-admin
 
@@ -2237,18 +2278,15 @@ def _dashboard_offline():
     return {"vazio": True, "motivo": "nenhuma planilha encontrada"}
 
 
-@app.get("/dashboard/dados", dependencies=[Depends(usuario_autenticado)])
-async def dashboard_dados(request: Request):
-    # --- Porteiro de acesso (Etapa 10) ---------------------------------------
-    # SEGURANÇA: X-Kaia-User é a identidade que o FRONT AFIRMA sobre si (uuid do
-    # localStorage). Sem senha/JWT, isto é CONVENIÊNCIA, não proteção: alguém
-    # poderia enviar o uuid do admin e passar. O gate real só existirá com
-    # Supabase Auth. Ainda assim, a decisão vem do BANCO (perfis.role), nunca de
-    # e-mail hardcoded no código — é a estrutura correta, faltando só a credencial.
+@app.get("/dashboard/dados")
+async def dashboard_dados(request: Request, ident: dict = Depends(usuario_identidade)):
+    # --- Porteiro de acesso -------------------------------------------------
+    # SEGURANÇA: a identidade vem do JWT VERIFICADO (sub/email), não mais do header
+    # X-Kaia-User (que o front apenas afirmava e era spoofável). A decisão de acesso
+    # continua vindo do BANCO (perfis.role), nunca de e-mail hardcoded no código.
     pool = request.app.state.pool
     if pool is not None:
-        user_id = request.headers.get("X-Kaia-User")
-        if not user_id or await _role_do_usuario(pool, user_id) != "admin":
+        if await _role_do_usuario(pool, ident.get("sub"), ident.get("email")) != "admin":
             return JSONResponse({"erro": "Acesso restrito ao dashboard interno."}, status_code=403)
 
         # Dados reais do Supabase (prioridade quando há banco).
@@ -2268,26 +2306,27 @@ async def dashboard_dados(request: Request):
 # usuario_autenticado) e já protege o /diagnose. DÍVIDA: estender o Depends às
 # demais rotas de dados — depende do frontend passar a enviar Authorization:
 # Bearer <token> em todas as páginas (hoje várias não carregam o supabase-js).
-@app.get("/perfil", dependencies=[Depends(usuario_autenticado)])
-async def get_perfil(request: Request, email: str = None, user_id: str = None):
+@app.get("/perfil")
+async def get_perfil(request: Request, ident: dict = Depends(usuario_identidade)):
+    # Identidade vem do TOKEN (sub + email verificados), NUNCA de query param: o
+    # aluno só lê o próprio perfil. sub primeiro; email como fallback (cobre perfil
+    # cujo user_id ainda não foi unificado com o id do Supabase Auth).
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
-    if not user_id and not email:
-        return JSONResponse(
-            {"status": "erro", "motivo": "user_id ou email obrigatório"}, status_code=400
-        )
+    sub, email = ident.get("sub"), ident.get("email")
     try:
         async with pool.acquire() as conn:
-            if user_id:
+            row = None
+            if sub:
                 row = await conn.fetchrow(
                     """
                     SELECT user_id, email, hobbies, nome, role, escola_id, turma_id
                     FROM perfis WHERE user_id = $1::uuid
                     """,
-                    user_id
+                    sub
                 )
-            else:
+            if not row and email:
                 row = await conn.fetchrow(
                     """
                     SELECT user_id, email, hobbies, nome, role, escola_id, turma_id
@@ -2358,13 +2397,16 @@ def _distribuicao_status(valores):
     return d
 
 
-@app.get("/responsavel/painel", dependencies=[Depends(usuario_autenticado)])
-async def painel_responsavel(request: Request, email: Optional[str] = None):
+@app.get("/responsavel/painel")
+async def painel_responsavel(request: Request, ident: dict = Depends(usuario_identidade)):
+    # O painel é do PRÓPRIO responsável logado: o e-mail vem do token, não do
+    # cliente (senão qualquer um pediria o painel de qualquer e-mail).
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
+    email = ident.get("email")
     if not email:
-        return JSONResponse({"erro": "Informe o e-mail do usuário logado."}, status_code=400)
+        return JSONResponse({"erro": "identidade ausente no token."}, status_code=400)
 
     async with pool.acquire() as conn:
         perfil = await conn.fetchrow(

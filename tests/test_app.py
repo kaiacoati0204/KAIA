@@ -232,7 +232,6 @@ async def test_gerar_questao_erro(monkeypatch):
     ("post", "/sessions/abc/end", {}),
     ("post", "/events", {"json": {"session_id": "s", "event_type": "tab_change", "payload": {}}}),
     ("post", "/perfil", {"json": {"user_id": "u"}}),
-    ("post", "/seed/aluno-teste", {}),
     ("get", "/perfil?email=a@b.com", {}),
     ("get", "/responsavel/painel?email=a@b.com", {}),
 ])
@@ -291,11 +290,21 @@ async def test_sessions_end_ignorado():
 
 
 async def test_events_ok():
-    conn = FakeConn(fetchrow={"insert into session_events": {"event_id": "e1"}})
+    conn = FakeConn(fetchrow={"insert into session_events": {"event_id": "e1"}},
+                    fetchval={"user_id from sessions": "test-user"})   # dono = usuário do token (passa ownership)
     _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.post("/events", json={"session_id": "s", "event_type": "tab_change", "payload": {}})
     assert r.status_code == 200 and r.json()["event_id"] == "e1"
+
+
+async def test_events_bloqueia_sessao_de_outro():
+    # Evento numa sessão que pertence a OUTRO usuário -> 403 (ownership).
+    conn = FakeConn(fetchval={"user_id from sessions": "outro-user"})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/events", json={"session_id": "s", "event_type": "tab_change", "payload": {}})
+    assert r.status_code == 403
 
 
 async def test_perfil_post_sem_user_id():
@@ -342,11 +351,12 @@ async def test_get_perfil_por_user_id():
     assert r.status_code == 200 and r.json()["user_id"] == "u1"
 
 
-async def test_get_perfil_sem_params():
+async def test_get_perfil_usa_token_sem_perfil():
+    # Identidade vem do token (não de query param). Sem perfil correspondente -> 404.
     _set_state(pool=FakePool(FakeConn()))
     async with _client() as c:
         r = await c.get("/perfil")
-    assert r.status_code == 400
+    assert r.status_code == 404
 
 
 async def test_intervencao_pendente_ok():
@@ -639,11 +649,12 @@ async def test_perfil_estatisticas_ok():
     assert r.status_code == 200 and body["desempenho"]["atencao"] == 70 and body["analise"]
 
 
-async def test_perfil_estatisticas_sem_aluno_id():
+async def test_perfil_estatisticas_usa_token_sem_dados():
+    # Identidade vem do token (não de aluno_id). Sem dados -> 200 com desempenho vazio.
     _set_state(pool=FakePool(FakeConn()))
     async with _client() as c:
-        r = await c.get("/perfil/estatisticas", params={"aluno_id": ""})
-    assert r.status_code == 400
+        r = await c.get("/perfil/estatisticas")
+    assert r.status_code == 200 and r.json()["desempenho"] is None
 
 
 # ============================================================ /responsavel/aluno (com banco)
@@ -657,6 +668,7 @@ async def test_responsavel_aluno_com_banco():
     conn = FakeConn(
         fetchrow={"lower(email)": {"user_id": "u1"}, "sequencia_dias_estudo": aluno},
         fetch={"group by date": [linha]},
+        fetchval={"role from perfis": "professor"},   # chamador é responsável (passa o gate)
     )
     _set_state(pool=FakePool(conn))
     async with _client() as c:
@@ -667,18 +679,37 @@ async def test_responsavel_aluno_com_banco():
 
 
 async def test_responsavel_aluno_nao_encontrado():
-    conn = FakeConn(fetchrow={"lower(email)": None})
+    conn = FakeConn(fetchrow={"lower(email)": None},
+                    fetchval={"role from perfis": "professor"})   # passa o gate; alvo é que não existe
     _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.get("/responsavel/aluno", params={"email": "nao@existe.com"})
     assert r.status_code == 404
 
 
+async def test_responsavel_aluno_bloqueia_nao_responsavel():
+    # Aluno comum tentando ver dados de outro aluno -> 403 (gate de role).
+    conn = FakeConn(fetchval={"role from perfis": "aluno"})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.get("/responsavel/aluno", params={"email": "outro@aluno.com"})
+    assert r.status_code == 403
+
+
 # ============================================================ /seed/aluno-teste
-async def test_seed_aluno_teste_ok():
+async def test_seed_aluno_teste_ok(monkeypatch):
+    monkeypatch.setenv("KAIA_SEED_ATIVO", "1")   # rota de dev: só roda com a flag
     conn = FakeConn(execute="INSERT 0 1")
     _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.post("/seed/aluno-teste")
     body = r.json()
     assert r.status_code == 200 and body["status"] == "ok" and body["janelas"] == 50
+
+
+async def test_seed_desativado_por_padrao(monkeypatch):
+    monkeypatch.delenv("KAIA_SEED_ATIVO", raising=False)   # sem a flag -> 403
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.post("/seed/aluno-teste")
+    assert r.status_code == 403

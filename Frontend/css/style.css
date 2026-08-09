@@ -1928,7 +1928,7 @@ body.textura-papel .conteudo {
 /* Lista de questões erradas no resumo final (Parte 7). */
 .resumo-erros {
   margin-bottom: 20px;
-  max-height: 160px;
+  max-height: 46vh;          /* espaço p/ abrir os itens sem soterrar (Fase 1) */
   overflow-y: auto;
   text-align: left;
 }
@@ -1937,15 +1937,114 @@ body.textura-papel .conteudo {
   font-size: 0.95rem;
   color: var(--profundo);
 }
-.resumo-erros ul {
+/* ===== Accordion de questões erradas (Fase 1) =====
+   Substitui a lista plana por itens colapsados. Fechado: só "Questão N" + ✗ e a
+   tag "Rever" (indicador por ícone+rótulo, não só cor). Aberto: Pergunta / Sua
+   resposta / Correta / Por quê. Tom calmo — rosê (--erro-*) e verde (--vd-uniao)
+   suaves, sem vermelho de alarme. */
+#resumo-erros-lista {
+  list-style: none;
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
 }
-.resumo-erros li {
-  margin-bottom: 6px;
-  font-size: 0.85rem;
+#resumo-erros-lista .acc-item {
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+.acc-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  color: var(--profundo);
+  text-align: left;
+  cursor: pointer;
+}
+.acc-header:hover { background: rgba(var(--profundo-rgb), 0.04); }
+.acc-header:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: -2px; }
+.acc-status {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--erro-bg);
+  color: var(--erro-tx);
+  font-size: 0.78rem;
+}
+.acc-titulo { flex: 1; }
+.acc-tag {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--erro-tx);
+  background: var(--erro-bg);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+/* Selo "✓ revisada" — questão que o aluno acertou na revisão (Fase 1.1). */
+.acc-tag--ok {
+  color: #2e7d4f;
+  background: rgba(87, 217, 121, 0.18);   /* --vd-uniao suave */
+}
+.acc-chevron {
+  flex: none;
+  color: var(--azul-coati);
+  transition: transform 0.2s ease;
+}
+.acc-header[aria-expanded="true"] .acc-chevron { transform: rotate(90deg); }
+.acc-panel {
+  padding: 2px 14px 14px;
   color: var(--tinta);
-  line-height: 1.4;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.acc-campo { margin: 12px 0 0; }
+.acc-rotulo {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--azul-coati);
+}
+.acc-linha {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.acc-linha--erro { background: var(--erro-bg); }
+.acc-linha--ok   { background: rgba(87, 217, 121, 0.18); }   /* --vd-uniao suave */
+.acc-ic { flex: none; font-weight: 800; }
+.acc-linha--erro .acc-ic { color: var(--erro-tx); }
+.acc-linha--ok   .acc-ic { color: #2e7d4f; }                 /* verde escuro p/ contraste */
+.acc-rot {
+  flex: none;
+  min-width: 96px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--profundo);
+}
+.acc-txt { color: var(--tinta); }
+@media (prefers-reduced-motion: reduce) {
+  .acc-chevron { transition: none; }
 }
 .resumo-acoes {
   display: flex;

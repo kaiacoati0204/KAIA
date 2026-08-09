@@ -1007,6 +1007,7 @@ function checkAnswer(idx, btn) {
         isMissionActive = false;
         clearInterval(idleInterval);
         revisaoRespondidas++;
+        if (acertou) currentQuestion.pendenteRevisao = false;   // acertou na revisão → sai da fila de pendências (Fase 1.1). Mesmo objeto de errosSessao (fila é cópia rasa), então o registro é atualizado.
         atualizarBarraRevisao();     // a barra enche ao longo da revisão
         mostrarExplicacao(idx, acertou);
         return;
@@ -1033,7 +1034,7 @@ function checkAnswer(idx, btn) {
     questoesRespondidas++;
     historicoQuestoes.push(currentQuestion);   // fonte do checkpoint de recuperação
     if (acertou) acertosSessao++;
-    else errosSessao.push(currentQuestion);   // guarda para a revisão (Parte 7)
+    else errosSessao.push({ ...currentQuestion, escolhaAluno: idx, pendenteRevisao: true });   // revisão (Parte 7): resposta do aluno (accordion) + ainda pendente de revisão (Fase 1.1)
     questoesNaRodada++;
     ajustarNivel(acertou);        // dificuldade adaptativa (Parte 6)
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
@@ -1247,28 +1248,117 @@ function voltarDoResumo() {
 }
 
 // ==== REVISÃO DE ERROS (Parte 7) ====
-// Popula a lista de questões erradas + o botão "Revisar erros" no resumo final.
+// Popula a lista de questões erradas (accordion) + o botão "Revisar erros".
+// Fechado por padrão: cada item mostra só "Questão N" + indicador; abre com
+// Pergunta / Sua resposta / Correta / Por quê. Reduz carga cognitiva (Fase 1).
 function preencherErros() {
     const sec = $('resumo-erros'), lista = $('resumo-erros-lista'), btn = $('btn-revisar');
     if (!sec || !lista || !btn) return;
     if (!errosSessao.length) { sec.hidden = true; btn.hidden = true; return; }
     lista.innerHTML = '';
-    errosSessao.forEach(q => {
-        const li = document.createElement('li');
-        li.textContent = `${q.q} — correta: ${q.opts[q.ans]}`;
-        lista.appendChild(li);
-    });
+    // Accordion = registro COMPLETO da sessão (todas as erradas), com selo nas já revisadas.
+    errosSessao.forEach((q, i) => lista.appendChild(montarErroAccordion(q, i)));
     sec.hidden = false;
-    btn.textContent = `Revisar erros (${errosSessao.length})`;
-    btn.hidden = false;
+    // Botão/fila de revisão contam só as PENDENTES (Fase 1.1); o botão some quando zera.
+    const pendentes = errosSessao.filter(q => q.pendenteRevisao).length;
+    btn.textContent = `Revisar erros (${pendentes})`;
+    btn.hidden = pendentes === 0;
+}
+
+// Um item do accordion. Todo texto vindo da IA (enunciado, alternativas,
+// explicação) entra via textContent — nunca innerHTML — para não abrir injeção.
+function montarErroAccordion(q, i) {
+    const n = i + 1;
+    const painelId = `acc-erro-${i}`;
+
+    const li = document.createElement('li');
+    li.className = 'acc-item';
+
+    // Cabeçalho clicável — fechado por padrão. O ✗ e a tag "Rever" dão o
+    // indicador de erro por ícone+rótulo (não só por cor).
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'acc-header';
+    header.setAttribute('aria-expanded', 'false');
+    header.setAttribute('aria-controls', painelId);
+    // Já revisada (acertou numa revisão) ganha selo verde; ainda pendente fica "Rever".
+    const resolvida = q.pendenteRevisao === false;
+    const tag = resolvida
+        ? '<span class="acc-tag acc-tag--ok">✓ revisada</span>'
+        : '<span class="acc-tag">Rever</span>';
+    header.setAttribute('aria-label',
+        `Questão ${n} — você errou${resolvida ? ', já revisada' : ''}, toque para ver os detalhes`);
+    header.innerHTML =
+        '<span class="acc-status" aria-hidden="true">✗</span>'
+        + `<span class="acc-titulo">Questão ${n}</span>`
+        + tag
+        + '<span class="acc-chevron" aria-hidden="true">▸</span>';
+
+    const painel = document.createElement('div');
+    painel.className = 'acc-panel';
+    painel.id = painelId;
+    painel.hidden = true;
+    painel.appendChild(_accCampo('Pergunta', q.q));
+    painel.appendChild(_accLinha('erro', '✗', 'Sua resposta', _accOpcao(q, q.escolhaAluno)));
+    painel.appendChild(_accLinha('ok',   '✓', 'Correta',     _accOpcao(q, q.ans)));
+    if (q.explicacao) painel.appendChild(_accCampo('Por quê', q.explicacao));
+
+    header.addEventListener('click', () => {
+        const aberto = header.getAttribute('aria-expanded') === 'true';
+        header.setAttribute('aria-expanded', String(!aberto));
+        painel.hidden = aberto;
+    });
+
+    li.appendChild(header);
+    li.appendChild(painel);
+    return li;
+}
+
+// Campo empilhado (rótulo em cima, valor embaixo) — Pergunta / Por quê.
+function _accCampo(rotulo, valor) {
+    const p = document.createElement('p');
+    p.className = 'acc-campo';
+    const r = document.createElement('span');
+    r.className = 'acc-rotulo';
+    r.textContent = rotulo;
+    const v = document.createElement('span');
+    v.className = 'acc-valor';
+    v.textContent = valor || '';
+    p.append(r, v);
+    return p;
+}
+
+// Faixa com ícone + rótulo + valor — Sua resposta / Correta (hierarquia por
+// rótulo e ícone, não só por cor).
+function _accLinha(tipo, icone, rotulo, valor) {
+    const div = document.createElement('div');
+    div.className = `acc-linha acc-linha--${tipo}`;
+    const ic = document.createElement('span');
+    ic.className = 'acc-ic';
+    ic.setAttribute('aria-hidden', 'true');
+    ic.textContent = icone;
+    const rot = document.createElement('span');
+    rot.className = 'acc-rot';
+    rot.textContent = rotulo;
+    const txt = document.createElement('span');
+    txt.className = 'acc-txt';
+    txt.textContent = valor;
+    div.append(ic, rot, txt);
+    return div;
+}
+
+// Texto de uma alternativa por índice; tolera índice ausente (defensivo).
+function _accOpcao(q, idx) {
+    return (Number.isInteger(idx) && q.opts && q.opts[idx] != null) ? q.opts[idx] : '—';
 }
 
 // "Revisar erros": mini-sessão só com as erradas, reusando os objetos (sem Gemini).
 function iniciarRevisao() {
-    if (!errosSessao.length) return;
+    const pendentes = errosSessao.filter(q => q.pendenteRevisao);   // só o que AINDA falta (Fase 1.1)
+    if (!pendentes.length) return;
     emRevisao = true;
-    revisaoFila = errosSessao.slice();
-    revisaoTotal = errosSessao.length;
+    revisaoFila = pendentes;      // filter já devolve array novo; os elementos são as mesmas refs de errosSessao
+    revisaoTotal = pendentes.length;
     revisaoRespondidas = 0;
     $('resumo-overlay').hidden = true;
     mostrarTela('quiz-view');
@@ -1290,6 +1380,7 @@ function atualizarContadorRevisao() {
 function carregarQuestaoRevisao() {
     if (!revisaoFila.length) {
         emRevisao = false;
+        preencherErros();                     // atualiza botão (pendentes) + selos das revisadas (Fase 1.1)
         $('resumo-overlay').hidden = false;   // volta ao resumo
         return;
     }

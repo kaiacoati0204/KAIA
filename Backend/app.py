@@ -434,16 +434,16 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
 # ==== META DIÁRIA (questões respondidas hoje) ====
 META_QUESTOES_DIA = 10
 
-@app.get("/questoes/hoje", dependencies=[Depends(usuario_autenticado)])
-async def questoes_hoje(request: Request, user_id: str = ""):
-    """Conta as questões respondidas HOJE por um aluno (eventos question_answer),
-    para a barra de meta diária da página de estudo."""
+@app.get("/questoes/hoje")
+async def questoes_hoje(request: Request, uid: str = Depends(usuario_autenticado)):
+    """Conta as questões respondidas HOJE pelo aluno (eventos question_answer),
+    para a barra de meta diária. Identidade vem do token, não do cliente."""
     pool = request.app.state.pool
     if pool is None:
         return {"respondidas_hoje": 0, "meta": META_QUESTOES_DIA}
-    user_id = user_id.strip()
+    user_id = (uid or "").strip()
     if not user_id:
-        return JSONResponse({"erro": "user_id é obrigatório."}, status_code=400)
+        return JSONResponse({"erro": "identidade ausente no token."}, status_code=400)
     async with pool.acquire() as conn:
         n = await conn.fetchval(
             """
@@ -637,13 +637,14 @@ async def _resetar_vistas_antigas(conn, user_id, materia, tema, nivel):
         print("[KaIA] erro ao resetar vistas antigas:", e)
 
 
-@app.post("/gerar-questao", dependencies=[Depends(usuario_autenticado)])
-async def gerar_questao(request: Request, dados: dict = Body(default={})):
+@app.post("/gerar-questao")
+async def gerar_questao(request: Request, dados: dict = Body(default={}),
+                        uid: str = Depends(usuario_autenticado)):
     materia = dados.get("materia", "")
     nome = MATERIAS.get(materia, materia)
     tema = dados.get("tema", "")
     hobbie = dados.get("hobbie") or None                 # singular; None = genérica
-    user_id = (dados.get("user_id") or "").strip() or None
+    user_id = (uid or "").strip() or None                # dono = token, não body.user_id
     # compat com o formato antigo (lista "hobbies"): usa o 1º como hobbie.
     if hobbie is None and isinstance(dados.get("hobbies"), list) and dados["hobbies"]:
         hobbie = dados["hobbies"][0]
@@ -704,12 +705,13 @@ async def gerar_questao(request: Request, dados: dict = Body(default={})):
 # Devolve ao pool as questões que o aluno recebeu mas NÃO usou (mudou de nível,
 # trocou de tema ou encerrou) — remove de questoes_vistas (Parte 6). Ignora ids
 # ausentes (questões de fallback/pré-cache).
-@app.post("/questoes/devolver", dependencies=[Depends(usuario_autenticado)])
-async def devolver_questoes(request: Request, dados: dict = Body(default={})):
+@app.post("/questoes/devolver")
+async def devolver_questoes(request: Request, dados: dict = Body(default={}),
+                           uid: str = Depends(usuario_autenticado)):
     pool = request.app.state.pool
     if pool is None:
         return {"devolvidas": 0}
-    user_id = (dados.get("user_id") or "").strip()
+    user_id = (uid or "").strip()   # dono = token, não body.user_id
     ids = [x for x in (dados.get("questao_ids") or []) if x]
     if not user_id or not ids:
         return {"devolvidas": 0}
@@ -1250,6 +1252,16 @@ async def predizer_estado(modelo, scaler, conn, session_id):
     return {"estado": estado, "score": score, "feats": feats}
 
 
+async def _dono_sessao(conn, session_id):
+    """user_id dono da sessão (ownership). None se a sessão não existe OU o id é
+    malformado — o chamador trata None como 'sem dono conhecido'."""
+    try:
+        return await conn.fetchval(
+            "select user_id from sessions where session_id = $1::uuid", session_id)
+    except Exception:
+        return None
+
+
 # ================== API: DIAGNOSE (predição do estado via RF) ===============
 # Protegido por JWT (Supabase Auth): exige Authorization: Bearer <token> válido.
 @app.get("/diagnose")
@@ -1266,6 +1278,9 @@ async def diagnose(request: Request, session_id: str,
         return JSONResponse({"erro": "Modelo indisponível no servidor."}, status_code=503)
 
     async with pool.acquire() as conn:
+        dono = await _dono_sessao(conn, session_id)
+        if dono is not None and str(dono) != str(_uid):
+            return JSONResponse({"erro": "Sessão não pertence ao usuário."}, status_code=403)
         res = await predizer_estado(modelo, scaler, conn, session_id)
     if res is None:
         return JSONResponse({"erro": "Sessão não encontrada."}, status_code=404)
@@ -1287,14 +1302,18 @@ class FeedbackIn(BaseModel):
     feedback_usuario: Optional[str] = None
 
 
-@app.get("/intervencao/pendente", dependencies=[Depends(usuario_autenticado)])
-async def intervencao_pendente(request: Request, session_id: str):
+@app.get("/intervencao/pendente")
+async def intervencao_pendente(request: Request, session_id: str,
+                               uid: str = Depends(usuario_autenticado)):
     """Frontend consulta a intervenção recém-disparada (sem reward ainda) nos
     últimos 5 min. É a 'flag' que substitui o WebSocket: o front faz polling."""
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
     async with pool.acquire() as conn:
+        dono = await _dono_sessao(conn, session_id)
+        if dono is not None and str(dono) != str(uid):
+            return JSONResponse({"erro": "Sessão não pertence ao usuário."}, status_code=403)
         try:
             row = await conn.fetchrow(
                 """
@@ -1318,8 +1337,9 @@ async def intervencao_pendente(request: Request, session_id: str):
     }}
 
 
-@app.post("/intervencao/feedback", dependencies=[Depends(usuario_autenticado)])
-async def intervencao_feedback(body: FeedbackIn, request: Request):
+@app.post("/intervencao/feedback")
+async def intervencao_feedback(body: FeedbackIn, request: Request,
+                               uid: str = Depends(usuario_autenticado)):
     """Recebe o feedback do aluno, grava o reward na intervenção mais recente
     (dessa sessão+tipo ainda sem reward) e atualiza o bandit (thompson.update)."""
     pool = request.app.state.pool
@@ -1331,6 +1351,9 @@ async def intervencao_feedback(body: FeedbackIn, request: Request):
 
     intervention_id = None
     async with pool.acquire() as conn:
+        dono = await _dono_sessao(conn, body.session_id)
+        if dono is not None and str(dono) != str(uid):
+            return JSONResponse({"erro": "Sessão não pertence ao usuário."}, status_code=403)
         try:
             row = await conn.fetchrow(
                 """
@@ -1529,12 +1552,10 @@ def _to_date(s):
         return None
 
 
-@app.post("/perfil", dependencies=[Depends(usuario_autenticado)])
-async def perfil(request: Request, dados: dict = Body(default={})):
-    user_id = dados.get("user_id")
-    if not user_id:
-        # sem identidade estável não há como fazer upsert
-        return JSONResponse({"status": "ignorado", "motivo": "sem user_id"}, status_code=400)
+@app.post("/perfil")
+async def perfil(request: Request, dados: dict = Body(default={}),
+                 uid: str = Depends(usuario_autenticado)):
+    user_id = uid   # dono do perfil = usuário do token, não body.user_id
 
     p = dados.get("perfil") or {}
     email = p.get("email") or dados.get("email") or None

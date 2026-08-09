@@ -22,8 +22,13 @@ FEATS_VALIDAS = {
 }
 
 
+class _FakeConn:
+    # dono da sessão = "test-user" (mesmo do stub de auth) -> passa o ownership.
+    async def fetchval(self, q, *a): return "test-user"
+
+
 class _Acq:
-    async def __aenter__(self): return object()
+    async def __aenter__(self): return _FakeConn()
     async def __aexit__(self, *a): return False
 
 
@@ -82,6 +87,15 @@ async def test_estado_valido(monkeypatch):
     async with _client() as c:
         r = await c.get("/diagnose", params={"session_id": "abc"})
     assert r.json()["estado"] in {"engajado", "distraido", "muito_distraido"}
+
+
+async def test_diagnose_sessao_de_outro():
+    _prep()
+    # token de OUTRO usuário: a sessão (dono "test-user") não é dele -> 403.
+    app_mod.app.dependency_overrides[app_mod.usuario_autenticado] = lambda: "outro-user"
+    async with _client() as c:
+        r = await c.get("/diagnose", params={"session_id": "abc"})
+    assert r.status_code == 403
 
 
 async def test_diagnose_sem_modelo():

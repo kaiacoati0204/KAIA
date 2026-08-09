@@ -204,6 +204,7 @@ async def test_resetar_vistas_antigas():
 # ============================================================ rotas Gemini (mock)
 async def test_gerar_questao_ok(monkeypatch):
     questao = {"q": "?", "opts": ["a", "b", "c", "d", "e"], "ans": 0}
+    _set_state(pool=None)   # sem banco -> pula cache, gera direto no Gemini (mock)
     monkeypatch.setattr(app_mod, "chamar_gemini", lambda p: json.dumps(questao))
     async with _client() as c:
         r = await c.post("/gerar-questao", json={"materia": "MAT", "tema": "t"})
@@ -214,6 +215,7 @@ async def test_gerar_questao_ok(monkeypatch):
 
 async def test_gerar_questao_erro(monkeypatch):
     def boom(p): raise RuntimeError("x")
+    _set_state(pool=None)   # sem banco -> pula cache, vai direto ao Gemini (que falha)
     monkeypatch.setattr(app_mod, "chamar_gemini", boom)
     async with _client() as c:
         r = await c.post("/gerar-questao", json={"materia": "MAT", "tema": "t"})
@@ -262,6 +264,48 @@ async def test_health():
     assert r.status_code == 200 and r.json()["status"]
 
 
+# ============================================================ autorização (item 1)
+# O conftest stubba a auth em todos os testes; aqui REMOVEMOS o stub para exercer
+# o caminho real "sem token -> 401" (que roda antes de qualquer JWKS, offline).
+@pytest.mark.parametrize("rota", [
+    "/perfil",
+    "/dashboard/dados",
+    "/diagnose?session_id=abc",
+    "/questoes/hoje",
+    "/perfil/estatisticas",
+])
+async def test_rota_protegida_sem_token_401(rota):
+    app_mod.app.dependency_overrides.pop(app_mod.usuario_autenticado, None)
+    app_mod.app.dependency_overrides.pop(app_mod.usuario_identidade, None)
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.get(rota)
+    assert r.status_code == 401
+
+
+async def test_perfil_post_ignora_user_id_do_cliente():
+    # IDOR fechado: o upsert usa o sub do TOKEN, não o user_id que o cliente manda.
+    conn = FakeConn(execute="INSERT 0 1")
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/perfil", json={"user_id": "atacante",
+                                          "perfil": {"email": "a@b.com"}})
+    assert r.status_code == 200
+    up = [args for (q, args) in conn.executed if "insert into perfis" in q]
+    assert up and str(up[0][0]) == "test-user"   # dono = token, não "atacante"
+
+
+async def test_anotacoes_put_ignora_aluno_id_do_cliente():
+    conn = FakeConn(execute="INSERT 0 1")
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.put("/anotacoes", json={"aluno_id": "atacante", "tema": "t",
+                                            "elementos": [{"tipo": "texto", "txt": "x"}]})
+    assert r.status_code == 200
+    up = [args for (q, args) in conn.executed if "insert into anotacoes" in q]
+    assert up and str(up[0][0]) == "test-user" and up[0][1] == "t"  # dono=token, tema=corpo
+
+
 # ============================================================ happy-paths (mock pool)
 async def test_sessions_ok():
     conn = FakeConn(fetchrow={"insert into sessions": {"session_id": "s1", "user_id": "u1"}})
@@ -307,11 +351,13 @@ async def test_events_bloqueia_sessao_de_outro():
     assert r.status_code == 403
 
 
-async def test_perfil_post_sem_user_id():
-    _set_state(pool=None)
+async def test_perfil_post_usa_token():
+    # Sem user_id no body: a identidade (dono do upsert) vem do token.
+    conn = FakeConn(execute="INSERT 0 1")
+    _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.post("/perfil", json={})
-    assert r.status_code == 400
+    assert r.status_code == 200 and r.json()["status"] == "ok"
 
 
 async def test_perfil_post_ok():
@@ -362,7 +408,8 @@ async def test_get_perfil_usa_token_sem_perfil():
 async def test_intervencao_pendente_ok():
     row = {"intervention_id": "iv1", "intervention_type": "checkpoint",
            "triggered_at": datetime.now(timezone.utc)}
-    conn = FakeConn(fetchrow={"from interventions": row})
+    conn = FakeConn(fetchrow={"from interventions": row},
+                    fetchval={"user_id from sessions": "test-user"})   # sessão é do usuário do token
     _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.get("/intervencao/pendente", params={"session_id": "s"})
@@ -370,11 +417,20 @@ async def test_intervencao_pendente_ok():
 
 
 async def test_intervencao_pendente_vazio():
-    conn = FakeConn(fetchrow={"from interventions": None})
+    conn = FakeConn(fetchrow={"from interventions": None},
+                    fetchval={"user_id from sessions": "test-user"})
     _set_state(pool=FakePool(conn))
     async with _client() as c:
         r = await c.get("/intervencao/pendente", params={"session_id": "s"})
     assert r.json()["pendente"] is None
+
+
+async def test_intervencao_pendente_sessao_de_outro():
+    conn = FakeConn(fetchval={"user_id from sessions": "outro-user"})   # sessão de outro -> 403
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.get("/intervencao/pendente", params={"session_id": "s"})
+    assert r.status_code == 403
 
 
 async def test_intervencao_feedback_tipo_invalido():
@@ -386,7 +442,8 @@ async def test_intervencao_feedback_tipo_invalido():
 
 
 async def test_intervencao_feedback_ok():
-    conn = FakeConn(fetchrow={"update interventions": {"intervention_id": "iv1"}})
+    conn = FakeConn(fetchrow={"update interventions": {"intervention_id": "iv1"}},
+                    fetchval={"user_id from sessions": "test-user"})   # sessão do usuário do token
     up = []
     thompson = SimpleNamespace(update=lambda t, r: up.append((t, r)))
     _set_state(pool=FakePool(conn), thompson=thompson)

@@ -68,3 +68,96 @@ jobs:
             echo "❌ servidor não subiu ou /docs não respondeu 200"
             exit 1
           fi
+
+  # Aplica as migrations versionadas num Postgres limpo e falha se qualquer uma
+  # der erro. Protege o schema em supabase/migrations contra "ficou quebrado" ou
+  # "mudaram no Supabase e a migration envelheceu".
+  migrations:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: ci
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Garante o cliente psql
+        run: command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+
+      - name: Pré-requisitos que o Supabase já provê (roles + auth.users)
+        # O dump referencia roles internos do Supabase (anon/authenticated/
+        # service_role/supabase_admin) e o trigger em auth.users; num Postgres puro
+        # eles não existem, então criamos stubs equivalentes. `postgres` já existe.
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "create role anon; create role authenticated; create role service_role; create role supabase_admin;"
+          psql -v ON_ERROR_STOP=1 -c "create schema auth; create table auth.users (id uuid primary key, email text);"
+
+      - name: Aplica as migrations em ordem (falha no primeiro erro)
+        run: |
+          shopt -s nullglob
+          files=(supabase/migrations/*.sql)
+          if [ ${#files[@]} -eq 0 ]; then echo "❌ nenhuma migration encontrada"; exit 1; fi
+          for f in "${files[@]}"; do
+            echo "== aplicando $f =="
+            psql -v ON_ERROR_STOP=1 -f "$f"
+          done
+          echo "✅ todas as migrations aplicaram sem erro"
+
+      - name: Sanidade — confirma que criou tabelas
+        run: |
+          n=$(psql -v ON_ERROR_STOP=1 -Atc "select count(*) from information_schema.tables where table_schema='public';")
+          echo "tabelas em public: $n"
+          if [ "$n" -lt 1 ]; then echo "❌ nenhuma tabela criada"; exit 1; fi
+
+      # Com o schema já aplicado neste Postgres, roda os testes de INTEGRAÇÃO:
+      # o app real (não FakeConn) contra dados reais — autorização entre usuários,
+      # ownership de sessão e isolamento por token.
+      - name: Configura Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instala dependências
+        run: pip install -r Backend/requirements.txt
+
+      - name: Testes de integração (app real contra o Postgres migrado)
+        env:
+          KAIA_TEST_DATABASE_URL: postgresql://postgres:ci@127.0.0.1:5432/postgres
+        run: pytest tests/test_integracao.py -q
+
+  # Testes de FRONT (Vitest): funções puras (node) + DOM (jsdom). Não precisa de
+  # banco nem navegador — só Node.
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configura Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instala as deps de teste do front
+        run: npm ci
+
+      - name: Vitest (puras + DOM)
+        run: npm test

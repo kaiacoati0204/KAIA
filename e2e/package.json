@@ -1,0 +1,13 @@
+{
+  "name": "kaia-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Camada C — E2E (Playwright) + acessibilidade (axe). Isolado do toolchain de unit/DOM da raiz.",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "^1.49.1"
+  }
+}

@@ -559,12 +559,7 @@ function setEstado(texto, alertar = false) {
     if (status)  status.innerText = texto;
 }
 
-// Tempo de leitura estimado — vira o limite de ociosidade daquela questão.
-function calculateReadingTime(text, options) {
-    const palavras = (text + ' ' + options.join(' ')).split(/\s+/).length;
-    const segundos = Math.ceil(palavras / 3.3) + 5;
-    return segundos;
-}
+// calculateReadingTime foi movida para puros.js (testável); carregada antes.
 
 function iniciarIdleMonitor() {
     clearInterval(idleInterval);
@@ -762,17 +757,7 @@ function esperaIAFim() {
     }
 }
 
-// Cria a lista de botões (temas ou alternativas) dentro de um container.
-function renderBotoes(container, itens, aoClicar) {
-    container.innerHTML = '';
-    itens.forEach((item, idx) => {
-        const btn = document.createElement('button');
-        btn.className = 'option-btn';
-        btn.innerText = typeof item === 'string' ? item : item.texto;
-        btn.onclick = () => aoClicar(item, idx, btn);
-        container.appendChild(btn);
-    });
-}
+// renderBotoes foi movida para puros.js (testável); carregada antes.
 
 // 1) A IA sugere os subtemas da matéria.
 async function abrirMateria(subject) {
@@ -1757,13 +1742,7 @@ function removerSelecionado() {
 }
 
 // --- Imagens (Ctrl+V) — SÓ no localStorage ----------------------------------
-// Tamanho real (em bytes) que um data URL base64 ocupa depois de decodificado.
-function bytesDataUrl(dataUrl) {
-    const virgula = dataUrl.indexOf(',');
-    const b64 = virgula >= 0 ? dataUrl.slice(virgula + 1) : dataUrl;
-    const pad = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
-    return Math.floor(b64.length * 3 / 4) - pad;
-}
+// bytesDataUrl foi movida para puros.js (testável); carregada antes.
 
 // Re-encode agressivo: WebP, maior lado ≤ 1000px, qualidade 0.7.
 async function reencodeParaWebP(blob) {

@@ -1,0 +1,14 @@
+{
+  "name": "kaia-frontend-tests",
+  "private": true,
+  "type": "module",
+  "description": "Testes de front (Vitest): funções puras (node) e DOM (jsdom).",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.9"
+  }
+}

@@ -1,30 +1,44 @@
-"""Testes unitários da validação de JWT (caminhos de rejeição, sem rede)."""
+"""Testes unitários da validação de token (auth.py) — sem rede, sem JWKS.
+
+Cobrem o parse do header Bearer e o caminho 'token ausente -> 401', que roda
+ANTES de qualquer chamada ao JWKS (logo é determinístico e offline). O caminho
+de token inválido depende do JWKS (rede) e fica de fora de propósito.
+"""
+from types import SimpleNamespace
+
 import pytest
 from fastapi import HTTPException
 
-import auth
+from auth import _bearer, verificar_token
 
 
-def test_token_ausente():
-    # Token vazio é rejeitado antes de qualquer rede (401), em qualquer ambiente.
-    with pytest.raises(HTTPException) as e:
-        auth.verificar_token("")
-    assert e.value.status_code == 401
-
-
-def test_token_invalido_rejeitado():
-    # Um token-lixo nunca passa: 401 se o JWKS está configurado (dev), 503 se
-    # não está (CI sem Supabase). O que importa é que NÃO autentica.
-    with pytest.raises(HTTPException) as e:
-        auth.verificar_token("nao.e.um.jwt")
-    assert e.value.status_code in (401, 503)
+def _req(headers):
+    return SimpleNamespace(headers=headers)
 
 
 def test_bearer_extrai_token():
-    class _Req:
-        headers = {"Authorization": "Bearer abc.def.ghi"}
-    assert auth._bearer(_Req()) == "abc.def.ghi"
+    assert _bearer(_req({"Authorization": "Bearer abc.def.ghi"})) == "abc.def.ghi"
 
-    class _Sem:
-        headers = {}
-    assert auth._bearer(_Sem()) is None
+
+def test_bearer_case_insensitive_no_esquema():
+    assert _bearer(_req({"Authorization": "bearer xyz"})) == "xyz"
+
+
+def test_bearer_sem_header():
+    assert _bearer(_req({})) is None
+
+
+def test_bearer_esquema_errado():
+    assert _bearer(_req({"Authorization": "Basic zzz"})) is None
+
+
+def test_verificar_token_ausente_401():
+    with pytest.raises(HTTPException) as e:
+        verificar_token(None)
+    assert e.value.status_code == 401
+
+
+def test_verificar_token_vazio_401():
+    with pytest.raises(HTTPException) as e:
+        verificar_token("")
+    assert e.value.status_code == 401

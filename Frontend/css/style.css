@@ -2333,11 +2333,13 @@ body.textura-papel .conteudo {
    Tudo em CSS: degradê + véu escuro + encadeamento dos fades. O JS
    (registrarPreloader, em js/login.js) só GARANTE a saída do overlay — ele não
    anima nada.
-   Ritmo calmo de propósito (público TEA/TDAH): passo de 1,15s, cada saudação com
-   0,9s em opacidade cheia, e cross-fade entre as vizinhas.
-   Linha do tempo: Olá 0s · Hello 1,15s · Hola 2,30s · Bonjour 3,45s · Ciao 4,60s ·
-   Hallo 5,75s · Konnichiwa 6,90s · Namaste 8,05s · Kaiá 9,20s → overlay sai em
-   10,3s e a tela fica livre em 11,0s.
+   Ritmo acelerado, SEM sobreposição: passo de 0,4s = duração do fade, então cada
+   saudação sai antes de a próxima entrar (não se cruzam — era o que "borrava" duas
+   palavras juntas). reduced-motion desliga tudo (regra no fim do bloco).
+   Saudações em vários alfabetos (latino, japonês, árabe, cirílico) pela variedade
+   de formas de letra. Linha do tempo: Olá 0s · こんにちは 0,4s · Hello 0,8s · Hola 1,2s ·
+   مرحبا 1,6s · Bonjour 2,0s · Ciao 2,4s · Привет 2,8s · Hallo 3,2s · Namaste entra
+   3,6s (fica) → overlay sai em 4,2s e a tela fica livre em ~4,7s.
    ATENÇÃO ao mexer: são TRÊS lugares acoplados — o passo (nth-child abaixo), o
    delay do kaia-pre-sair, e o PRE_MS do js/login.js (a rede de segurança, que
    precisa ficar depois do fim da animação).
@@ -2380,7 +2382,7 @@ body.textura-papel .conteudo {
       #d4a017 100%
     );
   background-repeat: repeat, no-repeat, no-repeat;
-  animation: kaia-pre-sair 0.7s ease 10.3s forwards;
+  animation: kaia-pre-sair 0.5s ease 4.2s forwards;
 }
 /* Grid de uma célula: todas as saudações ocupam o MESMO lugar, então uma sai
    enquanto a outra entra, sem empurrar nada. */
@@ -2397,24 +2399,28 @@ body.textura-papel .conteudo {
   font-weight: 800;
   letter-spacing: -0.5px;
   opacity: 0;
-  animation: kaia-pre-fade 1.5s ease both;
+  animation: kaia-pre-fade 0.4s ease both;
 }
-/* Passo de 1,15s entre as saudações. As vizinhas se cruzam por ~0,35s, então a
-   troca é um cross-fade e não um piscar. */
+/* Alfabetos que se ligam (árabe): tracking negativo separaria/sobreporia os
+   traços — nesses, espaçamento normal. */
+.kaia-pre-item[dir="rtl"] { letter-spacing: normal; }
+/* Passo de 0,4s = duração do fade: cada saudação SAI antes de a próxima entrar,
+   sem sobreposição. */
 .kaia-pre-item:nth-child(1) { animation-delay: 0s; }
-.kaia-pre-item:nth-child(2) { animation-delay: 1.15s; }
-.kaia-pre-item:nth-child(3) { animation-delay: 2.30s; }
-.kaia-pre-item:nth-child(4) { animation-delay: 3.45s; }
-.kaia-pre-item:nth-child(5) { animation-delay: 4.60s; }
-.kaia-pre-item:nth-child(6) { animation-delay: 5.75s; }
-.kaia-pre-item:nth-child(7) { animation-delay: 6.90s; }
-.kaia-pre-item:nth-child(8) { animation-delay: 8.05s; }
+.kaia-pre-item:nth-child(2) { animation-delay: 0.4s; }
+.kaia-pre-item:nth-child(3) { animation-delay: 0.8s; }
+.kaia-pre-item:nth-child(4) { animation-delay: 1.2s; }
+.kaia-pre-item:nth-child(5) { animation-delay: 1.6s; }
+.kaia-pre-item:nth-child(6) { animation-delay: 2.0s; }
+.kaia-pre-item:nth-child(7) { animation-delay: 2.4s; }
+.kaia-pre-item:nth-child(8) { animation-delay: 2.8s; }
+.kaia-pre-item:nth-child(9) { animation-delay: 3.2s; }
 /* A última (a marca) ENTRA e FICA — o overlay desaparece por cima dela. */
 .kaia-pre-item:last-child {
-  animation: kaia-pre-entrar 1s ease 9.2s both;
+  animation: kaia-pre-entrar 0.5s ease 3.6s both;
 }
 @keyframes kaia-pre-fade {
-  /* Platô largo (20%–80% = 0,9s em opacidade cheia) para dar tempo de ler. */
+  /* Platô 20%–80% (≈0,24s em opacidade cheia) — bem rápido, sem cruzar vizinhas. */
   0%, 100% { opacity: 0; transform: translateY(6px); }
   20%, 80% { opacity: 1; transform: translateY(0); }
 }

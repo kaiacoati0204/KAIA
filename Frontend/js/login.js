@@ -148,8 +148,8 @@ function registrarLuz() {
 // Também deixa pular a abertura com um clique ou uma tecla — quem já viu não
 // precisa esperar de novo.
 // Acoplado ao CSS: precisa ficar DEPOIS do fim da animação (#kaia-preloader sai em
-// 10,3s + 0,7s de fade = 11,0s). Se mudar o ritmo no style.css, ajuste aqui também.
-const PRE_MS = 11200;
+// 4,2s + 0,5s de fade = 4,7s). Se mudar o ritmo no style.css, ajuste aqui também.
+const PRE_MS = 5000;
 
 function registrarPreloader() {
     const pre = document.getElementById('kaia-preloader');

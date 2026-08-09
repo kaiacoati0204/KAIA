@@ -639,8 +639,11 @@ function registrarSensores() {
     // (v2: keystroke_pause removido — quase não há digitação, feature pausas_digitacao saiu)
 
     // --- cliques fora da área da questão ---
+    // Overlays da própria KaIA (intervenção, probe, avisos — id^="kaia-") contam
+    // como área de estudo: responder um feedback NÃO é "sair", é interagir com ela.
     document.addEventListener('click', (e) => {
-        if (!isMissionActive || !quizView || quizView.contains(e.target)) return;
+        if (!isMissionActive || !quizView) return;
+        if (quizView.contains(e.target) || e.target.closest('[id^="kaia-"]')) return;
         logEvent('click_outside', { x: e.clientX, y: e.clientY });
     });
 

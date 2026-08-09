@@ -22,7 +22,9 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA public;
+-- (editado à mão) IF NOT EXISTS: todo alvo real (Supabase/CI) já tem o schema
+-- `public`; sem isto o apply aborta com "schema public já existe".
+CREATE SCHEMA IF NOT EXISTS public;
 
 
 --

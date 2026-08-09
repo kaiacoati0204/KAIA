@@ -47,8 +47,45 @@ psql "<session-pooler-url>" -At \
        where t.tgrelid='auth.users'::regclass and not t.tgisinternal;"
 ```
 
-> Dica: se tiver **Docker**, `supabase db pull` faz os dois passos de uma vez e já
-> organiza como migration. Sem Docker, use o `pg_dump`/`psql` acima.
+**Dois retoques manuais obrigatórios no arquivo regenerado** (senão o apply aborta):
+1. Trocar `CREATE SCHEMA public;` por `CREATE SCHEMA IF NOT EXISTS public;` — todo
+   alvo (Supabase novo, CI) já tem o `public`.
+2. Anexar o `CREATE TRIGGER ... ON auth.users` (o passo do `pg_get_triggerdef` acima).
+
+> Dica: se tiver **Docker**, `supabase db pull` faz o dump de uma vez. Sem Docker,
+> use o `pg_dump`/`psql` acima. O trigger de `auth.users` e o retoque do schema
+> continuam sendo manuais nos dois caminhos.
+
+## Aplicar num alvo que NÃO é Supabase (ex.: Postgres puro / CI)
+
+O dump referencia roles internos do Supabase (`anon`, `authenticated`, `service_role`,
+`supabase_admin`) e o `auth.users`. Num Postgres puro eles não existem — crie stubs
+antes de aplicar:
+
+```sql
+create role anon; create role authenticated; create role service_role; create role supabase_admin;
+create schema auth; create table auth.users (id uuid primary key, email text);
+```
+
+## CI valida isto automaticamente
+
+O job `migrations` em `.github/workflows/ci.yml` sobe um Postgres limpo, cria esses
+stubs, aplica todas as migrations com `ON_ERROR_STOP=1` e **falha se qualquer uma
+der erro** — é o guarda contra a migration envelhecer ou quebrar. Em seguida, no
+mesmo Postgres já migrado, roda os **testes de integração** (`tests/test_integracao.py`):
+o app real contra dados reais (autorização entre usuários, ownership de sessão,
+isolamento por token).
+
+### Rodar os testes de integração localmente
+
+São opt-in: só rodam se `KAIA_TEST_DATABASE_URL` apontar para um Postgres com a
+migration aplicada (senão são pulados). Com um Postgres de teste no ar:
+
+```bash
+# 1) crie os stubs e aplique a migration (ver seção "alvo que NÃO é Supabase")
+# 2) aponte a env e rode só os de integração:
+KAIA_TEST_DATABASE_URL="postgresql://user:senha@host:5432/db" pytest tests/test_integracao.py -q
+```
 
 ## Mudanças novas de schema (daqui pra frente)
 

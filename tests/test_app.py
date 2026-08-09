@@ -264,6 +264,48 @@ async def test_health():
     assert r.status_code == 200 and r.json()["status"]
 
 
+# ============================================================ autorização (item 1)
+# O conftest stubba a auth em todos os testes; aqui REMOVEMOS o stub para exercer
+# o caminho real "sem token -> 401" (que roda antes de qualquer JWKS, offline).
+@pytest.mark.parametrize("rota", [
+    "/perfil",
+    "/dashboard/dados",
+    "/diagnose?session_id=abc",
+    "/questoes/hoje",
+    "/perfil/estatisticas",
+])
+async def test_rota_protegida_sem_token_401(rota):
+    app_mod.app.dependency_overrides.pop(app_mod.usuario_autenticado, None)
+    app_mod.app.dependency_overrides.pop(app_mod.usuario_identidade, None)
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.get(rota)
+    assert r.status_code == 401
+
+
+async def test_perfil_post_ignora_user_id_do_cliente():
+    # IDOR fechado: o upsert usa o sub do TOKEN, não o user_id que o cliente manda.
+    conn = FakeConn(execute="INSERT 0 1")
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/perfil", json={"user_id": "atacante",
+                                          "perfil": {"email": "a@b.com"}})
+    assert r.status_code == 200
+    up = [args for (q, args) in conn.executed if "insert into perfis" in q]
+    assert up and str(up[0][0]) == "test-user"   # dono = token, não "atacante"
+
+
+async def test_anotacoes_put_ignora_aluno_id_do_cliente():
+    conn = FakeConn(execute="INSERT 0 1")
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.put("/anotacoes", json={"aluno_id": "atacante", "tema": "t",
+                                            "elementos": [{"tipo": "texto", "txt": "x"}]})
+    assert r.status_code == 200
+    up = [args for (q, args) in conn.executed if "insert into anotacoes" in q]
+    assert up and str(up[0][0]) == "test-user" and up[0][1] == "t"  # dono=token, tema=corpo
+
+
 # ============================================================ happy-paths (mock pool)
 async def test_sessions_ok():
     conn = FakeConn(fetchrow={"insert into sessions": {"session_id": "s1", "user_id": "u1"}})

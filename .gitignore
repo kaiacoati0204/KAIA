@@ -37,6 +37,9 @@ ml/artifacts/metricas_v2.json
 .pytest_cache/
 htmlcov/
 
+# Node / testes de front (Vitest). package-lock.json É versionado (CI reproduzível).
+node_modules/
+
 # Documentação pessoal (explicação da arquitetura) — não versionar, é só da dona do projeto
 docs/
 

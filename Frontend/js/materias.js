@@ -594,6 +594,18 @@ function registrarSensores() {
         }
     });
 
+    // --- teclado no caderno: escrever é foco, não ociosidade (Fase 5) ---
+    // Espelha o mousemove acima, mas para a digitação. Listener DELEGADO no #caderno
+    // (o container persiste; o evento `input` borbulha dos blocos .cad-texto criados
+    // sob demanda). Só a escrita ATIVA reseta — caderno aberto e parado segue
+    // contando como ocioso.
+    $('caderno')?.addEventListener('input', () => {
+        if (!isMissionActive) return;      // o idle-monitor só corre nesse estado
+        idleTime = 0;                      // não escurece por causa da escrita
+        mexeuDesdeUltimoTick = true;       // e a escrita não vira tempo ocioso (dado limpo)
+        setEstado('ESTUDANDO');            // baixa o overlay se já tinha subido
+    });
+
     // --- dwell: tempo sobre as ALTERNATIVAS sem ainda responder (hesitação → estado interno) ---
     // O container #options-display persiste (só o innerHTML troca), então basta 1 listener.
     const opcoesArea = $('options-display');

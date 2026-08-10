@@ -29,7 +29,9 @@
       "Read(//c/Users/vitor/.claude/projects/**)",
       "Bash(python \"C:/Users/vitor/AppData/Local/Temp/claude/c--Users-vitor-OneDrive-Documentos-KAIA/33b6cb87-e253-46d3-8e90-e21822b642ea/scratchpad/limpar_materias.py\")",
       "Bash(node --check js/materias.js)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(cd \"C:/Users/Pichau/.claude/projects/c--Users-Pichau-Documents-Bia---Code-KaIA/memory\" && ls -la 2>/dev/null && cat MEMORY.md 2>/dev/null)",
+      "Read(//c/Users/Pichau/.claude/projects/c--Users-Pichau-Documents-Bia---Code-KaIA/memory/**)"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

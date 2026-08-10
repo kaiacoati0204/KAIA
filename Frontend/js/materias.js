@@ -113,37 +113,88 @@ function _pilhaNotif() {
     return c;
 }
 
+// ---- Strip de feedback ("isso ajudou?") — reutilizável em TODA intervenção ----
+// Fase 2. O tipo e o instante de exibição ficam FECHADOS no closure, não lidos do
+// global: as intervenções de AÇÃO já liberaram o polling (intervencaoAtual = null)
+// quando o strip aparece, e ler o global ali perderia o feedback em silêncio.
+function _garantirEstiloFeedback() {
+    if ($('kaia-fb-css')) return;
+    const css = document.createElement('style');
+    css.id = 'kaia-fb-css';
+    css.textContent = `
+      .kaia-card-notif{max-width:320px;
+        background:#1f2937;color:#f9fafb;border-radius:14px;padding:16px 18px;
+        box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:inherit;animation:kaiaIn .25s ease}
+      .kaia-card-notif h4{margin:0 0 6px;font-size:15px}
+      .kaia-card-notif p{margin:0 0 12px;font-size:13px;line-height:1.4;opacity:.9}
+      .kaia-fb{display:flex;gap:8px}
+      .kaia-fb button{flex:1;border:0;border-radius:8px;padding:7px 0;font-size:13px;cursor:pointer}
+      .kaia-fb .k1{background:#22c55e;color:#052e13}
+      .kaia-fb .k2{background:#eab308;color:#3a2e05}
+      .kaia-fb .k3{background:#ef4444;color:#3a0808}
+      .kaia-fb-compacto{justify-content:center;gap:6px}
+      .kaia-fb-compacto button{flex:0 0 auto;padding:5px 12px;font-size:12px}
+      .kaia-fb-wrap .kaia-fb-rotulo{margin:0 0 8px;font-size:13px;opacity:.9}
+      .kaia-fb-wrap .kaia-fb-obrigado{margin:0;font-size:13px;text-align:center;opacity:.9}
+      @keyframes kaiaIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`;
+    document.head.appendChild(css);
+}
+
+// Bloco pronto: rótulo opcional + os 3 botões. `agradecer` troca o strip por um
+// "valeu" ao responder — nos cards do polling isso não faz sentido (o card some na
+// hora), então lá fica false + onResposta: esconderIntervencao.
+function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
+                               agradecer = false, onResposta = null } = {}) {
+    _garantirEstiloFeedback();
+    const wrap = document.createElement('div');
+    wrap.className = 'kaia-fb-wrap';
+    if (rotulo) {
+        const l = document.createElement('p');
+        l.className = 'kaia-fb-rotulo';
+        l.textContent = rotulo;
+        wrap.appendChild(l);
+    }
+    const strip = document.createElement('div');
+    strip.className = compacto ? 'kaia-fb kaia-fb-compacto' : 'kaia-fb';
+    [['k1', 1.0, 'Ajudou 👍'], ['k2', 0.5, 'Mais ou menos'], ['k3', 0.0, 'Não 👎']]
+        .forEach(([cls, reward, texto]) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = cls;
+            b.textContent = texto;
+            b.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                enviarFeedbackIntervencao(tipo, reward, mostradaEm);
+                if (agradecer) {
+                    wrap.textContent = '';
+                    const ok = document.createElement('p');
+                    ok.className = 'kaia-fb-obrigado';
+                    ok.textContent = 'Valeu! 💛';
+                    wrap.appendChild(ok);
+                }
+                if (onResposta) onResposta(reward);
+            });
+            strip.appendChild(b);
+        });
+    wrap.appendChild(strip);
+    return wrap;
+}
+
+// Card do polling: casca fixa (o strip é remontado a cada disparo em
+// mostrarIntervencao, porque o tipo muda e o elemento é reaproveitado).
 function _garantirCardIntervencao() {
     if ($('kaia-intervencao')) return;
+    _garantirEstiloFeedback();
     const css = document.createElement('style');
-    css.textContent = `
-      #kaia-intervencao{max-width:320px;
-        background:#1f2937;color:#f9fafb;border-radius:14px;padding:16px 18px;
-        box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:inherit;display:none;animation:kaiaIn .25s ease}
-      #kaia-intervencao h4{margin:0 0 6px;font-size:15px}
-      #kaia-intervencao p{margin:0 0 12px;font-size:13px;line-height:1.4;opacity:.9}
-      #kaia-intervencao .kaia-fb{display:flex;gap:8px}
-      #kaia-intervencao button{flex:1;border:0;border-radius:8px;padding:7px 0;font-size:13px;cursor:pointer}
-      #kaia-intervencao .k1{background:#22c55e;color:#052e13}
-      #kaia-intervencao .k2{background:#eab308;color:#3a2e05}
-      #kaia-intervencao .k3{background:#ef4444;color:#3a0808}
-      @keyframes kaiaIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`;
+    css.textContent = `#kaia-intervencao{display:none}`;
     document.head.appendChild(css);
     const card = document.createElement('div');
     card.id = 'kaia-intervencao';
+    card.className = 'kaia-card-notif';
     card.innerHTML = `<h4 id="kaia-int-titulo"></h4><p id="kaia-int-texto"></p>
-      <div class="kaia-fb">
-        <button type="button" class="k1" data-r="1.0">Ajudou 👍</button>
-        <button type="button" class="k2" data-r="0.5">Mais ou menos</button>
-        <button type="button" class="k3" data-r="0.0">Não 👎</button>
-      </div>`;
+      <div id="kaia-int-fb"></div>`;
     _pilhaNotif().appendChild(card);
-    $$('#kaia-intervencao button').forEach(b =>
-        b.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            enviarFeedbackIntervencao(intervencaoAtual, parseFloat(b.dataset.r));
-        }));
 }
 
 function mostrarIntervencao(intv) {
@@ -159,18 +210,28 @@ function mostrarIntervencao(intv) {
               || { emoji: '💡', titulo: 'Dica', texto: 'Continue focado!' };
     $('kaia-int-titulo').innerText = `${info.emoji} ${info.titulo}`;
     $('kaia-int-texto').innerText  = Array.isArray(info.texto) ? _variar(info.texto) : info.texto;
+    const fb = $('kaia-int-fb');
+    fb.textContent = '';
+    fb.appendChild(_stripFeedback(intv.intervention_type, {
+        mostradaEm: intervencaoMostradaEm, onResposta: esconderIntervencao,
+    }));
     $('kaia-intervencao').style.display = 'block';
 }
+
+// Esconder o card e liberar o polling eram a MESMA coisa; separá-los é o que
+// permite pedir feedback depois que a intervenção de ação já acabou, sem deixar
+// o polling travado enquanto o strip espera (aluno pode simplesmente ignorar).
+function liberarPolling() { intervencaoAtual = null; }
 
 function esconderIntervencao() {
     const c = $('kaia-intervencao');
     if (c) c.style.display = 'none';
-    intervencaoAtual = null;
+    liberarPolling();
 }
 
-async function enviarFeedbackIntervencao(tipo, reward) {
+async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoMostradaEm) {
     if (!tipo) return;
-    const tempo = intervencaoMostradaEm ? (performance.now() - intervencaoMostradaEm) / 1000 : null;
+    const tempo = mostradaEm ? (performance.now() - mostradaEm) / 1000 : null;
     try {
         await postJSON('/intervencao/feedback', {
             session_id: sessionId, intervention_type: tipo,
@@ -178,7 +239,33 @@ async function enviarFeedbackIntervencao(tipo, reward) {
         });
         console.log('[KaIA] feedback enviado:', tipo, reward);
     } catch (e) { console.warn('[KaIA] falha no feedback:', e); }
-    esconderIntervencao();
+}
+
+// Feedback ATRASADO: pergunta "ajudou?" um tempo DEPOIS, quando o aluno já pôde
+// sentir o efeito (caso da troca de tema). Card próprio — o #kaia-intervencao é do
+// polling e pode já estar ocupado por outra intervenção quando este disparar.
+let _fbTardioTimer = null;
+
+function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs = 45000 }) {
+    clearTimeout(_fbTardioTimer);
+    _fbTardioTimer = setTimeout(() => {
+        // sessaoDeEstudoAberta (não isMissionActive): o aluno pode estar lendo a
+        // explicação da questão, o que já zerou isMissionActive — e ainda vale perguntar.
+        if (!sessaoDeEstudoAberta || !sessionId) return;
+        _garantirEstiloFeedback();
+        const card = document.createElement('div');
+        card.className = 'kaia-card-notif';
+        const h = document.createElement('h4');
+        h.textContent = titulo;
+        const p = document.createElement('p');
+        p.textContent = pergunta;
+        const sumir = () => card.remove();
+        card.append(h, p, _stripFeedback(tipo, {
+            mostradaEm, agradecer: true, onResposta: () => setTimeout(sumir, 1200),
+        }));
+        _pilhaNotif().appendChild(card);
+        setTimeout(sumir, vidaMs);      // ignorado: some sozinho, sem cobrar resposta
+    }, atrasoMs);
 }
 
 function iniciarPollIntervencao() {
@@ -202,6 +289,9 @@ function iniciarPollIntervencao() {
 // (suspende idle/aba/exit). Base da pausa ativa (movimento) e do micro-refoco
 // (respiração). idx cicla os passos (modulo) — cobre roteiro e respiração.
 let _seqTimer = null;
+let _seqFeedbackTipo   = null;   // tipo a perguntar ao fim (null = sem feedback)
+let _seqMostradaEm     = 0;      // instante em que a intervenção apareceu
+let _seqFeedbackAberto = false;  // card já trocou para "como foi?"
 
 function _garantirOverlaySeq() {
     if ($('kaia-seq')) return;
@@ -214,8 +304,11 @@ function _garantirOverlaySeq() {
       #kaia-seq h2{margin:0 0 4px;color:var(--profundo,#1a2b4c);font-size:18px}
       #kaia-seq .kaia-seq-passo{margin:10px 0;font-size:16px;min-height:2.6em}
       #kaia-seq .kaia-seq-seg{font-size:30px;font-weight:700;color:var(--profundo,#1a2b4c)}
-      #kaia-seq button{margin-top:14px;border:0;border-radius:10px;padding:9px 16px;
-        background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}`;
+      /* NÃO usar '#kaia-seq button': um seletor de ID venceria .kaia-fb button e
+         pintaria os 3 botões do strip de feedback de verde. */
+      #kaia-seq-voltar{margin-top:14px;border:0;border-radius:10px;padding:9px 16px;
+        background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}
+      #kaia-seq-fb:not(:empty){margin-top:12px}`;
     document.head.appendChild(css);
     const el = document.createElement('div');
     el.id = 'kaia-seq';
@@ -225,15 +318,27 @@ function _garantirOverlaySeq() {
         <h2 id="kaia-seq-titulo"></h2>
         <p class="kaia-seq-passo" id="kaia-seq-passo"></p>
         <div class="kaia-seq-seg"><span id="kaia-seq-seg">0</span>s</div>
+        <div id="kaia-seq-fb"></div>
         <button type="button" id="kaia-seq-voltar">Voltar agora</button>
       </div>`;
     document.body.appendChild(el);
-    $('kaia-seq-voltar').addEventListener('click', encerrarSequenciaGuiada);
+    // Em modo feedback o mesmo botão só FECHA — senão re-entraria em encerrar e
+    // remontaria o strip por cima de si mesmo.
+    $('kaia-seq-voltar').addEventListener('click', () => {
+        if (_seqFeedbackAberto) _fecharSeq(); else encerrarSequenciaGuiada();
+    });
 }
 
-function iniciarSequenciaGuiada({ titulo, passos, duracaoMs, passoMs }) {
+function iniciarSequenciaGuiada({ titulo, passos, duracaoMs, passoMs, feedbackTipo = null }) {
     _garantirOverlaySeq();
     pausaAtiva = true;                       // suspende idle/aba/exit durante a sequência
+    _seqFeedbackTipo    = feedbackTipo;
+    _seqMostradaEm      = intervencaoMostradaEm;
+    _seqFeedbackAberto  = false;
+    $('kaia-seq-fb').textContent = '';       // limpa o strip de uma sequência anterior
+    $('kaia-seq-passo').style.display = '';
+    $('kaia-seq').querySelector('.kaia-seq-seg').style.display = '';
+    $('kaia-seq-voltar').textContent = 'Voltar agora';
     $('kaia-seq-titulo').innerText = titulo;
     $('kaia-seq').classList.add('aberto');
     const fim = performance.now() + duracaoMs;
@@ -247,14 +352,40 @@ function iniciarSequenciaGuiada({ titulo, passos, duracaoMs, passoMs }) {
     tick();
 }
 
-function encerrarSequenciaGuiada() {
-    clearTimeout(_seqTimer);
+function _fecharSeq() {
     const el = $('kaia-seq');
     if (el) el.classList.remove('aberto');
+    _seqFeedbackAberto = false;
+    _seqFeedbackTipo   = null;
+}
+
+// Sensores e polling voltam SEMPRE aqui — o feedback (Fase 2) não pode segurar a
+// sessão. O overlay só continua aberto mais alguns segundos para a pergunta, com
+// o botão virando saída imediata.
+function encerrarSequenciaGuiada() {
+    clearTimeout(_seqTimer);
     pausaAtiva = false;
     idleTime = 0;                            // retoma os sensores sem contar o descanso
     if (isMissionActive) setEstado('ESTUDANDO');
-    esconderIntervencao();                   // libera o polling (intervencaoAtual = null)
+    liberarPolling();
+    if (_seqFeedbackTipo) _pedirFeedbackSeq(); else _fecharSeq();
+}
+
+const SEQ_FEEDBACK_MS = 8000;   // quanto o card fica perguntando antes de sair sozinho
+
+function _pedirFeedbackSeq() {
+    _seqFeedbackAberto = true;
+    $('kaia-seq-titulo').innerText = 'Como foi a pausa?';
+    $('kaia-seq-passo').style.display = 'none';
+    $('kaia-seq').querySelector('.kaia-seq-seg').style.display = 'none';
+    $('kaia-seq-voltar').textContent = 'Voltar à questão';
+    const alvo = $('kaia-seq-fb');
+    alvo.textContent = '';
+    alvo.appendChild(_stripFeedback(_seqFeedbackTipo, {
+        mostradaEm: _seqMostradaEm, agradecer: true,
+        onResposta: () => setTimeout(_fecharSeq, 1200),
+    }));
+    setTimeout(() => { if (_seqFeedbackAberto) _fecharSeq(); }, SEQ_FEEDBACK_MS);
 }
 
 // Pausa ativa (movimento) — Passo 3.
@@ -264,12 +395,15 @@ function iniciarPausaAtiva() {
         passos: ['Levanta e alonga os ombros 🙆', 'Olha pra longe — janela, parede 👀',
                  'Bebe uma água 💧', 'Respira fundo, 3 vezes 🌬️'],
         duracaoMs: 90 * 1000, passoMs: 22.5 * 1000,
+        feedbackTipo: 'pausa_ativa',
     });
 }
 
 // Micro-refoco (respiração) — Passo 4 · barra no TOPO: mensagem + barra que cai
 // linearmente com o tempo restante (sem números). Não usa o overlay central.
 let _mrInterval = null;
+let _mrMostradaEm     = 0;
+let _mrFeedbackAberto = false;
 
 function _garantirBarraMicroRefoco() {
     if ($('kaia-mr')) return;
@@ -283,20 +417,29 @@ function _garantirBarraMicroRefoco() {
       #kaia-mr .kaia-mr-fill{height:100%;width:100%;border-radius:99px;background:var(--vd-uniao,#57d979)}
       #kaia-mr .kaia-mr-pular{position:absolute;top:8px;right:12px;border:0;background:transparent;
         color:var(--tinta,#2b2a26);opacity:.6;font-size:13px;cursor:pointer;text-decoration:underline}
-      #kaia-mr .kaia-mr-pular:hover{opacity:1}`;
+      #kaia-mr .kaia-mr-pular:hover{opacity:1}
+      #kaia-mr-fb:not(:empty){margin-top:4px}`;
     document.head.appendChild(css);
     const el = document.createElement('div');
     el.id = 'kaia-mr';
     el.setAttribute('role', 'status');
     el.innerHTML = `<button type="button" class="kaia-mr-pular" id="kaia-mr-pular">Pular</button>
       <div class="kaia-mr-msg" id="kaia-mr-msg"></div>
-      <div class="kaia-mr-track"><div class="kaia-mr-fill" id="kaia-mr-fill"></div></div>`;
+      <div class="kaia-mr-track"><div class="kaia-mr-fill" id="kaia-mr-fill"></div></div>
+      <div id="kaia-mr-fb"></div>`;
     document.body.appendChild(el);
-    $('kaia-mr-pular').addEventListener('click', encerrarMicroRefoco);
+    $('kaia-mr-pular').addEventListener('click', () => {
+        if (_mrFeedbackAberto) _fecharMicroRefoco(); else encerrarMicroRefoco();
+    });
 }
 
 function iniciarMicroRefoco() {
     _garantirBarraMicroRefoco();
+    _mrMostradaEm     = intervencaoMostradaEm;
+    _mrFeedbackAberto = false;
+    $('kaia-mr-fb').textContent = '';          // limpa o strip do disparo anterior
+    $('kaia-mr').querySelector('.kaia-mr-track').style.display = '';
+    $('kaia-mr-pular').textContent = 'Pular';
     pausaAtiva = true;                         // suspende idle/aba/exit durante a respiração
     const passos = ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'];
     const dur = 30 * 1000, passoMs = 4 * 1000;
@@ -319,20 +462,41 @@ function iniciarMicroRefoco() {
     }, 200);
 }
 
-function encerrarMicroRefoco() {
-    clearInterval(_mrInterval);
+function _fecharMicroRefoco() {
     const el = $('kaia-mr');
     if (el) el.classList.remove('aberto');
+    _mrFeedbackAberto = false;
+}
+
+// A barra sobrevive alguns segundos só para perguntar (Fase 2) — em versão
+// compacta, para não ficar mais intrusiva que a própria intervenção. Sensores e
+// polling voltam antes disso.
+const MR_FEEDBACK_MS = 6000;
+
+function encerrarMicroRefoco() {
+    clearInterval(_mrInterval);
     pausaAtiva = false;
     idleTime = 0;                              // retoma sensores sem contar a respiração
     if (isMissionActive) setEstado('ESTUDANDO');
-    esconderIntervencao();
+    liberarPolling();
+    _mrFeedbackAberto = true;
+    $('kaia-mr-msg').innerText = 'Ajudou a reancorar?';
+    $('kaia-mr').querySelector('.kaia-mr-track').style.display = 'none';
+    $('kaia-mr-pular').textContent = 'Fechar';
+    const alvo = $('kaia-mr-fb');
+    alvo.textContent = '';
+    alvo.appendChild(_stripFeedback('micro_refoco', {
+        compacto: true, mostradaEm: _mrMostradaEm, agradecer: true,
+        onResposta: () => setTimeout(_fecharMicroRefoco, 1200),
+    }));
+    setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
 }
 
 // Troca de tema (intervenção com AÇÃO — Passo 5): modal CENTRAL (como a pausa
 // ativa, maior). Escolhe o tema-alvo ao aparecer e MOSTRA qual será; oferece a
 // ESCOLHA "Trocar" / "Continuar" (dá agência ao aluno).
-let _trocaTemaAlvo = null;
+let _trocaTemaAlvo   = null;
+let _trocaMostradaEm = 0;
 
 function _garantirCardTroca() {
     if ($('kaia-troca')) return;
@@ -365,14 +529,28 @@ function _garantirCardTroca() {
         </div>
       </div>`;
     document.body.appendChild(el);
-    $('kaia-troca-sim').addEventListener('click', () => { _esconderTroca(); esconderIntervencao(); _trocarTema(); });
-    $('kaia-troca-nao').addEventListener('click', () => { _esconderTroca(); esconderIntervencao(); });
+    // Feedback só DEPOIS (Fase 2): somar 3 botões aos 2 daqui daria 5 escolhas de
+    // uma vez, e no instante da escolha o aluno ainda não sentiu o efeito da troca.
+    $('kaia-troca-sim').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _trocarTema(); _perguntarDepoisDaTroca(); });
+    $('kaia-troca-nao').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _perguntarDepoisDaTroca(); });
+}
+
+const TROCA_FEEDBACK_MS = 45000;   // tempo até perguntar (aluno já sentiu o efeito)
+
+function _perguntarDepoisDaTroca() {
+    _feedbackTardio('troca_atividade', {
+        titulo: '🔄 Sobre a troca de tema',
+        pergunta: 'A sugestão de trocar de tema ajudou seu foco?',
+        atrasoMs: TROCA_FEEDBACK_MS, mostradaEm: _trocaMostradaEm,
+    });
 }
 
 function _esconderTroca() { const c = $('kaia-troca'); if (c) c.classList.remove('aberto'); }
 
 function mostrarTrocaTema() {
     _garantirCardTroca();
+    _trocaMostradaEm = intervencaoMostradaEm;   // capturado aqui: o card tardio dispara
+                                                // 45s depois, quando o global já mudou
     const outros = temasAtuais.filter(t => t && t !== currentTema);
     _trocaTemaAlvo = outros.length ? outros[Math.floor(Math.random() * outros.length)] : currentTema;
     $('kaia-troca-sub').innerText = _variar([
@@ -401,7 +579,8 @@ function _trocarTema() {
 // A questão atual fica atenuada; ao fechar, um REALCE de re-entrada volta o olho
 // pra ela (reduz o custo de retomada, alto no TEA/TDAH). Base: teste interpolado
 // (Szpunar 2013) + resumption lag. Reusa pausaAtiva; warm-up garante histórico.
-let _cpQuestao = null;
+let _cpQuestao    = null;
+let _cpMostradaEm = 0;
 
 function _questaoCheckpoint() {
     const recentes = historicoQuestoes.slice(-3);   // conteúdo RECENTE (últimas ~3 respondidas)
@@ -424,6 +603,7 @@ function _garantirEstiloCheckpoint() {
       #kaia-cp .kaia-cp-fb{margin:10px 0 0;font-size:14px;min-height:1.2em}
       #kaia-cp .kaia-cp-voltar{margin-top:10px;border:0;border-radius:10px;padding:9px 16px;display:none;
         background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}
+      #kaia-cp .kaia-fb-wrap{margin-top:12px}
       .question-wrapper.kaia-cp-dim{opacity:.35;transition:opacity .25s}
       .question-wrapper.kaia-cp-realce{box-shadow:0 0 0 3px var(--vd-uniao,#57d979);border-radius:14px;transition:box-shadow .3s}`;
     document.head.appendChild(css);
@@ -432,12 +612,13 @@ function _garantirEstiloCheckpoint() {
 function checkpointRecuperacao() {
     const q = _questaoCheckpoint();
     const lado = document.querySelector('.quiz-lado-questao');
-    if (!q || !Array.isArray(q.opts) || !lado) { esconderIntervencao(); return; }   // sem histórico -> não intervém
+    if (!q || !Array.isArray(q.opts) || !lado) { liberarPolling(); return; }   // sem histórico -> não intervém
     const antigo = $('kaia-cp');
     if (antigo) antigo.remove();             // evita duplicar se re-disparar
     _garantirEstiloCheckpoint();
     pausaAtiva = true;                        // suspende sensores durante o checkpoint
     _cpQuestao = q;
+    _cpMostradaEm = intervencaoMostradaEm;
 
     const wrap = document.querySelector('.question-wrapper');
     if (wrap) wrap.classList.add('kaia-cp-dim');   // atenua a questão atual (foco no checkpoint)
@@ -485,6 +666,13 @@ function _responderCheckpoint(acertou) {
         ? 'Isso! 🎯 De volta pro foco.'
         : `Sem problema — era: ${_cpQuestao ? _cpQuestao.opts[_cpQuestao.ans] : ''}.`;
     $$('#kaia-cp .kaia-cp-opt').forEach(b => b.disabled = true);   // trava após responder
+    // Feedback só depois de responder (Fase 2): antes disso competiria com a questão.
+    const card = $('kaia-cp');
+    if (card && !card.querySelector('.kaia-fb-wrap')) {
+        card.insertBefore(_stripFeedback('checkpoint', {
+            rotulo: 'Esse mini-check ajudou?', mostradaEm: _cpMostradaEm, agradecer: true,
+        }), $('kaia-cp-voltar'));
+    }
     $('kaia-cp-voltar').style.display = 'inline-block';
 }
 
@@ -500,7 +688,7 @@ function encerrarCheckpoint() {
     pausaAtiva = false;
     idleTime = 0;                            // retoma os sensores sem contar o checkpoint
     if (isMissionActive) setEstado('ESTUDANDO');
-    esconderIntervencao();                   // libera o polling (intervencaoAtual = null)
+    liberarPolling();
 }
 
 // ============================================================
@@ -526,7 +714,10 @@ function _garantirEstiloReancora() {
 }
 
 function reancorarDestaque() {
-    esconderIntervencao();                   // não é card; o cooldown já segura novo disparo
+    liberarPolling();                        // não é card; o cooldown já segura novo disparo
+    // Sem botão de feedback por decisão de produto (Fase 2): são 4s de escurecimento
+    // sutil, sem UI — perguntar "ajudou?" seria mais intrusivo que a intervenção.
+    // O reward continua vindo do sinal implícito (transição de estado).
     if (!document.querySelector('.question-wrapper')) return;
     _garantirEstiloReancora();
     document.body.classList.add('kaia-reancorar');
@@ -1226,6 +1417,7 @@ function encerrarSessaoComResumo() {
     encerrarSessao();          // POST /sessions/{id}/end
     devolverFila();            // devolve o que sobrou na fila
     clearInterval(idleInterval);
+    clearTimeout(_fbTardioTimer);   // nada de card de feedback caindo sobre o resumo
 
     preencherResumo();
     $('resumo-titulo').textContent = 'Sessão concluída!';

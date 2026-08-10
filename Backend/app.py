@@ -975,7 +975,8 @@ async def resolver_rewards(conn, thompson, session_id, estado_atual):
             session_id, INTERV_JANELA_REWARD_MIN,
         )
     except Exception as e:
-        print("[KaIA] colunas de reward ausentes (rode interventions_reward_estado.sql):", e)
+        print("[KaIA] colunas de reward ausentes — o banco está atrás do schema "
+              "versionado (supabase/migrations/*_remote_schema.sql):", e)
         return
 
     for p in pendentes:

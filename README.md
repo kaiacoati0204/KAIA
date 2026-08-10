@@ -56,7 +56,6 @@ Backend/
   auth.py               → validação do JWT do Supabase Auth (JWKS)
   mouse_features.py     → mouse_track bruto → features de mouse do modelo v2
   requirements.txt      → dependências Python
-  migrations/           → schema/trigger do banco (rode em ordem numérica; nunca apague)
   seed_contas_teste.py  → cria as contas @teste.kaia (senha teste1234)
   seed_sintetico.py     → popula sessões sintéticas para os painéis
   limpar_*.{py,sql}     → desfazem os seeds
@@ -64,7 +63,10 @@ Backend/
 ml/
   gerar_base_v2.py      → gera a base sintética + treina o modelo v2 (seed fixa; .pkl NÃO versionado)
   treinar_com_probe.py  → valida/re-treina o modelo com os rótulos reais do probe
-sql/                    → migrations avulsas (probe_labels, cache de questões, reward das intervenções)
+sql/historico/          → migrations avulsas antigas, já contidas no snapshot — só referência, NÃO rodar
+supabase/
+  migrations/           → schema versionado (snapshot de produção); ÚNICO SQL que o CI aplica
+  README.md             → recriar o banco, regenerar o snapshot, criar migration nova
 CLAUDE.md               → convenções do projeto (cores, acessibilidade, segurança, modelo, estilo)
 ```
 
@@ -127,8 +129,9 @@ SUPABASE_ANON_KEY: 'eyJ...',   // Supabase → Settings → API → Project API 
 > [!NOTE]
 > **Modelo de atenção (`/diagnose`):** o modelo v2 **não é versionado** — gere-o uma vez
 > (seed fixa, sempre igual): `python ml/gerar_base_v2.py`. Cria `modelo_rf_v2.pkl` +
-> `scaler_v2.pkl`. Sem eles o backend sobe normal, mas `/diagnose` responde 503. Para
-> gravar os rótulos do probe, rode `sql/probe_labels.sql` uma vez no Supabase.
+> `scaler_v2.pkl`. Sem eles o backend sobe normal, mas `/diagnose` responde 503. A tabela
+> `probe_labels`, que guarda os rótulos do probe, já vem no schema versionado — nada a
+> rodar à mão.
 
 ### 4. Subir o backend
 
@@ -176,8 +179,9 @@ Você só mexe no banco nestes casos:
   plano; rode de dentro de `Backend/`). Recria as 6 contas com senha `teste1234`.
   ⚠️ **Depende do schema base já existir** (`escolas`, `turmas`, `professores`,
   `coordenadores`) — ele *reaproveita* essas linhas, **não as cria**.
-- **Aplicar a migration de consentimento** (só se ainda não foi aplicada neste projeto):
-  rode `Backend/migrations/0001_perfil_signup_termos.sql` uma vez no Supabase → SQL Editor.
+- **Schema do banco** (inclusive o trigger de consentimento no signup): já vem inteiro no
+  snapshot versionado — veja [`supabase/README.md`](supabase/README.md) para aplicar num
+  projeto novo. Não há mais migration avulsa para rodar à mão.
 - *(opcional)* **Dar volume ao dashboard**: `python Backend/seed_sintetico.py --commit`.
 
 Limpeza (antes de produção / quando entrarem alunos reais): `Backend/limpar_sintetico.sql`

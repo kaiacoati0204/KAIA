@@ -7,7 +7,7 @@ async function carregarPerfil() {
     if (!$('nomeUsuario')) return;
 
     const SEM_DADO = '—';
-    const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    const usuario = lerUsuario();
 
     // 1) Identidade: parte do sessionStorage (login, por aba) e confirma via /perfil.
     $('nomeUsuario').textContent  = usuario?.nome || usuario?.email || SEM_DADO;
@@ -17,6 +17,9 @@ async function carregarPerfil() {
     // compartilhado entre abas (o último login sobrescreve para todas), então
     // discordaria da identidade desta aba. sessionStorage é por aba; o /perfil
     // é a fonte autoritativa.
+    // lerUsuario() preserva essa regra: a sessionStorage continua tendo
+    // prioridade, e a cópia do "lembre de mim" só entra quando a aba não tem
+    // identidade nenhuma (aí ela é a única resposta possível, melhor que "—").
     let alunoId = usuario?.user_id || null;
     if (usuario?.email) {
         try {

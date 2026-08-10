@@ -53,6 +53,13 @@
                 <input id="login-senha" type="password" placeholder="Digite sua senha" autocomplete="current-password">
             </div>
 
+            <!-- Reusa .grupo-termos (mesmo padrão do aceite no cadastro). Começa
+                 DESMARCADO de propósito: computador de escola é compartilhado. -->
+            <div class="grupo-termos">
+                <input id="login-lembrar" type="checkbox">
+                <label for="login-lembrar">Lembre de mim neste computador</label>
+            </div>
+
             <!-- Preenchido por salvarLogin() quando o e-mail não é encontrado -->
             <p id="login-erro" class="erro-login" role="alert" aria-live="polite"></p>
 

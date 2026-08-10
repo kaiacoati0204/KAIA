@@ -31,7 +31,11 @@
       "Bash(node --check js/materias.js)",
       "WebSearch",
       "Bash(cd \"C:/Users/Pichau/.claude/projects/c--Users-Pichau-Documents-Bia---Code-KaIA/memory\" && ls -la 2>/dev/null && cat MEMORY.md 2>/dev/null)",
-      "Read(//c/Users/Pichau/.claude/projects/c--Users-Pichau-Documents-Bia---Code-KaIA/memory/**)"
+      "Read(//c/Users/Pichau/.claude/projects/c--Users-Pichau-Documents-Bia---Code-KaIA/memory/**)",
+      "Bash(npx vitest *)",
+      "Bash(npm install *)",
+      "Bash(node \"C:/Users/Pichau/AppData/Local/Temp/claude/c--Users-Pichau-Documents-Bia---Code-KaIA/a1af6348-3525-449f-91b2-23ca67f65332/scratchpad/fase2.harness.mjs\")",
+      "Bash(python -)"
     ],
     "additionalDirectories": [
       "c:\\Users\\vitor\\OneDrive\\Documentos"

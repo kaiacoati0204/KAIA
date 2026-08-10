@@ -63,6 +63,14 @@ const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p
 // matérias/perfil leem para mandar ao backend (alimentam o prompt da IA).
 const lerHobbies = () => JSON.parse(sessionStorage.getItem('hobbies') || '[]');
 
+// Usuário logado. O padrão é sessionStorage (morre com a aba); com "lembre de
+// mim" (Fase 3) existe também uma cópia em localStorage. Ler os dois nesta ordem
+// importa: a sessionStorage é a mais fresca, e o fallback é o que faz uma aba
+// recém-aberta reconhecer quem está logado em vez de mostrar a rail sem nome.
+const lerUsuario = () => JSON.parse(
+    sessionStorage.getItem('kaia_usuario') || localStorage.getItem('kaia_usuario') || 'null'
+);
+
 // ============================================================
 //                    NAVEGAÇÃO (rail)
 // ============================================================
@@ -112,7 +120,7 @@ function montarRail() {
         }).join('');
 
     // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
-    const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+    const u = lerUsuario();
     const nome = u ? (u.nome || u.email || '').trim() : '';
     const inicial = nome ? nome[0].toUpperCase() : '·';
     const saudacao = nome
@@ -141,8 +149,12 @@ function montarRail() {
 
     // Sair: encerra a sessão do Supabase Auth, limpa o sessionStorage e volta ao
     // login. O signOut é best-effort (não trava o logout se o cliente faltar).
+    // Derruba TAMBÉM o "lembre de mim" (Fase 3): sair tem que desfazer o lembrar,
+    // senão o próximo a abrir o navegador entraria na conta de quem saiu.
     rail.querySelector('.rail-sair').addEventListener('click', async () => {
         try { await window.supabaseClient?.auth.signOut(); } catch (_) {}
+        localStorage.removeItem('kaia_lembrar');
+        localStorage.removeItem('kaia_usuario');
         sessionStorage.clear();
         window.location.href = 'login.html';
     });

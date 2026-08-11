@@ -2079,6 +2079,362 @@ body.textura-papel .conteudo {
   pointer-events: none;
 }
 #kaia-notificacoes > * { pointer-events: auto; }
+
+/* ============================================================
+   INTERVENÇÕES — o visual das 7 que o aluno vê
+   ============================================================
+   Este CSS vivia em template strings dentro das funções _garantir*() do
+   materias.js, injetado em runtime na primeira vez que cada intervenção
+   disparava. Foi trazido inteiro para cá para poder ser editado como CSS de
+   verdade — com realce, com o resto da paleta por perto e sem escapar aspas.
+   O JS segue criando os ELEMENTOS; aqui mora só a aparência.
+
+   Ordem: card de notificação → strip de feedback (compartilhado) →
+   micro_refoco → pausa_ativa → troca_atividade → checkpoint → reancoragem.
+   ============================================================ */
+
+/* ---- Card de notificação: auto_monitoramento e alerta_fadiga --------------
+   As duas usam ESTE mesmo card; o que muda é emoji/título/frase, definidos em
+   INTERVENCOES_MSG (materias.js). Era um cartão cinza-ardósia (#1f2937 com
+   texto #f9fafb) — o único ponto do produto com tema escuro, o que destoava
+   ainda mais depois do login claro. Agora usa os tokens da marca; a separação
+   do fundo, que antes vinha do contraste escuro, vem da borda + sombra. */
+.kaia-card-notif {
+  max-width: 320px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--tinta);
+  box-shadow: 0 10px 30px rgba(var(--profundo-rgb), 0.18);
+  font-family: inherit;
+  animation: kaiaIn 0.25s ease;
+}
+.kaia-card-notif h4 {
+  margin: 0 0 6px;
+  color: var(--profundo);
+  font-size: 15px;
+}
+.kaia-card-notif p {
+  margin: 0 0 12px;
+  color: var(--tinta);
+  font-size: 13px;
+  line-height: 1.4;
+}
+#kaia-intervencao { display: none; }
+
+@keyframes kaiaIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- Strip de feedback ("isso ajudou?") — usado por TODAS ----------------
+   Os três botões eram hex soltos e saturados (#22c55e/#eab308/#ef4444). Agora
+   são os pares de status já validados em contraste: fundo claro + texto escuro
+   da mesma família, iguais aos badges do painel do professor. */
+.kaia-fb {
+  display: flex;
+  gap: 8px;
+}
+.kaia-fb button {
+  flex: 1;
+  padding: 7px 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.kaia-fb button:hover { filter: brightness(0.96); }
+.kaia-fb button:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
+.kaia-fb .k1 { background: var(--acerto-bg); color: var(--acerto-tx); border-color: var(--acerto-tx); }
+.kaia-fb .k2 { background: var(--alerta-bg); color: var(--alerta-tx); border-color: var(--alerta-tx); }
+.kaia-fb .k3 { background: var(--erro-bg);   color: var(--erro-tx);   border-color: var(--erro-tx); }
+
+/* Variante compacta: usada onde o strip não pode pesar mais que a própria
+   intervenção (a barra do micro_refoco). */
+.kaia-fb-compacto { justify-content: center; gap: 6px; }
+.kaia-fb-compacto button { flex: 0 0 auto; padding: 5px 12px; font-size: 12px; }
+
+.kaia-fb-wrap .kaia-fb-rotulo {
+  margin: 0 0 8px;
+  color: var(--tinta);
+  font-size: 13px;
+}
+.kaia-fb-wrap .kaia-fb-obrigado {
+  margin: 0;
+  color: var(--tinta);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---- micro_refoco: barra fixa no topo (respiração de 30s) ---------------- */
+#kaia-mr {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: none;
+  padding: 12px 16px 10px;
+  background: var(--card);
+  box-shadow: 0 4px 20px rgba(var(--profundo-rgb), 0.15);
+  text-align: center;
+}
+#kaia-mr.aberto { display: block; }
+#kaia-mr .kaia-mr-msg {
+  margin-bottom: 8px;
+  color: var(--profundo);
+  font-size: 15px;
+  font-weight: 600;
+}
+#kaia-mr .kaia-mr-track {
+  max-width: 520px;
+  height: 6px;
+  margin: 0 auto;
+  border-radius: 99px;
+  background: var(--marfim);
+  overflow: hidden;
+}
+#kaia-mr .kaia-mr-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--vd-uniao);
+}
+#kaia-mr .kaia-mr-pular {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 13px;
+  opacity: 0.6;
+  text-decoration: underline;
+  cursor: pointer;
+}
+#kaia-mr .kaia-mr-pular:hover { opacity: 1; }
+#kaia-mr-fb:not(:empty) { margin-top: 4px; }
+
+/* ---- pausa_ativa: overlay da sequência guiada (90s) ---------------------- */
+#kaia-seq {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  place-items: center;
+  background: rgba(var(--profundo-rgb), 0.45);
+}
+#kaia-seq.aberto { display: grid; }
+#kaia-seq .kaia-seq-card {
+  max-width: 340px;
+  padding: 24px 22px;
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--tinta);
+  box-shadow: 0 12px 40px rgba(var(--profundo-rgb), 0.25);
+  text-align: center;
+}
+#kaia-seq h2 {
+  margin: 0 0 4px;
+  color: var(--profundo);
+  font-size: 18px;
+}
+#kaia-seq .kaia-seq-passo {
+  margin: 10px 0;
+  min-height: 2.6em;
+  font-size: 16px;
+}
+#kaia-seq .kaia-seq-seg {
+  color: var(--profundo);
+  font-size: 30px;
+  font-weight: 700;
+}
+/* NÃO usar '#kaia-seq button': um seletor de ID venceria `.kaia-fb button` e
+   pintaria os 3 botões do strip de feedback de verde. */
+#kaia-seq-voltar {
+  margin-top: 14px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vd-uniao);
+  color: var(--profundo);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+#kaia-seq-fb:not(:empty) { margin-top: 12px; }
+
+/* ---- troca_atividade: modal com a escolha do aluno ----------------------- */
+#kaia-troca {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  place-items: center;
+  background: rgba(var(--profundo-rgb), 0.45);
+}
+#kaia-troca.aberto { display: grid; }
+#kaia-troca .kaia-troca-card {
+  width: 90%;
+  max-width: 440px;
+  padding: 26px 24px;
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--tinta);
+  box-shadow: 0 12px 40px rgba(var(--profundo-rgb), 0.25);
+  text-align: center;
+}
+#kaia-troca h2 {
+  margin: 0 0 8px;
+  color: var(--profundo);
+  font-size: 19px;
+}
+#kaia-troca p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+#kaia-troca .kaia-troca-alvo { margin: 14px 0 18px; font-size: 15px; }
+#kaia-troca .kaia-troca-alvo strong { color: var(--profundo); }
+#kaia-troca .kaia-troca-btns { display: flex; gap: 10px; }
+#kaia-troca button {
+  flex: 1;
+  padding: 11px 0;
+  border: 0;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+#kaia-troca .sim { background: var(--vd-uniao); color: var(--profundo); }
+#kaia-troca .nao {
+  background: transparent;
+  color: var(--tinta);
+  border: 1px solid var(--profundo);
+}
+
+/* ---- checkpoint: card inline com uma questão do histórico recente -------- */
+#kaia-cp {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--vd-uniao);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 6px 24px rgba(var(--profundo-rgb), 0.12);
+}
+#kaia-cp .kaia-cp-topo {
+  margin-bottom: 8px;
+  color: var(--profundo);
+  font-size: 13px;
+  font-weight: 700;
+}
+#kaia-cp .kaia-cp-q {
+  margin: 0 0 12px;
+  color: var(--tinta);
+  font-size: 15px;
+  line-height: 1.4;
+}
+#kaia-cp .kaia-cp-opts { display: flex; flex-direction: column; gap: 8px; }
+#kaia-cp .kaia-cp-opt {
+  padding: 9px 12px;
+  border: 1px solid var(--profundo);
+  border-radius: 8px;
+  background: var(--marfim);
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+#kaia-cp .kaia-cp-opt:disabled { opacity: 0.7; cursor: default; }
+#kaia-cp .kaia-cp-fb { margin: 10px 0 0; min-height: 1.2em; font-size: 14px; }
+#kaia-cp .kaia-cp-voltar {
+  display: none;
+  margin-top: 10px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vd-uniao);
+  color: var(--profundo);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+#kaia-cp .kaia-fb-wrap { margin-top: 12px; }
+/* A questão atual atenua enquanto o checkpoint está aberto, e recebe um realce
+   de re-entrada ao fechar (reduz o custo de retomada). */
+.question-wrapper.kaia-cp-dim { opacity: 0.35; transition: opacity 0.25s; }
+.question-wrapper.kaia-cp-realce {
+  border-radius: 14px;
+  box-shadow: 0 0 0 3px var(--vd-uniao);
+  transition: box-shadow 0.3s;
+}
+
+/* ---- reancoragem: sem elemento próprio ----------------------------------
+   Escurece o entorno e ELEVA a questão acima do véu. Sutil de propósito
+   (regra TEA/TDAH: tirar estímulo, não adicionar — nada pisca). */
+body.kaia-reancorar::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(var(--profundo-rgb), 0.42);
+  pointer-events: none;
+}
+body.kaia-reancorar .question-wrapper {
+  position: relative;
+  z-index: 41;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 10px 40px rgba(var(--profundo-rgb), 0.25);
+}
+
+/* ---- probe de atenção (autorrelato) -------------------------------------
+   NÃO é uma das 7 intervenções — é a pergunta de autorrelato que gera o rótulo
+   real do modelo. Veio junto porque tinha o mesmo CSS-dentro-de-string, e
+   deixar um bloco injetado para trás faria a próxima pessoa se perguntar por
+   que só esse é diferente. Aparência inalterada. */
+#kaia-probe {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 60;
+  display: none;
+  width: calc(100% - 32px);
+  max-width: 340px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--tinta);
+  box-shadow: 0 8px 30px rgba(var(--profundo-rgb), 0.14);
+  transform: translateX(-50%);
+}
+#kaia-probe .probe-q {
+  margin: 0 0 10px;
+  color: var(--profundo);
+  font-size: 14px;
+  font-weight: 600;
+}
+#kaia-probe .probe-btns { display: flex; flex-direction: column; gap: 6px; }
+#kaia-probe button {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--marfim);
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+#kaia-probe button:hover { border-color: var(--profundo); }
+
 /* Aviso gentil ao bater a meta do dia — fade suave, some sozinho. */
 .meta-toast {
   max-width: 280px;

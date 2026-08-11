@@ -117,35 +117,17 @@ function _pilhaNotif() {
 // Fase 2. O tipo e o instante de exibição ficam FECHADOS no closure, não lidos do
 // global: as intervenções de AÇÃO já liberaram o polling (intervencaoAtual = null)
 // quando o strip aparece, e ler o global ali perderia o feedback em silêncio.
-function _garantirEstiloFeedback() {
-    if ($('kaia-fb-css')) return;
-    const css = document.createElement('style');
-    css.id = 'kaia-fb-css';
-    css.textContent = `
-      .kaia-card-notif{max-width:320px;
-        background:#1f2937;color:#f9fafb;border-radius:14px;padding:16px 18px;
-        box-shadow:0 10px 30px rgba(0,0,0,.35);font-family:inherit;animation:kaiaIn .25s ease}
-      .kaia-card-notif h4{margin:0 0 6px;font-size:15px}
-      .kaia-card-notif p{margin:0 0 12px;font-size:13px;line-height:1.4;opacity:.9}
-      .kaia-fb{display:flex;gap:8px}
-      .kaia-fb button{flex:1;border:0;border-radius:8px;padding:7px 0;font-size:13px;cursor:pointer}
-      .kaia-fb .k1{background:#22c55e;color:#052e13}
-      .kaia-fb .k2{background:#eab308;color:#3a2e05}
-      .kaia-fb .k3{background:#ef4444;color:#3a0808}
-      .kaia-fb-compacto{justify-content:center;gap:6px}
-      .kaia-fb-compacto button{flex:0 0 auto;padding:5px 12px;font-size:12px}
-      .kaia-fb-wrap .kaia-fb-rotulo{margin:0 0 8px;font-size:13px;opacity:.9}
-      .kaia-fb-wrap .kaia-fb-obrigado{margin:0;font-size:13px;text-align:center;opacity:.9}
-      @keyframes kaiaIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`;
-    document.head.appendChild(css);
-}
+//
+// O CSS de TODAS as intervenções (este strip, os cards, os overlays) mora no
+// style.css, seção "INTERVENÇÕES". Antes era injetado daqui em template string;
+// mudou de lugar para poder ser editado como CSS de verdade. Este arquivo só
+// monta os elementos e aplica as classes.
 
 // Bloco pronto: rótulo opcional + os 3 botões. `agradecer` troca o strip por um
 // "valeu" ao responder — nos cards do polling isso não faz sentido (o card some na
 // hora), então lá fica false + onResposta: esconderIntervencao.
 function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
                                agradecer = false, onResposta = null } = {}) {
-    _garantirEstiloFeedback();
     const wrap = document.createElement('div');
     wrap.className = 'kaia-fb-wrap';
     if (rotulo) {
@@ -185,10 +167,6 @@ function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
 // mostrarIntervencao, porque o tipo muda e o elemento é reaproveitado).
 function _garantirCardIntervencao() {
     if ($('kaia-intervencao')) return;
-    _garantirEstiloFeedback();
-    const css = document.createElement('style');
-    css.textContent = `#kaia-intervencao{display:none}`;
-    document.head.appendChild(css);
     const card = document.createElement('div');
     card.id = 'kaia-intervencao';
     card.className = 'kaia-card-notif';
@@ -252,7 +230,6 @@ function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs 
         // sessaoDeEstudoAberta (não isMissionActive): o aluno pode estar lendo a
         // explicação da questão, o que já zerou isMissionActive — e ainda vale perguntar.
         if (!sessaoDeEstudoAberta || !sessionId) return;
-        _garantirEstiloFeedback();
         const card = document.createElement('div');
         card.className = 'kaia-card-notif';
         const h = document.createElement('h4');
@@ -295,21 +272,6 @@ let _seqFeedbackAberto = false;  // card já trocou para "como foi?"
 
 function _garantirOverlaySeq() {
     if ($('kaia-seq')) return;
-    const css = document.createElement('style');
-    css.textContent = `
-      #kaia-seq{position:fixed;inset:0;display:none;place-items:center;z-index:60;background:rgba(26,43,76,.45)}
-      #kaia-seq.aberto{display:grid}
-      #kaia-seq .kaia-seq-card{background:var(--card,#fbf6ec);color:var(--tinta,#2b2a26);max-width:340px;
-        text-align:center;border-radius:16px;padding:24px 22px;box-shadow:0 12px 40px rgba(26,43,76,.25)}
-      #kaia-seq h2{margin:0 0 4px;color:var(--profundo,#1a2b4c);font-size:18px}
-      #kaia-seq .kaia-seq-passo{margin:10px 0;font-size:16px;min-height:2.6em}
-      #kaia-seq .kaia-seq-seg{font-size:30px;font-weight:700;color:var(--profundo,#1a2b4c)}
-      /* NÃO usar '#kaia-seq button': um seletor de ID venceria .kaia-fb button e
-         pintaria os 3 botões do strip de feedback de verde. */
-      #kaia-seq-voltar{margin-top:14px;border:0;border-radius:10px;padding:9px 16px;
-        background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}
-      #kaia-seq-fb:not(:empty){margin-top:12px}`;
-    document.head.appendChild(css);
     const el = document.createElement('div');
     el.id = 'kaia-seq';
     el.setAttribute('role', 'dialog');
@@ -407,19 +369,6 @@ let _mrFeedbackAberto = false;
 
 function _garantirBarraMicroRefoco() {
     if ($('kaia-mr')) return;
-    const css = document.createElement('style');
-    css.textContent = `
-      #kaia-mr{position:fixed;top:0;left:0;right:0;z-index:70;display:none;text-align:center;
-        background:var(--card,#fbf6ec);box-shadow:0 4px 20px rgba(26,43,76,.15);padding:12px 16px 10px}
-      #kaia-mr.aberto{display:block}
-      #kaia-mr .kaia-mr-msg{color:var(--profundo,#1a2b4c);font-size:15px;font-weight:600;margin-bottom:8px}
-      #kaia-mr .kaia-mr-track{height:6px;max-width:520px;margin:0 auto;border-radius:99px;overflow:hidden;background:var(--marfim,#f4ecdd)}
-      #kaia-mr .kaia-mr-fill{height:100%;width:100%;border-radius:99px;background:var(--vd-uniao,#57d979)}
-      #kaia-mr .kaia-mr-pular{position:absolute;top:8px;right:12px;border:0;background:transparent;
-        color:var(--tinta,#2b2a26);opacity:.6;font-size:13px;cursor:pointer;text-decoration:underline}
-      #kaia-mr .kaia-mr-pular:hover{opacity:1}
-      #kaia-mr-fb:not(:empty){margin-top:4px}`;
-    document.head.appendChild(css);
     const el = document.createElement('div');
     el.id = 'kaia-mr';
     el.setAttribute('role', 'status');
@@ -500,21 +449,6 @@ let _trocaMostradaEm = 0;
 
 function _garantirCardTroca() {
     if ($('kaia-troca')) return;
-    const css = document.createElement('style');
-    css.textContent = `
-      #kaia-troca{position:fixed;inset:0;display:none;place-items:center;z-index:60;background:rgba(26,43,76,.45)}
-      #kaia-troca.aberto{display:grid}
-      #kaia-troca .kaia-troca-card{background:var(--card,#fbf6ec);color:var(--tinta,#2b2a26);max-width:440px;width:90%;
-        text-align:center;border-radius:16px;padding:26px 24px;box-shadow:0 12px 40px rgba(26,43,76,.25)}
-      #kaia-troca h2{margin:0 0 8px;font-size:19px;color:var(--profundo,#1a2b4c)}
-      #kaia-troca p{margin:0 0 10px;font-size:14px;line-height:1.5;opacity:.9}
-      #kaia-troca .kaia-troca-alvo{margin:14px 0 18px;font-size:15px;opacity:1}
-      #kaia-troca .kaia-troca-alvo strong{color:var(--profundo,#1a2b4c)}
-      #kaia-troca .kaia-troca-btns{display:flex;gap:10px}
-      #kaia-troca button{flex:1;border:0;border-radius:10px;padding:11px 0;font-size:14px;cursor:pointer}
-      #kaia-troca .sim{background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c)}
-      #kaia-troca .nao{background:transparent;color:var(--tinta,#2b2a26);border:1px solid var(--profundo,#1a2b4c)}`;
-    document.head.appendChild(css);
     const el = document.createElement('div');
     el.id = 'kaia-troca';
     el.setAttribute('role', 'dialog');
@@ -587,35 +521,12 @@ function _questaoCheckpoint() {
     return recentes.length ? recentes[Math.floor(Math.random() * recentes.length)] : null;
 }
 
-function _garantirEstiloCheckpoint() {
-    if ($('kaia-cp-css')) return;
-    const css = document.createElement('style');
-    css.id = 'kaia-cp-css';
-    css.textContent = `
-      #kaia-cp{background:var(--card,#fbf6ec);border:1px solid var(--vd-uniao,#57d979);border-radius:14px;
-        padding:16px 18px;margin-bottom:16px;box-shadow:0 6px 24px rgba(26,43,76,.12)}
-      #kaia-cp .kaia-cp-topo{font-size:13px;font-weight:700;color:var(--profundo,#1a2b4c);margin-bottom:8px}
-      #kaia-cp .kaia-cp-q{margin:0 0 12px;font-size:15px;line-height:1.4;color:var(--tinta,#2b2a26)}
-      #kaia-cp .kaia-cp-opts{display:flex;flex-direction:column;gap:8px}
-      #kaia-cp .kaia-cp-opt{text-align:left;border:1px solid var(--profundo,#1a2b4c);background:var(--marfim,#f4ecdd);
-        color:var(--tinta,#2b2a26);border-radius:8px;padding:9px 12px;font-size:14px;cursor:pointer}
-      #kaia-cp .kaia-cp-opt:disabled{cursor:default;opacity:.7}
-      #kaia-cp .kaia-cp-fb{margin:10px 0 0;font-size:14px;min-height:1.2em}
-      #kaia-cp .kaia-cp-voltar{margin-top:10px;border:0;border-radius:10px;padding:9px 16px;display:none;
-        background:var(--vd-uniao,#57d979);color:var(--profundo,#1a2b4c);font-size:14px;cursor:pointer}
-      #kaia-cp .kaia-fb-wrap{margin-top:12px}
-      .question-wrapper.kaia-cp-dim{opacity:.35;transition:opacity .25s}
-      .question-wrapper.kaia-cp-realce{box-shadow:0 0 0 3px var(--vd-uniao,#57d979);border-radius:14px;transition:box-shadow .3s}`;
-    document.head.appendChild(css);
-}
-
 function checkpointRecuperacao() {
     const q = _questaoCheckpoint();
     const lado = document.querySelector('.quiz-lado-questao');
     if (!q || !Array.isArray(q.opts) || !lado) { liberarPolling(); return; }   // sem histórico -> não intervém
     const antigo = $('kaia-cp');
     if (antigo) antigo.remove();             // evita duplicar se re-disparar
-    _garantirEstiloCheckpoint();
     pausaAtiva = true;                        // suspende sensores durante o checkpoint
     _cpQuestao = q;
     _cpMostradaEm = intervencaoMostradaEm;
@@ -702,24 +613,12 @@ function encerrarCheckpoint() {
 const REANCORA_MS = 4000;
 let _reancoraTimer = null;
 
-function _garantirEstiloReancora() {
-    if ($('kaia-reancora-css')) return;
-    const css = document.createElement('style');
-    css.id = 'kaia-reancora-css';
-    css.textContent = `
-      body.kaia-reancorar::before{content:'';position:fixed;inset:0;background:rgba(26,43,76,.42);z-index:40;pointer-events:none}
-      body.kaia-reancorar .question-wrapper{position:relative;z-index:41;background:var(--card,#fbf6ec);
-        border-radius:14px;box-shadow:0 10px 40px rgba(26,43,76,.25)}`;
-    document.head.appendChild(css);
-}
-
 function reancorarDestaque() {
     liberarPolling();                        // não é card; o cooldown já segura novo disparo
     // Sem botão de feedback por decisão de produto (Fase 2): são 4s de escurecimento
     // sutil, sem UI — perguntar "ajudou?" seria mais intrusivo que a intervenção.
     // O reward continua vindo do sinal implícito (transição de estado).
     if (!document.querySelector('.question-wrapper')) return;
-    _garantirEstiloReancora();
     document.body.classList.add('kaia-reancorar');
     clearTimeout(_reancoraTimer);
     _reancoraTimer = setTimeout(() => document.body.classList.remove('kaia-reancorar'), REANCORA_MS);
@@ -1315,19 +1214,6 @@ let probeTimeout = null;
 
 function _garantirCardProbe() {
     if ($('kaia-probe')) return;
-    const st = document.createElement('style');
-    st.textContent = `
-      #kaia-probe{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;
-        max-width:340px;width:calc(100% - 32px);background:var(--card);color:var(--tinta);
-        border:1px solid var(--border);border-radius:14px;padding:14px 16px;
-        box-shadow:0 8px 30px rgba(var(--profundo-rgb),.14);display:none}
-      #kaia-probe .probe-q{margin:0 0 10px;font-size:14px;color:var(--profundo);font-weight:600}
-      #kaia-probe .probe-btns{display:flex;flex-direction:column;gap:6px}
-      #kaia-probe button{border:1px solid var(--border);background:var(--marfim);color:var(--tinta);
-        border-radius:9px;padding:8px 10px;font-size:13px;cursor:pointer;text-align:left}
-      #kaia-probe button:hover{border-color:var(--profundo)}
-    `;
-    document.head.appendChild(st);
     const card = document.createElement('div');
     card.id = 'kaia-probe';
     card.innerHTML =

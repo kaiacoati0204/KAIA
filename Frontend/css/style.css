@@ -2170,25 +2170,49 @@ body.textura-papel .conteudo {
   text-align: center;
 }
 
-/* ---- micro_refoco: barra fixa no topo (respiração de 30s) ---------------- */
+/* ---- micro_refoco: barra fixa no topo (respiração de 30s) ----------------
+   `display: none → block` NÃO transiciona — era por isso que a barra pipocava.
+   Agora ela fica sempre no DOM e a transição é opacity + transform; o
+   `visibility` entra junto para que, fechada, ela não receba clique nem seja
+   lida por leitor de tela (opacity: 0 sozinha deixaria uma faixa invisível
+   capturando o topo da página). O `visibility` só muda no FIM da saída — daí o
+   delay igual à duração — e no INÍCIO da entrada (delay 0). */
 #kaia-mr {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 70;
-  display: none;
-  padding: 12px 16px 10px;
+  padding: 18px 16px 16px;
   background: var(--card);
   box-shadow: 0 4px 20px rgba(var(--profundo-rgb), 0.15);
   text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-100%);          /* desliza de onde ela vem: o topo */
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
 }
-#kaia-mr.aberto { display: block; }
+#kaia-mr.aberto {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s;
+}
 #kaia-mr .kaia-mr-msg {
   margin-bottom: 8px;
   color: var(--profundo);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
+}
+/* Frase de acolhimento sorteada UMA vez na abertura (FRASES_MICRO_REFOCO, no
+   materias.js) e parada durante os 30s: variar entre aparições dá variedade,
+   variar durante viraria movimento numa intervenção que existe para acalmar. */
+#kaia-mr .kaia-mr-frase {
+  max-width: 520px;
+  margin: 0 auto 8px;
+  color: var(--tinta);
+  font-size: 14px;
+  line-height: 1.4;
 }
 #kaia-mr .kaia-mr-track {
   max-width: 520px;
@@ -2225,33 +2249,46 @@ body.textura-papel .conteudo {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: none;
+  display: grid;                         /* ver a nota do #kaia-mr: display não transiciona */
   place-items: center;
   background: rgba(var(--profundo-rgb), 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s ease, visibility 0s linear 0.35s;
 }
-#kaia-seq.aberto { display: grid; }
+#kaia-seq.aberto {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.35s ease, visibility 0s;
+}
 #kaia-seq .kaia-seq-card {
-  max-width: 340px;
-  padding: 24px 22px;
+  width: 90%;
+  max-width: 420px;
+  padding: 32px 28px;
   border-radius: 16px;
   background: var(--card);
   color: var(--tinta);
   box-shadow: 0 12px 40px rgba(var(--profundo-rgb), 0.25);
   text-align: center;
+  /* Cresce um triz junto com o fade — sem "bounce": movimento que passa do
+     ponto e volta é estímulo extra, o oposto do que a pausa quer. */
+  transform: scale(0.97);
+  transition: transform 0.35s ease;
 }
+#kaia-seq.aberto .kaia-seq-card { transform: none; }
 #kaia-seq h2 {
   margin: 0 0 4px;
   color: var(--profundo);
-  font-size: 18px;
+  font-size: 20px;
 }
 #kaia-seq .kaia-seq-passo {
-  margin: 10px 0;
+  margin: 12px 0;
   min-height: 2.6em;
-  font-size: 16px;
+  font-size: 18px;
 }
 #kaia-seq .kaia-seq-seg {
   color: var(--profundo);
-  font-size: 30px;
+  font-size: 40px;
   font-weight: 700;
 }
 /* NÃO usar '#kaia-seq button': um seletor de ID venceria `.kaia-fb button` e
@@ -2326,6 +2363,14 @@ body.textura-papel .conteudo {
   border-radius: 14px;
   background: var(--card);
   box-shadow: 0 6px 24px rgba(var(--profundo-rgb), 0.12);
+  /* O card é criado na hora pelo JS, então não há estado "fechado" para
+     transicionar — quem dá a entrada suave é a animation. Desliza de cima,
+     na mesma direção em que ele entra na página (prepend no topo da coluna). */
+  animation: kaiaCpEntra 0.32s ease-out both;
+}
+@keyframes kaiaCpEntra {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: none; }
 }
 #kaia-cp .kaia-cp-topo {
   margin-bottom: 8px;
@@ -2367,31 +2412,70 @@ body.textura-papel .conteudo {
 }
 #kaia-cp .kaia-fb-wrap { margin-top: 12px; }
 /* A questão atual atenua enquanto o checkpoint está aberto, e recebe um realce
-   de re-entrada ao fechar (reduz o custo de retomada). */
-.question-wrapper.kaia-cp-dim { opacity: 0.35; transition: opacity 0.25s; }
+   de re-entrada ao fechar (reduz o custo de retomada).
+   A transição mora na BASE, não na classe: se ficasse só em .kaia-cp-dim, ao
+   remover a classe a regra sairia junto e a questão voltaria de um salto.
+   0.35 deixava o texto de fundo em ~2:1 — atenuado a ponto de ser ilegível.
+   0.7 dá ~5:1, passa em AA: quem quiser ler a questão por trás, consegue. */
+.question-wrapper {
+  transition: opacity 0.25s ease, background-color 0.6s ease, box-shadow 0.6s ease;
+}
+.question-wrapper.kaia-cp-dim { opacity: 0.7; }
 .question-wrapper.kaia-cp-realce {
   border-radius: 14px;
   box-shadow: 0 0 0 3px var(--vd-uniao);
-  transition: box-shadow 0.3s;
+  /* O realce entra junto com a saída do dim, então precisa REPETIR o opacity da
+     base: `transition` é atalho, e listar só box-shadow aqui apagaria o fade de
+     volta da questão — que é exatamente o salto que a Fase 6 veio tirar. */
+  transition: opacity 0.25s ease, box-shadow 0.3s ease;
 }
 
 /* ---- reancoragem: sem elemento próprio ----------------------------------
    Escurece o entorno e ELEVA a questão acima do véu. Sutil de propósito
-   (regra TEA/TDAH: tirar estímulo, não adicionar — nada pisca). */
+   (regra TEA/TDAH: tirar estímulo, não adicionar — nada pisca).
+   O véu é um pseudo-elemento CONDICIONAL: quando a classe sai ele deixa de
+   existir, e o que não existe não transiciona. Por isso a entrada é animation
+   e a saída tem uma classe própria (.kaia-reancorar-saindo), que o timer do
+   materias.js liga antes de limpar as duas. Tempos longos de propósito — 0,6s
+   entrando, 0,8s saindo: esta é a mais sutil das 7, e um fade rápido num véu
+   de tela inteira seria um piscar. */
 body.kaia-reancorar::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(var(--profundo-rgb), 0.42);
+  background: rgba(var(--profundo-rgb), 0.48);
   pointer-events: none;
+  animation: kaiaVeuEntra 0.6s ease both;
 }
+body.kaia-reancorar-saindo::before { animation: kaiaVeuSai 0.8s ease both; }
+@keyframes kaiaVeuEntra { from { opacity: 0; } to   { opacity: 1; } }
+@keyframes kaiaVeuSai   { from { opacity: 1; } to   { opacity: 0; } }
 body.kaia-reancorar .question-wrapper {
   position: relative;
   z-index: 41;
   border-radius: 14px;
   background: var(--card);
   box-shadow: 0 10px 40px rgba(var(--profundo-rgb), 0.25);
+}
+
+/* ---- Quem pediu menos movimento recebe menos movimento -------------------
+   A transição suave é o PADRÃO porque aparição brusca agride a atenção — mas
+   para quem marcou "reduzir movimento" no sistema, o movimento é que agride.
+   Aqui os estados finais continuam iguais (mesmo véu, mesma opacidade, mesmos
+   tamanhos); só o caminho até eles vira instantâneo. */
+@media (prefers-reduced-motion: reduce) {
+  #kaia-mr,
+  #kaia-mr.aberto,
+  #kaia-seq,
+  #kaia-seq.aberto,
+  #kaia-seq .kaia-seq-card,
+  .question-wrapper { transition: none; }
+  #kaia-mr, #kaia-mr.aberto { transform: none; }
+  #kaia-seq .kaia-seq-card, #kaia-seq.aberto .kaia-seq-card { transform: none; }
+  #kaia-cp,
+  body.kaia-reancorar::before,
+  body.kaia-reancorar-saindo::before { animation: none; }
 }
 
 /* ---- probe de atenção (autorrelato) -------------------------------------

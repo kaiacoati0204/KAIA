@@ -284,6 +284,7 @@ function _garantirOverlaySeq() {
         <button type="button" id="kaia-seq-voltar">Voltar agora</button>
       </div>`;
     document.body.appendChild(el);
+    void el.offsetWidth;                     // ver a nota em _garantirBarraMicroRefoco
     // Em modo feedback o mesmo botão só FECHA — senão re-entraria em encerrar e
     // remontaria o strip por cima de si mesmo.
     $('kaia-seq-voltar').addEventListener('click', () => {
@@ -367,6 +368,34 @@ let _mrInterval = null;
 let _mrMostradaEm     = 0;
 let _mrFeedbackAberto = false;
 
+// Banco de frases de acolhimento da barra. Uma é sorteada na ABERTURA e fica
+// parada os 30s inteiros: variar entre aparições dá variedade, variar durante a
+// respiração viraria movimento numa intervenção que existe para acalmar.
+// Tom: sem cobrança, sem urgência, sem prometer resultado. Lista pensada para
+// ser editada — é só acrescentar/trocar linhas aqui.
+const FRASES_MICRO_REFOCO = [
+    'Sem pressa. A questão continua aí quando você voltar.',
+    'Estes trinta segundos são seus. Nada some enquanto isso.',
+    'Não precisa fazer certo. É só respirar.',
+    'Se a cabeça vagar, tudo bem — ela volta sozinha.',
+    'Ninguém está cronometrando você.',
+    'Solta os ombros. Eles costumam ficar tensos sem avisar.',
+    'Você já está fazendo o suficiente por agora.',
+    'Repara no ar entrando. Só isso, nada além.',
+    'Cansaço não é preguiça. Descansar é parte de estudar.',
+    'Um respiro de cada vez. Não precisa ser todos.',
+    'Dá pra ir devagar e ainda assim chegar.',
+    'Se distraiu? Acontece com todo mundo, o dia inteiro.',
+    'Desencosta os dentes e afrouxa a mandíbula.',
+    'Nada aqui depende de você acertar isso.',
+    'Seu corpo agradece essa pausa mais do que parece.',
+    'Está tudo bem se hoje render menos.',
+    'Você voltou até aqui. Isso já conta.',
+    'Deixa o ar sair devagar, sem empurrar.',
+    'O foco não sumiu. Ele só foi tomar um ar.',
+    'Estudar cansa mesmo. Não é você que está errado.',
+];
+
 function _garantirBarraMicroRefoco() {
     if ($('kaia-mr')) return;
     const el = document.createElement('div');
@@ -374,9 +403,15 @@ function _garantirBarraMicroRefoco() {
     el.setAttribute('role', 'status');
     el.innerHTML = `<button type="button" class="kaia-mr-pular" id="kaia-mr-pular">Pular</button>
       <div class="kaia-mr-msg" id="kaia-mr-msg"></div>
+      <div class="kaia-mr-frase" id="kaia-mr-frase"></div>
       <div class="kaia-mr-track"><div class="kaia-mr-fill" id="kaia-mr-fill"></div></div>
       <div id="kaia-mr-fb"></div>`;
     document.body.appendChild(el);
+    // Reflow logo após inserir: sem ele o navegador nunca chega a calcular o
+    // estado FECHADO, e a primeira abertura (criação + .aberto no mesmo tick)
+    // pula a transição — justo a que o aluno mais nota. Mesmo truque que a
+    // barra de progresso já usa abaixo.
+    void el.offsetWidth;
     $('kaia-mr-pular').addEventListener('click', () => {
         if (_mrFeedbackAberto) _fecharMicroRefoco(); else encerrarMicroRefoco();
     });
@@ -389,6 +424,10 @@ function iniciarMicroRefoco() {
     $('kaia-mr-fb').textContent = '';          // limpa o strip do disparo anterior
     $('kaia-mr').querySelector('.kaia-mr-track').style.display = '';
     $('kaia-mr-pular').textContent = 'Pular';
+    // Sorteia AQUI, uma vez só: nada de trocar a frase durante a respiração.
+    const frase = $('kaia-mr-frase');
+    frase.style.display = '';
+    frase.textContent = _variar(FRASES_MICRO_REFOCO);
     pausaAtiva = true;                         // suspende idle/aba/exit durante a respiração
     const passos = ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'];
     const dur = 30 * 1000, passoMs = 4 * 1000;
@@ -430,6 +469,7 @@ function encerrarMicroRefoco() {
     liberarPolling();
     _mrFeedbackAberto = true;
     $('kaia-mr-msg').innerText = 'Ajudou a reancorar?';
+    $('kaia-mr-frase').style.display = 'none';   // a frase acalma a respiração, não a pergunta
     $('kaia-mr').querySelector('.kaia-mr-track').style.display = 'none';
     $('kaia-mr-pular').textContent = 'Fechar';
     const alvo = $('kaia-mr-fb');
@@ -611,6 +651,11 @@ function encerrarCheckpoint() {
 // Reverte sozinho em REANCORA_MS. Sutil de propósito (regra TEA/TDAH: tirar
 // estímulo, não adicionar — nada pisca).
 const REANCORA_MS = 4000;
+// O véu é um ::before condicional: sumir a classe = sumir o elemento, e o que
+// não existe não transiciona. Então a saída é em dois tempos — liga a classe do
+// fade, espera ele terminar, só aí limpa. Este valor CASA com a animação
+// kaiaVeuSai no style.css; mexer num, mexer no outro.
+const REANCORA_SAIDA_MS = 800;
 let _reancoraTimer = null;
 
 function reancorarDestaque() {
@@ -619,9 +664,15 @@ function reancorarDestaque() {
     // sutil, sem UI — perguntar "ajudou?" seria mais intrusivo que a intervenção.
     // O reward continua vindo do sinal implícito (transição de estado).
     if (!document.querySelector('.question-wrapper')) return;
+    document.body.classList.remove('kaia-reancorar-saindo');   // disparo novo cancela saída em curso
     document.body.classList.add('kaia-reancorar');
     clearTimeout(_reancoraTimer);
-    _reancoraTimer = setTimeout(() => document.body.classList.remove('kaia-reancorar'), REANCORA_MS);
+    _reancoraTimer = setTimeout(() => {
+        document.body.classList.add('kaia-reancorar-saindo');
+        _reancoraTimer = setTimeout(
+            () => document.body.classList.remove('kaia-reancorar', 'kaia-reancorar-saindo'),
+            REANCORA_SAIDA_MS);
+    }, REANCORA_MS);
 }
 
 // ============================================================

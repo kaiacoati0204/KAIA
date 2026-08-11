@@ -14,10 +14,18 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../config.js"></script>
-    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <!-- Proteção de rota: sem login volta ao login; sem role de responsável volta
+         ao início. A lista repete ROLES_RESPONSAVEL do comum.js de propósito —
+         esta guarda tem que rodar ANTES de qualquer render, e o comum.js só
+         carrega no fim do <body>. Mudou lá, mude aqui.
+         Guarda de CONVENIÊNCIA (evita mostrar tela que não é sua): o controle
+         REAL é o backend, que resolve a role pelo token em /responsavel/painel. -->
     <script>
-        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario')
+                                || localStorage.getItem('kaia_usuario') || 'null');
         if (!usuario) window.location.href = 'login.html';
+        else if (!['professor', 'coordenador', 'pai'].includes((usuario.role || '').toLowerCase()))
+            window.location.href = 'index.html';
     </script>
 </head>
 
@@ -26,71 +34,316 @@
 
     <main class="conteudo">
 
-        <!-- Painel por role (professor / coordenador / pai).
-             Preenchido por carregarPainel() a partir de GET /responsavel/painel. -->
-        <section id="painel-role">
-            <h2 id="painel-titulo">Carregando…</h2>
-            <p id="painel-sub" class="painel-sub"></p>
-            <!-- gráficos (rosca de status + barras por turma + evolução) antes da tabela -->
-            <div id="painel-graficos"></div>
-            <div id="painel-tabela"></div>
+        <!-- ============ VISTA TURMA (padrão) ============ -->
+        <section id="vista-turma">
+
+            <!-- Painel por role (professor / coordenador / pai).
+                 Professor com PAINEL_DEMO: monta de ALUNOS_DEMO, sem rede.
+                 Demais casos: GET /responsavel/painel, como sempre. -->
+            <section id="painel-role">
+                <h2 id="painel-titulo">Carregando…</h2>
+                <p id="painel-sub" class="painel-sub"></p>
+                <div id="painel-filtro"></div>    <!-- seletor de turma (recorte primário) -->
+                <div id="painel-risco"></div>     <!-- "precisam de você agora" -->
+                <div id="painel-visao"></div>     <!-- contagens por status + rosca -->
+                <div id="painel-graficos"></div>  <!-- desempenho da turma -->
+                <!-- Tabela por ÚLTIMO: em turma grande ela é longa, e empurraria a
+                     leitura geral para baixo da dobra. Quem precisa de você (faixa
+                     de risco) e o panorama vêm primeiro; a lista é o detalhamento. -->
+                <div id="painel-tabela"></div>
+            </section>
+
+            <!-- Busca avulsa por e-mail: escondida enquanto PAINEL_DEMO estiver
+                 ligado (o clique no nome já leva ao mesmo relatório, e esta é a
+                 rota sem escopo fino — ver a dívida em app.py). -->
+            <div class="busca" id="bloco-busca">
+                <input id="email" type="email" placeholder="E-mail do aluno" autocomplete="off">
+                <button type="button" onclick="carregar()">Ver estatísticas</button>
+            </div>
+
+            <div id="status"></div>
+
+            <div class="grafico container-grafico" id="bloco-hobbies">
+                <h3>Estatísticas de Hobbies dos Usuários</h3>
+                <canvas id="meuGraficoKaIA"></canvas>
+            </div>
+
         </section>
 
-        <div class="busca">
-            <input id="email" type="email" placeholder="E-mail do aluno" autocomplete="off">
-            <button type="button" onclick="carregar()">Ver estatísticas</button>
-        </div>
+        <!-- ============ VISTA ALUNO (relatório individual) ============ -->
+        <!-- Os 5 cards, os 2 gráficos de série diária e a linha de hobbies são os
+             MESMOS que a busca por e-mail já usava — só mudaram de lugar. As duas
+             entradas (clique no nome / busca) preenchem este bloco. -->
+        <section id="vista-aluno" hidden>
+            <button type="button" class="voltar-turma" id="voltar-turma">
+                ← Voltar para <span id="voltar-turma-rot">a turma</span>
+            </button>
 
-        <div id="status"></div>
-
-        <!-- Liberado pelo JS quando o aluno é encontrado -->
-        <div id="painel">
-            <div class="cards">
-                <div class="card">
-                    <label>Total de acertos</label>
-                    <div class="v" id="m-acertos">–</div>
-                </div>
-                <div class="card">
-                    <label>Dias com estudo</label>
-                    <div class="v" id="m-dias">–</div>
-                </div>
-                <div class="card">
-                    <label>Sequência de dias</label>
-                    <div class="v" id="m-seq">–</div>
-                </div>
-                <div class="card">
-                    <label>Evolução de acertos</label>
-                    <div class="v tag" id="m-tend-acertos">–</div>
-                </div>
-                <div class="card">
-                    <label>Evolução do foco</label>
-                    <div class="v tag" id="m-tend-foco">–</div>
-                </div>
+            <div class="aluno-cabecalho">
+                <h2 id="aluno-nome">–</h2>
+                <span id="aluno-status"></span>
             </div>
+            <p id="aluno-sub" class="painel-sub"></p>
 
-            <div class="grafico">
-                <h3>Acertos por dia (quanto mais alto, melhor)</h3>
-                <canvas id="g-acertos"></canvas>
+            <div id="painel">
+                <div class="cards">
+                    <div class="card">
+                        <label>Total de acertos</label>
+                        <div class="v" id="m-acertos">–</div>
+                    </div>
+                    <div class="card">
+                        <label>Dias com estudo</label>
+                        <div class="v" id="m-dias">–</div>
+                    </div>
+                    <div class="card">
+                        <label>Sequência de dias</label>
+                        <div class="v" id="m-seq">–</div>
+                    </div>
+                    <div class="card">
+                        <label>Evolução de acertos</label>
+                        <div class="v tag" id="m-tend-acertos">–</div>
+                    </div>
+                    <div class="card">
+                        <label>Evolução do foco</label>
+                        <div class="v tag" id="m-tend-foco">–</div>
+                    </div>
+                </div>
+
+                <!-- Evolução individual: só aparece quando a série traz atenção.
+                     O backend hoje NÃO devolve esse campo — é mock-only. -->
+                <div class="graf-card" id="bloco-evolucao" hidden>
+                    <h4>Evolução individual — atenção e acerto (%)</h4>
+                    <div class="graf-wrap"><canvas id="g-evolucao"></canvas></div>
+                </div>
+
+                <!-- Mesma moldura do gráfico novo: sem altura fixa estes dois
+                     esticavam por centenas de px e engoliam o relatório. -->
+                <div class="graf-linha">
+                    <div class="graf-card">
+                        <h4>Acertos por dia (quanto mais alto, melhor)</h4>
+                        <div class="graf-wrap"><canvas id="g-acertos"></canvas></div>
+                    </div>
+                    <div class="graf-card">
+                        <h4>Distrações por dia — trocas de aba + cliques fora (quanto mais baixo, melhor)</h4>
+                        <div class="graf-wrap"><canvas id="g-foco"></canvas></div>
+                    </div>
+                </div>
+
+                <p class="hobbies" id="hobbies"></p>
             </div>
-
-            <div class="grafico">
-                <h3>Distrações por dia — trocas de aba + cliques fora (quanto mais baixo, melhor)</h3>
-                <canvas id="g-foco"></canvas>
-            </div>
-
-            <p class="hobbies" id="hobbies"></p>
-        </div>
-
-        <div class="grafico container-grafico">
-            <h3>Estatísticas de Hobbies dos Usuários</h3>
-            <canvas id="meuGraficoKaIA"></canvas>
-        </div>
+        </section>
 
     </main>
 
     <!-- comum.js primeiro: define API_URL/apiFetch e a rail usados abaixo. -->
     <script src="../js/comum.js"></script>
     <script>
+        // ========================================================
+        //   FASE 4 — PAINEL DO PROFESSOR COM DADOS FICTÍCIOS
+        // ========================================================
+        // Ligado: a visão de PROFESSOR monta de ALUNOS_DEMO, sem tocar na rede.
+        // Desligado: volta a GET /responsavel/painel, como sempre foi.
+        // Coordenador e pai NUNCA passam pelo mock — seguem no backend nos dois casos.
+        // Para plugar dados reais: `false` aqui + garantir que o payload de
+        // /responsavel/painel traga `aluno_id` (hoje não traz — ver nota abaixo).
+        const PAINEL_DEMO = true;
+
+        // Alunos fictícios. O formato espelha o payload real de /responsavel/painel
+        // (nome, turma, media_atencao, taxa_acerto, minutos) para a troca ser só
+        // apagar esta constante. Campos MOCK-ONLY, que o backend hoje NÃO devolve:
+        //   · aluno_id / turma_id → sem eles não dá para linkar o relatório individual
+        //   · motivo              → precisaria ser derivado da série de evolução
+        //   · serie[].atencao/.acerto → a série real tem só {dia, acertos, distracao}
+        // `status` NÃO fica aqui: é derivado por statusAtencao(), os mesmos cortes
+        // do backend (app.py:_status_atencao), para o mock não divergir da regra real.
+        const ALUNOS_DEMO = [
+            { aluno_id: 'demo-01', nome: 'Ana Beatriz Rocha', turma_id: 't-7m', turma: '7º ano · manhã',
+              media_atencao: 0.38, taxa_acerto: 0.52, minutos: 22,
+              motivo: 'caiu 12 pontos desde a semana passada',
+              hobbies: ['Música', 'Desenho'],
+              resumo: { total_acertos: 128, dias_com_dados: 9, sequencia_dias: 1,
+                        tendencia_acertos: 'piorando', tendencia_foco: 'piorando' },
+              serie: [ { dia: '02/06', acertos: 18, distracao: 6,  atencao: 0.62, acerto: 0.71 },
+                       { dia: '09/06', acertos: 16, distracao: 8,  atencao: 0.58, acerto: 0.66 },
+                       { dia: '16/06', acertos: 14, distracao: 11, atencao: 0.55, acerto: 0.63 },
+                       { dia: '23/06', acertos: 11, distracao: 14, atencao: 0.50, acerto: 0.58 },
+                       { dia: '30/06', acertos: 9,  distracao: 17, atencao: 0.44, acerto: 0.55 },
+                       { dia: '07/07', acertos: 8,  distracao: 19, atencao: 0.38, acerto: 0.52 } ] },
+
+            { aluno_id: 'demo-02', nome: 'Caio Ferraz Lima', turma_id: 't-7m', turma: '7º ano · manhã',
+              media_atencao: 0.41, taxa_acerto: 0.61, minutos: 35,
+              motivo: '3ª semana seguida em queda',
+              hobbies: ['Futebol', 'Videogames'],
+              resumo: { total_acertos: 154, dias_com_dados: 11, sequencia_dias: 2,
+                        tendencia_acertos: 'piorando', tendencia_foco: 'piorando' },
+              serie: [ { dia: '02/06', acertos: 19, distracao: 5,  atencao: 0.66, acerto: 0.74 },
+                       { dia: '09/06', acertos: 18, distracao: 7,  atencao: 0.61, acerto: 0.72 },
+                       { dia: '16/06', acertos: 16, distracao: 9,  atencao: 0.56, acerto: 0.69 },
+                       { dia: '23/06', acertos: 14, distracao: 12, atencao: 0.51, acerto: 0.66 },
+                       { dia: '30/06', acertos: 12, distracao: 15, atencao: 0.46, acerto: 0.63 },
+                       { dia: '07/07', acertos: 11, distracao: 16, atencao: 0.41, acerto: 0.61 } ] },
+
+            { aluno_id: 'demo-03', nome: 'Lia Moreira Costa', turma_id: 't-7m', turma: '7º ano · manhã',
+              media_atencao: 0.47, taxa_acerto: 0.58, minutos: 18,
+              motivo: 'só 18 minutos de estudo na semana',
+              hobbies: ['Leitura', 'Anime'],
+              resumo: { total_acertos: 96, dias_com_dados: 6, sequencia_dias: 1,
+                        tendencia_acertos: 'estavel', tendencia_foco: 'piorando' },
+              serie: [ { dia: '02/06', acertos: 13, distracao: 8,  atencao: 0.59, acerto: 0.60 },
+                       { dia: '09/06', acertos: 12, distracao: 9,  atencao: 0.57, acerto: 0.59 },
+                       { dia: '16/06', acertos: 13, distracao: 10, atencao: 0.54, acerto: 0.61 },
+                       { dia: '23/06', acertos: 12, distracao: 12, atencao: 0.52, acerto: 0.58 },
+                       { dia: '30/06', acertos: 11, distracao: 13, atencao: 0.49, acerto: 0.57 },
+                       { dia: '07/07', acertos: 12, distracao: 14, atencao: 0.47, acerto: 0.58 } ] },
+
+            { aluno_id: 'demo-04', nome: 'Bruno Sales Aguiar', turma_id: 't-7m', turma: '7º ano · manhã',
+              media_atencao: 0.63, taxa_acerto: 0.70, minutos: 52,
+              hobbies: ['Basquete', 'Programação'],
+              resumo: { total_acertos: 210, dias_com_dados: 13, sequencia_dias: 4,
+                        tendencia_acertos: 'estavel', tendencia_foco: 'estavel' },
+              serie: [ { dia: '02/06', acertos: 20, distracao: 6, atencao: 0.61, acerto: 0.68 },
+                       { dia: '09/06', acertos: 21, distracao: 5, atencao: 0.64, acerto: 0.70 },
+                       { dia: '16/06', acertos: 19, distracao: 7, atencao: 0.62, acerto: 0.69 },
+                       { dia: '23/06', acertos: 22, distracao: 6, atencao: 0.65, acerto: 0.72 },
+                       { dia: '30/06', acertos: 20, distracao: 6, atencao: 0.63, acerto: 0.70 },
+                       { dia: '07/07', acertos: 21, distracao: 5, atencao: 0.63, acerto: 0.70 } ] },
+
+            { aluno_id: 'demo-05', nome: 'Marina Duarte Pires', turma_id: 't-7m', turma: '7º ano · manhã',
+              media_atencao: 0.78, taxa_acerto: 0.84, minutos: 66,
+              hobbies: ['Yoga', 'Escrita'],
+              resumo: { total_acertos: 288, dias_com_dados: 15, sequencia_dias: 7,
+                        tendencia_acertos: 'melhorando', tendencia_foco: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 22, distracao: 5, atencao: 0.68, acerto: 0.75 },
+                       { dia: '09/06', acertos: 24, distracao: 4, atencao: 0.71, acerto: 0.78 },
+                       { dia: '16/06', acertos: 25, distracao: 4, atencao: 0.73, acerto: 0.80 },
+                       { dia: '23/06', acertos: 26, distracao: 3, atencao: 0.75, acerto: 0.81 },
+                       { dia: '30/06', acertos: 27, distracao: 3, atencao: 0.77, acerto: 0.83 },
+                       { dia: '07/07', acertos: 28, distracao: 2, atencao: 0.78, acerto: 0.84 } ] },
+
+            { aluno_id: 'demo-06', nome: 'Téo Nakamura Alves', turma_id: 't-7m', turma: '7º ano · manhã',
+              media_atencao: 0.81, taxa_acerto: 0.77, minutos: 71,
+              hobbies: ['Xadrez', 'Astronomia'],
+              resumo: { total_acertos: 265, dias_com_dados: 14, sequencia_dias: 6,
+                        tendencia_acertos: 'estavel', tendencia_foco: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 23, distracao: 4, atencao: 0.74, acerto: 0.76 },
+                       { dia: '09/06', acertos: 22, distracao: 4, atencao: 0.76, acerto: 0.75 },
+                       { dia: '16/06', acertos: 24, distracao: 3, atencao: 0.78, acerto: 0.78 },
+                       { dia: '23/06', acertos: 23, distracao: 3, atencao: 0.79, acerto: 0.76 },
+                       { dia: '30/06', acertos: 24, distracao: 2, atencao: 0.80, acerto: 0.77 },
+                       { dia: '07/07', acertos: 25, distracao: 2, atencao: 0.81, acerto: 0.77 } ] },
+
+            { aluno_id: 'demo-07', nome: 'Helena Prado Vieira', turma_id: 't-8t', turma: '8º ano · tarde',
+              media_atencao: 0.68, taxa_acerto: 0.72, minutos: 48,
+              hobbies: ['Dança', 'Fotografia'],
+              resumo: { total_acertos: 198, dias_com_dados: 12, sequencia_dias: 3,
+                        tendencia_acertos: 'melhorando', tendencia_foco: 'estavel' },
+              serie: [ { dia: '02/06', acertos: 17, distracao: 7, atencao: 0.64, acerto: 0.66 },
+                       { dia: '09/06', acertos: 18, distracao: 6, atencao: 0.66, acerto: 0.68 },
+                       { dia: '16/06', acertos: 19, distracao: 6, atencao: 0.67, acerto: 0.70 },
+                       { dia: '23/06', acertos: 20, distracao: 5, atencao: 0.68, acerto: 0.71 },
+                       { dia: '30/06', acertos: 21, distracao: 5, atencao: 0.69, acerto: 0.72 },
+                       { dia: '07/07', acertos: 21, distracao: 5, atencao: 0.68, acerto: 0.72 } ] },
+
+            { aluno_id: 'demo-08', nome: 'Igor Sampaio Rezende', turma_id: 't-8t', turma: '8º ano · tarde',
+              media_atencao: 0.74, taxa_acerto: 0.69, minutos: 55,
+              hobbies: ['Ciclismo', 'RPG'],
+              resumo: { total_acertos: 221, dias_com_dados: 13, sequencia_dias: 5,
+                        tendencia_acertos: 'estavel', tendencia_foco: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 19, distracao: 6, atencao: 0.69, acerto: 0.68 },
+                       { dia: '09/06', acertos: 18, distracao: 5, atencao: 0.70, acerto: 0.67 },
+                       { dia: '16/06', acertos: 20, distracao: 5, atencao: 0.72, acerto: 0.70 },
+                       { dia: '23/06', acertos: 19, distracao: 4, atencao: 0.73, acerto: 0.69 },
+                       { dia: '30/06', acertos: 20, distracao: 4, atencao: 0.74, acerto: 0.70 },
+                       { dia: '07/07', acertos: 20, distracao: 3, atencao: 0.74, acerto: 0.69 } ] },
+
+            { aluno_id: 'demo-09', nome: 'Júlia Antunes Barros', turma_id: 't-8t', turma: '8º ano · tarde',
+              media_atencao: 0.83, taxa_acerto: 0.88, minutos: 62,
+              hobbies: ['Culinária', 'Idiomas'],
+              resumo: { total_acertos: 302, dias_com_dados: 15, sequencia_dias: 9,
+                        tendencia_acertos: 'melhorando', tendencia_foco: 'estavel' },
+              serie: [ { dia: '02/06', acertos: 26, distracao: 3, atencao: 0.81, acerto: 0.84 },
+                       { dia: '09/06', acertos: 27, distracao: 3, atencao: 0.82, acerto: 0.85 },
+                       { dia: '16/06', acertos: 28, distracao: 2, atencao: 0.82, acerto: 0.86 },
+                       { dia: '23/06', acertos: 29, distracao: 2, atencao: 0.83, acerto: 0.87 },
+                       { dia: '30/06', acertos: 29, distracao: 2, atencao: 0.84, acerto: 0.88 },
+                       { dia: '07/07', acertos: 30, distracao: 2, atencao: 0.83, acerto: 0.88 } ] },
+
+            { aluno_id: 'demo-10', nome: 'Rafael Nunes Cardoso', turma_id: 't-8t', turma: '8º ano · tarde',
+              media_atencao: 0.71, taxa_acerto: 0.65, minutos: 44,
+              hobbies: ['Natação', 'Séries'],
+              resumo: { total_acertos: 187, dias_com_dados: 11, sequencia_dias: 3,
+                        tendencia_acertos: 'estavel', tendencia_foco: 'estavel' },
+              serie: [ { dia: '02/06', acertos: 17, distracao: 6, atencao: 0.70, acerto: 0.64 },
+                       { dia: '09/06', acertos: 18, distracao: 6, atencao: 0.71, acerto: 0.66 },
+                       { dia: '16/06', acertos: 17, distracao: 5, atencao: 0.70, acerto: 0.64 },
+                       { dia: '23/06', acertos: 18, distracao: 6, atencao: 0.72, acerto: 0.66 },
+                       { dia: '30/06', acertos: 18, distracao: 5, atencao: 0.71, acerto: 0.65 },
+                       { dia: '07/07', acertos: 19, distracao: 5, atencao: 0.71, acerto: 0.65 } ] },
+        ];
+
+        const SEMANA_DEMO = 8;
+        const PROFESSOR_DEMO = { nome: 'Prof. demonstração', materia: 'Matemática', escola: 'Escola demonstração' };
+
+        // Cortes de status: MESMOS do backend (app.py:_status_atencao) — <50 risco,
+        // 50-70 atenção, >=70 bem. Duplicar aqui é o preço de o mock não ter banco;
+        // se mudarem lá, mudam aqui.
+        const statusAtencao = (m) =>
+            m == null ? null : m < 0.50 ? 'risco' : m < 0.70 ? 'atencao' : 'bem';
+
+        // Lê um token de cor do :root — evita hex solto que envelhece à parte da paleta.
+        const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+        // ---- Tratamento das linhas (Fase 4) --------------------------------
+        // Refinamento sem brilho: esta tela mostra crianças em risco para
+        // professor e responsável. Glow/neon puxaria o olho para o efeito, não
+        // para o dado — e a marca é de tom calmo. O que dá o acabamento aqui é
+        // preenchimento em degradê, linha mais encorpada, ponto discreto que
+        // cresce no hover, e grade só na horizontal.
+        // Scriptable: o degradê é recalculado a cada layout, ancorado na ÁREA do
+        // gráfico. Criar a partir de canvas.height na montagem pegava a altura
+        // ainda não resolvida (150px default) e o degradê terminava no meio.
+        const degrade = (rgbToken, topo = 0.3) => (ctx) => {
+            const { chart } = ctx;
+            const area = chart.chartArea;
+            if (!area) return 'transparent';        // 1º passo do layout: sem área ainda
+            const g = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+            g.addColorStop(0, `rgba(${tok(rgbToken)}, ${topo})`);
+            g.addColorStop(1, `rgba(${tok(rgbToken)}, 0)`);
+            return g;
+        };
+
+        const LINHA_BASE = {
+            borderWidth: 2.5,
+            tension: .35,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            pointBorderWidth: 2,
+            pointBackgroundColor: tok('--card'),   // miolo claro: o ponto "recorta" a linha
+            fill: true,
+        };
+
+        // Eixos limpos: sem grade vertical (ela cortava as linhas sem informar
+        // nada), sem moldura, e tooltip encostada no ponto.
+        const EIXOS_LIMPOS = {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: tok('--profundo'), padding: 10, cornerRadius: 8,
+                    titleFont: { weight: '700' }, displayColors: true, boxPadding: 4,
+                },
+            },
+            scales: {
+                x: { grid: { display: false }, border: { display: false },
+                     ticks: { color: tok('--tinta'), font: { size: 11 } } },
+                y: { grid: { color: `rgba(${tok('--profundo-rgb')}, .07)` },
+                     border: { display: false },
+                     ticks: { color: tok('--tinta'), font: { size: 11 }, maxTicksLimit: 6 },
+                     beginAtZero: true },
+            },
+        };
+
         let gAcertos = null, gFoco = null, gHobbies = null;
 
         // Eixos claros: os gráficos desta página vivem sobre cards brancos.
@@ -117,14 +370,88 @@
             el.className = 'v tag ' + info.cls;
         }
 
+        // Escapa antes de interpolar em innerHTML. Hoje os dados são de uma
+        // constante local, mas o mesmo caminho vai receber payload do backend.
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g,
+            (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        // ========================================================
+        //   RELATÓRIO INDIVIDUAL — fonte única para as duas entradas
+        // ========================================================
+        // Clique no nome (mock) e busca por e-mail (backend) preenchem ESTE bloco.
+        // Cada entrada adapta seus dados para o formato abaixo; nada é duplicado.
+        function preencherRelatorio(r) {
+            $('aluno-nome').textContent = r.nome;
+            $('aluno-sub').textContent  = r.sub || '';
+            $('aluno-status').innerHTML = r.status ? badge(r.status) : '';
+
+            $('m-acertos').textContent = r.resumo.total_acertos ?? '–';
+            $('m-dias').textContent    = r.resumo.dias_com_dados ?? '–';
+            $('m-seq').textContent     = r.resumo.sequencia_dias ?? 0;
+            aplicarTend('m-tend-acertos', r.resumo.tendencia_acertos);
+            aplicarTend('m-tend-foco',    r.resumo.tendencia_foco);
+
+            $('hobbies').textContent = r.hobbies?.length
+                ? `Hobbies usados na personalização: ${r.hobbies.join(', ')}` : '';
+
+            desenhar(r.serie.map(s => s.dia), r.serie.map(s => s.acertos), r.serie.map(s => s.distracao));
+            desenharEvolucao(r.serie);
+            $('painel').style.display = 'block';
+        }
+
+        // Evolução individual (Fase 4). MOCK-ONLY: só desenha quando a série traz
+        // `atencao`. O /responsavel/aluno devolve {dia, acertos, distracao} e mais
+        // nada, então pela busca por e-mail o bloco fica escondido — em vez de
+        // inventar uma linha que o dado real não sustenta.
+        let gEvolucao = null;
+        function desenharEvolucao(serie) {
+            gEvolucao?.destroy(); gEvolucao = null;
+            const tem = serie.length > 0 && serie[0].atencao != null;
+            $('bloco-evolucao').hidden = !tem;
+            if (!tem) return;
+
+            const cv = $('g-evolucao');
+            gEvolucao = new Chart(cv, {
+                type: 'line',
+                data: {
+                    labels: serie.map(s => s.dia),
+                    datasets: [
+                        { ...LINHA_BASE, label: 'Atenção',
+                          data: serie.map(s => Math.round(s.atencao * 100)),
+                          borderColor: tok('--azul-coati'),
+                          pointBorderColor: tok('--azul-coati'),
+                          backgroundColor: degrade('--azul-coati-rgb') },
+                        // Tracejada e sem preenchimento: separa as duas linhas sem
+                        // depender só da cor, e deixa a de atenção como protagonista.
+                        { ...LINHA_BASE, label: 'Acerto',
+                          data: serie.map(s => Math.round(s.acerto * 100)),
+                          borderColor: tok('--acerto-tx'),
+                          pointBorderColor: tok('--acerto-tx'),
+                          borderDash: [6, 4], fill: false },
+                    ],
+                },
+                options: {
+                    ...EIXOS_LIMPOS,
+                    plugins: {
+                        ...EIXOS_LIMPOS.plugins,
+                        legend: { display: true, position: 'bottom', align: 'center',
+                                  labels: { color: tok('--profundo'), usePointStyle: true,
+                                            pointStyle: 'line', boxWidth: 26, padding: 18,
+                                            font: { size: 12, weight: '700' } } },
+                    },
+                    scales: { ...EIXOS_LIMPOS.scales,
+                              y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } },
+                },
+            });
+        }
+
         async function carregar() {
             const email  = document.getElementById('email').value.trim();
             const status = document.getElementById('status');
-            const painel = document.getElementById('painel');
 
             if (!email) { status.textContent = 'Digite o e-mail do aluno.'; return; }
             status.textContent = 'Carregando…';
-            painel.style.display = 'none';
+            document.getElementById('painel').style.display = 'none';
 
             try {
                 const r = await apiFetch(`/responsavel/aluno?email=${encodeURIComponent(email)}`);
@@ -139,23 +466,24 @@
                 status.textContent = data.demo
                     ? '⚠️ Modo demonstração: dados de exemplo (sem conexão com o banco nesta rede).'
                     : '';
-                painel.style.display = 'block';
 
-                document.getElementById('m-acertos').textContent = data.resumo.total_acertos;
-                document.getElementById('m-dias').textContent    = data.resumo.dias_com_dados;
-                document.getElementById('m-seq').textContent     = data.aluno.sequencia_dias_estudo ?? 0;
-                aplicarTend('m-tend-acertos', data.resumo.tendencia_acertos);
-                aplicarTend('m-tend-foco',    data.resumo.tendencia_foco);
-
-                const hobbies = data.aluno.hobbies || [];
-                document.getElementById('hobbies').textContent =
-                    hobbies.length ? `Hobbies usados na personalização: ${hobbies.join(', ')}` : '';
-
-                desenhar(
-                    data.series.map(s => s.dia),
-                    data.series.map(s => s.acertos),
-                    data.series.map(s => s.distracao)
-                );
+                const _pronto = {
+                    nome: data.aluno.email || email,
+                    sub: `Busca por e-mail · ${data.resumo.dias_com_dados} dias com dados`,
+                    status: null,                       // a busca não traz média de atenção
+                    hobbies: data.aluno.hobbies || [],
+                    resumo: {
+                        total_acertos: data.resumo.total_acertos,
+                        dias_com_dados: data.resumo.dias_com_dados,
+                        sequencia_dias: data.aluno.sequencia_dias_estudo ?? 0,
+                        tendencia_acertos: data.resumo.tendencia_acertos,
+                        tendencia_foco: data.resumo.tendencia_foco,
+                    },
+                    serie: data.series,                 // sem `atencao` → sem gráfico de evolução
+                };
+                _veioDaLista = false;
+                mostrarVista('aluno');                  // antes de desenhar: canvas precisa de tamanho
+                preencherRelatorio(_pronto);
             } catch (e) {
                 status.textContent = 'Não foi possível conectar ao servidor (a API está rodando em :5000?).';
                 console.error(e);
@@ -163,23 +491,30 @@
         }
 
         function desenhar(labels, acertos, distracao) {
+            const cvA = document.getElementById('g-acertos');
             gAcertos?.destroy();
-            gAcertos = new Chart(document.getElementById('g-acertos'), {
+            gAcertos = new Chart(cvA, {
                 type: 'line',
                 data: { labels, datasets: [{
-                    data: acertos, borderColor: '#57D979', backgroundColor: 'rgba(87,217,121,.15)',
-                    fill: true, tension: .3, pointRadius: 4,
+                    ...LINHA_BASE, label: 'Acertos', data: acertos,
+                    borderColor: tok('--acerto-tx'),
+                    pointBorderColor: tok('--acerto-tx'),
+                    backgroundColor: degrade('--vd-uniao-rgb', .35),
                 }] },
-                options: EIXOS,
+                options: EIXOS_LIMPOS,
             });
 
             gFoco?.destroy();
             gFoco = new Chart(document.getElementById('g-foco'), {
                 type: 'bar',
                 data: { labels, datasets: [{
-                    data: distracao, backgroundColor: '#e8606b', borderRadius: 6,
+                    // --erro-bg/-tx no lugar do vermelho vivo: mesma família suave
+                    // dos badges, sem tom de alarme.
+                    label: 'Distrações', data: distracao,
+                    backgroundColor: tok('--erro-bg'),
+                    borderColor: tok('--erro-tx'), borderWidth: 1, borderRadius: 6,
                 }] },
-                options: EIXOS,
+                options: EIXOS_LIMPOS,
             });
         }
 
@@ -339,6 +674,14 @@
 
             const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; renderGraficos(null); };
 
+            // Professor + mock: monta local, sem tocar na rede. Coordenador e pai
+            // seguem pelo backend nos dois modos — o mock não os alcança.
+            if (PAINEL_DEMO && (usuario.role || '').toLowerCase() === 'professor') {
+                _turmaAtual = _turmaAtual || turmasDemo()[0]?.turma_id;
+                renderPainelDemo();
+                return;
+            }
+
             try {
                 const r = await apiFetch(`/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
                 const d = await r.json();
@@ -358,12 +701,323 @@
             }
         }
 
+        // ========================================================
+        //   PAINEL DO PROFESSOR — vista TURMA (Fase 4, dados fictícios)
+        // ========================================================
+        // Recorte primário é a TURMA, não a escola: é o formato que o requisito de
+        // LGPD pede (cada professor vê a turma dele). Hoje o backend agrega por
+        // escola+matéria — quando conectar, isto vira um filtro por turma_id.
+        let _turmaAtual = null;
+        let _ordem = { campo: 'media_atencao', dir: 'asc' };   // menor atenção primeiro
+
+        const turmasDemo = () => {
+            const m = new Map();
+            ALUNOS_DEMO.forEach(a => m.set(a.turma_id, a.turma));
+            return [...m].map(([turma_id, turma]) => ({ turma_id, turma }));
+        };
+
+        const alunosDaTurma = () => ALUNOS_DEMO
+            .filter(a => a.turma_id === _turmaAtual)
+            .map(a => ({ ...a, status: statusAtencao(a.media_atencao) }));
+
+        function renderFiltro() {
+            const turmas = turmasDemo();
+            $('painel-filtro').innerHTML =
+                `<label class="filtro-turma">Turma
+                   <select id="sel-turma">${turmas.map(t =>
+                     `<option value="${esc(t.turma_id)}">${esc(t.turma)}</option>`).join('')}</select>
+                 </label>`;
+            $('sel-turma').value = _turmaAtual;
+            // Só o conteúdo é re-renderizado: refazer o <select> aqui roubaria o foco.
+            $('sel-turma').addEventListener('change', (e) => {
+                _turmaAtual = e.target.value;
+                renderConteudoTurma();
+            });
+        }
+
+        // A faixa que responde "quem precisa de mim AGORA" — antes de qualquer
+        // tabela. Sem ninguém em risco, mensagem calma em vez de espaço vazio.
+        function renderRisco(alunos) {
+            const risco = alunos.filter(a => a.status === 'risco')
+                                .sort((a, b) => a.media_atencao - b.media_atencao);
+            const box = $('painel-risco');
+
+            if (!risco.length) {
+                box.innerHTML =
+                    `<div class="risco-vazio">
+                       <strong>Ninguém em risco nesta turma esta semana.</strong>
+                       <span>A lista completa continua abaixo, se quiser olhar de perto.</span>
+                     </div>`;
+                return;
+            }
+
+            box.innerHTML =
+                `<h3 class="risco-titulo">Precisam de você agora</h3>
+                 <div class="risco-lista">${risco.map(a =>
+                   `<button type="button" class="risco-card" data-aluno="${esc(a.aluno_id)}">
+                      <span class="risco-nome">${esc(a.nome)}</span>
+                      <span class="risco-num">atenção ${pct(a.media_atencao)}</span>
+                      <span class="risco-motivo">${esc(a.motivo || 'atenção abaixo de 50%')}</span>
+                    </button>`).join('')}</div>`;
+
+            $$('#painel-risco .risco-card').forEach(b =>
+                b.addEventListener('click', () => irParaAluno(b.dataset.aluno)));
+        }
+
+        // Só as contagens: três cards curtos ocupando a largura inteira. A rosca
+        // desceu para a fileira de gráficos — ao lado das contagens ela forçava
+        // os cards a esticar até a altura dela, e sobrava um vazio enorme dentro
+        // de cada um.
+        function renderVisao(alunos) {
+            const cont = { bem: 0, atencao: 0, risco: 0 };
+            alunos.forEach(a => { if (a.status) cont[a.status]++; });
+
+            $('painel-visao').innerHTML =
+                `<div class="cards visao-contagens">
+                   <div class="card visao-bem"><label>Bem</label><div class="v">${cont.bem}</div></div>
+                   <div class="card visao-atencao"><label>Atenção</label><div class="v">${cont.atencao}</div></div>
+                   <div class="card visao-risco"><label>Em risco</label><div class="v">${cont.risco}</div></div>
+                 </div>`;
+            return cont;
+        }
+
+        // A rosca usa os tokens -bg no preenchimento e os -tx só na borda: com os
+        // -tx como fill (como era antes) as três fatias ficavam escuras e pesadas,
+        // brigando com os badges suaves da tabela.
+        let gStatusDemo = null;
+        function desenharRosca(cont) {
+            gStatusDemo?.destroy();
+            gStatusDemo = new Chart($('gf-status-demo'), {
+                type: 'doughnut',
+                data: { labels: ['Bem', 'Atenção', 'Em risco'], datasets: [{
+                    data: [cont.bem, cont.atencao, cont.risco],
+                    backgroundColor: [tok('--acerto-bg'), tok('--alerta-bg'), tok('--erro-bg')],
+                    borderColor:     [tok('--acerto-tx'), tok('--alerta-tx'), tok('--erro-tx')],
+                    borderWidth: 2,
+                }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    // Legenda embaixo e numa linha só: o card tem 400px, e com
+                    // boxWidth menor + pointStyle os três rótulos cabem sem quebrar
+                    // (antes "Em risco" caía para a segunda linha, torto).
+                    layout: { padding: { bottom: 4 } },
+                    plugins: { legend: {
+                        position: 'bottom', align: 'center',
+                        labels: { color: tok('--profundo'), usePointStyle: true,
+                                  pointStyle: 'circle', boxWidth: 8, boxHeight: 8,
+                                  padding: 18, font: { size: 12, weight: '700' } },
+                    } },
+                },
+            });
+        }
+
+        // Célula de atenção: barra + número. A barra é decorativa (aria-hidden) —
+        // quem lê por leitor de tela recebe o número, que está logo ao lado.
+        const celAtencao = (v) =>
+            `<span class="atencao-cel">
+               <span class="mini-barra mini-${statusAtencao(v)}" aria-hidden="true">
+                 <i style="width:${Math.round(v * 100)}%"></i></span>
+               <span class="atencao-num">${pct(v)}</span>
+             </span>`;
+
+        // Tabela própria da visão de professor: a tabela() genérica segue intacta
+        // para coordenador e pai, que não têm ordenação, mini-barra nem link.
+        const COLS_ALUNO = [
+            { campo: 'nome',          rotulo: 'Aluno' },
+            { campo: 'turma',         rotulo: 'Turma' },
+            { campo: 'status',        rotulo: 'Status' },
+            { campo: 'media_atencao', rotulo: 'Atenção' },
+            { campo: 'taxa_acerto',   rotulo: 'Acerto' },
+            { campo: 'minutos',       rotulo: 'Minutos' },
+        ];
+
+        function ordenarAlunos(linhas) {
+            // Ordenar por "status" é ordenar pela atenção — o badge é só a faixa dela.
+            const c = _ordem.campo === 'status' ? 'media_atencao' : _ordem.campo;
+            const s = [...linhas].sort((a, b) => typeof a[c] === 'string'
+                ? String(a[c]).localeCompare(String(b[c]), 'pt-BR')
+                : a[c] - b[c]);
+            return _ordem.dir === 'asc' ? s : s.reverse();
+        }
+
+        function renderTabelaAlunos(alunos) {
+            const th = COLS_ALUNO.map(c => {
+                const ativo = _ordem.campo === c.campo;
+                const seta  = ativo ? (_ordem.dir === 'asc' ? '↑' : '↓') : '⇅';
+                const aria  = ativo ? (_ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+                return `<th aria-sort="${aria}">
+                          <button type="button" class="th-ord${ativo ? ' ativo' : ''}" data-campo="${c.campo}">
+                            ${c.rotulo}<span class="th-seta" aria-hidden="true">${seta}</span>
+                          </button></th>`;
+            }).join('');
+
+            const tr = ordenarAlunos(alunos).map(a =>
+                `<tr>
+                   <td><button type="button" class="aluno-link" data-aluno="${esc(a.aluno_id)}">${esc(a.nome)}</button></td>
+                   <td>${esc(a.turma)}</td>
+                   <td>${badge(a.status)}</td>
+                   <td>${celAtencao(a.media_atencao)}</td>
+                   <td>${pct(a.taxa_acerto)}</td>
+                   <td>${a.minutos}</td>
+                 </tr>`).join('');
+
+            $('painel-tabela').innerHTML =
+                `<table class="tabela-painel tabela-alunos"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+
+            $$('#painel-tabela .th-ord').forEach(b => b.addEventListener('click', () => {
+                const campo = b.dataset.campo;
+                _ordem = { campo, dir: (_ordem.campo === campo && _ordem.dir === 'asc') ? 'desc' : 'asc' };
+                renderTabelaAlunos(alunos);
+            }));
+            $$('#painel-tabela .aluno-link').forEach(b =>
+                b.addEventListener('click', () => irParaAluno(b.dataset.aluno)));
+        }
+
+        // Gráficos da turma. Separado de renderGraficos() de propósito: aquele serve
+        // o payload do backend (coordenador/pai) e continua intocado. Aqui a rosca já
+        // subiu para a visão geral, e as barras passam a ser POR ALUNO — com uma turma
+        // por vez, "atenção por turma" viraria uma barra só.
+        let gAluno = null, gEvoTurma = null;
+        function renderGraficosTurma(alunos, cont) {
+            gAluno?.destroy(); gEvoTurma?.destroy();
+            $('painel-graficos').innerHTML =
+                `<div class="graf-linha graf-linha-3">
+                   <div class="graf-card"><h4>Distribuição por status</h4>
+                     <div class="graf-wrap"><canvas id="gf-status-demo"></canvas></div></div>
+                   <div class="graf-card"><h4>Atenção por aluno (%)</h4>
+                     <div class="graf-wrap"><canvas id="gf-aluno"></canvas></div></div>
+                   <div class="graf-card"><h4>Evolução da turma (%)</h4>
+                     <div class="graf-wrap"><canvas id="gf-evo-turma"></canvas></div></div>
+                 </div>`;
+            desenharRosca(cont);
+
+            const ord = [...alunos].sort((a, b) => a.media_atencao - b.media_atencao);
+            gAluno = new Chart($('gf-aluno'), {
+                type: 'bar',
+                data: { labels: ord.map(a => a.nome.split(' ')[0]), datasets: [{
+                    data: ord.map(a => Math.round(a.media_atencao * 100)),
+                    // Barra na cor do status: quem está em risco se destaca sem
+                    // precisar de vermelho de alarme.
+                    backgroundColor: ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : a.status === 'atencao' ? 'alerta' : 'erro'}-bg`)),
+                    borderColor:     ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : a.status === 'atencao' ? 'alerta' : 'erro'}-tx`)),
+                    borderWidth: 1, borderRadius: 6,
+                }] },
+                options: EIXOS_LIMPOS,
+            });
+
+            // Média da turma ponto a ponto — derivada das séries, sem campo extra
+            // no mock. Assume que todos têm a mesma grade de datas (verdade aqui).
+            const base = alunos[0]?.serie || [];
+            const evo = base.map((p, i) => ({
+                dia: p.dia,
+                atencao: alunos.reduce((s, a) => s + (a.serie[i]?.atencao ?? 0), 0) / alunos.length,
+            }));
+            const cvE = $('gf-evo-turma');
+            gEvoTurma = new Chart(cvE, {
+                type: 'line',
+                data: { labels: evo.map(e => e.dia), datasets: [{
+                    ...LINHA_BASE, label: 'Atenção média',
+                    data: evo.map(e => Math.round(e.atencao * 100)),
+                    borderColor: tok('--azul-coati'),
+                    pointBorderColor: tok('--azul-coati'),
+                    backgroundColor: degrade('--azul-coati-rgb'),
+                }] },
+                options: { ...EIXOS_LIMPOS,
+                           scales: { ...EIXOS_LIMPOS.scales,
+                                     y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } } },
+            });
+        }
+
+        function renderConteudoTurma() {
+            const alunos = alunosDaTurma();
+            const turma  = turmasDemo().find(t => t.turma_id === _turmaAtual);
+            $('painel-sub').textContent =
+                `${PROFESSOR_DEMO.nome} · ${PROFESSOR_DEMO.escola} · semana ${SEMANA_DEMO} · `
+                + `${alunos.length} alunos em ${turma?.turma ?? '—'}`;
+            $('voltar-turma-rot').textContent = turma?.turma ?? 'a turma';
+            renderRisco(alunos);
+            const cont = renderVisao(alunos);
+            renderGraficosTurma(alunos, cont);
+            renderTabelaAlunos(alunos);
+        }
+
+        function renderPainelDemo() {
+            $('painel-titulo').textContent = `Turmas de ${PROFESSOR_DEMO.materia}`;
+            renderFiltro();
+            renderConteudoTurma();
+        }
+
+        // ========================================================
+        //   NAVEGAÇÃO turma ↔ aluno (hash, sem abas)
+        // ========================================================
+        // O hash existe para o Voltar do NAVEGADOR funcionar: sem ele, voltar sairia
+        // da tela inteira em vez de devolver o professor à lista.
+        let _veioDaLista = false;
+
+        function mostrarVista(qual) {
+            $('vista-turma').hidden = qual !== 'turma';
+            $('vista-aluno').hidden = qual !== 'aluno';
+            window.scrollTo(0, 0);
+        }
+
+        function irParaAluno(id) {
+            _veioDaLista = true;
+            location.hash = 'aluno=' + encodeURIComponent(id);
+        }
+
+        function abrirRelatorio(aluno) {
+            // Trocar a vista ANTES de desenhar: com a seção ainda `hidden` o canvas
+            // mede 0×0 e o Chart.js congela esse tamanho — os gráficos saíam
+            // esticados e cortados.
+            mostrarVista('aluno');
+            preencherRelatorio({
+                nome: aluno.nome,
+                sub: `${aluno.turma} · semana ${SEMANA_DEMO} · ${aluno.minutos} min estudados`,
+                status: statusAtencao(aluno.media_atencao),
+                hobbies: aluno.hobbies || [],
+                resumo: aluno.resumo,
+                serie: aluno.serie,
+            });
+        }
+
+        function aplicarHash() {
+            const m = location.hash.match(/^#aluno=(.+)$/);
+            if (!m) return mostrarVista('turma');
+            const aluno = ALUNOS_DEMO.find(a => a.aluno_id === decodeURIComponent(m[1]));
+            // Hash inválido (link velho, id que não existe) não pode deixar a tela em
+            // branco — cai na lista.
+            if (!aluno) return mostrarVista('turma');
+            abrirRelatorio(aluno);
+        }
+
+        window.addEventListener('hashchange', aplicarHash);
+        $('voltar-turma').addEventListener('click', () => {
+            if (_veioDaLista) { history.back(); return; }   // devolve a entrada do histórico
+            history.replaceState(null, '', location.pathname);
+            mostrarVista('turma');
+        });
+
         document.getElementById('email').addEventListener('keydown', e => {
             if (e.key === 'Enter') carregar();
         });
+
+        // Só o professor com mock roda offline. Escondir a busca para TODOS tiraria
+        // de coordenador e pai a única forma que eles têm de abrir um aluno — eles
+        // não têm nome clicável, porque o payload do backend não traz aluno_id.
+        const usandoMock = () => PAINEL_DEMO && (usuario.role || '').toLowerCase() === 'professor';
+
         document.addEventListener('DOMContentLoaded', () => {
+            if (usandoMock()) {
+                // Os dois dependem de rede e, num painel mock, só confundem. E a busca
+                // por e-mail é o caminho SEM escopo fino (dívida em app.py) — com o
+                // clique no nome levando ao mesmo relatório, ela vira supérflua aqui.
+                $('bloco-busca').hidden = true;
+                $('bloco-hobbies').hidden = true;
+            } else {
+                carregarGraficoHobbies();
+            }
             carregarPainel();
-            carregarGraficoHobbies();
+            aplicarHash();          // respeita #aluno=... vindo direto na URL
         });
     </script>
 

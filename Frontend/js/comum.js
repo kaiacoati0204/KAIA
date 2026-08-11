@@ -6,19 +6,29 @@
 const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 
 // ============================================================
-//   BETA: gestão desligada (Acompanhar / Dashboard)
+//   BETA: gestão desligada (Dashboard)
 // ============================================================
-// Durante o beta, os painéis de professor/responsável (responsaveis.html) e de
-// admin (dashboard.html) ficam SEM entrada na rail e SEM acesso por URL — para
-// TODOS, inclusive admin. Páginas e backend seguem intactos.
+// Durante o beta o painel de admin (dashboard.html) fica SEM entrada na rail e
+// SEM acesso por URL — para TODOS, inclusive admin. Página e backend intactos.
 // PARA REATIVAR: troque para false (volta o link na rail e o acesso).
+//
+// responsaveis.html SAIU desta lista na Fase 4: em vez de bloqueio para todos,
+// ela agora é liberada por ROLE (ver ROLES_RESPONSAVEL abaixo). A troca é de um
+// bloqueio grosso por um controle de acesso de verdade — o que o painel precisa
+// para valer alguma coisa no beta.
 const BETA_SEM_GESTAO = true;
-const PAGINAS_GESTAO  = ['responsaveis.html', 'dashboard.html'];
+const PAGINAS_GESTAO  = ['dashboard.html'];
 
 if (BETA_SEM_GESTAO) {
     const _pg = location.pathname.split('/').pop() || 'index.html';
     if (PAGINAS_GESTAO.includes(_pg)) location.replace('index.html');   // digitar a URL não entra
 }
+
+// Quem enxerga o painel "Acompanhar" (responsaveis.html). A guarda de rota da
+// própria página repete esta lista INLINE no <head> — ela precisa rodar antes de
+// qualquer render, e o comum.js só carrega no fim do <body>. Mudou aqui, mude lá.
+const ROLES_RESPONSAVEL = ['professor', 'coordenador', 'pai'];
+const ehResponsavel = (u) => ROLES_RESPONSAVEL.includes((u?.role || '').toLowerCase());
 
 // --- Atalhos de DOM ---------------------------------------------------------
 const $  = (id) => document.getElementById(id);
@@ -112,15 +122,18 @@ function montarRail() {
 
     const item = (ic, tx) => `<span class="rail-ic">${ic}</span><span class="rail-tx">${tx}</span>`;
 
+    const u = lerUsuario();
     const links = MENU_LINKS
         .filter(([href]) => !(BETA_SEM_GESTAO && PAGINAS_GESTAO.includes(href)))
+        // "Acompanhar" só para quem tem painel. Sem isto o aluno veria um link que
+        // a guarda de rota rejeita — pior que não mostrar.
+        .filter(([href]) => href !== 'responsaveis.html' || ehResponsavel(u))
         .map(([href, rotulo]) => {
             const ativo = href === atual ? ' ativo' : '';
             return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
         }).join('');
 
     // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
-    const u = lerUsuario();
     const nome = u ? (u.nome || u.email || '').trim() : '';
     const inicial = nome ? nome[0].toUpperCase() : '·';
     const saudacao = nome

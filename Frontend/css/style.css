@@ -38,14 +38,21 @@
   --erro-bg: #f3e2e2;
   --erro-tx: #8a3b3b;
   --alerta-bg: #f7ecd2;   /* âmbar suave — faixa "Atenção" (status do meio) */
-  --alerta-tx: #8a6d1e;
+  /* Escurecido de #8a6d1e (Fase 4): sobre o --alerta-bg o par dava 4.17:1 e
+     reprovava no badge "Atenção" (12px, exige 4.5:1) — justo o status do meio,
+     o mais fácil de ignorar. Agora 5.1:1. Os outros dois pares já passavam. */
+  --alerta-tx: #7a5f14;
 
   /* superfícies (dashboard e cards) */
   --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */
   --surface: #f6f2ec;
   --border: rgba(var(--profundo-rgb), 0.08);
   --sep: #f0ebe3;
-  --muted: #8b8b8b;
+  /* Escurecido de #8b8b8b (Fase 4): dava 3.16:1 sobre o marfim e reprovava nos
+     TRÊS lugares onde é usado — todos texto secundário pequeno (13px e 10px),
+     que é onde contraste baixo mais machuca. Agora 5.5:1, e segue lendo como
+     secundário pelo tamanho/peso, não por estar apagado. */
+  --muted: #635e56;
   --raio: 12px;
 }
 
@@ -1050,9 +1057,12 @@ body {
   font-size: 0.9rem;
   font-weight: 700;
 }
-.tag.bom    { color: var(--vd-uniao); }
-.tag.ruim   { color: var(--vermelho); }
-.tag.neutro { color: var(--gravata-kinrou); }
+/* Tokens de STATUS, não as cores vivas da marca: sobre o marfim o verde-união
+   dá 1.5:1, o dourado 1.3:1 e o vermelho 2.8:1 — os três reprovavam. Os pares
+   -tx entregam 6,5:1 e são a mesma família dos badges logo acima. */
+.tag.bom    { color: var(--acerto-tx); }
+.tag.ruim   { color: var(--erro-tx); }
+.tag.neutro { color: var(--alerta-tx); }
 
 .grafico,
 .container-grafico {
@@ -1722,6 +1732,220 @@ body.rail-aberta .rail-tx { opacity: 1; }
 @media (max-width: 900px) {
   .graf-linha { grid-template-columns: 1fr; }
 }
+
+/* ============================================================
+   PAINEL DO PROFESSOR (Fase 4) — turma → aluno
+   ============================================================ */
+/* O atributo hidden perde para qualquer `display` do autor (ex.: .busca é flex).
+   Esta linha faz `hidden` valer sempre — as vistas turma/aluno dependem disso. */
+[hidden] { display: none !important; }
+
+.filtro-turma {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--profundo);
+  font-size: 13px;
+  font-weight: 800;
+}
+.filtro-turma select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--profundo);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.filtro-turma select:focus-visible {
+  outline: 2px solid var(--azul-coati);
+  outline-offset: 2px;
+}
+
+/* "Precisam de você agora": a primeira coisa da tela. Âmbar suave — chama o olho
+   sem virar alarme (o vermelho aqui empurraria o professor para a urgência, e a
+   leitura certa é "olha estes três", não "socorro"). */
+.risco-titulo {
+  margin-bottom: 10px;
+  color: var(--profundo);
+  font-size: 14px;
+  font-weight: 800;
+}
+/* auto-FIT (não auto-fill): com 3 alunos em risco numa tela larga, o auto-fill
+   criava 6 trilhas e deixava metade da faixa vazia. O auto-fit colapsa as
+   trilhas sobrando e os cards ocupam a largura. */
+.risco-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.risco-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid var(--erro-tx);
+  border-radius: var(--raio);
+  background: var(--erro-bg);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.risco-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(var(--profundo-rgb), .12); }
+.risco-card:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
+.risco-nome   { color: var(--erro-tx); font-size: 15px; font-weight: 800; }
+.risco-num    { color: var(--erro-tx); font-size: 13px; font-weight: 700; }
+.risco-motivo { color: var(--tinta); font-size: 12px; line-height: 1.35; opacity: .85; }
+
+.risco-vazio {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  margin-bottom: 24px;
+  border: 1px solid var(--acerto-tx);
+  border-radius: var(--raio);
+  background: var(--acerto-bg);
+}
+.risco-vazio strong { color: var(--acerto-tx); font-size: 15px; }
+.risco-vazio span   { color: var(--tinta); font-size: 13px; opacity: .85; }
+
+/* Contagens: três cards CURTOS na largura inteira, alinhados com a fileira de
+   gráficos logo abaixo. Três colunas fixas (o auto-fit do .cards genérico criava
+   trilhas a mais e desalinhava as bordas). */
+.visao-contagens {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: 16px;
+}
+#painel-visao .card {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-left-width: 4px;
+}
+#painel-visao .card .v { font-size: 2rem; line-height: 1; }
+/* Faixa lateral na cor do status: liga a contagem ao badge da tabela sem
+   precisar repetir a legenda. Prefixado com o ID porque `#painel-visao .card`
+   usa o shorthand `border`, que já define border-left-color e venceria. */
+#painel-visao .visao-bem     { border-left-color: var(--acerto-tx); }
+#painel-visao .visao-atencao { border-left-color: var(--alerta-tx); }
+#painel-visao .visao-risco   { border-left-color: var(--erro-tx); }
+
+/* Fileira de 3 gráficos (rosca + barras + linha) ocupando a largura toda. */
+.graf-linha-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 1200px) {
+  .graf-linha-3 { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 900px) {
+  .graf-linha-3 { grid-template-columns: 1fr; }
+  .visao-contagens { grid-template-columns: 1fr; }
+}
+
+/* Não existe regra base para .card (só .dashboard-page .card). Aqui os tiles
+   apareciam como texto solto no fundo. Escopo estreito de propósito: uma regra
+   .card global mudaria o dashboard junto. */
+#painel-visao .card,
+#vista-aluno .card {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--raio);
+  background: var(--card);
+}
+#painel-visao .card label,
+#vista-aluno .card label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+#painel-visao .card .v,
+#vista-aluno .card .v { color: var(--profundo); }
+@media (max-width: 900px) {
+  .visao-geral { grid-template-columns: 1fr; }
+}
+
+/* Cabeçalho ordenável: o <th> vira botão, sem perder o visual de cabeçalho. */
+.tabela-alunos th { padding: 0; }
+.th-ord {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.th-ord:hover { background: var(--sep); }
+.th-ord:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: -2px; }
+.th-ord.ativo { color: var(--azul-coati); }
+.th-seta { opacity: .55; font-size: 10px; }
+.th-ord.ativo .th-seta { opacity: 1; }
+
+/* Célula de atenção: a barra dá a comparação que o número sozinho não dá. */
+.atencao-cel { display: flex; align-items: center; gap: 8px; }
+.mini-barra {
+  flex: 0 0 56px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--sep);
+  overflow: hidden;
+}
+.mini-barra i { display: block; height: 100%; border-radius: 99px; }
+.mini-bem     i { background: var(--acerto-tx); }
+.mini-atencao i { background: var(--alerta-tx); }
+.mini-risco   i { background: var(--erro-tx); }
+.atencao-num { font-variant-numeric: tabular-nums; }
+
+/* Nome do aluno = link para o relatório individual. */
+.aluno-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--azul-coati);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.aluno-link:hover { color: var(--profundo); }
+.aluno-link:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 2px; }
+
+/* Relatório individual */
+.voltar-turma {
+  margin-bottom: 16px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--profundo);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.voltar-turma:hover { background: var(--surface); }
+.voltar-turma:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 2px; }
+.aluno-cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+#bloco-evolucao { margin-bottom: 20px; }
+#bloco-evolucao .graf-wrap { height: 240px; }
 
 /* ============================================================
    TEXTURA DE PAPEL (Etapa 6) — desligada por padrão (body.textura-papel)

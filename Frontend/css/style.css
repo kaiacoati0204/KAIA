@@ -2170,28 +2170,37 @@ body.textura-papel .conteudo {
   text-align: center;
 }
 
-/* ---- micro_refoco: barra fixa no topo (respiração de 30s) ----------------
+/* ---- micro_refoco: barra fixa NO RODAPÉ (respiração de 30s) --------------
    `display: none → block` NÃO transiciona — era por isso que a barra pipocava.
    Agora ela fica sempre no DOM e a transição é opacity + transform; o
    `visibility` entra junto para que, fechada, ela não receba clique nem seja
    lida por leitor de tela (opacity: 0 sozinha deixaria uma faixa invisível
-   capturando o topo da página). O `visibility` só muda no FIM da saída — daí o
-   delay igual à duração — e no INÍCIO da entrada (delay 0). */
+   capturando a base da página). O `visibility` só muda no FIM da saída — daí o
+   delay igual à duração — e no INÍCIO da entrada (delay 0).
+
+   Ficava no TOPO e tinha dois problemas: as questões começam na parte de cima
+   da coluna, então sobravam ~10px entre a barra e o conteúdo com a tela inteira
+   vazia embaixo; e, com `left: 0`, ela passava POR CIMA da barra lateral.
+   Agora começa depois da rail (e acompanha quando a rail abre) e sobe do
+   rodapé, que é de onde ela passou a vir. */
 #kaia-mr {
   position: fixed;
-  top: 0;
-  left: 0;
+  bottom: 0;
+  left: var(--rail-col);
   right: 0;
   z-index: 70;
   padding: 18px 16px 16px;
   background: var(--card);
-  box-shadow: 0 4px 20px rgba(var(--profundo-rgb), 0.15);
+  box-shadow: 0 -4px 20px rgba(var(--profundo-rgb), 0.15);
   text-align: center;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-100%);          /* desliza de onde ela vem: o topo */
-  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0s linear 0.35s;
+  transform: translateY(100%);           /* desliza de onde ela vem: o rodapé */
+  transition: opacity 0.35s ease, transform 0.35s ease, left 0.25s ease,
+              visibility 0s linear 0.35s;
 }
+/* Acompanha a rail expandida no mesmo tempo em que ela se abre (0.25s). */
+body.rail-aberta #kaia-mr { left: var(--rail-col-aberta); }
 #kaia-mr.aberto {
   opacity: 1;
   visibility: visible;
@@ -2243,6 +2252,17 @@ body.textura-papel .conteudo {
 }
 #kaia-mr .kaia-mr-pular:hover { opacity: 1; }
 #kaia-mr-fb:not(:empty) { margin-top: 4px; }
+
+/* Com a barra no rodapé ela disputa espaço com o probe de autorrelato e com a
+   pilha de cards, que também vivem ancorados embaixo — e o probe dispara ao
+   responder questão, sem relação com as intervenções, então os dois aparecem
+   juntos de verdade. Enquanto a barra está aberta, os dois sobem a altura dela.
+   `--mr-altura` é escrita pelo materias.js com a altura REAL (ela encolhe no
+   modo feedback e cresce se a frase quebrar em duas linhas). */
+body.kaia-mr-aberta #kaia-probe { bottom: calc(24px + var(--mr-altura, 0px)); }
+body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0px)); }
+#kaia-probe,
+#kaia-notificacoes { transition: bottom 0.35s ease; }
 
 /* ---- pausa_ativa: overlay da sequência guiada (90s) ---------------------- */
 #kaia-seq {
@@ -2438,8 +2458,18 @@ body.textura-papel .conteudo {
    e a saída tem uma classe própria (.kaia-reancorar-saindo), que o timer do
    materias.js liga antes de limpar as duas. Tempos longos de propósito — 0,6s
    entrando, 0,8s saindo: esta é a mais sutil das 7, e um fade rápido num véu
-   de tela inteira seria um piscar. */
-body.kaia-reancorar::before {
+   de tela inteira seria um piscar.
+
+   O VÉU MORA NO #quiz-view, NÃO NO body — e isso não é detalhe de organização.
+   #quiz-view é `position: relative; z-index: 2`, ou seja, um CONTEXTO DE
+   EMPILHAMENTO. Com o véu no body, o z-index 41 da questão só valia dentro
+   desse contexto: vista de fora, a subárvore inteira pintava no nível 2, abaixo
+   do véu (40) — a questão era escurecida junto com o resto e o efeito só
+   desenhava um retângulo claro por baixo do véu. Pondo o véu no MESMO contexto,
+   40 e 41 finalmente competem entre si e a questão sobe de verdade.
+   `position: fixed` continua cobrindo a viewport toda (nenhum ancestral tem
+   transform) e sai do fluxo, então não vira item do flex do #quiz-view. */
+body.kaia-reancorar #quiz-view::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -2448,15 +2478,27 @@ body.kaia-reancorar::before {
   pointer-events: none;
   animation: kaiaVeuEntra 0.6s ease both;
 }
-body.kaia-reancorar-saindo::before { animation: kaiaVeuSai 0.8s ease both; }
+body.kaia-reancorar-saindo #quiz-view::before { animation: kaiaVeuSai 0.8s ease both; }
 @keyframes kaiaVeuEntra { from { opacity: 0; } to   { opacity: 1; } }
 @keyframes kaiaVeuSai   { from { opacity: 1; } to   { opacity: 0; } }
+/* A folga do card vem de `box-shadow` com spread, não de `padding`: spread
+   cresce a área PINTADA sem alterar o layout, então o texto não se desloca
+   quando o véu entra e sai. Com padding, a questão daria um salto a cada
+   disparo — num efeito cujo objetivo é não sobressaltar.
+   O deslocamento para baixo é IGUAL ao spread de propósito: assim o card cresce
+   14px nas laterais e 28 embaixo, e ZERO para cima. Medido, o ABANDONAR termina
+   em y=106 e a questão começa em y=106 — folga nenhuma. Qualquer expansão para
+   cima cortaria a borda do botão ao meio, que é exatamente o tipo de recorte
+   estranho que esta correção veio tirar. Em cima, quem dá o respiro é a entrelinha
+   do próprio título. Raio final = 2 do elemento + 14 do spread. */
 body.kaia-reancorar .question-wrapper {
   position: relative;
   z-index: 41;
-  border-radius: 14px;
+  border-radius: 2px;
   background: var(--card);
-  box-shadow: 0 10px 40px rgba(var(--profundo-rgb), 0.25);
+  box-shadow:
+    0 14px 0 14px var(--card),
+    0 24px 44px 14px rgba(var(--profundo-rgb), 0.28);
 }
 
 /* ---- Quem pediu menos movimento recebe menos movimento -------------------
@@ -2470,12 +2512,14 @@ body.kaia-reancorar .question-wrapper {
   #kaia-seq,
   #kaia-seq.aberto,
   #kaia-seq .kaia-seq-card,
+  #kaia-probe,
+  #kaia-notificacoes,
   .question-wrapper { transition: none; }
   #kaia-mr, #kaia-mr.aberto { transform: none; }
   #kaia-seq .kaia-seq-card, #kaia-seq.aberto .kaia-seq-card { transform: none; }
   #kaia-cp,
-  body.kaia-reancorar::before,
-  body.kaia-reancorar-saindo::before { animation: none; }
+  body.kaia-reancorar #quiz-view::before,
+  body.kaia-reancorar-saindo #quiz-view::before { animation: none; }
 }
 
 /* ---- probe de atenção (autorrelato) -------------------------------------

@@ -432,7 +432,9 @@ function iniciarMicroRefoco() {
     const passos = ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'];
     const dur = 30 * 1000, passoMs = 4 * 1000;
     $('kaia-mr').classList.add('aberto');
+    document.body.classList.add('kaia-mr-aberta');
     $('kaia-mr-msg').innerText = passos[0];
+    _medirBarraMicroRefoco();
     // barra começa cheia e cai linearmente até 0 no fim (via transition CSS, sem números)
     const fill = $('kaia-mr-fill');
     fill.style.transition = 'none';
@@ -450,9 +452,20 @@ function iniciarMicroRefoco() {
     }, 200);
 }
 
+// A barra vive no rodapé, onde o probe de autorrelato e a pilha de cards também
+// moram. Publica a altura REAL dela para o CSS subir os dois enquanto ela está
+// aberta — medida em vez de fixa porque a barra encolhe no modo feedback e
+// cresce se a frase quebrar em duas linhas.
+function _medirBarraMicroRefoco() {
+    const el = $('kaia-mr');
+    if (el) document.body.style.setProperty('--mr-altura', `${el.offsetHeight}px`);
+}
+
 function _fecharMicroRefoco() {
     const el = $('kaia-mr');
     if (el) el.classList.remove('aberto');
+    document.body.classList.remove('kaia-mr-aberta');
+    document.body.style.removeProperty('--mr-altura');
     _mrFeedbackAberto = false;
 }
 
@@ -478,6 +491,7 @@ function encerrarMicroRefoco() {
         compacto: true, mostradaEm: _mrMostradaEm, agradecer: true,
         onResposta: () => setTimeout(_fecharMicroRefoco, 1200),
     }));
+    _medirBarraMicroRefoco();                   // encolheu: sem a frase e sem a barra
     setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
 }
 

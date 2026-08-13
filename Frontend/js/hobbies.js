@@ -49,7 +49,7 @@ function salvarHobbies() {
     sessionStorage.setItem('hobbies', JSON.stringify(hobbiesSelecionados));
     gravarPerfil({ ...lerPerfil(), hobbies: hobbiesSelecionados });
     enviarPerfil({ tipo: 'hobbies' });
-    window.location.href = 'index.html';
+    window.location.href = 'materias.html';   // home do aluno logado (index virou landing pública)
 }
 
 document.addEventListener('DOMContentLoaded', registrarHobbies);

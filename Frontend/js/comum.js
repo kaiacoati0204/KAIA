@@ -21,7 +21,7 @@ const PAGINAS_GESTAO  = ['dashboard.html'];
 
 if (BETA_SEM_GESTAO) {
     const _pg = location.pathname.split('/').pop() || 'index.html';
-    if (PAGINAS_GESTAO.includes(_pg)) location.replace('index.html');   // digitar a URL não entra
+    if (PAGINAS_GESTAO.includes(_pg)) location.replace('materias.html');   // digitar a URL não entra
 }
 
 // Quem enxerga o painel "Acompanhar" (responsaveis.html). A guarda de rota da
@@ -86,10 +86,13 @@ const lerUsuario = () => JSON.parse(
 // ============================================================
 // MENU_LINKS alimenta a barra lateral estática (montarRail) — fica aqui para
 // o markup do menu não ser copiado (e divergir) em cada HTML.
+// "Início" saiu: apontava para o index.html, que virou a LANDING PÚBLICA (página
+// de vendas, sem rail e sem login). Dentro do produto ele era um botão que
+// jogava o aluno logado para fora — e Matérias já era, na prática, a home.
+// Matérias assume o topo da lista.
 const MENU_LINKS = [
-    ['index.html',        'Início'],
-    ['perfil.html',       'Perfil'],
     ['materias.html',     'Matérias'],
+    ['perfil.html',       'Perfil'],
     ['meu-coati.html',    'Meu Coati'],
     ['responsaveis.html', 'Acompanhar'],
     ['dashboard.html',    'Dashboard'],
@@ -106,7 +109,6 @@ const MENU_LINKS = [
 // real do layout (o body vira flex): empurra o conteúdo em vez de sobrepor.
 const RAIL_ICONES = {
     menu:                '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-    'index.html':        '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
     'login.html':        '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
     'perfil.html':       '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
     'materias.html':     '<svg viewBox="0 0 24 24"><path d="M4 4h13a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M4 4v14"/></svg>',

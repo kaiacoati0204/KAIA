@@ -25,7 +25,7 @@
                                 || localStorage.getItem('kaia_usuario') || 'null');
         if (!usuario) window.location.href = 'login.html';
         else if (!['professor', 'coordenador', 'pai'].includes((usuario.role || '').toLowerCase()))
-            window.location.href = 'index.html';
+            window.location.href = 'materias.html';
     </script>
 </head>
 

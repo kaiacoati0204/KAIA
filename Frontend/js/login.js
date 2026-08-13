@@ -52,10 +52,13 @@ async function finalizarLogin(authUser, falhar, lembrar = false) {
     sessionStorage.setItem('hobbies', JSON.stringify(hobbies));
     gravarPerfil({ ...lerPerfil(), email: u.email, hobbies });
 
+    // A home de quem ENTROU é materias.html. O index.html virou a landing
+    // pública (sem guarda de login): mandar o aluno recém-logado para lá seria
+    // devolvê-lo à página de vendas em vez de abrir o produto.
     if (u.role === 'aluno') {
-        window.location.href = hobbies.length ? 'index.html' : 'hobbies.html';
+        window.location.href = hobbies.length ? 'materias.html' : 'hobbies.html';
     } else {
-        window.location.href = ROTA_POR_ROLE[u.role] || 'index.html';
+        window.location.href = ROTA_POR_ROLE[u.role] || 'materias.html';
     }
 }
 

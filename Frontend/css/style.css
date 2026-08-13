@@ -3295,3 +3295,339 @@ body.kaia-reancorar .question-wrapper {
 @media (prefers-reduced-motion: reduce) {
   #kaia-preloader { display: none; }
 }
+
+/* ============================================================
+   LANDING PÚBLICA (index.html) — namespace lp-*
+   ============================================================
+   Bloco NOVO, no fim do arquivo e sem tocar em nenhuma regra acima. O index
+   deixou de ser página interna (tinha guarda de login e barra lateral) e virou
+   a porta de entrada pública: quem chega aqui ainda não tem conta.
+
+   Tudo é escopado em `body.lp-page` ou no prefixo `.lp-`. As exceções são os
+   hovers de .plano/.coati-container, que já existiam e são reaproveitados — por
+   isso vêm sob `.lp-page`, que vence em especificidade sem editar o original
+   (as outras páginas continuam com o hover antigo).
+
+   Paleta: só tokens. Nada de #fff/#000 — fundo é --marfim/--card/--surface e
+   texto é --tinta/--profundo, a mesma regra do resto do projeto.
+   ============================================================ */
+
+/* Rolagem suave só na landing: o "Ver planos" do hero é o único link âncora do
+   produto. O :has mantém isso fora das outras páginas sem mexer no html
+   global; onde não houver suporte, o link só salta em vez de deslizar. */
+html:has(body.lp-page) { scroll-behavior: smooth; }
+
+/* O header é sticky, então uma âncora pararia com o título ATRÁS dele. A folga
+   é a altura do header (~68px) mais respiro. */
+.lp-page .lp-secao[id] { scroll-margin-top: 88px; }
+
+/* Cinto de segurança contra barra horizontal: o hero usa clamp com vw e os
+   grids têm mínimo de 240px. */
+.lp-page { overflow-x: hidden; }
+
+/* ---- Header --------------------------------------------------------------
+   Substitui a rail no index. Fica no topo enquanto a página rola, porque o
+   "Entrar" é o destino de toda a página e some rápido no scroll. */
+.lp-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.lp-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 14px 24px;
+}
+.lp-logo {
+  color: var(--profundo);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+/* O "IA" em azul-coati é a leitura da marca: Ka(iá) + IA. */
+.lp-logo span { color: var(--azul-coati); }
+.lp-logo-peq { font-size: 1.15rem; }
+
+/* ---- Botões --------------------------------------------------------------
+   Três pesos: primário (dourado, a ação principal), secundário (contorno) e
+   ghost (o "Entrar" do header, que não deve competir com o hero). */
+.lp-btn {
+  display: inline-block;
+  padding: 13px 26px;
+  border-radius: 10px;
+  border: 2px solid var(--profundo);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+.lp-btn:focus-visible { outline: 3px solid var(--azul-coati); outline-offset: 2px; }
+.lp-btn-primario {
+  background: var(--gravata-kinrou);
+  color: var(--profundo);
+}
+.lp-btn-secundario {
+  background: transparent;
+  color: var(--profundo);
+}
+.lp-btn-secundario:hover { background: rgba(var(--profundo-rgb), 0.06); }
+.lp-btn-ghost {
+  padding: 9px 20px;
+  border-width: 1px;
+  border-color: rgba(var(--profundo-rgb), 0.35);
+  background: transparent;
+  color: var(--profundo);
+  font-size: 0.9rem;
+}
+.lp-btn-ghost:hover {
+  border-color: var(--profundo);
+  background: rgba(var(--profundo-rgb), 0.05);
+}
+.lp-btn-primario:hover,
+.lp-btn-secundario:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(var(--profundo-rgb), 0.16);
+}
+
+/* ---- Hero ----------------------------------------------------------------
+   Sem gradiente e sem imagem de fundo: o público da KaIA é justamente quem se
+   dispersa com estímulo visual. A separação do resto da página vem de uma
+   mudança sutil de superfície (--surface sobre --marfim) e de uma linha. */
+.lp-hero {
+  padding: 76px 24px 68px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.lp-hero-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+.lp-hero-titulo {
+  margin-bottom: 18px;
+  color: var(--profundo);
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.lp-hero-sub {
+  max-width: 560px;
+  margin: 0 auto 34px;
+  color: var(--tinta);
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+.lp-hero-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+/* ---- Seções da landing --------------------------------------------------- */
+.lp-secao {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+.lp-secao-titulo {
+  margin-bottom: 10px;
+  color: var(--profundo);
+  font-size: clamp(1.5rem, 3.4vw, 2rem);
+  font-weight: 800;
+  text-align: center;
+}
+.lp-secao-sub {
+  max-width: 560px;
+  margin: 0 auto 34px;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-align: center;
+}
+.lp-secao-titulo + .lp-passos { margin-top: 36px; }
+
+/* ---- Como funciona em 3 passos ------------------------------------------- */
+.lp-passos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+.lp-passo {
+  display: flex;
+  flex-direction: column;
+  padding: 28px 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+/* Ícone de TRAÇO (stroke), não sólido: o mesmo vocabulário dos ícones da rail,
+   e um bloco de cor cheia pesaria mais que o texto do card. */
+.lp-passo-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: rgba(var(--azul-coati-rgb), 0.09);
+  color: var(--azul-coati);
+}
+.lp-passo-ic svg { width: 24px; height: 24px; }
+.lp-passo-num {
+  margin-bottom: 6px;
+  /* cor: --bege-legivel, no bloco de contraste mais abaixo */
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.lp-passo h3 {
+  margin-bottom: 10px;
+  color: var(--profundo);
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.lp-passo p {
+  color: var(--tinta);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+/* ---- Planos --------------------------------------------------------------
+   O grid base (.planos-grid) é auto-fit com mínimo de 240px: com 2 cards na
+   faixa escolar ele os esticaria por toda a largura, e cada card ficaria muito
+   mais largo que os individuais logo acima — a comparação entre as faixas
+   perderia a escala. Aqui a faixa escolar recebe colunas fixas e um teto. */
+.lp-planos-grid { align-items: stretch; }
+.lp-planos-grid > .plano { height: 100%; }
+/* O botão desce para a base mesmo quando os cards têm listas de tamanhos
+   diferentes — as 5 chamadas ficam alinhadas numa linha só. */
+.lp-planos-grid .plano-itens { flex: 1; }
+.lp-planos-escolar {
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+/* O título da faixa escolar acompanha a MESMA caixa dos dois cards. Sem isto ele
+   fica colado na borda esquerda da seção enquanto os cards estão centralizados,
+   e o rótulo parece pertencer a outra coisa. */
+.lp-planos-titulo-escolar {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---- Rodapé --------------------------------------------------------------
+   Fundo próprio (--surface) e padding folgado: o rodapé anterior era um botão
+   solto no fim da coluna de texto, sem nada que o encerrasse. */
+.lp-rodape {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.lp-rodape-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 34px 24px;
+}
+.lp-rodape-copy {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.lp-rodape-link {
+  color: var(--azul-coati);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+.lp-rodape-link:hover { border-bottom-color: var(--azul-coati); }
+.lp-rodape-link:focus-visible { outline: 3px solid var(--azul-coati); outline-offset: 3px; }
+
+/* ---- Hover unificado dos cards ------------------------------------------
+   Os três tipos de card da landing sobem o MESMO tanto. .plano já subia 6px
+   (regra antiga, que segue valendo nas outras páginas); sob .lp-page ele passa
+   a 4px para bater com os cards de passo — card que sobe mais que o vizinho lê
+   como "mais importante", e aqui não é o caso. */
+.lp-page .plano:hover,
+.lp-page .coati-container:hover,
+.lp-page .lp-passo:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 36px rgba(var(--profundo-rgb), 0.14);
+}
+/* O .coati-container não tinha transição própria (nunca teve hover). */
+.lp-page .coati-container {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ---- Contraste dos rótulos bege ------------------------------------------
+   O --bege (#c4a186) sobre o --card dá ~2:1 — reprova em AA com folga, e cai
+   justo nos textos MENORES dos cards (0,7rem a 0,9rem), que é onde contraste
+   baixo mais machuca. Um axe na página acusa 19 nós.
+   Não é regressão desta frente: .plano-tipo/.plano-alvo/.plano-preco span e o
+   figcaption do Coati já eram assim. O que mudou é a exposição — o index virou
+   página PÚBLICA, e o "R$ 19,90 /mês" tem o valor legível e a unidade não.
+   O tom aqui é o MESMO bege, só escurecido até 5,4:1 sobre o --card. Mesmo
+   remédio já aplicado na Fase 4 ao --muted (5,5:1) e ao --alerta-tx (5,1:1).
+   Escopado em .lp-page: as outras páginas seguem exatamente como estavam. Para
+   desfazer, basta apagar este bloco.
+   SE ISTO SUBIR PARA O TOKEN --bege, apague daqui e ajuste lá. */
+.lp-page {
+  --bege-legivel: #7d5f45;
+}
+.lp-page .plano-tipo,
+.lp-page .plano-alvo,
+.lp-page .plano-preco span,
+.lp-page .coati-imagem figcaption,
+.lp-passo-num { color: var(--bege-legivel); }
+
+/* ---- Telas estreitas ----------------------------------------------------- */
+@media (max-width: 720px) {
+  .lp-hero { padding: 52px 20px 46px; }
+  .lp-secao { padding: 46px 20px; }
+  .lp-header-inner { padding: 12px 18px; }
+  .lp-hero-acoes .lp-btn { flex: 1 1 100%; }
+  /* Duas colunas em 720px de largura deixariam cada card escolar com ~140px. */
+  .lp-planos-escolar { grid-template-columns: 1fr; }
+  .lp-rodape-inner { justify-content: center; text-align: center; }
+}
+
+/* ---- Quem pediu menos movimento recebe menos movimento -------------------
+   Mesma regra do bloco das intervenções: o estado final é idêntico (mesmas
+   cores, mesma sombra), só o caminho até ele deixa de ser animado. Inclui a
+   rolagem do "Ver planos", que é movimento de tela inteira — o mais pesado
+   deles para quem marcou a preferência. */
+@media (prefers-reduced-motion: reduce) {
+  html:has(body.lp-page) { scroll-behavior: auto; }
+  .lp-btn,
+  .lp-passo,
+  .lp-rodape-link,
+  .lp-page .plano,
+  .lp-page .coati-container { transition: none; }
+  .lp-btn:hover,
+  .lp-page .plano:hover,
+  .lp-page .coati-container:hover,
+  .lp-page .lp-passo:hover { transform: none; }
+}

@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KaIA | Manifesto e Proposta</title>
+    <title>KaIA | Estude com foco. Chegue preparado.</title>
+    <meta name="description"
+        content="A KaIA detecta quando você se distrai e age — para que cada hora de estudo valha de verdade.">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
@@ -12,17 +14,96 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../config.js"></script>
-    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
-    <script>
-        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
-        if (!usuario) window.location.href = 'login.html';
-    </script>
+    <!-- SEM guarda de rota: esta página é a LANDING PÚBLICA. Quem chega aqui
+         ainda não tem conta — mandar para o login seria fechar a porta da rua.
+         A home de quem JÁ está logado é materias.html (ver login.js/hobbies.js). -->
 </head>
 
-<!-- data-rail: o script.js injeta a barra lateral estática (nav + saudação no rodapé) -->
-<body data-rail>
+<!-- Sem data-rail: a barra lateral é do produto logado, não da página pública.
+     Quem navega aqui usa o header da landing (abaixo). A classe lp-page escopa
+     todo o CSS de landing (bloco lp-* no fim do style.css). -->
+<body class="lp-page">
+
+    <!-- ===================== HEADER DA LANDING ===================== -->
+    <header class="lp-header">
+        <div class="lp-header-inner">
+            <a href="index.html" class="lp-logo" aria-label="KaIA — página inicial">Ka<span>IA</span></a>
+            <a href="login.html" class="lp-btn lp-btn-ghost lp-btn-entrar">Entrar</a>
+        </div>
+    </header>
 
     <main class="app-wrapper">
+
+        <!-- ===================== HERO ===================== -->
+        <section class="lp-hero">
+            <div class="lp-hero-inner">
+                <h1 class="lp-hero-titulo">Estude com foco. Chegue preparado.</h1>
+                <p class="lp-hero-sub">
+                    A KaIA detecta quando você se distrai e age — para que cada hora de estudo
+                    valha de verdade.
+                </p>
+                <div class="lp-hero-acoes">
+                    <a href="login.html" class="lp-btn lp-btn-primario">Começar grátis</a>
+                    <a href="#planos" class="lp-btn lp-btn-secundario">Ver planos</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===================== COMO FUNCIONA ===================== -->
+        <section class="lp-secao" id="como-funciona">
+            <h2 class="lp-secao-titulo">Como funciona em 3 passos</h2>
+            <div class="lp-passos">
+
+                <article class="lp-passo">
+                    <span class="lp-passo-ic" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/>
+                            <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/>
+                        </svg>
+                    </span>
+                    <span class="lp-passo-num">Passo 1</span>
+                    <h3>Você escolhe o tema e estuda</h3>
+                    <p>
+                        Matemática, Biologia, Redação — o que você precisar. A IA gera as questões
+                        na hora, com gabarito e explicação, no seu ritmo.
+                    </p>
+                </article>
+
+                <article class="lp-passo">
+                    <span class="lp-passo-ic" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12h3.5l2-5 3 10 2.5-7 1.5 2H21"/>
+                        </svg>
+                    </span>
+                    <span class="lp-passo-num">Passo 2</span>
+                    <h3>A KaIA observa seu foco</h3>
+                    <p>
+                        Sem câmera e sem nada invasivo: só sinais de comportamento na própria tela —
+                        mouse parado, troca de aba, scroll rápido demais para ter lido.
+                    </p>
+                </article>
+
+                <article class="lp-passo">
+                    <span class="lp-passo-ic" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                             stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="9"/>
+                            <line x1="10" y1="9" x2="10" y2="15"/>
+                            <line x1="14" y1="9" x2="14" y2="15"/>
+                        </svg>
+                    </span>
+                    <span class="lp-passo-num">Passo 3</span>
+                    <h3>Ela age quando você se perde</h3>
+                    <p>
+                        Uma pausa guiada, um aviso discreto ou uma mudança no tipo de questão.
+                        Nada pisca, nada cobra — o convite é para voltar, não para se sentir mal.
+                    </p>
+                </article>
+
+            </div>
+        </section>
 
         <section class="main-content">
 
@@ -112,118 +193,124 @@
                     </p>
                 </article>
 
-                
-                <!-- ===================== PLANOS ===================== -->
-                <article class="question-wrapper">
-                    <h2>Planos</h2>
-                    <p>Valores simulados para o MVP — servem de referência de posicionamento, não são uma oferta comercial fechada.</p>
-
-                    <h3 class="planos-titulo">Para você, sozinho</h3>
-                    <div class="planos-grid">
-
-                        <div class="plano">
-                            <span class="plano-tipo">INDIVIDUAL</span>
-                            <h4>Essencial</h4>
-                            <div class="plano-preco">R$ 29,90<span>/mês</span></div>
-                            <p class="plano-alvo">1 aluno</p>
-                            <ul class="plano-itens">
-                                <li>Questões geradas por IA sob demanda</li>
-                                <li>Gabarito e explicação em toda questão</li>
-                                <li>Detecção de distração durante a sessão</li>
-                                <li>Relatório básico ao final de cada sessão</li>
-                            </ul>
-                            <a href="login.html" class="plano-btn">Começar</a>
-                        </div>
-
-                        <div class="plano plano-destaque">
-                            <span class="plano-tipo">INDIVIDUAL</span>
-                            <span class="plano-selo">MAIS ESCOLHIDO</span>
-                            <h4>Foco</h4>
-                            <div class="plano-preco">R$ 44,90<span>/mês</span></div>
-                            <p class="plano-alvo">1 aluno</p>
-                            <ul class="plano-itens">
-                                <li>Tudo do Essencial</li>
-                                <li>Intervenções adaptativas (pausa guiada)</li>
-                                <li>Histórico de foco e evolução por tema</li>
-                                <li>Questões calibradas pelos seus hobbies</li>
-                            </ul>
-                            <a href="login.html" class="plano-btn">Começar</a>
-                        </div>
-
-                        <div class="plano">
-                            <span class="plano-tipo">INDIVIDUAL</span>
-                            <h4>Intensivo</h4>
-                            <div class="plano-preco">R$ 59,90<span>/mês</span></div>
-                            <p class="plano-alvo">1 aluno</p>
-                            <ul class="plano-itens">
-                                <li>Tudo do Foco</li>
-                                <li>Questões ilimitadas e simulados completos</li>
-                                <li>Plano de estudo por data de prova</li>
-                                <li>Correção de redação com devolutiva</li>
-                            </ul>
-                            <a href="login.html" class="plano-btn">Começar</a>
-                        </div>
-                    </div>
-
-                    <h3 class="planos-titulo">Para escolas e cursinhos</h3>
-                    <div class="planos-grid">
-
-                        <div class="plano plano-escolar">
-                            <span class="plano-tipo">ESCOLAR</span>
-                            <h4>Turma</h4>
-                            <div class="plano-preco">R$ 690<span>/mês</span></div>
-                            <p class="plano-alvo">Até 40 alunos · ~R$ 17 por aluno</p>
-                            <ul class="plano-itens">
-                                <li>Uma sala de aula inteira</li>
-                                <li>Painel do professor com foco agregado</li>
-                                <li>Relatórios anônimos de gargalo da turma</li>
-                                <li>Questões alinhadas ao plano de aula</li>
-                            </ul>
-                            <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
-                        </div>
-
-                        <div class="plano plano-escolar plano-destaque">
-                            <span class="plano-tipo">ESCOLAR</span>
-                            <span class="plano-selo">MELHOR CUSTO</span>
-                            <h4>Escola</h4>
-                            <div class="plano-preco">R$ 2.900<span>/mês</span></div>
-                            <p class="plano-alvo">Até 200 alunos · ~R$ 14 por aluno</p>
-                            <ul class="plano-itens">
-                                <li>Tudo do Turma, em até 5 salas</li>
-                                <li>Comparativo de foco entre turmas</li>
-                                <li>Acesso para coordenação pedagógica</li>
-                                <li>Onboarding e treinamento do corpo docente</li>
-                            </ul>
-                            <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
-                        </div>
-
-                        <div class="plano plano-escolar">
-                            <span class="plano-tipo">ESCOLAR</span>
-                            <h4>Rede</h4>
-                            <div class="plano-preco">Sob consulta</div>
-                            <p class="plano-alvo">200+ alunos · múltiplas unidades</p>
-                            <ul class="plano-itens">
-                                <li>Tudo do Escola, sem limite de salas</li>
-                                <li>Dashboard consolidado da rede</li>
-                                <li>Exportação de dados e integração própria</li>
-                                <li>Suporte dedicado e SLA</li>
-                            </ul>
-                            <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
-                        </div>
-                    </div>
-                </article>
-
-            </div>
-
-            <div class="acesso-rodape">
-                <a href="login.html" class="btn-login-extra">Acessar Plataforma</a>
             </div>
 
         </section>
 
+        <!-- ===================== PLANOS ===================== -->
+        <!-- ⚠️ NOMES DOS PLANOS SÃO PROVISÓRIOS ⚠️
+             "Básico", "Pro", "Pro Anual", "Escola" e "Escola Rede" são rótulos de
+             trabalho. A Bia vai trocar por nomes indígenas (mesma família do
+             "kaiá"/Coati que dá nome à marca).
+             PARA TROCAR: cada nome aparece em DOIS lugares por card — o <h4> e,
+             quando o card cita o plano de baixo, o primeiro <li> ("Tudo do X").
+             Busque por `data-plano-nome` abaixo: todo <h4> de plano tem esse
+             atributo justamente para achar os cinco de uma vez. -->
+        <section class="lp-secao lp-planos" id="planos">
+            <h2 class="lp-secao-titulo">Planos</h2>
+            <p class="lp-secao-sub">
+                Valores de referência do MVP — posicionamento, não uma oferta comercial fechada.
+            </p>
+
+            <h3 class="planos-titulo">Para você, sozinho</h3>
+            <div class="planos-grid lp-planos-grid">
+
+                <div class="plano">
+                    <span class="plano-tipo">INDIVIDUAL</span>
+                    <h4 data-plano-nome>Básico</h4>
+                    <div class="plano-preco">R$ 19,90<span>/mês</span></div>
+                    <p class="plano-alvo">1 aluno</p>
+                    <ul class="plano-itens">
+                        <li>3 sessões por dia, de até 10 questões cada</li>
+                        <li>Questões personalizadas geradas por IA</li>
+                        <li>As 9 intervenções de foco</li>
+                        <li>Streak e meta diária</li>
+                        <li>Caderno de anotações</li>
+                        <li>Painel da semana</li>
+                    </ul>
+                    <a href="login.html" class="plano-btn">Começar</a>
+                </div>
+
+                <div class="plano">
+                    <span class="plano-tipo">INDIVIDUAL</span>
+                    <h4 data-plano-nome>Pro</h4>
+                    <div class="plano-preco">R$ 29,90<span>/mês</span></div>
+                    <p class="plano-alvo">1 aluno</p>
+                    <ul class="plano-itens">
+                        <li>Tudo do Básico</li>
+                        <li>Sessões ilimitadas</li>
+                        <li>Histórico completo</li>
+                        <li>Relatórios semanais por matéria</li>
+                        <li>Dificuldade adaptativa</li>
+                        <li>Revisão com 2ª tentativa</li>
+                    </ul>
+                    <a href="login.html" class="plano-btn">Começar</a>
+                </div>
+
+                <div class="plano plano-destaque">
+                    <span class="plano-tipo">INDIVIDUAL</span>
+                    <span class="plano-selo">MELHOR CUSTO-BENEFÍCIO</span>
+                    <h4 data-plano-nome>Pro Anual</h4>
+                    <div class="plano-preco">R$ 19,90<span>/mês</span></div>
+                    <p class="plano-alvo">R$ 238,90 por ano · 33% de desconto</p>
+                    <ul class="plano-itens">
+                        <li>Tudo do Pro</li>
+                        <li>Acesso durante todo o ciclo do ENEM</li>
+                        <li>Parcelável em 12x, ou à vista no Pix</li>
+                        <li>Prioridade em novas funcionalidades</li>
+                    </ul>
+                    <a href="login.html" class="plano-btn">Começar</a>
+                </div>
+            </div>
+
+            <!-- Escolares em faixa PRÓPRIA e mais estreita: são dois cards, e num
+                 grid de 3 colunas eles ficariam com um buraco à direita — o que
+                 se lê como "faltou um plano". -->
+            <h3 class="planos-titulo lp-planos-titulo-escolar">Para escolas e redes</h3>
+            <div class="planos-grid lp-planos-grid lp-planos-escolar">
+
+                <div class="plano plano-escolar">
+                    <span class="plano-tipo">ESCOLAR</span>
+                    <h4 data-plano-nome>Escola</h4>
+                    <div class="plano-preco">R$ 9,90<span>/aluno/mês</span></div>
+                    <p class="plano-alvo">Mínimo de 20 alunos</p>
+                    <ul class="plano-itens">
+                        <li>Tudo do Pro, para cada aluno</li>
+                        <li>Painel do professor</li>
+                        <li>Relatórios por turma</li>
+                        <li>Onboarding do corpo docente</li>
+                    </ul>
+                    <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
+                </div>
+
+                <div class="plano plano-escolar">
+                    <span class="plano-tipo">ESCOLAR</span>
+                    <h4 data-plano-nome>Escola Rede</h4>
+                    <div class="plano-preco">R$ 9,90<span>/aluno/mês</span></div>
+                    <p class="plano-alvo">Mínimo de 80 alunos</p>
+                    <ul class="plano-itens">
+                        <li>Tudo do Escola</li>
+                        <li>Painel do coordenador</li>
+                        <li>Relatórios comparativos entre unidades</li>
+                    </ul>
+                    <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
+                </div>
+            </div>
+        </section>
+
     </main>
 
-    <!-- Só comum.js: rail + textura vêm do init compartilhado; index não tem JS próprio. -->
+    <!-- ===================== RODAPÉ ===================== -->
+    <footer class="lp-rodape">
+        <div class="lp-rodape-inner">
+            <a href="index.html" class="lp-logo lp-logo-peq" aria-label="KaIA — página inicial">Ka<span>IA</span></a>
+            <p class="lp-rodape-copy">© 2025 KaIA</p>
+            <a href="login.html" class="lp-rodape-link">Entrar na plataforma</a>
+        </div>
+    </footer>
+
+    <!-- Só comum.js: textura vem do init compartilhado. Sem data-rail no body, o
+         montarRail() é no-op — o mesmo caminho já usado por login/cadastro. -->
     <script src="../js/comum.js"></script>
 </body>
 

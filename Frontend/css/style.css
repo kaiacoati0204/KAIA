@@ -79,6 +79,23 @@ body {
   background-color: var(--gravata-kinrou);
   border-radius: 20px;
 }
+/* A TRILHA (o sulco atrás do polegar) não tinha regra: sem ela o navegador
+   pinta o padrão dele, que é BRANCO PURO — uma faixa branca de ponta a ponta na
+   direita de toda página, justo o que a regra fixa do projeto proíbe. Era o
+   "quadro branco" que aparecia atrás da barra amarela.
+   `transparent` em vez de um token: assim o sulco mostra o fundo de QUEM ESTÁ
+   ATRÁS, e a barra continua certa tanto no marfim das páginas quanto em
+   qualquer superfície com fundo próprio (dashboard, listas com rolagem interna)
+   — sem precisar de uma regra por lugar.
+   O `scrollbar-color` faz o mesmo fora do WebKit (Firefox), que ignora os
+   pseudo-elementos acima. */
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+html {
+  scrollbar-color: var(--gravata-kinrou) transparent;
+}
 
 /* =========================
    TELA DE LOGIN / HOBBIES

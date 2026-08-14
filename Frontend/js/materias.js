@@ -163,6 +163,62 @@ function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
     return wrap;
 }
 
+// ---- Onde o card aparece, e por que não é sempre no mesmo canto ------------
+// Dispensar o card aqui é RESPONDER o feedback (não há X): um clique no
+// automático não desperdiça só a intervenção, ele injeta recompensa falsa no
+// Thompson — e como os 3 botões saem sempre na mesma ordem, o reflexo acerta
+// sempre a mesma resposta, o que é viés e não ruído.
+// O reflexo se prende a um PONTO da tela. Então a faixa (embaixo) fica fixa e
+// previsível — achar continua barato — e o ponto dentro dela roda. Em ORDEM, e
+// não por sorteio: sorteio repetiria o mesmo canto ~1/3 das vezes, e é na
+// repetição que o reflexo se forma. As classes moram no style.css.
+const POSICOES_CARD = ['pos-dir', 'pos-esq', 'pos-centro'];
+let _posicaoCardIdx = -1;
+
+const _probeNaTela = () => {
+    const p = $('kaia-probe');
+    return !!p && getComputedStyle(p).display !== 'none';
+};
+
+function _posicionarPilhaNotif() {
+    const pilha = _pilhaNotif();
+    // O toast da meta diária divide este contêiner. Se ele estiver na tela,
+    // mover a pilha arrastaria o aviso junto — fica onde está (e a rotação não
+    // avança, para o próximo card ainda cair num lugar diferente deste).
+    if ([...pilha.children].some(el => el.id !== 'kaia-intervencao')) return;
+    for (let i = 0; i < POSICOES_CARD.length; i++) {
+        _posicaoCardIdx = (_posicaoCardIdx + 1) % POSICOES_CARD.length;
+        // O probe de autorrelato mora embaixo no centro e gera o rótulo do
+        // modelo: o card (z-index 9999) o taparia. O centro perde a vez.
+        if (POSICOES_CARD[_posicaoCardIdx] === 'pos-centro' && _probeNaTela()) continue;
+        break;
+    }
+    pilha.classList.remove(...POSICOES_CARD);
+    pilha.classList.add(POSICOES_CARD[_posicaoCardIdx]);
+}
+
+// Portão antes de o feedback aceitar clique. Vale para TODO card, não só o
+// primeiro da sessão: com teto de 5 intervenções por sessão (app.py) e só 2 dos
+// 7 arms sendo card, o aluno vê ~1 card por sessão — o reflexo não se forma
+// DENTRO da sessão, vem das anteriores. Gatear "só o primeiro" seria quase o
+// mesmo na prática e deixaria o card com dois comportamentos para o mesmo
+// visual, que é a inconsistência que atrapalha TEA/TDAH.
+const CARD_GATE_MS = 900;
+
+function _travarFeedbackDoCard(alvo) {
+    const strip = alvo.querySelector('.kaia-fb');
+    if (!strip) return;
+    const botoes = [...strip.querySelectorAll('button')];
+    strip.classList.add('kaia-fb-travado');
+    // `disabled` e não só pointer-events: trava o teclado também e o leitor de
+    // tela anuncia que ainda não dá para responder.
+    botoes.forEach(b => b.disabled = true);
+    setTimeout(() => {
+        strip.classList.remove('kaia-fb-travado');
+        botoes.forEach(b => b.disabled = false);
+    }, CARD_GATE_MS);
+}
+
 // Card do polling: casca fixa (o strip é remontado a cada disparo em
 // mostrarIntervencao, porque o tipo muda e o elemento é reaproveitado).
 function _garantirCardIntervencao() {
@@ -193,6 +249,8 @@ function mostrarIntervencao(intv) {
     fb.appendChild(_stripFeedback(intv.intervention_type, {
         mostradaEm: intervencaoMostradaEm, onResposta: esconderIntervencao,
     }));
+    _posicionarPilhaNotif();
+    _travarFeedbackDoCard(fb);
     $('kaia-intervencao').style.display = 'block';
 }
 

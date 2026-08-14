@@ -2097,6 +2097,35 @@ body.textura-papel .conteudo {
 }
 #kaia-notificacoes > * { pointer-events: auto; }
 
+/* Três âncoras na FAIXA INFERIOR, alternadas em rotação pelo materias.js.
+   O card sempre no mesmo canto vira invisível (o aluno aprende a dispensar sem
+   ler, e como dispensar aqui é RESPONDER o feedback, isso vira dado falso no
+   Thompson). Mas posição aleatória cobraria uma varredura da tela a cada
+   aparição — caro justo para quem já está com a atenção comprometida.
+   O acordo: a FAIXA é previsível (é sempre embaixo, busca ao longo de uma
+   linha) e o PONTO dentro dela muda, que é o que o reflexo memoriza.
+   O topo está fora: Caderno/ABANDONAR ocupam x 984→1220, y 63→106. */
+#kaia-notificacoes.pos-dir { right: 20px; left: auto; align-items: flex-end; }
+#kaia-notificacoes.pos-esq {
+  left: calc(var(--rail-col) + 20px);
+  right: auto;
+  align-items: flex-start;
+}
+body.rail-aberta #kaia-notificacoes.pos-esq { left: calc(var(--rail-col-aberta) + 20px); }
+#kaia-notificacoes.pos-centro {
+  left: 50%;
+  right: auto;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+/* Portão: os botões nascem inertes por CARD_GATE_MS. O clique-reflexo dispara
+   antes disso e encontra botão morto — o que por si só devolve o olhar ao card.
+   Quem está lendo não percebe: 0,9s é menos do que ler a frase. Sem contagem
+   regressiva visível — seria um estímulo pulsando, o oposto do que o card quer;
+   a própria transição de opacidade é o aviso de que já dá para responder. */
+.kaia-fb.kaia-fb-travado button { opacity: 0.45; cursor: default; }
+
 /* ============================================================
    INTERVENÇÕES — o visual das 7 que o aluno vê
    ============================================================
@@ -2162,7 +2191,7 @@ body.textura-papel .conteudo {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition: filter 0.15s ease, opacity 0.35s ease;
 }
 .kaia-fb button:hover { filter: brightness(0.96); }
 .kaia-fb button:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }

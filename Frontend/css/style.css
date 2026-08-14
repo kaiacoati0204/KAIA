@@ -3345,12 +3345,14 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 /* ---- Header --------------------------------------------------------------
    Substitui a rail no index. Fica no topo enquanto a página rola, porque o
    "Entrar" é o destino de toda a página e some rápido no scroll. */
+/* Mesmo fundo do corpo da página e SEM linha embaixo: o header não deve se
+   destacar como faixa. Ele continua opaco (o conteúdo passa por baixo ao rolar,
+   sem transparecer) — quem separa do conteúdo é o padding, não uma borda. */
 .lp-header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
+  background: var(--marfim);
 }
 .lp-header-inner {
   display: flex;
@@ -3423,7 +3425,6 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-hero {
   padding: 76px 24px 68px;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
   text-align: center;
 }
 .lp-hero-inner {
@@ -3486,7 +3487,6 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
   flex-direction: column;
   padding: 28px 24px;
   border-radius: 20px;
-  border: 1px solid rgba(var(--bege-rgb), 0.35);
   background: var(--card);
   box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.05);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -3554,9 +3554,10 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 /* ---- Rodapé --------------------------------------------------------------
    Fundo próprio (--surface) e padding folgado: o rodapé anterior era um botão
    solto no fim da coluna de texto, sem nada que o encerrasse. */
+/* Mesmo fundo do corpo e sem linha em cima — a separação vem do padding
+   folgado do .lp-rodape-inner. */
 .lp-rodape {
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: var(--marfim);
 }
 .lp-rodape-inner {
   display: flex;
@@ -3619,6 +3620,37 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-page .plano-preco span,
 .lp-page .coati-imagem figcaption,
 .lp-passo-num { color: var(--bege-legivel); }
+
+/* ---- Landing sem bordas -------------------------------------------------
+   Nada de linha em nenhuma seção: quem separa é espaçamento e sombra. As
+   regras de header/rodapé/hero/passo já nasceram sem borda logo acima; aqui
+   ficam as CLASSES COMPARTILHADAS (.plano, .coati-*), zeradas só sob .lp-page
+   para as outras páginas continuarem como estavam.
+   Os `padding` NÃO saem junto: o espaço que a borda tracejada ocupava em
+   .plano-alvo e .coati-imagem é dado pelo padding, então tirar só a linha
+   preserva o respiro. E como o box-sizing é border-box, remover a borda dos
+   cards não muda o tamanho externo de nenhum deles. */
+.lp-page .plano,
+.lp-page .plano-destaque,
+.lp-page .coati-container { border: 0; }
+.lp-page .plano-alvo { border-bottom: 0; }
+.lp-page .coati-imagem { border-left: 0; }
+
+/* A "linha amarela" na lateral direita não era borda nenhuma: é o POLEGAR da
+   barra de rolagem, que o projeto pinta de --gravata-kinrou desde sempre
+   (regra global lá em cima). Numa página interna ele é um detalhe de marca;
+   numa landing de fundo liso vira um traço vertical de ponta a ponta.
+   Aqui ele fica discreto em vez de sumir: barra invisível numa página longa
+   tira a única pista de quanto ainda falta rolar. Só nesta página — o resto do
+   produto segue com a barra amarela.
+   `html:has(...)` porque a barra do DOCUMENTO lê os pseudo-elementos do <html>,
+   não os do <body>. */
+html:has(body.lp-page)::-webkit-scrollbar-thumb {
+  background-color: rgba(var(--profundo-rgb), 0.16);
+}
+html:has(body.lp-page) {
+  scrollbar-color: rgba(var(--profundo-rgb), 0.16) transparent;
+}
 
 /* ---- Telas estreitas ----------------------------------------------------- */
 @media (max-width: 720px) {

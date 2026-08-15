@@ -222,6 +222,76 @@ async def test_gerar_questao_erro(monkeypatch):
     assert r.status_code == 502
 
 
+# ---------------------------------------------- few-shot (questões reais)
+async def test_gerar_no_gemini_injeta_exemplo_real(monkeypatch):
+    capturado = {}
+    def fake(prompt):
+        capturado["p"] = prompt
+        return json.dumps([{"q": "?", "opts": ["a", "b", "c", "d", "e"], "ans": 0}])
+    monkeypatch.setattr(app_mod, "chamar_gemini", fake)
+    exemplos = [{"enunciado": "ENUNCIADO_REAL_XYZ", "alternativas": list("abcde"), "gabarito": 1}]
+    await app_mod._gerar_no_gemini(1, "PORT", "Português", "Sintaxe", None, 3, exemplos=exemplos)
+    assert "ENUNCIADO_REAL_XYZ" in capturado["p"] and "questões REAIS" in capturado["p"]
+
+
+async def test_gerar_no_gemini_injeta_evitar(monkeypatch):
+    # Anti-repetição: enunciados já existentes entram no prompt p/ o modelo divergir.
+    capturado = {}
+    def fake(prompt):
+        capturado["p"] = prompt
+        return json.dumps([{"q": "?", "opts": list("abcde"), "ans": 0}])
+    monkeypatch.setattr(app_mod, "chamar_gemini", fake)
+    await app_mod._gerar_no_gemini(1, "HIS", "História", "Revolução", None, 3,
+                                   evitar=["QUESTAO_JA_EXISTE_ABC"])
+    assert "QUESTAO_JA_EXISTE_ABC" in capturado["p"] and "JÁ EXISTEM" in capturado["p"]
+
+
+async def test_exemplos_similares_pgvector(monkeypatch):
+    # Retrieval dinâmico: embedding ok + linha do pgvector -> exemplo no formato certo.
+    monkeypatch.setattr(app_mod, "_embed", lambda t: [0.1] * app_mod.EMBED_DIM)
+    class FakeConn:
+        async def fetch(self, *a):
+            return [{"enunciado": "REAL_SIMILAR",
+                     "alternativas": '["a","b","c","d","e"]', "gabarito": 2}]
+    r = await app_mod._exemplos_similares(FakeConn(), "HIS", "Revolução")
+    assert r and r[0]["enunciado"] == "REAL_SIMILAR" and r[0]["alternativas"] == list("abcde")
+
+
+async def test_exemplos_similares_sem_embedding_none(monkeypatch):
+    # Sem embedding (falha/cota) -> None -> caller cai nos exemplos few-shot fixos.
+    monkeypatch.setattr(app_mod, "_embed", lambda t: None)
+    assert await app_mod._exemplos_similares(object(), "HIS", "Revolução") is None
+
+
+def test_exemplos_few_shot_materia_de_conta_vazio(monkeypatch):
+    monkeypatch.setattr(app_mod, "_EXEMPLOS_FEW_SHOT", {"PORT": [
+        {"enunciado": "E1", "alternativas": list("abcde"), "gabarito": 2}]})
+    assert app_mod._exemplos_few_shot("MAT") == []   # matéria sem entrada -> []
+
+
+def test_exemplos_few_shot_traz_da_materia(monkeypatch):
+    monkeypatch.setattr(app_mod, "_EXEMPLOS_FEW_SHOT", {"PORT": [
+        {"enunciado": "E1", "alternativas": list("abcde"), "gabarito": 2}]})
+    r = app_mod._exemplos_few_shot("PORT")
+    assert len(r) == 1 and r[0]["enunciado"] == "E1"
+
+
+async def test_gerar_questao_buffer_por_niveis(monkeypatch):
+    # /gerar-questao com distribuição -> gera por FAIXA e combina o buffer.
+    chamadas = []
+    async def fake_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
+        chamadas.append((nivel, n))
+        return [{"q": f"nv{nivel}", "opts": list("abcde"), "ans": 0, "nivel": nivel} for _ in range(n)]
+    monkeypatch.setattr(app_mod, "_montar_banda", fake_banda)
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.post("/gerar-questao", json={"materia": "PORT", "tema": "t",
+                                                 "distribuicao": {"1": 2, "2": 3}})
+    body = r.json()
+    assert r.status_code == 200 and len(body["questoes"]) == 5   # 2 + 3
+    assert set(chamadas) == {(1, 2), (2, 3)}
+
+
 # ============================================================ guardas 'sem banco'
 @pytest.mark.parametrize("metodo,rota,kwargs", [
     ("get", "/anotacoes?aluno_id=a&tema=t", {}),
@@ -641,30 +711,21 @@ def test_dashboard_offline_base_sintetica():
     assert resultado is not None
 
 
-# ============================================================ /temas (Gemini + cache)
-async def test_temas_cache_hit():
-    conn = FakeConn(fetchrow={"from temas_cache": {"temas": '["Álgebra", "Geometria"]'}})
-    _set_state(pool=FakePool(conn))
+# ============================================================ /temas (lista fixa)
+async def test_temas_fixo():
+    _set_state(pool=None)   # nem toca no banco/IA
     async with _client() as c:
         r = await c.post("/temas", json={"materia": "MAT"})
-    assert r.status_code == 200 and r.json()["fonte"] == "cache"
+    body = r.json()
+    assert r.status_code == 200 and body["fonte"] == "fixo"
+    assert body["temas"] == app_mod.TEMAS_FIXOS["MAT"] and len(body["temas"]) > 0
 
 
-async def test_temas_ia_sem_cache(monkeypatch):
-    monkeypatch.setattr(app_mod, "chamar_gemini", lambda p: '["T1", "T2", "T3"]')
-    _set_state(pool=None)   # sem cache -> chama a IA
-    async with _client() as c:
-        r = await c.post("/temas", json={"materia": "MAT"})
-    assert r.status_code == 200 and r.json()["fonte"] == "ia" and len(r.json()["temas"]) == 3
-
-
-async def test_temas_erro(monkeypatch):
-    def boom(p): raise RuntimeError("quota")
-    monkeypatch.setattr(app_mod, "chamar_gemini", boom)
+async def test_temas_materia_desconhecida():
     _set_state(pool=None)
     async with _client() as c:
-        r = await c.post("/temas", json={"materia": "MAT"})
-    assert r.status_code == 502
+        r = await c.post("/temas", json={"materia": "XYZ"})
+    assert r.status_code == 404
 
 
 # ============================================================ /anotacoes

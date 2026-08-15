@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import re
 import json
+import random
 import asyncio
 import pickle
 import uuid
@@ -22,7 +23,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from typing import Optional
 
@@ -54,6 +54,39 @@ MATERIAS = {
     "ING":  "Inglês",
     "FIL":  "Filosofia",
     "SOC":  "Sociologia",
+}
+
+# Área do ENEM p/ o banco de questões reais (o dataset rotula por ÁREA, não matéria fina).
+# O filtro por área estreita o pool; o embedding faz o casamento fino do tema.
+_AREA_ENEM = {
+    "ING": "ING", "PORT": "PORT",
+    "HIS": "HUMANAS", "GEO": "HUMANAS", "FIL": "HUMANAS", "SOC": "HUMANAS",
+    "BIO": "NATUREZA", "FIS": "NATUREZA", "QUI": "NATUREZA",
+    "MAT": "MAT",
+}
+
+# Temas FIXOS e curados por matéria (alto rendimento no ENEM/vestibulares — Matriz do
+# INEP + análise das provas). Nomes curtos p/ caber no card. Substitui a geração por IA.
+TEMAS_FIXOS = {
+    "PORT": ["Interpretação de Texto", "Gêneros Textuais", "Funções da Linguagem",
+             "Variação Linguística", "Figuras de Linguagem", "Coesão e Coerência"],
+    "HIS":  ["Brasil Colônia", "Brasil Império", "Brasil República", "Ditadura Militar",
+             "Era Vargas", "Movimentos Sociais"],
+    "GEO":  ["Questões Ambientais", "Urbanização", "Industrialização", "Globalização",
+             "Questão Agrária", "Geopolítica"],
+    "BIO":  ["Ecologia", "Genética", "Evolução", "Citologia", "Fisiologia Humana",
+             "Biotecnologia"],
+    "FIL":  ["Filosofia Antiga", "Filosofia Moderna", "Filosofia Política", "Ética",
+             "Teoria Crítica", "Existencialismo"],
+    "SOC":  ["Cultura e Sociedade", "Movimentos Sociais", "Estado e Cidadania",
+             "Trabalho e Sociedade", "Sociologia Brasileira", "Indústria Cultural"],
+    "ING":  ["Interpretação de Texto", "Vocabulário em Contexto", "Ideia Central"],
+    "MAT":  ["Funções", "Progressões", "Análise Combinatória", "Geometria Plana",
+             "Geometria Espacial", "Estatística", "Probabilidade", "Porcentagem"],
+    "FIS":  ["Leis de Newton", "Trabalho e Energia", "Cinemática", "Eletricidade",
+             "Termodinâmica", "Ondas"],
+    "QUI":  ["Química Geral", "Físico-Química", "Química Orgânica", "Estequiometria",
+             "Soluções", "Eletroquímica"],
 }
 
 # Resposta padrão quando o servidor está sem banco (pool = None).
@@ -163,11 +196,17 @@ app.add_middleware(
 
 
 # ================= HELPERS GEMINI =============================================
+# Modelo do Gemini. 3.5-flash-lite: geração nova + cota grátis maior (~500/dia no
+# projeto) que o 2.5-flash (~20/dia). Configurável por env GEMINI_MODEL (limites em
+# https://ai.google.dev/gemini-api/docs/rate-limits).
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+
+
 def chamar_gemini(prompt):
     """Faz uma chamada ao Gemini e devolve o texto da resposta (ou levanta erro)."""
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
-        f"models/gemini-2.5-flash:generateContent?key={API_KEY}"
+        f"models/{GEMINI_MODEL}:generateContent?key={API_KEY}"
     )
     body = {"contents": [{"parts": [{"text": prompt}]}]}
     response = requests.post(url, json=body, timeout=30)
@@ -176,6 +215,36 @@ def chamar_gemini(prompt):
     if not candidatos:
         raise ValueError(f"Resposta inesperada do Gemini: {data}")
     return candidatos[0]["content"]["parts"][0]["text"]
+
+
+# ================= EMBEDDINGS (few-shot dinâmico via pgvector) ================
+# Mesma chave do Gemini. Modelo multilíngue (bom p/ PT). Degradação graciosa: se
+# falhar, o caller cai nos exemplos few-shot fixos.
+GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
+EMBED_DIM = 768   # TEM de bater com a coluna vector(768) da tabela questoes_reais
+# Few-shot dinâmico (pgvector) DESLIGADO por padrão: só ligue (=1) depois de aplicar a
+# migration e rodar Backend/ingerir_questoes_reais.py — senão gasta embedding à toa.
+FEWSHOT_DINAMICO = os.getenv("KAIA_FEWSHOT_DINAMICO") == "1"
+
+
+def _embed(texto):
+    """Vetor de embedding (EMBED_DIM floats) do texto, ou None em falha."""
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        f"models/{GEMINI_EMBED_MODEL}:embedContent?key={API_KEY}"
+    )
+    body = {"content": {"parts": [{"text": texto}]}, "outputDimensionality": EMBED_DIM}
+    try:
+        vals = requests.post(url, json=body, timeout=15).json().get("embedding", {}).get("values")
+        return vals if isinstance(vals, list) and vals else None
+    except Exception as e:
+        print("[KaIA] erro embedding:", e)
+        return None
+
+
+def _vec_literal(v):
+    """Vetor como literal pgvector ('[a,b,...]') p/ passar via asyncpg + cast ::vector."""
+    return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
 
 
 def extrair_json(texto):
@@ -187,80 +256,16 @@ def extrair_json(texto):
 
 
 # ================== API: TEMAS de uma matéria ===============================
-# Cache em `temas_cache` (materia PK, temas jsonb): a geração dos temas custa 1
-# requisição ao Gemini (free tier: 20/dia). Cacheado, cada matéria gasta no
-# máximo 1 chamada na vida — e a tela de temas passa a abrir instantânea.
+# Temas FIXOS e curados (TEMAS_FIXOS) — sem geração/IA e sem cache. Instantâneo,
+# ZERO chamada ao Gemini, e alinhado ao que mais cai no ENEM (Matriz INEP + análise).
 @app.post("/temas", dependencies=[Depends(usuario_autenticado)])
-async def temas(request: Request, refresh: bool = False, dados: dict = Body(default={})):
+async def temas(dados: dict = Body(default={})):
     materia = (dados.get("materia") or "").strip()
-    pool = request.app.state.pool
-
-    async def ler_cache():
-        if pool is None or not materia:
-            return None
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow("select temas from temas_cache where materia = $1", materia)
-        if not row:
-            return None
-        cache = row["temas"]
-        if isinstance(cache, str):   # jsonb volta como string no asyncpg
-            cache = json.loads(cache)
-        return cache or None
-
-    # 1) Cache hit → devolve sem tocar no Gemini (salvo ?refresh=true).
-    if not refresh:
-        cache = await ler_cache()
-        if cache:
-            return {"temas": cache, "fonte": "cache"}
-
-    # 2) Miss (ou refresh) → chama a IA. run_in_threadpool: chamar_gemini é
-    # bloqueante (requests) e a rota é async — não pode travar o event loop.
-    # O prompt usa o NOME por extenso e pede os temas de MAIOR INCIDÊNCIA no
-    # ENEM, em formato curto (≤4 palavras, sem parênteses) p/ caber no card.
-    nome = MATERIAS.get(materia, materia)
-    prompt = (
-        f"Liste os 6 temas de {nome} de MAIOR INCIDÊNCIA na prova do ENEM e nos "
-        "principais vestibulares brasileiros — os conteúdos que MAIS CAEM, não uma "
-        "lista genérica da matéria.\n"
-        "Regras de formato (siga à risca):\n"
-        "- No máximo 4 palavras por tema.\n"
-        "- SEM parênteses, SEM subtítulos, SEM exemplos ou listas dentro do tema.\n"
-        "- Nomes curtos e diretos. Ex.: \"Estequiometria\", \"Análise Sintática\", "
-        "\"Termoquímica\".\n"
-        "Responda APENAS com um array JSON de 6 strings, sem texto extra."
-    )
-    try:
-        lista = extrair_json(await run_in_threadpool(chamar_gemini, prompt))
-        if not isinstance(lista, list) or not lista:
-            raise ValueError("resposta sem lista de temas")
-    except Exception as e:
-        print("[KaIA] erro /temas:", e)
-        # 2b) IA falhou, mas há cache antigo → devolve o cache (salva os testes
-        # quando a quota do Gemini estoura).
-        cache = await ler_cache()
-        if cache:
-            return {"temas": cache, "fonte": "cache_stale"}
-        return JSONResponse(
-            {"temas": [], "erro": "Não foi possível carregar os temas."}, status_code=502
-        )
-
-    # 3) Grava/atualiza o cache (best-effort: não derruba a resposta se falhar).
-    if pool is not None and materia:
-        try:
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    insert into temas_cache (materia, temas, updated_at)
-                    values ($1, $2::jsonb, now())
-                    on conflict (materia) do update set
-                        temas = excluded.temas, updated_at = now()
-                    """,
-                    materia, json.dumps(lista, ensure_ascii=False),
-                )
-        except Exception as e:
-            print("[KaIA] aviso: não foi possível gravar o cache de temas:", e)
-
-    return {"temas": lista, "fonte": "ia"}
+    lista = TEMAS_FIXOS.get(materia, [])
+    if not lista:
+        return JSONResponse({"temas": [], "erro": "Matéria sem temas cadastrados."},
+                            status_code=404)
+    return {"temas": lista, "fonte": "fixo"}
 
 
 # ================== API: ANOTAÇÕES (caderno do aluno por tema) ================
@@ -460,8 +465,19 @@ async def questoes_hoje(request: Request, uid: str = Depends(usuario_autenticado
 
 
 # Alinha porque_erradas a opts (o frontend acessa por índice) e garante explicacao.
+def _sem_markdown(t):
+    """Tira markdown do texto (cabeçalhos ##, negrito **, crase) — os exemplos reais
+    do ENEM têm isso e a IA às vezes copia."""
+    if not isinstance(t, str):
+        return t
+    t = re.sub(r'(?m)^\s*#{1,6}\s*', '', t)        # "## Título" -> "Título"
+    return t.replace('**', '').replace('__', '').replace('`', '').strip()
+
+
 def _normalizar_questao(questao):
-    opts = questao.get("opts") or []
+    questao["q"] = _sem_markdown(questao.get("q", ""))
+    opts = [_sem_markdown(o) for o in (questao.get("opts") or [])]
+    questao["opts"] = opts
     pe = questao.get("porque_erradas")
     if not isinstance(pe, list) or len(pe) != len(opts):
         questao["porque_erradas"] = [
@@ -516,21 +532,65 @@ def _frontend_q(q):
         "porque_erradas": q.get("porque_erradas", []),
     }
 
+# Exemplos reais (few-shot) carregados do JSON no repo (curados do ENEM, Apache 2.0).
+# Chaveado por matéria KaIA; matérias de conta (MAT/FIS/QUI) não têm entrada -> [].
+_EXEMPLOS_PATH = Path(__file__).with_name("exemplos_few_shot.json")
+try:
+    _EXEMPLOS_FEW_SHOT = json.loads(_EXEMPLOS_PATH.read_text(encoding="utf-8"))
+except Exception:
+    _EXEMPLOS_FEW_SHOT = {}
+
+
+def _exemplos_few_shot(materia):
+    """TODOS os exemplos reais da matéria (curados p/ variedade de formato), em ordem
+    embaralhada — [] se não houver (matéria de conta ou JSON ausente). Sem banco."""
+    pool = list(_EXEMPLOS_FEW_SHOT.get(materia) or [])
+    random.shuffle(pool)
+    return pool
+
+
 # Gera `n` questões no Gemini (roda em thread p/ não travar o loop). Com hobbie,
-# instrui ~60% a usá-lo e a marcar "usa_hobbie" (Parte 5).
-async def _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel):
+# instrui ~60% a usá-lo e a marcar "usa_hobbie" (Parte 5). `exemplos`: questões
+# reais injetadas como few-shot (estilo/dificuldade), quando houver.
+async def _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel, exemplos=None, evitar=None):
     dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
     if hobbie:
         proporcao = max(1, round(n * 0.6))
         formato = _FORMATO_QUESTAO_HOBBIE
         regra_hobbie = (
-            f'- Use o hobbie "{hobbie}" no enunciado de aproximadamente {proporcao} das {n} '
-            f'questões; nas outras, faça enunciados genéricos (sem citar o hobbie).\n'
+            f'- Em aproximadamente {proporcao} das {n} questões, use o hobbie "{hobbie}" como '
+            f'CONTEXTO CENTRAL do enunciado — a situação/cenário gira em torno dele, não é só '
+            f'uma menção de passagem; o conceito avaliado continua EXATAMENTE o mesmo. Nas '
+            f'outras, enunciados genéricos (sem citar o hobbie).\n'
             f'- Em CADA questão inclua o booleano "usa_hobbie" indicando se usou o hobbie.\n'
         )
     else:
         formato = _FORMATO_QUESTAO
         regra_hobbie = ''
+    # Few-shot: questões reais como referência de ESTILO/dificuldade (não copiar conteúdo).
+    bloco_exemplos = ''
+    if exemplos:
+        refs = []
+        for ex in exemplos:
+            alts = ' / '.join(ex.get('alternativas') or [])
+            refs.append(f'Enunciado: {ex["enunciado"][:400]}\nAlternativas: {alts}')
+        bloco_exemplos = (
+            '\nExemplos de questões REAIS de vestibular desta matéria — copie o ESTILO, '
+            'registro, comprimento e nível, e VARIE o tipo/formato de enunciado entre as '
+            'questões como estes exemplos variam (interpretação de texto, análise de fonte, '
+            'aplicação de conceito). Crie questões NOVAS — NÃO reaproveite o conteúdo, NEM '
+            'repita a mesma estrutura em todas:\n'
+            + '\n---\n'.join(refs) + '\n'
+        )
+    # Anti-repetição: mostra o que JÁ existe dessa combinação pra o modelo divergir.
+    bloco_evitar = ''
+    if evitar:
+        lista = '\n'.join(f'- {e[:180]}' for e in evitar[:10] if e)
+        if lista:
+            bloco_evitar = (
+                '\nEstas questões JÁ EXISTEM sobre este tema — NÃO repita o enunciado nem o '
+                'mesmo foco; aborde aspectos/subtemas DIFERENTES:\n' + lista + '\n'
+            )
     prompt = f"""
 Crie {n} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
 para o ensino médio.
@@ -540,9 +600,10 @@ Regras:
 - "ans" é o índice (0 a 4) da alternativa correta.
 - "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da correta use "".
 - As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
+- Enunciados em TEXTO CORRIDO — sem markdown (nada de ##, **, títulos ou listas).
 - Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre a esse nível.
 {regra_hobbie}- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
-"""
+{bloco_evitar}{bloco_exemplos}"""
     try:
         dados_ia = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
         if isinstance(dados_ia, list):
@@ -637,6 +698,87 @@ async def _resetar_vistas_antigas(conn, user_id, materia, tema, nivel):
         print("[KaIA] erro ao resetar vistas antigas:", e)
 
 
+# Few-shot DINÂMICO: recupera do banco de questões reais (pgvector) as k mais parecidas
+# com o tema pedido. Devolve no formato de _exemplos_few_shot, ou None em qualquer falha
+# (sem pgvector, sem embedding, tabela vazia) — aí o caller usa os exemplos FIXOS.
+async def _exemplos_similares(conn, materia, tema, k=5):
+    vetor = await asyncio.to_thread(_embed, f"{MATERIAS.get(materia, materia)}: {tema}")
+    if not vetor:
+        return None
+    area = _AREA_ENEM.get(materia, materia)
+    try:
+        rows = await conn.fetch(
+            "select enunciado, alternativas, gabarito from questoes_reais "
+            "where materia = $1 and embedding is not null "
+            "order by embedding <=> $2::vector limit $3",
+            area, _vec_literal(vetor), k)
+    except Exception as e:
+        print("[KaIA] busca similares (pgvector) indisponível:", e)
+        return None
+    if not rows:
+        return None
+    exemplos = []
+    for r in rows:
+        alts = r["alternativas"]
+        exemplos.append({"enunciado": r["enunciado"],
+                         "alternativas": json.loads(alts) if isinstance(alts, str) else alts,
+                         "gabarito": r["gabarito"]})
+    print(f"[KaIA] few-shot dinâmico: {len(exemplos)} exemplos reais p/ {materia}/{tema}")
+    return exemplos
+
+
+# Enunciados JÁ existentes dessa combinação (p/ o prompt anti-repetição divergir).
+async def _enunciados_existentes(conn, materia, tema, nivel, limite=10):
+    try:
+        rows = await conn.fetch(
+            "select enunciado from questoes_cache "
+            "where materia = $1 and tema = $2 and nivel = $3 order by random() limit $4",
+            materia, tema, nivel, limite)
+        return [r["enunciado"] for r in rows]
+    except Exception as e:
+        print("[KaIA] erro ao buscar enunciados existentes:", e)
+        return []
+
+
+async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
+    """Monta até `n` questões de UMA faixa (materia+tema+nivel): cache-first (hobbie ->
+    genérica -> reset de vistas antigas) e gera o que faltar no Gemini (few-shot),
+    salvando no cache. Marca as entregues como vistas e etiqueta o nível em cada uma
+    (o front escolhe pela faixa no buffer)."""
+    entregues = []
+    # 1) cache com o hobbie da vez
+    if hobbie:
+        entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n)
+    # 2) completa com genéricas (hobbie NULL)
+    if len(entregues) < n:
+        entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues))
+    # 3) esgotou? libera as vistas antigas (>30d) e tenta o cache de novo.
+    if len(entregues) < n:
+        await _resetar_vistas_antigas(conn, user_id, materia, tema, nivel)
+        if hobbie:
+            ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
+            entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n - len(entregues), ja)
+        if len(entregues) < n:
+            ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
+            entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues), ja)
+    # 4) ainda falta -> Gemini (few-shot) + salva no cache
+    if n - len(entregues) > 0:
+        evitar = await _enunciados_existentes(conn, materia, tema, nivel)
+        # few-shot dinâmico (pgvector) SE ligado, com fallback pros exemplos fixos
+        exemplos = None
+        if FEWSHOT_DINAMICO:
+            exemplos = await _exemplos_similares(conn, materia, tema)
+        exemplos = exemplos or _exemplos_few_shot(materia)
+        novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel,
+                                       exemplos=exemplos, evitar=evitar)
+        entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
+    # 5) marca vistas + etiqueta o nível
+    await _marcar_vistas(conn, user_id, entregues)
+    for q in entregues:
+        q["nivel"] = nivel
+    return entregues
+
+
 @app.post("/gerar-questao")
 async def gerar_questao(request: Request, dados: dict = Body(default={}),
                         uid: str = Depends(usuario_autenticado)):
@@ -648,6 +790,8 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
     # compat com o formato antigo (lista "hobbies"): usa o 1º como hobbie.
     if hobbie is None and isinstance(dados.get("hobbies"), list) and dados["hobbies"]:
         hobbie = dados["hobbies"][0]
+    # Lista completa de hobbies (buffer varia o hobby POR FAIXA -> não domina um só).
+    hobbies_lista = [h for h in (dados.get("hobbies") or []) if h] if isinstance(dados.get("hobbies"), list) else []
 
     qtd_raw = dados.get("quantidade")
     lote = qtd_raw is not None
@@ -660,11 +804,22 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
     except (TypeError, ValueError):
         nivel = 3
 
+    # Buffer da sessão: {"nivel": qtd, ...} — o front pede o leque de níveis de uma
+    # vez (carregar tudo no início). O backend gera por FAIXA (chamadas pequenas).
+    distribuicao = dados.get("distribuicao") if isinstance(dados.get("distribuicao"), dict) else None
+    if distribuicao:
+        try:
+            n = min(sum(int(v) for v in distribuicao.values()), 40)   # teto de segurança
+            lote = True
+        except (TypeError, ValueError):
+            distribuicao = None
+
     pool = getattr(request.app.state, "pool", None)
 
     # Sem banco ou sem user_id: sem cache — gera tudo no Gemini (comportamento antigo).
     if pool is None or not user_id:
-        entregues = [_frontend_q(q) for q in await _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel)]
+        entregues = [_frontend_q(q) for q in await _gerar_no_gemini(
+            n, materia, nome, tema, hobbie, nivel, exemplos=_exemplos_few_shot(materia))]
         if not entregues:
             return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
         return {"questoes": entregues} if lote else entregues[0]
@@ -672,34 +827,29 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
     entregues = []
     try:
         async with pool.acquire() as conn:
-            # 1) cache com o hobbie da vez
-            if hobbie:
-                entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n)
-            # 2) completa com genéricas (hobbie NULL)
-            if len(entregues) < n:
-                entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues))
-            # 3) esgotou? libera as vistas antigas (>30d) e tenta o cache de novo (Parte 7).
-            #    `excluir` os ids já coletados evita repetir a mesma questão no lote.
-            if len(entregues) < n:
-                await _resetar_vistas_antigas(conn, user_id, materia, tema, nivel)
-                if hobbie:
-                    ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
-                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, n - len(entregues), ja)
-                if len(entregues) < n:
-                    ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
-                    entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues), ja)
-            # 4) ainda falta -> Gemini + salva no cache
-            if n - len(entregues) > 0:
-                novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel)
-                entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
-            # 5) marca as entregues como vistas
-            await _marcar_vistas(conn, user_id, entregues)
+            if distribuicao:
+                # buffer: gera por FAIXA de nível (chamadas pequenas, calibração limpa).
+                # Hobbies em RODÍZIO entre as faixas (ordem embaralhada) -> os hobbies da
+                # sessão se alternam, sem um só dominar o buffer.
+                if hobbies_lista:
+                    random.shuffle(hobbies_lista)
+                for i, (niv_str, cnt) in enumerate(distribuicao.items()):
+                    try:
+                        niv = max(1, min(int(niv_str), 5))
+                        cnt = max(0, min(int(cnt), 10))
+                    except (TypeError, ValueError):
+                        continue
+                    if cnt:
+                        hob = hobbies_lista[i % len(hobbies_lista)] if hobbies_lista else hobbie
+                        entregues += await _montar_banda(conn, user_id, materia, nome, tema, hob, niv, cnt)
+            else:
+                entregues = await _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n)
     except Exception as e:
         print("[KaIA] erro no cache /gerar-questao:", e)
 
     if not entregues:
         return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
-    return {"questoes": entregues} if lote else entregues[0]
+    return {"questoes": entregues} if (lote or distribuicao) else entregues[0]
 
 
 # Devolve ao pool as questões que o aluno recebeu mas NÃO usou (mudou de nível,

@@ -680,38 +680,104 @@ const questaoFallback = (subject, tema) => ({
 // ============================================================
 //        LOTE DE QUESTÕES (economiza cota do Gemini)
 // ============================================================
-// Uma chamada ao /gerar-questao traz LOTE_QTD questões; consumimos uma por vez e
-// só pedimos outro lote quando a fila esvazia. Trocar de tema descarta o lote.
+// Buffer da RODADA: UMA chamada ao /gerar-questao traz um LEQUE de níveis (janela
+// centrada no nível atual) pra rodada inteira — carregado no INÍCIO e servido da
+// fila, sem rede no meio. Só re-busca quando a fila esvazia (fronteira das 10) ou
+// ao trocar de tema (descarta o buffer).
 let filaQuestoes     = [];
-let filaChave        = null;   // `${materia}::${tema}` do lote em memória
+let filaChave        = null;   // `${materia}::${tema}` do buffer em memória
 let loteBloqueadoAte = 0;      // enquanto performance.now() < isto, não re-chama o backend
-const LOTE_QTD          = 5;
+let hobbiesSessao    = [];     // 2 hobbies sorteados por sessão (variedade sem trocar de tema a cada questão)
 const LOTE_COOLDOWN_MS  = 120000;   // após uma falha (ex.: cota estourada), 2 min sem re-tentar
+
+// Sorteia até 2 hobbies do aluno pra sessão inteira — mistura os temas sem virar
+// "tudo sobre a mesma coisa". Zera/re-sorteia a cada sessão.
+function sortearHobbiesSessao() {
+    const copia = lerHobbies().slice();
+    hobbiesSessao = [];
+    while (hobbiesSessao.length < 2 && copia.length) {
+        hobbiesSessao.push(copia.splice(Math.floor(Math.random() * copia.length), 1)[0]);
+    }
+}
+
+// Distribuição de níveis do buffer (~META_QUESTOES), centrada no nível atual; o peso
+// que cairia fora de [1..5] nas bordas vai pro centro. Ex.: nível 2 -> {1:3, 2:4, 3:3}.
+function janelaDistribuicao(centro) {
+    const c = Math.max(NIVEL_MIN, Math.min(centro, NIVEL_MAX));
+    const pesos = { [c - 1]: 3, [c]: 4, [c + 1]: 3 };
+    const dist = {};
+    let perdido = 0;
+    for (const nvStr of Object.keys(pesos)) {
+        const nv = Number(nvStr);
+        if (nv >= NIVEL_MIN && nv <= NIVEL_MAX) dist[nv] = pesos[nvStr];
+        else perdido += pesos[nvStr];
+    }
+    dist[c] = (dist[c] || 0) + perdido;
+    return dist;
+}
+
+// Tira da fila a questão de nível mais próximo do alvo (degradação graciosa: se
+// esgotou a faixa exata, serve a vizinha).
+function pegarDaFila(nivelAlvo) {
+    if (!filaQuestoes.length) return null;
+    let idx = 0, melhor = Infinity;
+    filaQuestoes.forEach((q, i) => {
+        const d = Math.abs((q.nivel != null ? q.nivel : nivelAlvo) - nivelAlvo);
+        if (d < melhor) { melhor = d; idx = i; }
+    });
+    return filaQuestoes.splice(idx, 1)[0];
+}
+
+// Busca UM buffer no backend e devolve as questões válidas (ou [] em falha silenciosa).
+// Envia os 2 hobbies da sessão; o backend faz rodízio deles por faixa.
+async function buscarBufferQuestoes(subject, tema) {
+    const data = await postJSON('/gerar-questao', {
+        materia: subject, tema, user_id: userId,
+        hobbies: hobbiesSessao.length ? hobbiesSessao : lerHobbies(),
+        distribuicao: janelaDistribuicao(nivelDificuldade),
+    });
+    const lote = Array.isArray(data?.questoes) ? data.questoes : [];
+    return lote.filter(q => q && Array.isArray(q.opts));
+}
 
 async function obterProximaQuestao(subject, tema) {
     const chave = `${subject}::${tema}`;
-    if (filaChave !== chave) { devolverFila(); filaChave = chave; }   // tema novo → devolve o lote antigo
+    if (filaChave !== chave) { devolverFila(); filaChave = chave; }   // tema novo → devolve o buffer antigo
     if (!filaQuestoes.length) {
-        // Em cooldown após falha: serve fallback SEM re-chamar (não spamar endpoint que já falhou).
+        // Fila vazia (início da sessão / o prefetch não deu conta) → busca BLOQUEANTE.
         if (performance.now() < loteBloqueadoAte) return questaoFallback(subject, tema);
         try {
-            // Um hobbie aleatório por LOTE (não fixo na sessão): sorteia da lista do aluno.
-            const hobbiesAluno = lerHobbies();
-            const hobbie = hobbiesAluno.length ? hobbiesAluno[Math.floor(Math.random() * hobbiesAluno.length)] : null;
-            const data = await postJSON('/gerar-questao', {
-                materia: subject, tema, hobbie, user_id: userId, quantidade: LOTE_QTD, nivel: nivelDificuldade
-            });
-            const lote = Array.isArray(data?.questoes) ? data.questoes : [];
-            filaQuestoes = lote.filter(q => q && Array.isArray(q.opts));
-            if (!filaQuestoes.length) throw new Error(data?.erro || 'lote vazio');
+            const novas = await buscarBufferQuestoes(subject, tema);
+            if (!novas.length) throw new Error('buffer vazio');
+            filaQuestoes = novas;
             loteBloqueadoAte = 0;   // sucesso limpa o cooldown
         } catch (e) {
-            console.warn('[KaIA] /gerar-questao (lote) indisponível, usando questão local:', e);
+            console.warn('[KaIA] /gerar-questao (buffer) indisponível, usando questão local:', e);
             loteBloqueadoAte = performance.now() + LOTE_COOLDOWN_MS;
             return questaoFallback(subject, tema);
         }
     }
-    return filaQuestoes.shift();
+    return pegarDaFila(nivelDificuldade) || questaoFallback(subject, tema);
+}
+
+// Reabastece a fila em BACKGROUND quando ela fica baixa — sem loader, pra o
+// "carregando" nunca aparecer no meio da rodada. Blindado contra chamadas concorrentes.
+const LIMIAR_REABASTECER = 3;
+let reabastecendoFila = false;
+function talvezReabastecerFila(subject, tema) {
+    if (reabastecendoFila || filaChave !== `${subject}::${tema}`) return;
+    if (filaQuestoes.length > LIMIAR_REABASTECER) return;
+    if (performance.now() < loteBloqueadoAte) return;
+    reabastecendoFila = true;
+    buscarBufferQuestoes(subject, tema)
+        .then(novas => {
+            if (novas.length && filaChave === `${subject}::${tema}`) {
+                filaQuestoes.push(...novas);   // só aproveita se ainda é o mesmo tema
+                loteBloqueadoAte = 0;
+            }
+        })
+        .catch(e => console.warn('[KaIA] reabastecimento em background falhou:', e))
+        .finally(() => { reabastecendoFila = false; });
 }
 
 // Devolve ao pool as questões do lote que NÃO foram usadas (mudou de nível/tema
@@ -812,7 +878,6 @@ let errosSeguidos    = 0;
 const NIVEL_MIN = 1, NIVEL_MAX = 5;
 
 function ajustarNivel(acertou) {
-    const antes = nivelDificuldade;
     if (acertou) {
         acertosSeguidos++; errosSeguidos = 0;
         if (acertosSeguidos >= 2 && nivelDificuldade < NIVEL_MAX) { nivelDificuldade++; acertosSeguidos = 0; }
@@ -820,7 +885,8 @@ function ajustarNivel(acertou) {
         errosSeguidos++; acertosSeguidos = 0;
         if (errosSeguidos >= 2 && nivelDificuldade > NIVEL_MIN) { nivelDificuldade--; errosSeguidos = 0; }
     }
-    if (nivelDificuldade !== antes) devolverFila();   // nível mudou → devolve o lote (novo nível na próxima)
+    // O buffer cobre VÁRIOS níveis: mudar de nível NÃO descarta a fila (pegarDaFila serve
+    // a faixa certa; o reabastecimento em background re-centra no novo nível).
     atualizarNivel();
 }
 
@@ -858,6 +924,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     nivelDificuldade = 2;
     acertosSeguidos = 0;
     errosSeguidos = 0;
+    sortearHobbiesSessao();                     // 2 hobbies fixos p/ a sessão (variedade)
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
     await carregarMetaHoje();                   // baseline do dia (contador diário)
@@ -909,6 +976,9 @@ async function carregarQuestao(subject, tema) {
     if (typeof cadAberto === 'function' && cadAberto() && cadTema !== tema) {
         carregarCaderno(tema);
     }
+
+    // Reabastece a fila em background (sem loader) enquanto o aluno lê/responde.
+    talvezReabastecerFila(subject, tema);
 }
 
 // Entrada ao escolher um tema: abre a sessão (se ainda não aberta) e carrega a 1ª

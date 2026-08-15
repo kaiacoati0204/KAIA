@@ -32,7 +32,7 @@
   --erro-bg: #f3e2e2;
   --erro-tx: #8a3b3b;
   --alerta-bg: #f7ecd2;   /* âmbar suave — faixa "Atenção" (status do meio) */
-  --alerta-tx: #8a6d1e;
+  --alerta-tx: #7d6316;   /* escurecido de #8a6d1e p/ contraste 4.88:1 (WCAG AA) sobre --alerta-bg */
 
   /* superfícies (dashboard e cards) */
   --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */

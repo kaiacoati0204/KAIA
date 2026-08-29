@@ -62,6 +62,11 @@ function encerrarSessao() {
 }
 
 function logEvent(type, payload) {
+    // (gatilho de teste) — REMOVER junto com o bloco do gatilho. Marca o que
+    // acontece durante uma intervenção de teste, para dar para filtrar depois.
+    if (typeof _intervencaoDeTeste !== 'undefined' && _intervencaoDeTeste) {
+        payload = { ...(payload || {}), origem: 'gatilho_teste' };
+    }
     const event = { session_id: sessionId, ts: new Date().toISOString(), event_type: type, payload };
     console.log('[KaIA Event]', event);
     postJSON('/events', event, true).catch(() => {});
@@ -78,25 +83,120 @@ let intervencaoMostradaEm = 0;      // p/ calcular tempo_ate_aceitar_s
 // a mesma, combatendo a habituação).
 const _variar = (a) => a[Math.floor(Math.random() * a.length)];
 
+// ============================================================
+//   TODO: ajustar tempo pra produção — TEMPOS DE TESTE
+// ============================================================
+// Enquanto o visual das 7 está sendo calibrado, TODOS os tempos das
+// intervenções estão encurtados: com os valores reais, ver uma pausa ativa
+// inteira custa 90 segundos por rodada de ajuste.
+//
+// COMO RESTAURAR: troque TEMPOS_DE_TESTE para false. Só isso. Cada chamada de
+// T() carrega os DOIS valores — T(teste, produção) — então o valor real nunca
+// se perdeu, está ali do lado. Todos os pontos afetados carregam o comentário
+// "TODO: ajustar tempo pra produção", então um grep por esse texto lista a
+// lista inteira.
+//
+// Os tempos de PRODUÇÃO abaixo são os que estavam valendo antes desta fase e
+// ainda NÃO foram calibrados de verdade — isso é etapa própria, com dados de
+// uso. Não trate a segunda coluna como número final.
+const TEMPOS_DE_TESTE = true;
+const T = (teste, producao) => (TEMPOS_DE_TESTE ? teste : producao);
+
+// ============================================================
+//   ÍCONES DAS 7 — trocar aqui pelos ícones da marca
+// ============================================================
+// Substituem os emojis dos títulos. Emoji renderiza diferente em cada sistema
+// operacional e nenhum deles é da marca; estes são SVG de traço, no mesmo
+// vocabulário dos ícones da rail (comum.js), herdando cor via currentColor.
+//
+// PARA TROCAR: substitua o SVG da entrada correspondente. Só isso — o CSS
+// (.kaia-ic no style.css) cuida de tamanho, cor e alinhamento, e nenhuma outra
+// parte do código conhece os desenhos.
+//
+// NOTA: os emojis que aparecem DENTRO do texto dos passos (🙆 👀 💧 🌬️ em
+// PAUSA_ATIVA_PASSOS) continuam como estão — são conteúdo da instrução, não
+// identidade da intervenção. Dá para trocar também, é só pedir.
+const ICONES_INTERVENCAO = {
+    // bússola — "onde está sua atenção agora?"
+    auto_monitoramento: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>',
+    // lua — cansaço
+    alerta_fadiga:      '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
+    // onda de respiração
+    micro_refoco:       '<svg viewBox="0 0 24 24"><path d="M3 12h3l2-4 3 8 2.5-6 1.5 2h6"/></svg>',
+    // figura em movimento
+    pausa_ativa:        '<svg viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="2"/><path d="M12 8v6"/><path d="m7 10 5-2 5 2"/><path d="m9 21 3-7 3 7"/></svg>',
+    // duas setas em ciclo
+    troca_atividade:    '<svg viewBox="0 0 24 24"><path d="M3 11a8 8 0 0 1 13.5-5.5L21 9"/><polyline points="21 4 21 9 16 9"/><path d="M21 13a8 8 0 0 1-13.5 5.5L3 15"/><polyline points="3 20 3 15 8 15"/></svg>',
+    // alvo — recuperar o que já viu
+    checkpoint:         '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>',
+    // âncora
+    reancoragem:        '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M12 7v14"/><path d="M6 11h12"/><path d="M4 15a8 8 0 0 0 16 0"/></svg>',
+};
+
+// Devolve o <span> do ícone pronto. `chip` põe o ícone num quadrado de bege
+// (usado nos dois overlays, onde ele é o único elemento gráfico do card).
+function _iconeHTML(tipo, chip = false) {
+    const svg = ICONES_INTERVENCAO[tipo];
+    if (!svg) return '';
+    return `<span class="kaia-ic${chip ? ' kaia-ic-chip' : ''}" aria-hidden="true">${svg}</span>`;
+}
+
 // Copy dos braços que renderizam como CARD de texto. Os demais do alvo
 // (micro_refoco, pausa_ativa, troca_atividade, checkpoint, reancoragem) são AÇÃO —
 // mostrarIntervencao desvia antes deste lookup. `texto` é uma LISTA: sorteia uma
 // frase a cada disparo. Adicionar/editar frases aqui.
+// `titulo` e `texto` são LISTAS: cada disparo sorteia um de cada, então o card
+// muda de cabeçalho E de corpo. Combinado com a rotação de POSIÇÃO (POSICOES_CARD,
+// abaixo), duas aparições seguidas nunca são iguais nem no lugar nem no que dizem
+// — que é o que impede o card de virar banner ignorado.
+// Tom das listas: nomear o que está acontecendo sem cobrar, sem urgência e sem
+// prometer resultado. Nada de "você precisa", "foque!" ou exclamação dupla.
+// Para editar: acrescenta ou troca linhas aqui, nada mais depende disso.
 const INTERVENCOES_MSG = {
     auto_monitoramento: {
-        emoji: '🧭', titulo: 'Como está seu foco?', texto: [
+        titulo: [
+            'Como está seu foco?',
+            'Só um instante',
+            'Pausa de um segundo',
+            'E aí, ainda por aqui?',
+            'Um respiro rápido',
+        ],
+        texto: [
             'Se a mente vagou, tudo bem — perceber já ajuda. Bora focar nas próximas 3?',
             'Deu uma dispersada? Acontece. Reancora nas próximas 3 questões.',
             'Notou que saiu do foco? Só de perceber você já voltou.',
             'Tudo bem divagar. Respira e escolhe voltar pra questão.',
+            'A atenção vai e volta o dia inteiro. Agora ela pode voltar.',
+            'Sem cobrança: só um lembrete de que a questão continua aí.',
+            'Reparar que se distraiu é metade do caminho de volta.',
+            'Onde estava sua cabeça? Não precisa responder — só voltar.',
+            'A próxima questão é um recomeço. Não precisa de impulso nenhum.',
+            'Perder o fio é normal. Pegar de novo também.',
+            'Você não precisa de foco perfeito. Só do próximo passo.',
+            'Se travou nesta questão, tudo bem pular e voltar depois.',
         ],
     },
     alerta_fadiga: {
-        emoji: '😴', titulo: 'Sinais de cansaço', texto: [
+        titulo: [
+            'Sinais de cansaço',
+            'Seu ritmo caiu',
+            'Já foi bastante',
+            'Hora de desacelerar?',
+            'O corpo está avisando',
+        ],
+        texto: [
             'Talvez seja hora de um descanso de verdade.',
             'Você já estudou bastante hoje — que tal uma pausa maior?',
             'Cansaço é sinal de que rendeu. Vale descansar um pouco.',
             'Seu foco pede uma pausa de verdade. Sem culpa.',
+            'Insistir cansado costuma render menos que voltar depois.',
+            'Parar agora não apaga o que você já fez hoje.',
+            'Descansar faz parte de estudar. Não é o contrário.',
+            'O que você aprendeu hoje continua aí amanhã.',
+            'Uma pausa longa agora pode valer mais que dez questões.',
+            'Seu corpo pediu primeiro. Vale escutar.',
+            'Estudar cansado vira releitura. Melhor voltar inteiro.',
+            'Sem meta a bater agora. Pode ir descansar.',
         ],
     },
 };
@@ -168,12 +268,32 @@ function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
 // automático não desperdiça só a intervenção, ele injeta recompensa falsa no
 // Thompson — e como os 3 botões saem sempre na mesma ordem, o reflexo acerta
 // sempre a mesma resposta, o que é viés e não ruído.
-// O reflexo se prende a um PONTO da tela. Então a faixa (embaixo) fica fixa e
-// previsível — achar continua barato — e o ponto dentro dela roda. Em ORDEM, e
-// não por sorteio: sorteio repetiria o mesmo canto ~1/3 das vezes, e é na
-// repetição que o reflexo se forma. As classes moram no style.css.
-const POSICOES_CARD = ['pos-dir', 'pos-esq', 'pos-centro'];
-let _posicaoCardIdx = -1;
+// O reflexo se prende a um PONTO da tela. Então o REPERTÓRIO de zonas é fixo e
+// pequeno (achar continua barato: são sempre os mesmos 6 lugares, todos na
+// metade de baixo) e o ponto dentro dele roda. Em ORDEM, e não por sorteio:
+// sorteio repetiria o mesmo canto ~1/6 das vezes, e é na repetição que o
+// reflexo se forma.
+// São 3 colunas x 2 linhas. A ordem abaixo é escolhida a dedo para que zonas
+// CONSECUTIVAS mudem de coluna E de linha — o salto entre uma aparição e a
+// seguinte é sempre o maior possível. As classes moram no style.css, junto com
+// as medidas que provam que nenhuma zona toca a questão nem a barra lateral.
+const POSICOES_CARD = [
+    ['pos-esq'],                  // inferior esquerda
+    ['pos-centro', 'pos-alta'],   // meio-alta, centro
+    ['pos-dir'],                  // inferior direita
+    ['pos-esq', 'pos-alta'],      // meio-alta, esquerda
+    ['pos-centro'],               // inferior centro
+    ['pos-dir', 'pos-alta'],      // meio-alta, direita
+];
+const _TODAS_POSICOES = POSICOES_CARD.flat();
+
+// O índice VIVE ENTRE SESSÕES. Com teto de 5 intervenções por sessão e só 2 dos
+// 7 braços sendo card, o aluno vê ~1 card por sessão: se o índice zerasse a cada
+// carregamento, ele cairia SEMPRE na primeira zona — a rotação existiria no
+// código e não na experiência, que é exatamente o reflexo que ela veio evitar.
+const POS_CARD_CHAVE = 'kaia_pos_card_idx';
+let _posicaoCardIdx = parseInt(localStorage.getItem(POS_CARD_CHAVE), 10);
+if (!Number.isInteger(_posicaoCardIdx)) _posicaoCardIdx = -1;
 
 const _probeNaTela = () => {
     const p = $('kaia-probe');
@@ -188,13 +308,16 @@ function _posicionarPilhaNotif() {
     if ([...pilha.children].some(el => el.id !== 'kaia-intervencao')) return;
     for (let i = 0; i < POSICOES_CARD.length; i++) {
         _posicaoCardIdx = (_posicaoCardIdx + 1) % POSICOES_CARD.length;
+        const zona = POSICOES_CARD[_posicaoCardIdx];
         // O probe de autorrelato mora embaixo no centro e gera o rótulo do
-        // modelo: o card (z-index 9999) o taparia. O centro perde a vez.
-        if (POSICOES_CARD[_posicaoCardIdx] === 'pos-centro' && _probeNaTela()) continue;
+        // modelo: o card (z-index 9999) o taparia. Só a zona centro-BAIXA
+        // conflita — a centro-alta passa bem acima dele.
+        if (zona.includes('pos-centro') && !zona.includes('pos-alta') && _probeNaTela()) continue;
         break;
     }
-    pilha.classList.remove(...POSICOES_CARD);
-    pilha.classList.add(POSICOES_CARD[_posicaoCardIdx]);
+    localStorage.setItem(POS_CARD_CHAVE, String(_posicaoCardIdx));
+    pilha.classList.remove(..._TODAS_POSICOES);
+    pilha.classList.add(...POSICOES_CARD[_posicaoCardIdx]);
 }
 
 // Portão antes de o feedback aceitar clique. Vale para TODO card, não só o
@@ -203,7 +326,7 @@ function _posicionarPilhaNotif() {
 // DENTRO da sessão, vem das anteriores. Gatear "só o primeiro" seria quase o
 // mesmo na prática e deixaria o card com dois comportamentos para o mesmo
 // visual, que é a inconsistência que atrapalha TEA/TDAH.
-const CARD_GATE_MS = 900;
+const CARD_GATE_MS = T(350, 900);   // TODO: ajustar tempo pra produção
 
 function _travarFeedbackDoCard(alvo) {
     const strip = alvo.querySelector('.kaia-fb');
@@ -241,9 +364,15 @@ function mostrarIntervencao(intv) {
     if (intv.intervention_type === 'reancoragem')     { reancorarDestaque();      return; }
     _garantirCardIntervencao();
     const info = INTERVENCOES_MSG[intv.intervention_type]
-              || { emoji: '💡', titulo: 'Dica', texto: 'Continue focado!' };
-    $('kaia-int-titulo').innerText = `${info.emoji} ${info.titulo}`;
-    $('kaia-int-texto').innerText  = Array.isArray(info.texto) ? _variar(info.texto) : info.texto;
+              || { titulo: 'Dica', texto: 'Continue focado!' };
+    // titulo e texto aceitam string OU lista — o fallback acima ainda é string.
+    const _um = (v) => (Array.isArray(v) ? _variar(v) : v);
+    // innerHTML só para o ÍCONE (SVG nosso, constante); o título entra por
+    // append, que cria nó de texto e não interpreta marcação.
+    const tit = $('kaia-int-titulo');
+    tit.innerHTML = _iconeHTML(intv.intervention_type);
+    tit.append(' ' + _um(info.titulo));
+    $('kaia-int-texto').innerText  = _um(info.texto);
     const fb = $('kaia-int-fb');
     fb.textContent = '';
     fb.appendChild(_stripFeedback(intv.intervention_type, {
@@ -267,6 +396,13 @@ function esconderIntervencao() {
 
 async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoMostradaEm) {
     if (!tipo) return;
+    // (gatilho de teste) — REMOVER junto com o bloco do gatilho.
+    // Intervenção que a Bia disparou para ver o design não pode virar recompensa
+    // no Thompson: seria dado inventado alimentando o modelo.
+    if (_intervencaoDeTeste) {
+        console.log('[KaIA] (teste) feedback NÃO enviado:', tipo, reward);
+        return;
+    }
     const tempo = mostradaEm ? (performance.now() - mostradaEm) / 1000 : null;
     try {
         await postJSON('/intervencao/feedback', {
@@ -282,7 +418,8 @@ async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoM
 // polling e pode já estar ocupado por outra intervenção quando este disparar.
 let _fbTardioTimer = null;
 
-function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs = 45000 }) {
+function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs = 45000,
+                                 icone = null }) {
     clearTimeout(_fbTardioTimer);
     _fbTardioTimer = setTimeout(() => {
         // sessaoDeEstudoAberta (não isMissionActive): o aluno pode estar lendo a
@@ -291,7 +428,8 @@ function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs 
         const card = document.createElement('div');
         card.className = 'kaia-card-notif';
         const h = document.createElement('h4');
-        h.textContent = titulo;
+        h.innerHTML = icone ? _iconeHTML(icone) : '';   // SVG constante nosso
+        h.append(icone ? ' ' + titulo : titulo);        // nó de texto, sem marcação
         const p = document.createElement('p');
         p.textContent = pergunta;
         const sumir = () => card.remove();
@@ -312,10 +450,166 @@ function iniciarPollIntervencao() {
         try {
             const r = await apiFetch(`/intervencao/pendente?session_id=${sessionId}`);
             const data = await r.json();
-            if (data && data.pendente) mostrarIntervencao(data.pendente);
+            if (data && data.pendente) {
+                _intervencaoDeTeste = false;   // (gatilho de teste) veio do motor real
+                mostrarIntervencao(data.pendente);
+            }
         } catch (_) { /* silencioso */ }
-    }, 15000);
+        // TODO: ajustar tempo pra produção — 4s no teste (a intervenção aparece
+        // quase na hora, dá pra iterar no visual), 15s de verdade.
+    }, T(4000, 15000));
 }
+
+// =============================================================================
+// ===== GATILHO DE TESTE (PROVISÓRIO) — REMOVER, o Vitor faz o motor real =====
+// =============================================================================
+// POR QUE EXISTE: as 7 intervenções não disparam sozinhas porque o motor de
+// decisão ainda não existe. Este bloco é uma muleta para a Bia CONSEGUIR VER as
+// intervenções acontecendo no fluxo real e validar o design. Não é heurística,
+// não é modelo, não pretende ser: é "ficou parado N segundos, mostra a próxima
+// da fila".
+//
+// COMO REMOVER (3 passos, nada mais depende disto):
+//   1. apague este bloco inteiro;
+//   2. apague a linha `iniciarGatilhoTeste();` (junto de iniciarPollIntervencao);
+//   3. apague o guarda marcado "(gatilho de teste)" em enviarFeedbackIntervencao
+//      e a linha `_intervencaoDeTeste = false;` em iniciarPollIntervencao.
+//
+// COMO DESLIGAR SEM APAGAR: GATILHO_TESTE = false. Ou, no console do navegador,
+// kaiaGatilhoTeste(false).
+//
+// NÃO CONTAMINA O DADO: toda intervenção nascida daqui é marcada em
+// _intervencaoDeTeste, e enviarFeedbackIntervencao NÃO envia o feedback nesse
+// caso — o Thompson do backend não recebe recompensa de intervenção falsa. Os
+// eventos que passarem por logEvent durante uma delas vão marcados com
+// origem: 'gatilho_teste' no payload, para dar para filtrar depois.
+const GATILHO_TESTE = true;
+
+// TODO: ajustar tempo pra produção — não se aplica: isto sai antes da produção.
+const GATILHO_TESTE_IDLE_S   = 9;      // segundos de inatividade até disparar
+const GATILHO_TESTE_ESPERA_MS = 12000; // intervalo mínimo entre dois disparos
+
+// A fila roda em ordem para a Bia ver as 7 sem depender de sorte.
+const GATILHO_TESTE_ORDEM = [
+    'auto_monitoramento', 'micro_refoco', 'alerta_fadiga', 'reancoragem',
+    'checkpoint', 'pausa_ativa', 'troca_atividade',
+];
+
+let _gtIdx           = -1;
+let _gtInterval      = null;
+let _gtUltimoEm      = 0;
+let _intervencaoDeTeste = false;   // lido por enviarFeedbackIntervencao e logEvent
+
+// ---- Dock de botões: uma bolinha por intervenção --------------------------
+// Só existe com GATILHO_TESTE ligado; no modo normal nem é criado.
+// O CSS mora AQUI, injetado, e não no style.css — de propósito. A convenção do
+// projeto é o contrário (CSS das intervenções foi todo para o style.css), mas
+// isto é ferramenta de teste descartável: mantendo estilo e marcação no mesmo
+// bloco, remover é apagar UM trecho, sem deixar regra órfã na folha de estilo.
+//
+// Fica no topo, encostado depois da rail: a faixa y 0→63 é a única área grande
+// que não é usada nem pela questão (começa em 136) nem pelas 6 zonas dos cards
+// (metade de baixo) nem pelos botões Caderno/ABANDONAR (x 984→1220).
+function _montarDockTeste() {
+    if (!GATILHO_TESTE || $('kaia-dock-teste')) return;
+
+    const st = document.createElement('style');
+    st.id = 'kaia-dock-teste-css';
+    st.textContent = `
+      #kaia-dock-teste {
+        position: fixed; top: 10px; left: calc(var(--rail-col) + 12px);
+        z-index: 10000;                      /* acima de tudo, inclusive dos cards (9999) */
+        display: flex; align-items: center; gap: 6px;
+        padding: 5px 8px; border-radius: 999px;
+        background: var(--card); border: 1px dashed var(--bege-forte);
+        box-shadow: 0 4px 14px rgba(var(--profundo-rgb), 0.12);
+        transition: left 0.25s ease, opacity 0.2s ease;
+        opacity: 0.55;
+      }
+      #kaia-dock-teste:hover { opacity: 1; }
+      body.rail-aberta #kaia-dock-teste { left: calc(var(--rail-col-aberta) + 12px); }
+      #kaia-dock-teste .dk-rot {
+        color: var(--bege-tinta); font-size: 9px; font-weight: 800;
+        letter-spacing: 0.12em; padding-right: 2px;
+      }
+      #kaia-dock-teste button {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 26px; height: 26px; padding: 0;
+        border: 1px solid var(--bege-linha); border-radius: 50%;
+        background: var(--bege-veu); color: var(--bege-tinta); cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+      }
+      #kaia-dock-teste button:hover { background: var(--bege-forte); color: var(--card); }
+      #kaia-dock-teste button:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
+      #kaia-dock-teste button svg { width: 15px; height: 15px; fill: none;
+        stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    `;
+    document.head.appendChild(st);
+
+    const dock = document.createElement('div');
+    dock.id = 'kaia-dock-teste';
+    dock.innerHTML = '<span class="dk-rot">TESTE</span>';
+    GATILHO_TESTE_ORDEM.forEach(tipo => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.title = tipo.replace(/_/g, ' ');       // tooltip com o nome
+        b.setAttribute('aria-label', `Disparar ${tipo}`);
+        b.innerHTML = ICONES_INTERVENCAO[tipo] || '';
+        b.addEventListener('click', () => {
+            // fecha o que estiver aberto antes, senão o clique não faz nada
+            esconderIntervencao();
+            dispararIntervencaoTeste(tipo);
+        });
+        dock.appendChild(b);
+    });
+    document.body.appendChild(dock);
+}
+
+function iniciarGatilhoTeste() {
+    if (!GATILHO_TESTE) return;
+    _montarDockTeste();
+    clearInterval(_gtInterval);
+    console.log('[KaIA] GATILHO DE TESTE ligado — %ds parado dispara a próxima das 7. '
+              + 'No console: kaiaTestar() lista, kaiaTestar("checkpoint") dispara uma, '
+              + 'kaiaGatilhoTeste(false) desliga.', GATILHO_TESTE_IDLE_S);
+    _gtInterval = setInterval(() => {
+        if (!GATILHO_TESTE) return;
+        if (!isMissionActive || pausaAtiva) return;   // não invade pausa/descanso
+        if (intervencaoAtual) return;                 // já tem uma na tela
+        if (idleTime < GATILHO_TESTE_IDLE_S) return;
+        if (performance.now() - _gtUltimoEm < GATILHO_TESTE_ESPERA_MS) return;
+        _gtIdx = (_gtIdx + 1) % GATILHO_TESTE_ORDEM.length;
+        dispararIntervencaoTeste(GATILHO_TESTE_ORDEM[_gtIdx]);
+    }, 1000);
+}
+
+function pararGatilhoTeste() { clearInterval(_gtInterval); _gtInterval = null; }
+
+// Dispara UMA intervenção pelo caminho normal (mostrarIntervencao), só que
+// marcada como teste. Reancoragem e checkpoint precisam da questão na tela.
+function dispararIntervencaoTeste(tipo) {
+    if (!GATILHO_TESTE_ORDEM.includes(tipo)) {
+        console.warn('[KaIA] tipo desconhecido:', tipo, '— use um destes:', GATILHO_TESTE_ORDEM);
+        return;
+    }
+    _gtUltimoEm = performance.now();
+    _intervencaoDeTeste = true;
+    console.log('[KaIA] (teste) disparando:', tipo);
+    mostrarIntervencao({ intervention_type: tipo });
+}
+
+// Atalhos de console para a Bia escolher o que ver, sem esperar a fila.
+window.kaiaTestar = (tipo) => {
+    if (!tipo) { console.log('[KaIA] tipos:', GATILHO_TESTE_ORDEM.join(', ')); return; }
+    dispararIntervencaoTeste(tipo);
+};
+window.kaiaGatilhoTeste = (ligado) => {
+    if (ligado === false) { pararGatilhoTeste(); console.log('[KaIA] gatilho de teste PARADO.'); }
+    else { iniciarGatilhoTeste(); }
+};
+// =============================================================================
+// ===== FIM DO GATILHO DE TESTE (PROVISÓRIO) ==================================
+// =============================================================================
 
 // ============================================================
 //   SEQUÊNCIA GUIADA — base das intervenções com AÇÃO (Passos 3 e 4)
@@ -328,6 +622,43 @@ let _seqFeedbackTipo   = null;   // tipo a perguntar ao fim (null = sem feedback
 let _seqMostradaEm     = 0;      // instante em que a intervenção apareceu
 let _seqFeedbackAberto = false;  // card já trocou para "como foi?"
 
+// ---- Troca suave da frase do roteiro (pausa_ativa) -------------------------
+// O tick roda 4x por segundo e reescrevia a frase toda vez; agora ele só age
+// quando o ÍNDICE do passo muda de verdade, e a troca é animada.
+// Estes dois valores CASAM com as animações kaiaPassoSai/kaiaPassoEntra no
+// style.css — mexeu num, mexe no outro.
+const SEQ_PASSO_SAIDA_MS   = 220;
+const SEQ_PASSO_ENTRADA_MS = 450;
+let _seqPassoIdx   = -1;
+let _seqPassoTimer = null;
+
+// Quem pediu menos movimento recebe a troca direta, sem espera nenhuma: manter
+// o atraso da saída só para depois trocar o texto seria um travamento sem
+// motivo, já que a animação nem vai rodar.
+const _menosMovimento = () =>
+    !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+function _trocarPassoSeq(texto) {
+    const el = $('kaia-seq-passo');
+    if (!el) return;
+    clearTimeout(_seqPassoTimer);
+    if (_menosMovimento()) { el.textContent = texto; return; }
+    // Primeira frase da sequência: não há o que fazer sair, ela só entra.
+    if (!el.textContent) {
+        el.textContent = texto;
+        el.classList.add('kaia-passo-entra');
+        return;
+    }
+    el.classList.remove('kaia-passo-entra');
+    el.classList.add('kaia-passo-sai');
+    _seqPassoTimer = setTimeout(() => {
+        el.textContent = texto;
+        el.classList.remove('kaia-passo-sai');
+        void el.offsetWidth;              // reflow: reinicia a animação de entrada
+        el.classList.add('kaia-passo-entra');
+    }, SEQ_PASSO_SAIDA_MS);
+}
+
 function _garantirOverlaySeq() {
     if ($('kaia-seq')) return;
     const el = document.createElement('div');
@@ -335,6 +666,7 @@ function _garantirOverlaySeq() {
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
     el.innerHTML = `<div class="kaia-seq-card">
+        <div id="kaia-seq-ic"></div>
         <h2 id="kaia-seq-titulo"></h2>
         <p class="kaia-seq-passo" id="kaia-seq-passo"></p>
         <div class="kaia-seq-seg"><span id="kaia-seq-seg">0</span>s</div>
@@ -350,23 +682,37 @@ function _garantirOverlaySeq() {
     });
 }
 
-function iniciarSequenciaGuiada({ titulo, passos, duracaoMs, passoMs, feedbackTipo = null }) {
+function iniciarSequenciaGuiada({ titulo, passos, duracaoMs, passoMs, feedbackTipo = null,
+                                  icone = null }) {
     _garantirOverlaySeq();
     pausaAtiva = true;                       // suspende idle/aba/exit durante a sequência
     _seqFeedbackTipo    = feedbackTipo;
     _seqMostradaEm      = intervencaoMostradaEm;
     _seqFeedbackAberto  = false;
     $('kaia-seq-fb').textContent = '';       // limpa o strip de uma sequência anterior
+    // Zera a troca de frases: sem isto, um novo disparo começaria com o texto e
+    // a classe de animação do disparo anterior, e a 1ª frase entraria sem o fade.
+    clearTimeout(_seqPassoTimer);
+    _seqPassoIdx = -1;
+    $('kaia-seq-passo').classList.remove('kaia-passo-sai', 'kaia-passo-entra');
+    $('kaia-seq-passo').textContent = '';
     $('kaia-seq-passo').style.display = '';
     $('kaia-seq').querySelector('.kaia-seq-seg').style.display = '';
     $('kaia-seq-voltar').textContent = 'Voltar agora';
+    $('kaia-seq-ic').innerHTML = icone ? _iconeHTML(icone, true) : '';
     $('kaia-seq-titulo').innerText = titulo;
     $('kaia-seq').classList.add('aberto');
     const fim = performance.now() + duracaoMs;
     const tick = () => {
         const restante = Math.max(0, fim - performance.now());
         $('kaia-seq-seg').innerText = Math.ceil(restante / 1000);
-        $('kaia-seq-passo').innerText = passos[Math.floor((duracaoMs - restante) / passoMs) % passos.length];
+        // Só troca quando o passo REALMENTE muda: reescrever a cada 250ms
+        // reiniciaria a animação quatro vezes por segundo.
+        const idx = Math.floor((duracaoMs - restante) / passoMs) % passos.length;
+        if (idx !== _seqPassoIdx) {
+            _seqPassoIdx = idx;
+            _trocarPassoSeq(passos[idx]);
+        }
         if (restante <= 0) return encerrarSequenciaGuiada();
         _seqTimer = setTimeout(tick, 250);
     };
@@ -376,6 +722,7 @@ function iniciarSequenciaGuiada({ titulo, passos, duracaoMs, passoMs, feedbackTi
 function _fecharSeq() {
     const el = $('kaia-seq');
     if (el) el.classList.remove('aberto');
+    clearTimeout(_seqPassoTimer);   // troca de frase pendente não escreve num card fechado
     _seqFeedbackAberto = false;
     _seqFeedbackTipo   = null;
 }
@@ -392,9 +739,11 @@ function encerrarSequenciaGuiada() {
     if (_seqFeedbackTipo) _pedirFeedbackSeq(); else _fecharSeq();
 }
 
-const SEQ_FEEDBACK_MS = 8000;   // quanto o card fica perguntando antes de sair sozinho
+// quanto o card fica perguntando antes de sair sozinho
+const SEQ_FEEDBACK_MS = T(5000, 8000);   // TODO: ajustar tempo pra produção
 
 function _pedirFeedbackSeq() {
+    clearTimeout(_seqPassoTimer);   // o card vira "como foi?": nada mais de frase
     _seqFeedbackAberto = true;
     $('kaia-seq-titulo').innerText = 'Como foi a pausa?';
     $('kaia-seq-passo').style.display = 'none';
@@ -410,24 +759,46 @@ function _pedirFeedbackSeq() {
 }
 
 // Pausa ativa (movimento) — Passo 3.
+// Bancos da pausa ativa. Os passos são um ROTEIRO (rodam em ordem durante a
+// pausa), não um sorteio — sortear passo a passo mandaria o aluno alongar depois
+// de já ter voltado a sentar. Quem varia entre disparos é o título.
+const PAUSA_ATIVA_TITULOS = [
+    'Pausa ativa',
+    'Hora de mexer o corpo',
+    'Levanta e respira',
+    'Dois minutos de corpo',
+    'Sai da cadeira um pouco',
+];
+const PAUSA_ATIVA_PASSOS = [
+    'Levanta e alonga os ombros 🙆',
+    'Olha pra longe — janela, parede 👀',
+    'Bebe uma água 💧',
+    'Respira fundo, 3 vezes 🌬️',
+];
+
 function iniciarPausaAtiva() {
     iniciarSequenciaGuiada({
-        titulo: _variar(['🤸 Pausa ativa', '🤸 Hora de mexer o corpo', '🤸 Levanta e respira']),
-        passos: ['Levanta e alonga os ombros 🙆', 'Olha pra longe — janela, parede 👀',
-                 'Bebe uma água 💧', 'Respira fundo, 3 vezes 🌬️'],
-        duracaoMs: 90 * 1000, passoMs: 22.5 * 1000,
+        titulo: _variar(PAUSA_ATIVA_TITULOS),
+        passos: PAUSA_ATIVA_PASSOS,
+        // TODO: ajustar tempo pra produção — 9s no teste, 90s de verdade.
+        // passoMs é sempre duracao/4 (são 4 passos): mexeu num, mexe no outro.
+        duracaoMs: T(9 * 1000, 90 * 1000),
+        passoMs:   T(2.25 * 1000, 22.5 * 1000),
         feedbackTipo: 'pausa_ativa',
+        icone: 'pausa_ativa',
     });
 }
 
-// Micro-refoco (respiração) — Passo 4 · barra no TOPO: mensagem + barra que cai
-// linearmente com o tempo restante (sem números). Não usa o overlay central.
+// Micro-refoco (respiração) — Passo 4 · barra fixa NO RODAPÉ, deslizando de
+// baixo: mensagem + barra que cai linearmente com o tempo restante (sem
+// números). Não usa o overlay central. (Dizia "no TOPO" — a barra desceu para o
+// rodapé e o comentário tinha ficado para trás.)
 let _mrInterval = null;
 let _mrMostradaEm     = 0;
 let _mrFeedbackAberto = false;
 
 // Banco de frases de acolhimento da barra. Uma é sorteada na ABERTURA e fica
-// parada os 30s inteiros: variar entre aparições dá variedade, variar durante a
+// PARADA do começo ao fim: variar entre aparições dá variedade, variar durante a
 // respiração viraria movimento numa intervenção que existe para acalmar.
 // Tom: sem cobrança, sem urgência, sem prometer resultado. Lista pensada para
 // ser editada — é só acrescentar/trocar linhas aqui.
@@ -460,7 +831,8 @@ function _garantirBarraMicroRefoco() {
     el.id = 'kaia-mr';
     el.setAttribute('role', 'status');
     el.innerHTML = `<button type="button" class="kaia-mr-pular" id="kaia-mr-pular">Pular</button>
-      <div class="kaia-mr-msg" id="kaia-mr-msg"></div>
+      <div class="kaia-mr-msg"><span class="kaia-ic">${ICONES_INTERVENCAO.micro_refoco}</span>
+        <span id="kaia-mr-msg"></span></div>
       <div class="kaia-mr-frase" id="kaia-mr-frase"></div>
       <div class="kaia-mr-track"><div class="kaia-mr-fill" id="kaia-mr-fill"></div></div>
       <div id="kaia-mr-fb"></div>`;
@@ -473,6 +845,27 @@ function _garantirBarraMicroRefoco() {
     $('kaia-mr-pular').addEventListener('click', () => {
         if (_mrFeedbackAberto) _fecharMicroRefoco(); else encerrarMicroRefoco();
     });
+
+    // (gatilho de teste) — REMOVER junto com o bloco do gatilho.
+    // A barra some sozinha, que é o conceito dela: faixa passiva de "respire",
+    // sem exigir ação. Isso torna difícil OLHAR para ela com calma. Só no modo
+    // de teste ela ganha um X e para de se fechar sozinha (ver encerrarMicroRefoco),
+    // então dá para inspecionar o desenho pelo tempo que precisar. Com
+    // GATILHO_TESTE = false nada disto existe e o comportamento real volta.
+    if (GATILHO_TESTE) {
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.id = 'kaia-mr-x-teste';
+        x.title = 'Fechar (só no modo de teste)';
+        x.setAttribute('aria-label', 'Fechar a barra');
+        x.textContent = '×';
+        x.style.cssText = 'position:absolute;top:6px;left:12px;width:26px;height:26px;'
+            + 'border:1px dashed var(--bege-forte);border-radius:50%;background:var(--bege-veu);'
+            + 'color:var(--bege-tinta);font-size:17px;line-height:1;cursor:pointer;'
+            + 'font-family:inherit;display:flex;align-items:center;justify-content:center;';
+        x.addEventListener('click', _fecharMicroRefoco);
+        el.appendChild(x);
+    }
 }
 
 function iniciarMicroRefoco() {
@@ -488,7 +881,9 @@ function iniciarMicroRefoco() {
     frase.textContent = _variar(FRASES_MICRO_REFOCO);
     pausaAtiva = true;                         // suspende idle/aba/exit durante a respiração
     const passos = ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'];
-    const dur = 30 * 1000, passoMs = 4 * 1000;
+    // TODO: ajustar tempo pra produção — 6s no teste, 30s de verdade. passoMs é
+    // o tempo de cada fase da respiração (inspira/segura/expira).
+    const dur = T(6 * 1000, 30 * 1000), passoMs = T(1.2 * 1000, 4 * 1000);
     $('kaia-mr').classList.add('aberto');
     document.body.classList.add('kaia-mr-aberta');
     $('kaia-mr-msg').innerText = passos[0];
@@ -530,7 +925,7 @@ function _fecharMicroRefoco() {
 // A barra sobrevive alguns segundos só para perguntar (Fase 2) — em versão
 // compacta, para não ficar mais intrusiva que a própria intervenção. Sensores e
 // polling voltam antes disso.
-const MR_FEEDBACK_MS = 6000;
+const MR_FEEDBACK_MS = T(4000, 6000);   // TODO: ajustar tempo pra produção
 
 function encerrarMicroRefoco() {
     clearInterval(_mrInterval);
@@ -550,7 +945,12 @@ function encerrarMicroRefoco() {
         onResposta: () => setTimeout(_fecharMicroRefoco, 1200),
     }));
     _medirBarraMicroRefoco();                   // encolheu: sem a frase e sem a barra
-    setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
+    // (gatilho de teste) — REMOVER a condição, mantendo o setTimeout.
+    // No modo de teste a barra ESPERA o X; no comportamento real ela se fecha
+    // sozinha em MR_FEEDBACK_MS, sem cobrar resposta.
+    if (!GATILHO_TESTE) {
+        setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
+    }
 }
 
 // Troca de tema (intervenção com AÇÃO — Passo 5): modal CENTRAL (como a pausa
@@ -566,7 +966,8 @@ function _garantirCardTroca() {
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
     el.innerHTML = `<div class="kaia-troca-card">
-        <h2>🔄 Que tal trocar de tema?</h2>
+        ${_iconeHTML('troca_atividade', true)}
+        <h2>Que tal trocar de tema?</h2>
         <p id="kaia-troca-sub"></p>
         <p class="kaia-troca-alvo">Ir para: <strong id="kaia-troca-tema"></strong></p>
         <div class="kaia-troca-btns">
@@ -581,17 +982,26 @@ function _garantirCardTroca() {
     $('kaia-troca-nao').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _perguntarDepoisDaTroca(); });
 }
 
-const TROCA_FEEDBACK_MS = 45000;   // tempo até perguntar (aluno já sentiu o efeito)
+// tempo até perguntar (aluno já sentiu o efeito)
+const TROCA_FEEDBACK_MS = T(8000, 45000);   // TODO: ajustar tempo pra produção
 
 function _perguntarDepoisDaTroca() {
     _feedbackTardio('troca_atividade', {
-        titulo: '🔄 Sobre a troca de tema',
+        titulo: 'Sobre a troca de tema',
+        icone: 'troca_atividade',
         pergunta: 'A sugestão de trocar de tema ajudou seu foco?',
         atrasoMs: TROCA_FEEDBACK_MS, mostradaEm: _trocaMostradaEm,
     });
 }
 
-function _esconderTroca() { const c = $('kaia-troca'); if (c) c.classList.remove('aberto'); }
+// Zera a ociosidade ao fechar: o aluno acabou de CLICAR num botão, não está
+// parado. Sem isto o overlay de inatividade, que estava segurado enquanto o
+// modal existia, subiria no instante seguinte ao fechamento.
+function _esconderTroca() {
+    const c = $('kaia-troca');
+    if (c) c.classList.remove('aberto');
+    idleTime = 0;
+}
 
 function mostrarTrocaTema() {
     _garantirCardTroca();
@@ -628,6 +1038,49 @@ function _trocarTema() {
 let _cpQuestao    = null;
 let _cpMostradaEm = 0;
 
+// ---- Bancos de texto do checkpoint ---------------------------------------
+// Três momentos, três listas. O checkpoint é a intervenção que mais se repete
+// dentro de uma mesma semana de estudo, então é a que mais sofre com texto
+// fixo: o aluno decora a frase de abertura e para de ler o que vem depois.
+// Em CHECKPOINT_ERRO, {r} é substituído pela resposta certa.
+// Para editar: acrescenta linhas. Nada além destas listas precisa mudar.
+const CHECKPOINT_ABERTURAS = [
+    'Pausa relâmpago — recupere isto:',
+    'Rapidinho: você lembra desta?',
+    'Só pra fixar — responde essa:',
+    'Mini-check do que você já viu:',
+    'Uma de trás, pra assentar:',
+    'Volta rápida no que já passou:',
+    'Sem valer nota — só pra lembrar:',
+    'Trinta segundos numa que você já viu:',
+    'Puxa da memória essa aqui:',
+    'Revisão relâmpago, sem pressa:',
+    'Uma pergunta de aquecimento:',
+    'Do que você já respondeu hoje:',
+];
+const CHECKPOINT_ACERTO = [
+    'Isso! De volta pro foco.',
+    'Certo — está fixado mesmo.',
+    'Acertou. Isso é sinal de que ficou.',
+    'Essa você já tem.',
+    'Certinho. Bora seguir.',
+    'Boa — memória em dia.',
+];
+const CHECKPOINT_ERRO = [
+    'Sem problema — era: {r}.',
+    'Passa nada. A resposta era: {r}.',
+    'Essa escapou. Era: {r}. Agora fixou.',
+    'Ainda não. Era: {r} — errar aqui ajuda a lembrar depois.',
+    'Quase. A certa era: {r}.',
+    'Era: {r}. Sem peso nenhum, isso aqui não conta nota.',
+];
+const CHECKPOINT_ROTULO_FB = [
+    'Esse mini-check ajudou?',
+    'Voltar numa questão antiga ajudou?',
+    'Valeu a pena essa pausa rápida?',
+    'Isso te ajudou a reancorar?',
+];
+
 function _questaoCheckpoint() {
     const recentes = historicoQuestoes.slice(-3);   // conteúdo RECENTE (últimas ~3 respondidas)
     return recentes.length ? recentes[Math.floor(Math.random() * recentes.length)] : null;
@@ -651,12 +1104,8 @@ function checkpointRecuperacao() {
     card.setAttribute('role', 'group');
     const topo = document.createElement('div');
     topo.className = 'kaia-cp-topo';
-    topo.textContent = _variar([
-        '🎯 Pausa relâmpago — recupere isto:',
-        '🎯 Rapidinho: você lembra desta?',
-        '🎯 Só pra fixar — responde essa:',
-        '🎯 Mini-check do que você já viu:',
-    ]);
+    topo.innerHTML = _iconeHTML('checkpoint');      // SVG constante nosso
+    topo.append(' ' + _variar(CHECKPOINT_ABERTURAS));   // nó de texto, sem marcação
     const pq = document.createElement('p');
     pq.className = 'kaia-cp-q';
     pq.textContent = q.q;                     // textContent: sem injeção de HTML
@@ -685,15 +1134,16 @@ function checkpointRecuperacao() {
 }
 
 function _responderCheckpoint(acertou) {
+    const certa = _cpQuestao ? _cpQuestao.opts[_cpQuestao.ans] : '';
     $('kaia-cp-fb').textContent = acertou
-        ? 'Isso! 🎯 De volta pro foco.'
-        : `Sem problema — era: ${_cpQuestao ? _cpQuestao.opts[_cpQuestao.ans] : ''}.`;
+        ? _variar(CHECKPOINT_ACERTO)
+        : _variar(CHECKPOINT_ERRO).replace('{r}', certa);
     $$('#kaia-cp .kaia-cp-opt').forEach(b => b.disabled = true);   // trava após responder
     // Feedback só depois de responder (Fase 2): antes disso competiria com a questão.
     const card = $('kaia-cp');
     if (card && !card.querySelector('.kaia-fb-wrap')) {
         card.insertBefore(_stripFeedback('checkpoint', {
-            rotulo: 'Esse mini-check ajudou?', mostradaEm: _cpMostradaEm, agradecer: true,
+            rotulo: _variar(CHECKPOINT_ROTULO_FB), mostradaEm: _cpMostradaEm, agradecer: true,
         }), $('kaia-cp-voltar'));
     }
     $('kaia-cp-voltar').style.display = 'inline-block';
@@ -722,7 +1172,7 @@ function encerrarCheckpoint() {
 // na tarefa (segmenting effect). NÃO pausa sensores (é refoco, não descanso).
 // Reverte sozinho em REANCORA_MS. Sutil de propósito (regra TEA/TDAH: tirar
 // estímulo, não adicionar — nada pisca).
-const REANCORA_MS = 4000;
+const REANCORA_MS = T(2500, 4000);   // TODO: ajustar tempo pra produção
 // O véu é um ::before condicional: sumir a classe = sumir o elemento, e o que
 // não existe não transiciona. Então a saída é em dois tempos — liga a classe do
 // fade, espera ele terminar, só aí limpa. Este valor CASA com a animação
@@ -774,6 +1224,21 @@ function setEstado(texto, alertar = false) {
 
 // calculateReadingTime foi movida para puros.js (testável); carregada antes.
 
+// Há intervenção ocupando a tela?
+// Três checagens, e as três são necessárias:
+//   1. `intervencaoAtual` — o registro de quem está segurando o polling. Só
+//      vale quando a intervenção entrou por mostrarIntervencao().
+//   2. a classe no body — a reancoragem libera o polling na hora, de propósito
+//      (é refoco, não descanso), então some da checagem 1 imediatamente.
+//   3. o DOM — a rede de segurança. Se algo abrir uma intervenção por fora do
+//      mostrarIntervencao (o gatilho de teste chamando a função direto, ou o
+//      motor do Vitor amanhã), 1 e 2 não veem, mas o elemento aberto está lá.
+//      Sem esta, a troca_atividade voltava a ficar sob a tela de inatividade.
+const _intervencaoNaTela = () =>
+    !!intervencaoAtual
+    || document.body.classList.contains('kaia-reancorar')
+    || !!document.querySelector('#kaia-troca.aberto, #kaia-seq.aberto, #kaia-mr.aberto, #kaia-cp');
+
 function iniciarIdleMonitor() {
     clearInterval(idleInterval);
     idleInterval = setInterval(() => {
@@ -786,7 +1251,14 @@ function iniciarIdleMonitor() {
         mexeuDesdeUltimoTick = false;
         const timer = $('timer');
         if (timer) timer.innerText = idleTime;
-        if (idleTime >= dynamicLimit) setEstado('FALTA DE INTERAÇÃO', true);
+        // O overlay de inatividade NÃO sobe enquanto há intervenção na tela.
+        // Subir o z-index resolveu para as que têm camada própria, mas não para
+        // o checkpoint (inline, sem camada) nem para a reancoragem (o véu dela
+        // mora em 40, dentro do #quiz-view). E, mesmo onde resolveu, mostrar
+        // "Ainda está Conosco?" por cima de uma intervenção é dizer duas coisas
+        // ao mesmo tempo para quem já está com a atenção comprometida: a
+        // intervenção JÁ é o chamado de volta.
+        if (idleTime >= dynamicLimit && !_intervencaoNaTela()) setEstado('FALTA DE INTERAÇÃO', true);
     }, 1000);
 }
 
@@ -1129,6 +1601,7 @@ async function carregarQuestao(subject, tema) {
     dwellEntrouEm = 0;
     iniciarIdleMonitor();
     iniciarPollIntervencao();
+    iniciarGatilhoTeste();   // (gatilho de teste) PROVISÓRIO — REMOVER esta linha
 
     // Se o caderno está aberto, troca o canvas para o tema desta questão.
     if (typeof cadAberto === 'function' && cadAberto() && cadTema !== tema) {
@@ -1179,7 +1652,7 @@ function notificarMetaDiaria() {
     const el = document.createElement('div');
     el.className = 'meta-toast';
     el.setAttribute('role', 'status');
-    el.textContent = '🎯 Meta de hoje alcançada — 10 questões!';
+    el.textContent = 'Meta de hoje alcançada — 10 questões!';
     _pilhaNotif().appendChild(el);
     requestAnimationFrame(() => el.classList.add('visivel'));
     setTimeout(() => {

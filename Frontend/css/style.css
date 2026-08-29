@@ -2087,7 +2087,8 @@ body.textura-papel .conteudo {
 #kaia-notificacoes {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  /* --notif-baixo é a LINHA da zona (ver as 6 zonas abaixo); 20px é a de baixo. */
+  bottom: var(--notif-baixo, 20px);
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -2097,14 +2098,26 @@ body.textura-papel .conteudo {
 }
 #kaia-notificacoes > * { pointer-events: auto; }
 
-/* Três âncoras na FAIXA INFERIOR, alternadas em rotação pelo materias.js.
+/* ---- SEIS zonas na metade de baixo, alternadas em rotação pelo materias.js -
    O card sempre no mesmo canto vira invisível (o aluno aprende a dispensar sem
    ler, e como dispensar aqui é RESPONDER o feedback, isso vira dado falso no
-   Thompson). Mas posição aleatória cobraria uma varredura da tela a cada
-   aparição — caro justo para quem já está com a atenção comprometida.
-   O acordo: a FAIXA é previsível (é sempre embaixo, busca ao longo de uma
-   linha) e o PONTO dentro dela muda, que é o que o reflexo memoriza.
-   O topo está fora: Caderno/ABANDONAR ocupam x 984→1220, y 63→106. */
+   Thompson). Mas posição ALEATÓRIA cobraria uma varredura da tela a cada
+   aparição — caro justo para quem já está com a atenção comprometida, que é o
+   público desta tela.
+   O acordo: as zonas são POUCAS, FIXAS e sempre as mesmas (a busca continua
+   barata porque o repertório é conhecido), e a rotação garante que duas
+   aparições seguidas nunca caiam no mesmo ponto.
+
+   POR QUE SÓ A METADE DE BAIXO — medido na tela de estudo (viewport 1280x900):
+     rail ............... x 0→60 (fechada) / 0→180 (aberta)
+     Caderno/ABANDONAR .. x 984→1220, y 63→111
+     questão + opções ... y 141→487 (fechada) / 136→512 (aberta)
+     LIVRE .............. y 512→900, à direita da rail
+   A faixa superior tem 63px de altura útil — não cabe um card de ~170px. Então
+   as 6 zonas são 3 colunas x 2 linhas dentro da área livre, e nenhuma toca a
+   questão, a rail ou os botões do topo.
+   As colunas da ESQUERDA partem DEPOIS da rail (e acompanham quando ela abre):
+   é o que garante que o card nunca fique atrás nem por cima dela. */
 #kaia-notificacoes.pos-dir { right: 20px; left: auto; align-items: flex-end; }
 #kaia-notificacoes.pos-esq {
   left: calc(var(--rail-col) + 20px);
@@ -2112,12 +2125,21 @@ body.textura-papel .conteudo {
   align-items: flex-start;
 }
 body.rail-aberta #kaia-notificacoes.pos-esq { left: calc(var(--rail-col-aberta) + 20px); }
+/* Centro da ÁREA ÚTIL, não da viewport: com a rail aberta os dois diferem em
+   60px, e centrar na viewport jogaria o card para a esquerda do conteúdo. */
 #kaia-notificacoes.pos-centro {
-  left: 50%;
+  left: calc(var(--rail-col) + (100vw - var(--rail-col)) / 2);
   right: auto;
   align-items: center;
   transform: translateX(-50%);
 }
+body.rail-aberta #kaia-notificacoes.pos-centro {
+  left: calc(var(--rail-col-aberta) + (100vw - var(--rail-col-aberta)) / 2);
+}
+/* A segunda LINHA: mesmo trio de colunas, mais alto. 200px deixa o topo do card
+   em ~y530 — abaixo dos 512 onde a questão termina com a rail aberta, que é o
+   caso mais apertado dos dois. */
+#kaia-notificacoes.pos-alta { --notif-baixo: 200px; }
 
 /* Portão: os botões nascem inertes por CARD_GATE_MS. O clique-reflexo dispara
    antes disso e encontra botão morto — o que por si só devolve o olhar ao card.
@@ -2139,6 +2161,56 @@ body.rail-aberta #kaia-notificacoes.pos-esq { left: calc(var(--rail-col-aberta) 
    micro_refoco → pausa_ativa → troca_atividade → checkpoint → reancoragem.
    ============================================================ */
 
+/* ---- BEGE: os tokens que dão presença à marca nas 7 ----------------------
+   As 7 puxavam para o azul-névoa e o creme; o bege da marca só aparecia em
+   rótulo pequeno. Estes quatro tokens são o vocabulário do bege nas
+   intervenções — e existem porque o --bege puro (#c4a186) NÃO pode ser usado
+   em texto: sobre o --card ele dá ~2:1 e reprova em AA com folga.
+     --bege-tinta  texto (5,4:1 sobre o --card — o mesmo tom já usado na landing)
+     --bege-forte  acento sólido: barra de progresso, filete, realce
+     --bege-linha  bordas e filetes
+     --bege-veu    preenchimento suave: chip de ícone, fundo de opção
+   Mudou a identidade? Mexe SÓ aqui: as 7 leem daqui, nenhuma tem hex solto. */
+:root {
+  --bege-tinta: #7d5f45;
+  --bege-forte: #b08a68;
+  --bege-linha: rgba(var(--bege-rgb), 0.55);
+  --bege-veu:   rgba(var(--bege-rgb), 0.14);
+}
+
+/* ---- Ícone de identidade das 7 -------------------------------------------
+   Substitui os emojis dos títulos. Emoji renderiza diferente em cada sistema
+   (o 🤸 sai colorido no Windows, outro desenho no Android) e nenhum é da marca.
+   Estes são SVG de TRAÇO, herdando a cor por `currentColor` — o mesmo
+   vocabulário dos ícones da rail.
+   PARA TROCAR PELOS ÍCONES DA MARCA: os desenhos ficam em ICONES_INTERVENCAO,
+   no materias.js. Substitua o SVG de cada entrada; nada aqui precisa mudar. */
+.kaia-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -0.18em;
+  color: var(--bege-forte);
+}
+.kaia-ic svg {
+  width: 1.05em;
+  height: 1.05em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* No chip redondo (overlay da pausa e modal da troca) o ícone ganha corpo. */
+.kaia-ic-chip {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 10px;
+  border-radius: 14px;
+  background: var(--bege-veu);
+}
+.kaia-ic-chip svg { width: 24px; height: 24px; }
+
 /* ---- Card de notificação: auto_monitoramento e alerta_fadiga --------------
    As duas usam ESTE mesmo card; o que muda é emoji/título/frase, definidos em
    INTERVENCOES_MSG (materias.js). Era um cartão cinza-ardósia (#1f2937 com
@@ -2148,7 +2220,12 @@ body.rail-aberta #kaia-notificacoes.pos-esq { left: calc(var(--rail-col-aberta) 
 .kaia-card-notif {
   max-width: 320px;
   padding: 16px 18px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--bege-linha);
+  /* Filete de bege à esquerda: é o que dá presença à marca sem pintar o fundo
+     inteiro (fundo bege cheio derrubaria o contraste do texto). O mesmo filete
+     reaparece no checkpoint e na barra do micro_refoco — é o fio que costura
+     as 7 visualmente. */
+  border-left: 4px solid var(--bege-forte);
   border-radius: 14px;
   background: var(--card);
   color: var(--tinta);
@@ -2234,9 +2311,12 @@ body.rail-aberta #kaia-notificacoes.pos-esq { left: calc(var(--rail-col-aberta) 
   bottom: 0;
   left: var(--rail-col);
   right: 0;
-  z-index: 70;
+  z-index: 5600;   /* ver a escala de camadas acima */
   padding: 18px 16px 16px;
   background: var(--card);
+  /* Mesmo filete de bege do card de notificação, agora na aresta por onde a
+     barra entra. É o que marca a barra como "da KaIA" sem pintar nada. */
+  border-top: 3px solid var(--bege-forte);
   box-shadow: 0 -4px 20px rgba(var(--profundo-rgb), 0.15);
   text-align: center;
   opacity: 0;
@@ -2274,29 +2354,35 @@ body.rail-aberta #kaia-mr { left: var(--rail-col-aberta); }
   height: 6px;
   margin: 0 auto;
   border-radius: 99px;
-  background: var(--marfim);
+  background: var(--bege-veu);
   overflow: hidden;
 }
 #kaia-mr .kaia-mr-fill {
   width: 100%;
   height: 100%;
   border-radius: 99px;
-  background: var(--vd-uniao);
+  /* Era verde-união. O bege tira o "semáforo" da barra: ela marca tempo
+     passando, não certo/errado — e passa a ler como elemento da marca. */
+  background: var(--bege-forte);
 }
+/* O "Pular" era --tinta a 60% de opacidade: dava 2,8:1 e reprovava em AA (o axe
+   acusa). É a ÚNICA saída da barra — o controle que menos pode sumir. Agora usa
+   o bege legível em opacidade cheia: continua secundário pelo tamanho e pelo
+   sublinhado, não por estar apagado. */
 #kaia-mr .kaia-mr-pular {
   position: absolute;
   top: 8px;
   right: 12px;
   border: 0;
   background: transparent;
-  color: var(--tinta);
+  color: var(--bege-tinta);
   font-family: inherit;
   font-size: 13px;
-  opacity: 0.6;
   text-decoration: underline;
   cursor: pointer;
 }
-#kaia-mr .kaia-mr-pular:hover { opacity: 1; }
+#kaia-mr .kaia-mr-pular:hover { color: var(--profundo); }
+#kaia-mr .kaia-mr-pular:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
 #kaia-mr-fb:not(:empty) { margin-top: 4px; }
 
 /* Com a barra no rodapé ela disputa espaço com o probe de autorrelato e com a
@@ -2306,15 +2392,46 @@ body.rail-aberta #kaia-mr { left: var(--rail-col-aberta); }
    `--mr-altura` é escrita pelo materias.js com a altura REAL (ela encolhe no
    modo feedback e cresce se a frase quebrar em duas linhas). */
 body.kaia-mr-aberta #kaia-probe { bottom: calc(24px + var(--mr-altura, 0px)); }
-body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0px)); }
+body.kaia-mr-aberta #kaia-notificacoes {
+  bottom: calc(var(--notif-baixo, 20px) + var(--mr-altura, 0px));
+}
 #kaia-probe,
 #kaia-notificacoes { transition: bottom 0.35s ease; }
+
+/* ---- AS CAMADAS DAS 7 (por que 5500/5600 e não 60/70) --------------------
+   As intervenções viviam em z-index 60 e 70 — abaixo do #overlay de
+   inatividade ("Ainda está Conosco?"), que é z-index 5000. E os dois se
+   encontram SEMPRE: o gatilho dispara aos 9s parado e o overlay sobe aos 10s
+   (dynamicLimit), então um segundo depois de a intervenção aparecer, uma tela
+   preta a 95% cobria tudo. A troca_atividade era a mais visível porque é a
+   única que espera uma DECISÃO do aluno e não suspende os sensores.
+
+   A escala do projeto, de baixo para cima:
+      40/41  véu e questão da reancoragem (dentro do #quiz-view)
+      1000   .resumo-overlay
+      5000   #overlay — inatividade
+    → 5500   overlays centrais das 7 + probe de autorrelato
+    → 5600   barra do micro_refoco (acima dos centrais: pode conviver com eles)
+      6000   #kaia-exit-aviso — exit-intent
+      7000   #kaia-pausa — pausa do pomodoro
+      8000   #kaia-preloader
+      9999   pilha de cards
+
+   Ficam ACIMA da inatividade e ABAIXO do exit-intent e da pausa do pomodoro:
+   "você está saindo da página" e "acabou o ciclo de foco" são estados mais
+   fortes que uma intervenção e devem cobri-la. O #kaia-pausa já usava 7000 com
+   este mesmo raciocínio — a escala aqui só estende o que ele começou.
+
+   O checkpoint não entra na lista: ele é INLINE, nasce dentro da coluna de
+   estudo e não tem camada própria. Para ele (e para a reancoragem, cujo véu
+   mora em 40) a proteção é outra — o idle-monitor não levanta o overlay
+   enquanto há intervenção na tela. Ver _intervencaoNaTela() no materias.js. */
 
 /* ---- pausa_ativa: overlay da sequência guiada (90s) ---------------------- */
 #kaia-seq {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 5500;
   display: grid;                         /* ver a nota do #kaia-mr: display não transiciona */
   place-items: center;
   background: rgba(var(--profundo-rgb), 0.45);
@@ -2329,10 +2446,15 @@ body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0p
 }
 #kaia-seq .kaia-seq-card {
   width: 90%;
-  max-width: 420px;
-  padding: 32px 28px;
-  border-radius: 16px;
+  /* Maior de propósito: esta é a única das 7 que pede o corpo inteiro do aluno
+     (levantar, alongar, beber água). Um card pequeno lia como aviso; grande, lê
+     como "para agora e faz isto". */
+  max-width: 480px;
+  padding: 40px 34px;
+  border-radius: 20px;
   background: var(--card);
+  border: 1px solid var(--bege-linha);
+  border-top: 4px solid var(--bege-forte);
   color: var(--tinta);
   box-shadow: 0 12px 40px rgba(var(--profundo-rgb), 0.25);
   text-align: center;
@@ -2345,17 +2467,51 @@ body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0p
 #kaia-seq h2 {
   margin: 0 0 4px;
   color: var(--profundo);
-  font-size: 20px;
+  font-size: 23px;
 }
+/* O passo da vez num chip de bege: separa a INSTRUÇÃO do resto do card sem
+   precisar de mais uma linha divisória. */
 #kaia-seq .kaia-seq-passo {
-  margin: 12px 0;
+  margin: 18px 0;
+  padding: 14px 16px;
   min-height: 2.6em;
-  font-size: 18px;
+  border-radius: 14px;
+  background: var(--bege-veu);
+  color: var(--tinta);
+  font-size: 19px;
+  line-height: 1.4;
+}
+/* ---- Troca de frase do roteiro (só na pausa_ativa) -----------------------
+   É a única das 7 cujo texto muda sozinha durante a intervenção, e trocar seco
+   dava um "corte" — o oposto do que uma pausa para acalmar deveria fazer.
+   O movimento é CONTÍNUO PARA CIMA: a frase que sai sobe e some, a que entra
+   vem de baixo. As duas na mesma direção viram uma coisa só subindo, como uma
+   linha de texto rolando; em direções opostas viraria um "vai-e-volta", que é
+   estímulo a mais.
+   Saída curta (0,22s) e entrada mais longa (0,45s), com desaceleração no fim:
+   quem chega merece mais tempo que quem sai, e terminar devagar é o que faz o
+   movimento ler como calmo em vez de rápido.
+   Os tempos CASAM com SEQ_PASSO_SAIDA_MS/SEQ_PASSO_ENTRADA_MS no materias.js —
+   mexeu num, mexe no outro. */
+#kaia-seq .kaia-seq-passo.kaia-passo-sai {
+  animation: kaiaPassoSai 0.22s ease both;
+}
+#kaia-seq .kaia-seq-passo.kaia-passo-entra {
+  animation: kaiaPassoEntra 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+@keyframes kaiaPassoSai {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-10px); }
+}
+@keyframes kaiaPassoEntra {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
 }
 #kaia-seq .kaia-seq-seg {
-  color: var(--profundo);
-  font-size: 40px;
+  color: var(--bege-tinta);
+  font-size: 46px;
   font-weight: 700;
+  letter-spacing: -1px;
 }
 /* NÃO usar '#kaia-seq button': um seletor de ID venceria `.kaia-fb button` e
    pintaria os 3 botões do strip de feedback de verde. */
@@ -2372,26 +2528,43 @@ body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0p
 }
 #kaia-seq-fb:not(:empty) { margin-top: 12px; }
 
-/* ---- troca_atividade: modal com a escolha do aluno ----------------------- */
+/* ---- troca_atividade: modal com a escolha do aluno -----------------------
+   Era a única das 7 que aparecia SEM transição (`display: none → grid` cru):
+   pipocava enquanto as outras 6 deslizavam. Agora usa o mesmo par
+   opacity+visibility do #kaia-seq — `display` não transiciona, e o
+   `visibility` só muda no fim da saída para o modal não capturar clique
+   enquanto está invisível. E ganhou o filete de bege das outras. */
 #kaia-troca {
   position: fixed;
   inset: 0;
-  z-index: 60;
-  display: none;
+  z-index: 5500;   /* ver a escala de camadas acima */
+  display: grid;
   place-items: center;
   background: rgba(var(--profundo-rgb), 0.45);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
-#kaia-troca.aberto { display: grid; }
+#kaia-troca.aberto {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.3s ease, visibility 0s;
+}
 #kaia-troca .kaia-troca-card {
   width: 90%;
   max-width: 440px;
   padding: 26px 24px;
   border-radius: 16px;
   background: var(--card);
+  border: 1px solid var(--bege-linha);
+  border-top: 4px solid var(--bege-forte);
   color: var(--tinta);
   box-shadow: 0 12px 40px rgba(var(--profundo-rgb), 0.25);
   text-align: center;
+  transform: scale(0.97);
+  transition: transform 0.3s ease;
 }
+#kaia-troca.aberto .kaia-troca-card { transform: none; }
 #kaia-troca h2 {
   margin: 0 0 8px;
   color: var(--profundo);
@@ -2425,7 +2598,11 @@ body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0p
 #kaia-cp {
   padding: 16px 18px;
   margin-bottom: 16px;
-  border: 1px solid var(--vd-uniao);
+  border: 1px solid var(--bege-linha);
+  /* Mesmo filete do card de notificação: o checkpoint nasce DENTRO da coluna de
+     estudo, e o filete é o que o marca como intervenção e não como parte da
+     questão. Era um contorno verde inteiro — lia como "acertou". */
+  border-left: 4px solid var(--bege-forte);
   border-radius: 14px;
   background: var(--card);
   box-shadow: 0 6px 24px rgba(var(--profundo-rgb), 0.12);
@@ -2440,9 +2617,10 @@ body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0p
 }
 #kaia-cp .kaia-cp-topo {
   margin-bottom: 8px;
-  color: var(--profundo);
+  color: var(--bege-tinta);
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 #kaia-cp .kaia-cp-q {
   margin: 0 0 12px;
@@ -2453,17 +2631,32 @@ body.kaia-mr-aberta #kaia-notificacoes { bottom: calc(20px + var(--mr-altura, 0p
 #kaia-cp .kaia-cp-opts { display: flex; flex-direction: column; gap: 8px; }
 #kaia-cp .kaia-cp-opt {
   padding: 9px 12px;
-  border: 1px solid var(--profundo);
+  /* Contorno em bege no lugar do azul-profundo: quatro opções com borda escura
+     pesavam mais que a própria questão logo abaixo. */
+  border: 1px solid var(--bege-linha);
   border-radius: 8px;
-  background: var(--marfim);
+  background: var(--bege-veu);
   color: var(--tinta);
   font-family: inherit;
   font-size: 14px;
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
+#kaia-cp .kaia-cp-opt:hover:not(:disabled) {
+  border-color: var(--bege-forte);
+  background: rgba(var(--bege-rgb), 0.24);
+}
+#kaia-cp .kaia-cp-opt:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
 #kaia-cp .kaia-cp-opt:disabled { opacity: 0.7; cursor: default; }
-#kaia-cp .kaia-cp-fb { margin: 10px 0 0; min-height: 1.2em; font-size: 14px; }
+/* `color` explícito: sem ele a devolutiva herdava o azul-coati do <body> e saía
+   azul no meio de um card que não tem mais nada azul. */
+#kaia-cp .kaia-cp-fb {
+  margin: 10px 0 0;
+  min-height: 1.2em;
+  color: var(--tinta);
+  font-size: 14px;
+}
 #kaia-cp .kaia-cp-voltar {
   display: none;
   margin-top: 10px;
@@ -2520,31 +2713,71 @@ body.kaia-reancorar #quiz-view::before {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(var(--profundo-rgb), 0.48);
+  /* 0.48 → 0.42: com o painel novo (raio grande, fio de bege) a questão já
+     separa sozinha; escurecer menos deixa o entorno ainda legível, que é o que
+     torna o efeito um convite e não um bloqueio. */
+  background: rgba(var(--profundo-rgb), 0.42);
   pointer-events: none;
   animation: kaiaVeuEntra 0.6s ease both;
 }
 body.kaia-reancorar-saindo #quiz-view::before { animation: kaiaVeuSai 0.8s ease both; }
 @keyframes kaiaVeuEntra { from { opacity: 0; } to   { opacity: 1; } }
 @keyframes kaiaVeuSai   { from { opacity: 1; } to   { opacity: 0; } }
-/* A folga do card vem de `box-shadow` com spread, não de `padding`: spread
-   cresce a área PINTADA sem alterar o layout, então o texto não se desloca
-   quando o véu entra e sai. Com padding, a questão daria um salto a cada
-   disparo — num efeito cujo objetivo é não sobressaltar.
-   O deslocamento para baixo é IGUAL ao spread de propósito: assim o card cresce
-   14px nas laterais e 28 embaixo, e ZERO para cima. Medido, o ABANDONAR termina
-   em y=106 e a questão começa em y=106 — folga nenhuma. Qualquer expansão para
-   cima cortaria a borda do botão ao meio, que é exatamente o tipo de recorte
-   estranho que esta correção veio tirar. Em cima, quem dá o respiro é a entrelinha
-   do próprio título. Raio final = 2 do elemento + 14 do spread. */
-body.kaia-reancorar .question-wrapper {
+/* O painel que sobe é um PSEUDO-ELEMENTO, não a sombra do próprio wrapper.
+   Antes a folga vinha de `box-shadow` com spread sólido (`0 14px 0 14px`), que
+   pinta um retângulo de canto vivo do tamanho exato do elemento: virava uma
+   moldura grossa, com raio de 2px, colada no texto — o "quadrado" que a Bia
+   apontou. Um ::before posicionado com `inset` negativo faz o mesmo trabalho
+   (não desloca o texto, porque sai do fluxo) e permite o que a sombra não
+   permitia: raio generoso, folga DIFERENTE por lado e uma linha fina.
+
+   A delicadeza está em três escolhas:
+     · raio 18px em vez de 2px — o painel lê como superfície, não como recorte;
+     · um fio de bege de 1px no lugar de contorno grosso (0 0 0 1px), que é o
+       mesmo bege das outras 6 e dá a borda "suave" pedida;
+     · sombra larga e MUITO diluída (50px de blur a 20%), que separa do véu por
+       profundidade em vez de por contraste de aresta.
+
+   A folga é assimétrica e medida: acima da questão sobram 30px até a barra do
+   Caderno/ABANDONAR (questão em y=141 com a rail fechada, y=136 aberta; a barra
+   termina em 111/106), então -14px em cima ainda deixa 16px de respiro e nunca
+   encosta nos botões. Embaixo e nas laterais pode ser mais generoso.
+
+   `z-index: -1` fica ATRÁS do texto mas dentro do contexto de empilhamento do
+   próprio wrapper (que é z-index 41) — ou seja, ainda acima do véu (40). */
+/* Sobem a PERGUNTA e as OPÇÕES, cada uma por si — não o bloco todo.
+   A diferença é visível: elevar o .question-wrapper desenhava UM painel em
+   volta de tudo (uma moldura, por mais suave que fosse). Elevando os elementos
+   individualmente, o véu continua aparecendo NOS VÃOS entre as opções — o que
+   se lê é "a questão está nítida e o resto apagou", não "abriu um card por
+   cima". É a versão mais sutil das duas.
+
+   As opções já têm superfície própria (.option-btn tem background --card), então
+   sobem prontas: só ganham o fio de bege e uma sombra difusa. A pergunta é um
+   <h2> sem fundo — se subisse crua, ficaria texto escuro sobre a página
+   escurecida pelo véu e o contraste despencaria justo no elemento mais
+   importante. Por isso ela leva uma superfície própria, num ::before com inset
+   negativo: dá o fundo sem `padding` (que empurraria o texto e faria a questão
+   pular no disparo, num efeito cujo objetivo é não sobressaltar). */
+body.kaia-reancorar #question-display,
+body.kaia-reancorar .option-btn {
   position: relative;
   z-index: 41;
-  border-radius: 2px;
+}
+body.kaia-reancorar #question-display::before {
+  content: "";
+  position: absolute;
+  inset: -12px -16px;
+  z-index: -1;
+  border-radius: 14px;
   background: var(--card);
   box-shadow:
-    0 14px 0 14px var(--card),
-    0 24px 44px 14px rgba(var(--profundo-rgb), 0.28);
+    0 0 0 1px var(--bege-linha),
+    0 10px 30px rgba(var(--profundo-rgb), 0.16);
+}
+body.kaia-reancorar .option-btn {
+  border-color: var(--bege-linha);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.14);
 }
 
 /* ---- Quem pediu menos movimento recebe menos movimento -------------------
@@ -2558,11 +2791,23 @@ body.kaia-reancorar .question-wrapper {
   #kaia-seq,
   #kaia-seq.aberto,
   #kaia-seq .kaia-seq-card,
+  #kaia-troca,
+  #kaia-troca.aberto,
+  #kaia-troca .kaia-troca-card,
   #kaia-probe,
   #kaia-notificacoes,
   .question-wrapper { transition: none; }
   #kaia-mr, #kaia-mr.aberto { transform: none; }
   #kaia-seq .kaia-seq-card, #kaia-seq.aberto .kaia-seq-card { transform: none; }
+  /* A frase do roteiro troca DIRETO. O materias.js também detecta a preferência
+     e pula a espera da saída, então a troca é instantânea de verdade — sem
+     movimento e sem o atraso que só existia para dar tempo à animação. */
+  #kaia-seq .kaia-seq-passo.kaia-passo-sai,
+  #kaia-seq .kaia-seq-passo.kaia-passo-entra { animation: none; }
+  #kaia-troca .kaia-troca-card, #kaia-troca.aberto .kaia-troca-card { transform: none; }
+  /* O card de notificação entrava com `animation: kaiaIn` e tinha escapado
+     desta lista — era a única das 7 que ainda se movia aqui. */
+  .kaia-card-notif,
   #kaia-cp,
   body.kaia-reancorar #quiz-view::before,
   body.kaia-reancorar-saindo #quiz-view::before { animation: none; }
@@ -2577,7 +2822,7 @@ body.kaia-reancorar .question-wrapper {
   position: fixed;
   left: 50%;
   bottom: 24px;
-  z-index: 60;
+  z-index: 5500;   /* o probe gera o RÓTULO do modelo: não pode ficar sob o overlay */
   display: none;
   width: calc(100% - 32px);
   max-width: 340px;

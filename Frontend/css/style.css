@@ -23,6 +23,26 @@
   /* largura da barra lateral (rail): colapsada e aberta */
   --rail-col: 60px;
   --rail-col-aberta: 180px;
+  /* --- COLUNA DE ESTUDO (responsividade em telas largas) -------------------
+     A tela de estudo não tinha teto de largura: em 1920 a pergunta chegava a
+     ~145 caracteres por linha e em 3440 a ~272, contra os 45–75 confortáveis
+     para leitura — e os botões de resposta viravam barras de 3.200px com o
+     texto perdido no canto. Estes dois tokens são o teto.
+     1100px NÃO é um número novo: é exatamente a largura que a coluna já tinha
+     em 1280 (60 de rail + 60 de padding + 1100 + 60 de padding = 1280). Ou
+     seja, do notebook para baixo nada muda — o teto só impede o esticamento
+     daí para cima. */
+  --col-estudo: 1100px;
+  /* ONDE a coluna está agora — as três medidas derivadas.
+     Desde que a coluna passou a ser CENTRADA, "o fim do conteúdo" não é mais
+     "a borda da janela": num monitor de 3440 a coluna vai de x1200 a x2300, com
+     1.100px de margem de cada lado. As intervenções se ancoram nestes tokens em
+     vez de na janela — sem isso, o card de canto nasceria a mais de 1.000px de
+     distância do texto que a aluna está lendo, fora do campo de visão útil.
+     A conta é a mesma do layout: 60px de padding do .main-content de cada lado,
+     e o que sobrar além do teto vira margem igual dos dois lados. Em 1280 não
+     sobra nada, --estudo-esq dá 120px e tudo cai exatamente onde já caía. */
+  --rail-atual: var(--rail-col);
   /* Fundo marfim (acessibilidade TEA/TDAH): off-white no lugar do bege escuro.
      Regra fixa do projeto: nunca #fff/#000 puros — off-white e quase-preto. */
   --marfim: #f4ecdd;   /* fundo das páginas */
@@ -439,6 +459,17 @@ html {
   overflow-y: auto;
   background-color: var(--marfim);
 }
+/* Telas ALTAS: o conteúdo grudava no topo e sobrava meia tela vazia embaixo —
+   o cabeçalho parecia apertado contra a borda justamente onde havia espaço de
+   sobra. Mais respiro em cima usa esse vazio e centra melhor o bloco no campo
+   de visão. O corte em 950px é acima da altura de notebook (768/800/900), onde
+   não há folga para dar: lá o padding continua o de sempre. */
+@media (min-height: 950px) {
+  .main-content { padding-top: 96px; }
+}
+@media (min-height: 1250px) {
+  .main-content { padding-top: 130px; }
+}
 .content-header {
   margin-bottom: 40px;
 }
@@ -470,12 +501,51 @@ html {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   max-width: 1500px;
 }
+/* CENTRALIZAÇÃO em telas grandes. A grade já parava em 1500px, mas o bloco
+   inteiro ficava colado na esquerda: num monitor de 3440 sobravam ~1.900px de
+   bege vazio de um lado só, e o conteúdo lia como "esquecido no canto".
+   O teto vai na VIEW, não na grade, de propósito: assim o cabeçalho
+   ("Selecione uma matéria…") e os cards se movem JUNTOS e continuam alinhados
+   entre si — que era a razão original de a grade estar à esquerda. O que muda é
+   só onde esse bloco inteiro cai na tela: agora com margens iguais dos dois
+   lados. */
+#menu-view,
+#temas-view {
+  max-width: 1500px;
+  margin-inline: auto;
+}
+/* A grade de TEMAS é gerada pela IA e não tem número fixo de cards; sem teto
+   ela abria 12 colunas num monitor largo. O mesmo 1500 da grade de matérias. */
+#temas-view .mission-grid { max-width: 1500px; }
+/* TELAS DE NOTEBOOK (1101–1680px): devolve espaço ao subtítulo.
+   O comentário acima diz que o max-width de 1500px existe "p/ o subtítulo caber
+   em uma linha" — medindo, isso NÃO acontecia em nenhum notebook. Em 1280 cada
+   card tem 200px, dos quais 60 são padding: sobram 140px de texto. O subtítulo
+   mais longo ("Mecânica & Eletromagnetismo") precisa de 233px, e nove dos dez
+   quebravam em duas linhas.
+   Não dá para resolver por completo: 5 colunas de 233px + respiro não cabem em
+   1100px de área útil — é aritmética, não CSS. O que dá é apertar o que sobra
+   (gap 25→20, padding 30→24), o que devolve ~35px de texto por card e derruba
+   de nove para quatro os subtítulos que quebram em 1280 (e para dois em 1366).
+   Acima de 1680px a grade já tem folga e volta ao respiro original.
+   Os dois que quebram em qualquer notebook são os mais longos — se um dia
+   valer a pena zerar isso, o caminho é encurtar o TEXTO, não o CSS. */
+@media (max-width: 1680px) {
+  #menu-view .mission-grid { gap: 20px; }
+  #menu-view .mission-card { padding: 24px; }
+}
 @media (max-width: 1100px) {
   #menu-view .mission-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 .mission-card {
+  /* O card vira a RÉGUA do próprio texto: com container-type, o `cqw` usado no
+     h3 e no span abaixo mede 1% da largura útil DESTE card, não da janela.
+     É o que faz o texto caber sozinho em qualquer monitor — inclusive nos que
+     nunca testamos e nos que rodam com zoom do sistema, onde um breakpoint
+     fixo em px erra. Ver o comentário do h3. */
+  container-type: inline-size;
   padding: 30px;
   border-radius: 20px;
   border: 1px solid var(--border);
@@ -501,13 +571,31 @@ html {
   height: 3rem;
   fill: var(--profundo);
 }
+/* O NOME da matéria NUNCA corta — em nenhuma largura.
+   "Matemática" em 2rem mede 187px. Num notebook o card oferece ~156px de texto
+   e, sendo uma palavra só, não existe onde quebrar: a palavra saía para fora da
+   borda do card. Com o zoom do sistema ligado (comum em PC de escola) o card
+   aperta ainda mais e o corte piora.
+   Um breakpoint em px não resolve isso — só empurra o problema para a largura
+   seguinte. Aqui o tamanho da letra é uma fração da largura DO CARD (cqw), então
+   ele se ajusta sozinho a qualquer combinação de monitor e zoom: 2rem sempre que
+   couber, encolhendo só o necessário, e nunca abaixo de 1.1rem (onde ainda
+   sobra folga até a largura em que a grade já virou de 5 para 2 colunas).
+   O overflow-wrap é a rede de segurança final: se um dia entrar uma matéria de
+   nome muito mais longo, ela quebra a palavra em vez de vazar. */
 .mission-card h3 {
-  font-size: 2rem;
+  font-size: clamp(1.1rem, 16cqw, 2rem);
   margin-bottom: 10px;
   color: var(--profundo);
+  overflow-wrap: break-word;
 }
+/* Mesma ideia no subtítulo. O caso que doía era "Mecânica & Eletromagnetismo":
+   quebra em duas linhas sem problema, mas "Eletromagnetismo" sozinha mede 140px
+   e estourava o card estreito. */
 .mission-card span {
+  font-size: clamp(0.8rem, 10cqw, 1rem);
   color: var(--profundo);
+  overflow-wrap: break-word;
 }
 #temas-view h2 {
   font-size: 2.2rem;
@@ -521,11 +609,30 @@ html {
   display: flex;
   flex-direction: column;
   gap: 30px;
+  /* Teto de leitura (ver --col-estudo nos TOKENS) + CENTRALIZAÇÃO. Em 1280 a
+     coluna já media 1100px e as margens já eram simétricas, então nada muda de
+     1280 para baixo. Acima disso o teto impede o esticamento e o margin auto
+     mantém a coluna no meio da área útil, com o mesmo respiro dos dois lados —
+     em vez de encostada na esquerda com meia tela vazia à direita.
+     O #quiz-view É este container, então o cabeçalho da questão acompanha a
+     coluna e continua alinhado com a pergunta e as opções. */
+  max-width: var(--col-estudo);
+  margin-inline: auto;
 }
+/* Cabeçalho da questão: matéria + dificuldade | barra da meta + "Questão X de
+   10" + streak | Caderno + Abandonar.
+   Eram três grupos apertados numa linha só, com os itens de cada grupo quase
+   encostados — "Questão 1 de 10 🔥 2 dias" lia como uma coisa só. Ganharam ar
+   (gap maior dentro e entre os grupos) e permissão para quebrar de linha: em
+   coluna estreita ou com zoom alto, o grupo que não couber desce inteiro em vez
+   de espremer os vizinhos. */
 .quiz-nav {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 14px 32px;
+  padding-bottom: 4px;
 }
 .abort-btn {
   padding: 12px 20px;
@@ -556,6 +663,21 @@ html {
   flex-direction: column;
   gap: 15px;
 }
+/* POR QUE AS ALTERNATIVAS CONTINUAM EM UMA COLUNA SÓ
+   Numa tela larga cada botão fica com ~94% da largura vazia à direita, porque a
+   resposta costuma ser curta ("CO₂ e H₂O") dentro de uma barra de 1100px. A
+   tentação é quebrar em duas ou três colunas para preencher.
+   Não é seguro: o CSS enxerga a largura da coluna, nunca o TAMANHO da
+   alternativa. Uma grade de 3 colunas serviria bem às respostas curtas e
+   amassaria as longas em quatro linhas cada — e o comprimento das alternativas
+   varia por questão, porque quem escreve é a IA. Some-se a isso que a lista
+   vertical A–E é o padrão de varredura mais barato para quem está com a atenção
+   comprometida (o público desta tela), e que botões de larguras diferentes dão
+   peso visual diferente a alternativas que precisam parecer equivalentes — a
+   escolha alimenta o bandit.
+   O vazio dentro do botão é o preço de uma lista previsível. O que dá para
+   melhorar sem esse risco é a PROPORÇÃO do bloco todo — feito na media query de
+   1800px, mais acima. */
 .option-btn {
   padding: 20px;
   border: 1px solid var(--border);
@@ -571,6 +693,30 @@ html {
   border-color: var(--gravata-kinrou);
   color: var(--profundo);
   transform: translateX(5px);
+}
+/* MONITOR LARGO (a partir de 1800px): o bloco cresce em PROPORÇÃO, não só em
+   largura. Num monitor de 2560 a coluna de 1100px lia como uma tira estreita no
+   meio da tela — o conteúdo estava centrado e preenchia a coluna inteira (medido),
+   mas a coluna era pequena demais para o tamanho do monitor.
+   Alargar só o container pioraria a leitura: a linha da pergunta iria dos ~92
+   caracteres para ~110, longe dos 45–75 confortáveis. Por isso a largura e a
+   TIPOGRAFIA sobem juntas, +18% cada: a coluna vai a 1300px, a pergunta a
+   1.75rem, e a contagem de caracteres por linha fica onde estava (~92). O bloco
+   ocupa mais tela e continua se lendo igual — de mais longe, que é como se olha
+   um monitor grande.
+   Uma media query só, e para CIMA: abaixo de 1800px nada aqui existe, então as
+   telas médias e de notebook ficam exatamente como estão hoje.
+   NÃO mexi no número de colunas das alternativas de propósito — ver o comentário
+   do .option-btn mais abaixo. */
+@media (min-width: 1800px) {
+  :root { --col-estudo: 1300px; }
+  .quiz-container { gap: 36px; }
+  .question-wrapper h2 { font-size: 1.75rem; }
+  .options-grid { gap: 18px; }
+  .option-btn {
+    padding: 26px;
+    font-size: 1rem;
+  }
 }
 .feedback-msg {
   font-size: 1rem;
@@ -2067,7 +2213,7 @@ body.textura-papel .conteudo {
 .quiz-nav-info {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.85rem;
 }
 /* Indicador de dificuldade adaptativa (●●○○○). */
 .nivel-dif {
@@ -2118,23 +2264,43 @@ body.textura-papel .conteudo {
    questão, a rail ou os botões do topo.
    As colunas da ESQUERDA partem DEPOIS da rail (e acompanham quando ela abre):
    é o que garante que o card nunca fique atrás nem por cima dela. */
-#kaia-notificacoes.pos-dir { right: 20px; left: auto; align-items: flex-end; }
+/* Com a rail aberta a coluna toda desloca 120px — trocar UM token reposiciona
+   as três zonas e a barra de uma vez. */
+/* As três medidas derivadas da coluna moram no BODY, não no :root — um var()
+   dentro de uma custom property resolve no elemento onde ela é DECLARADA, e no
+   :root elas congelariam com a rail fechada (a rail aberta deixaria de mover as
+   intervenções). No body, a linha seguinte troca o --rail-atual e as três
+   recalculam junto. */
+body {
+  --estudo-larg: min(var(--col-estudo), calc(100vw - var(--rail-atual) - 120px));
+  --estudo-esq: calc(
+    var(--rail-atual) + 60px
+    + (100vw - var(--rail-atual) - 120px - var(--estudo-larg)) / 2
+  );
+  --estudo-dir: calc(var(--estudo-esq) + var(--estudo-larg));
+}
+body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
+/* As zonas seguem a COLUNA DE ESTUDO, não a janela (ver os tokens --estudo-*).
+   Em 1280 a coluna encosta nas bordas e as contas dão exatamente os valores de
+   antes; num monitor largo é isto que mantém o card ao lado do texto em vez de
+   exilado na borda da tela. */
+#kaia-notificacoes.pos-dir {
+  right: calc(100vw - var(--estudo-dir) - 40px);
+  left: auto;
+  align-items: flex-end;
+}
 #kaia-notificacoes.pos-esq {
-  left: calc(var(--rail-col) + 20px);
+  left: calc(var(--estudo-esq) - 40px);
   right: auto;
   align-items: flex-start;
 }
-body.rail-aberta #kaia-notificacoes.pos-esq { left: calc(var(--rail-col-aberta) + 20px); }
 /* Centro da ÁREA ÚTIL, não da viewport: com a rail aberta os dois diferem em
    60px, e centrar na viewport jogaria o card para a esquerda do conteúdo. */
 #kaia-notificacoes.pos-centro {
-  left: calc(var(--rail-col) + (100vw - var(--rail-col)) / 2);
+  left: calc(var(--estudo-esq) + var(--estudo-larg) / 2);
   right: auto;
   align-items: center;
   transform: translateX(-50%);
-}
-body.rail-aberta #kaia-notificacoes.pos-centro {
-  left: calc(var(--rail-col-aberta) + (100vw - var(--rail-col-aberta)) / 2);
 }
 /* A segunda LINHA: mesmo trio de colunas, mais alto. 200px deixa o topo do card
    em ~y530 — abaixo dos 512 onde a questão termina com a rail aberta, que é o
@@ -2321,7 +2487,17 @@ body.rail-aberta #kaia-notificacoes.pos-centro {
 #kaia-mr {
   position: fixed;
   bottom: 0;
-  left: var(--rail-col);
+  /* LARGURA CHEIA: da rail até a borda direita, em qualquer monitor. Chegou a
+     acompanhar a coluna de estudo junto com as outras intervenções, e ficou
+     errado: as outras são cards que precisam nascer perto do texto, esta é uma
+     faixa de rodapé — encurtá-la deixava um pedaço de barra solto no meio da
+     tela em vez de uma faixa.
+     A frase continua alinhada com a questão de graça: a barra ocupa a mesma
+     área ao lado da rail em que a coluna é centrada, então os dois centros
+     coincidem (em 3440, ambos em x1750).
+     O --rail-atual já cobre a rail aberta, e a transição de `left` faz a barra
+     acompanhar a abertura no mesmo tempo dela (0.25s). */
+  left: var(--rail-atual);
   right: 0;
   z-index: 5600;   /* ver a escala de camadas acima */
   padding: 18px 16px 16px;
@@ -2337,8 +2513,8 @@ body.rail-aberta #kaia-notificacoes.pos-centro {
   transition: opacity 0.35s ease, transform 0.35s ease, left 0.25s ease,
               visibility 0s linear 0.35s;
 }
-/* Acompanha a rail expandida no mesmo tempo em que ela se abre (0.25s). */
-body.rail-aberta #kaia-mr { left: var(--rail-col-aberta); }
+/* A rail aberta já é tratada pelo --rail-atual nos tokens da coluna: a barra
+   reposiciona sozinha, no mesmo tempo em que a rail se abre (0.25s). */
 #kaia-mr.aberto {
   opacity: 1;
   visibility: visible;
@@ -2361,9 +2537,19 @@ body.rail-aberta #kaia-mr { left: var(--rail-col-aberta); }
   font-size: 14px;
   line-height: 1.4;
 }
+/* Trilho em PROPORÇÃO da faixa, não em medida fixa. Era `max-width: 520px`, o
+   mesmo teto da frase — os dois formavam um par, mas o trilho ficava com ~40%
+   da faixa num notebook e ~20% num monitor grande, some sumindo conforme a tela
+   cresce. Os 65% (≈63% depois do padding lateral) dão os mesmos ~63% em
+   qualquer largura, que é o ponto: presença constante.
+   A FRASE fica nos 520px de propósito — ali o limite é de leitura, não de
+   proporção: a 14px, 520px já dão ~74 caracteres por linha, o teto do
+   confortável. Alargar a frase junto pioraria o que o trilho melhora. */
 #kaia-mr .kaia-mr-track {
-  max-width: 520px;
-  height: 6px;
+  width: 65%;
+  /* Era 6px — um fio, que sumia na faixa larga do rodapé. 10px dá corpo sem
+     virar bloco: continua uma pílula fina, agora visível de relance. */
+  height: 10px;
   margin: 0 auto;
   border-radius: 99px;
   background: var(--bege-veu);
@@ -2373,9 +2559,11 @@ body.rail-aberta #kaia-mr { left: var(--rail-col-aberta); }
   width: 100%;
   height: 100%;
   border-radius: 99px;
-  /* Era verde-união. O bege tira o "semáforo" da barra: ela marca tempo
-     passando, não certo/errado — e passa a ler como elemento da marca. */
-  background: var(--bege-forte);
+  /* Passou por verde-união (semáforo: sugeria certo/errado numa barra que só
+     marca tempo passando) e por bege-forte, que sumia contra o sulco de bege
+     do track. O azul-coati resolve os dois: é da marca, não tem leitura de
+     acerto/erro, e tem contraste de sobra contra o bege claro do sulco. */
+  background: var(--azul-coati);
 }
 /* O "Pular" era --tinta a 60% de opacidade: dava 2,8:1 e reprovava em AA (o axe
    acusa). É a ÚNICA saída da barra — o controle que menos pode sumir. Agora usa
@@ -2892,10 +3080,13 @@ body.kaia-reancorar .option-btn {
   color: var(--profundo);
   opacity: 0.85;
 }
+/* O trio barra + contador + streak respira mais: eram 0.6rem entre os três,
+   o que os colava num bloco só. */
 .meta-progresso {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem 1rem;
 }
 .meta-barra {
   width: 140px;
@@ -3425,6 +3616,22 @@ body.kaia-reancorar .option-btn {
   animation: kaia-ail-letra 3s infinite;
 }
 .kaia-ail__esfera {
+  /* As seis cores da esfera viraram TOKENS para que o mesmo componente possa
+     aparecer em dois contextos com pesos diferentes. Os valores abaixo são os
+     de sempre (a esfera azul da espera da IA) — quem não sobrescreve nada não
+     vê diferença nenhuma. A tela de saudações sobrescreve com a variante clara
+     (ver .kaia-pre-esfera no bloco do PRELOADER).
+     --ail-funda é a sombra que dá o volume, --ail-media o meio-tom e
+     --ail-brilho* o realce que gira. */
+  --ail-brilho:  #6f97e8;
+  --ail-brilho2: #89adf0;
+  --ail-brilho3: #7ba3ec;
+  --ail-media:   #2d4ba5;
+  --ail-media2:  #3a5cb8;
+  --ail-funda:   #1a2b4c;
+  --ail-halo:    rgba(111, 151, 232, 0.3);
+  --ail-halo2:   rgba(45, 75, 165, 0.2);
+
   position: absolute;
   inset: 0;
   border-radius: 50%;
@@ -3434,29 +3641,29 @@ body.kaia-reancorar .option-btn {
   0% {
     transform: rotate(90deg);
     box-shadow:
-      0 6px 12px 0 #6f97e8 inset,
-      0 12px 18px 0 #2d4ba5 inset,
-      0 36px 36px 0 #1a2b4c inset,
-      0 0 3px 1.2px rgba(111, 151, 232, 0.3),
-      0 0 6px 1.8px rgba(45, 75, 165, 0.2);
+      0 6px 12px 0 var(--ail-brilho) inset,
+      0 12px 18px 0 var(--ail-media) inset,
+      0 36px 36px 0 var(--ail-funda) inset,
+      0 0 3px 1.2px var(--ail-halo),
+      0 0 6px 1.8px var(--ail-halo2);
   }
   50% {
     transform: rotate(270deg);
     box-shadow:
-      0 6px 12px 0 #89adf0 inset,
-      0 12px 6px 0 #3a5cb8 inset,
-      0 24px 36px 0 #2d4ba5 inset,
-      0 0 3px 1.2px rgba(111, 151, 232, 0.3),
-      0 0 6px 1.8px rgba(45, 75, 165, 0.2);
+      0 6px 12px 0 var(--ail-brilho2) inset,
+      0 12px 6px 0 var(--ail-media2) inset,
+      0 24px 36px 0 var(--ail-media) inset,
+      0 0 3px 1.2px var(--ail-halo),
+      0 0 6px 1.8px var(--ail-halo2);
   }
   100% {
     transform: rotate(450deg);
     box-shadow:
-      0 6px 12px 0 #7ba3ec inset,
-      0 12px 18px 0 #2d4ba5 inset,
-      0 36px 36px 0 #1a2b4c inset,
-      0 0 3px 1.2px rgba(111, 151, 232, 0.3),
-      0 0 6px 1.8px rgba(45, 75, 165, 0.2);
+      0 6px 12px 0 var(--ail-brilho3) inset,
+      0 12px 18px 0 var(--ail-media) inset,
+      0 36px 36px 0 var(--ail-funda) inset,
+      0 0 3px 1.2px var(--ail-halo),
+      0 0 6px 1.8px var(--ail-halo2);
   }
 }
 @keyframes kaia-ail-letra {
@@ -3468,9 +3675,9 @@ body.kaia-reancorar .option-btn {
   .kaia-ail__esfera {
     animation: none;
     box-shadow:
-      0 6px 12px 0 #6f97e8 inset,
-      0 12px 18px 0 #2d4ba5 inset,
-      0 36px 36px 0 #1a2b4c inset;
+      0 6px 12px 0 var(--ail-brilho) inset,
+      0 12px 18px 0 var(--ail-media) inset,
+      0 36px 36px 0 var(--ail-funda) inset;
   }
   .kaia-ail__letra {
     animation: none;
@@ -3543,19 +3750,69 @@ body.kaia-reancorar .option-btn {
   animation: kaia-pre-sair 0.45s ease 3.5s forwards;
 }
 /* Grid de uma célula: todas as saudações ocupam o MESMO lugar, então uma sai
-   enquanto a outra entra, sem empurrar nada. */
+   enquanto a outra entra, sem empurrar nada. É também o que deixa a esfera
+   centrada em todas elas de uma vez: ela é irmã da pilha, não de uma palavra. */
 .kaia-pre-saudacoes {
   display: grid;
   place-items: center;
+  position: relative;   /* âncora da esfera */
+  /* Tamanho do texto FORA do .kaia-pre-item, porque a esfera também depende
+     dele. ~51px em qualquer monitor: o 8vw só entra abaixo de 640px de
+     largura, e aí a esfera encolhe junto — nunca sozinha. */
+  --pre-fs: clamp(2rem, 8vw, 3.2rem);
+  /* DIÂMETRO FIXO, dimensionado para a MAIOR saudação. Medindo as dez em
+     51,2px, a maior não é "Namaste" (221px) e sim o japonês こんにちは, com
+     254x82px — o círculo que envolve essa caixa tem 267px. Os 6,25em dão 320px,
+     ~26px de respiro de cada lado.
+     É FIXO de propósito: preso ao tamanho da fonte, e não ao tamanho da palavra
+     da vez. Assim a esfera não pulsa quando a sequência passa de "Olá" (87px)
+     para こんにちは — ela fica parada e as palavras trocam dentro dela. */
+  --pre-anel: calc(var(--pre-fs) * 6.25);
+}
+/* A MESMA esfera da espera da IA (.kaia-ail__esfera, no bloco AI LOADER acima):
+   mesma classe, mesma geometria de box-shadow, mesma rotação de 5s. Um só
+   elemento de "carregando/pensando" nos dois contextos — quem vê a abertura
+   reconhece o mesmo objeto depois, na espera da questão.
+   O que muda aqui é só o PESO das cores. Na tela da questão a esfera é o azul
+   cheio do Coati, porque ali ela é o assunto: o aluno está esperando por ela.
+   Na abertura ela é pano de fundo das saudações, então entra em bege bem
+   diluído — presença, não protagonismo — e as palavras continuam legíveis por
+   cima (o texto é --profundo, e a esfera clara não rouba contraste dele). */
+.kaia-pre-esfera.kaia-ail__esfera {
+  --ail-brilho:  rgba(var(--card-rgb), 0.85);
+  --ail-brilho2: rgba(var(--card-rgb), 0.95);
+  --ail-brilho3: rgba(var(--card-rgb), 0.90);
+  --ail-media:   rgba(var(--bege-rgb), 0.26);
+  --ail-media2:  rgba(var(--bege-rgb), 0.32);
+  --ail-funda:   rgba(var(--bege-rgb), 0.60);
+  --ail-halo:    rgba(var(--bege-rgb), 0.22);
+  --ail-halo2:   rgba(var(--bege-rgb), 0.14);
+
+  /* TAMANHO FIXO — o motivo de existir o --pre-anel. A esfera fica do tamanho
+     da MAIOR saudação e não muda mais: as palavras trocam dentro dela.
+     `inset: auto` desfaz o inset:0 herdado do AI Loader, onde a esfera acompanha
+     o palco; aqui ela tem medida própria. */
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: var(--pre-anel);
+  height: var(--pre-anel);
+  margin: calc(var(--pre-anel) / -2) 0 0 calc(var(--pre-anel) / -2);
+  z-index: 0;             /* atrás das saudações (que sobem para o 1) */
+  pointer-events: none;
 }
 .kaia-pre-item {
   grid-area: 1 / 1;
   margin: 0;
+  position: relative;
+  z-index: 1;   /* por cima da esfera */
   /* Era --marfim (claro sobre fundo escuro). Com o fundo claro, inverte para o
      azul da marca: 11.9:1 na faixa onde as saudações aparecem. */
   color: var(--profundo);        /* cor SÓLIDA — o degradê é só no fundo */
-  /* ~50px em tela cheia; o 8vw só reduz em telas estreitas, sem estourar. */
-  font-size: clamp(2rem, 8vw, 3.2rem);
+  /* ~50px em tela cheia; o 8vw só reduz em telas estreitas, sem estourar.
+     Mora no .kaia-pre-saudacoes porque o anel se dimensiona pelo mesmo valor —
+     mudou aqui, o anel acompanha em vez de descolar. */
+  font-size: var(--pre-fs);
   font-weight: 800;
   letter-spacing: -0.5px;
   opacity: 0;
@@ -3594,7 +3851,10 @@ body.kaia-reancorar .option-btn {
   to { opacity: 0; visibility: hidden; }
 }
 /* Sem movimento: nada de tela de abertura. Um preloader que não anima só atrasa
-   o acesso, então ele simplesmente não aparece. */
+   o acesso, então ele simplesmente não aparece — e isso já cobre o anel, que é
+   filho dele: quem pede menos movimento não vê nada girando porque não vê a
+   tela. Não precisa de regra própria; se um dia o preloader deixar de sumir
+   aqui, a esfera já cai na regra de reduced-motion do próprio AI Loader. */
 @media (prefers-reduced-motion: reduce) {
   #kaia-preloader { display: none; }
 }

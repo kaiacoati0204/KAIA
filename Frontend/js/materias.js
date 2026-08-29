@@ -592,6 +592,28 @@ function dispararIntervencaoTeste(tipo) {
         console.warn('[KaIA] tipo desconhecido:', tipo, '— use um destes:', GATILHO_TESTE_ORDEM);
         return;
     }
+    // Encerra de verdade o que estiver rodando antes de abrir a próxima.
+    // Em produção duas intervenções nunca se sobrepõem (o polling é travado por
+    // intervencaoAtual), mas o dock deixa clicar uma em cima da outra — e um
+    // temporizador pendente do micro_refoco (o MR_DELAY_MS) voltava a abrir a
+    // barra POR CIMA da intervenção seguinte, zerando pausaAtiva junto.
+    _fecharMicroRefoco();
+    _fecharSeq();
+    _esconderTroca();
+
+    // O checkpoint precisa de pelo menos uma questão RESPONDIDA para ter o que
+    // recuperar — num teste avulso o histórico está vazio e ele não abriria.
+    // Só no modo de teste: empresta uma questão de exemplo para o design poder
+    // ser visto. Em produção o histórico vem das questões de verdade.
+    if (tipo === 'checkpoint' && historicoQuestoes.length === 0) {
+        console.log('[KaIA] (teste) histórico vazio — usando questão de exemplo no checkpoint.');
+        historicoQuestoes.push({
+            q: 'Qual gás é o principal responsável pelo efeito estufa de origem humana?',
+            opts: ['Metano', 'Dióxido de carbono', 'Ozônio', 'Argônio'],
+            ans: 1,
+        });
+    }
+
     _gtUltimoEm = performance.now();
     _intervencaoDeTeste = true;
     console.log('[KaIA] (teste) disparando:', tipo);
@@ -794,8 +816,17 @@ function iniciarPausaAtiva() {
 // números). Não usa o overlay central. (Dizia "no TOPO" — a barra desceu para o
 // rodapé e o comentário tinha ficado para trás.)
 let _mrInterval = null;
+let _mrDelayTimer     = null;
 let _mrMostradaEm     = 0;
 let _mrFeedbackAberto = false;
+
+// Respiro ANTES de a barra começar a descer: ela aparece cheia e fica parada,
+// dando tempo de LER a frase de acolhimento antes de qualquer movimento
+// começar. Sem isso a barra já entrava descendo, e uma contagem correndo em
+// cima do texto é justamente o tipo de pressa que a intervenção veio tirar.
+// O tempo total na tela é MR_DELAY_MS + a duração da respiração.
+// TODO: ajustar tempo pra produção — 1,5s no teste, 4s de verdade.
+const MR_DELAY_MS = T(1500, 4000);
 
 // Banco de frases de acolhimento da barra. Uma é sorteada na ABERTURA e fica
 // PARADA do começo ao fim: variar entre aparições dá variedade, variar durante a
@@ -846,26 +877,10 @@ function _garantirBarraMicroRefoco() {
         if (_mrFeedbackAberto) _fecharMicroRefoco(); else encerrarMicroRefoco();
     });
 
-    // (gatilho de teste) — REMOVER junto com o bloco do gatilho.
-    // A barra some sozinha, que é o conceito dela: faixa passiva de "respire",
-    // sem exigir ação. Isso torna difícil OLHAR para ela com calma. Só no modo
-    // de teste ela ganha um X e para de se fechar sozinha (ver encerrarMicroRefoco),
-    // então dá para inspecionar o desenho pelo tempo que precisar. Com
-    // GATILHO_TESTE = false nada disto existe e o comportamento real volta.
-    if (GATILHO_TESTE) {
-        const x = document.createElement('button');
-        x.type = 'button';
-        x.id = 'kaia-mr-x-teste';
-        x.title = 'Fechar (só no modo de teste)';
-        x.setAttribute('aria-label', 'Fechar a barra');
-        x.textContent = '×';
-        x.style.cssText = 'position:absolute;top:6px;left:12px;width:26px;height:26px;'
-            + 'border:1px dashed var(--bege-forte);border-radius:50%;background:var(--bege-veu);'
-            + 'color:var(--bege-tinta);font-size:17px;line-height:1;cursor:pointer;'
-            + 'font-family:inherit;display:flex;align-items:center;justify-content:center;';
-        x.addEventListener('click', _fecharMicroRefoco);
-        el.appendChild(x);
-    }
+    // (O X de teste que existia aqui saiu: com MR_DELAY_MS a barra fica parada
+    // tempo suficiente para ser vista, e o "Pular" já é a saída. A barra volta a
+    // se fechar sozinha em todos os modos, que é o conceito dela — faixa passiva
+    // de "respire", sem exigir ação.)
 }
 
 function iniciarMicroRefoco() {
@@ -888,21 +903,28 @@ function iniciarMicroRefoco() {
     document.body.classList.add('kaia-mr-aberta');
     $('kaia-mr-msg').innerText = passos[0];
     _medirBarraMicroRefoco();
-    // barra começa cheia e cai linearmente até 0 no fim (via transition CSS, sem números)
+    // A barra entra CHEIA e fica parada por MR_DELAY_MS — tempo de ler a frase.
+    // Só depois ela começa a cair linearmente até 0 (via transition CSS, sem
+    // números). A contagem que encerra a intervenção também só começa aí: o
+    // delay é respiro, não desconto do tempo de respiração.
     const fill = $('kaia-mr-fill');
+    clearInterval(_mrInterval);
+    clearTimeout(_mrDelayTimer);
     fill.style.transition = 'none';
     fill.style.width = '100%';
     void fill.offsetWidth;                     // reflow p/ reiniciar a queda a cada disparo
-    fill.style.transition = `width ${dur}ms linear`;
-    fill.style.width = '0%';
-    // a mensagem troca por fase da respiração
-    const inicio = performance.now();
-    clearInterval(_mrInterval);
-    _mrInterval = setInterval(() => {
-        const passado = performance.now() - inicio;
-        if (passado >= dur) return encerrarMicroRefoco();
-        $('kaia-mr-msg').innerText = passos[Math.floor(passado / passoMs) % passos.length];
-    }, 200);
+
+    _mrDelayTimer = setTimeout(() => {
+        fill.style.transition = `width ${dur}ms linear`;
+        fill.style.width = '0%';
+        // a mensagem troca por fase da respiração
+        const inicio = performance.now();
+        _mrInterval = setInterval(() => {
+            const passado = performance.now() - inicio;
+            if (passado >= dur) return encerrarMicroRefoco();
+            $('kaia-mr-msg').innerText = passos[Math.floor(passado / passoMs) % passos.length];
+        }, 200);
+    }, MR_DELAY_MS);
 }
 
 // A barra vive no rodapé, onde o probe de autorrelato e a pilha de cards também
@@ -915,6 +937,8 @@ function _medirBarraMicroRefoco() {
 }
 
 function _fecharMicroRefoco() {
+    clearInterval(_mrInterval);
+    clearTimeout(_mrDelayTimer);
     const el = $('kaia-mr');
     if (el) el.classList.remove('aberto');
     document.body.classList.remove('kaia-mr-aberta');
@@ -929,6 +953,7 @@ const MR_FEEDBACK_MS = T(4000, 6000);   // TODO: ajustar tempo pra produção
 
 function encerrarMicroRefoco() {
     clearInterval(_mrInterval);
+    clearTimeout(_mrDelayTimer);   // "Pular" durante o delay não deixa a queda começar depois
     pausaAtiva = false;
     idleTime = 0;                              // retoma sensores sem contar a respiração
     if (isMissionActive) setEstado('ESTUDANDO');
@@ -945,12 +970,7 @@ function encerrarMicroRefoco() {
         onResposta: () => setTimeout(_fecharMicroRefoco, 1200),
     }));
     _medirBarraMicroRefoco();                   // encolheu: sem a frase e sem a barra
-    // (gatilho de teste) — REMOVER a condição, mantendo o setTimeout.
-    // No modo de teste a barra ESPERA o X; no comportamento real ela se fecha
-    // sozinha em MR_FEEDBACK_MS, sem cobrar resposta.
-    if (!GATILHO_TESTE) {
-        setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
-    }
+    setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
 }
 
 // Troca de tema (intervenção com AÇÃO — Passo 5): modal CENTRAL (como a pausa
@@ -1089,7 +1109,18 @@ function _questaoCheckpoint() {
 function checkpointRecuperacao() {
     const q = _questaoCheckpoint();
     const lado = document.querySelector('.quiz-lado-questao');
-    if (!q || !Array.isArray(q.opts) || !lado) { liberarPolling(); return; }   // sem histórico -> não intervém
+    if (!q || !Array.isArray(q.opts) || !lado) {
+        // Falhava em SILÊNCIO: sem nenhuma questão respondida ainda,
+        // historicoQuestoes está vazio, não há o que recuperar e a intervenção
+        // simplesmente não acontecia — sem nada no console, o que faz parecer
+        // que ela "quebrou". O aviso não muda o comportamento, só o torna
+        // visível para quem está testando ou depurando.
+        console.warn('[KaIA] checkpoint não disparou: '
+            + (!lado ? 'a área de estudo não está na tela.'
+                     : `é preciso ter respondido ao menos 1 questão (histórico: ${historicoQuestoes.length}).`));
+        liberarPolling();
+        return;
+    }
     const antigo = $('kaia-cp');
     if (antigo) antigo.remove();             // evita duplicar se re-disparar
     pausaAtiva = true;                        // suspende sensores durante o checkpoint

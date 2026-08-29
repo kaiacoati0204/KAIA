@@ -2217,16 +2217,22 @@ body.rail-aberta #kaia-notificacoes.pos-centro {
    texto #f9fafb) — o único ponto do produto com tema escuro, o que destoava
    ainda mais depois do login claro. Agora usa os tokens da marca; a separação
    do fundo, que antes vinha do contraste escuro, vem da borda + sombra. */
+/* MAIOR que as outras superfícies pequenas do produto, de propósito: é a única
+   das 7 que aparece no canto, longe de onde o olho está (a questão, no centro).
+   As centrais não precisam disso — elas já chegam ocupando a tela.
+   O aumento é de corpo, não de peso: mais largura, mais respiro e texto maior,
+   mantendo a mesma paleta e o mesmo filete. Nada de sombra mais forte nem cor
+   mais saturada, que é o que faria virar anúncio. */
 .kaia-card-notif {
-  max-width: 320px;
-  padding: 16px 18px;
+  max-width: 440px;
+  padding: 24px 26px;
   border: 1px solid var(--bege-linha);
   /* Filete de bege à esquerda: é o que dá presença à marca sem pintar o fundo
      inteiro (fundo bege cheio derrubaria o contraste do texto). O mesmo filete
      reaparece no checkpoint e na barra do micro_refoco — é o fio que costura
      as 7 visualmente. */
-  border-left: 4px solid var(--bege-forte);
-  border-radius: 14px;
+  border-left: 5px solid var(--bege-forte);
+  border-radius: 16px;
   background: var(--card);
   color: var(--tinta);
   box-shadow: 0 10px 30px rgba(var(--profundo-rgb), 0.18);
@@ -2234,15 +2240,21 @@ body.rail-aberta #kaia-notificacoes.pos-centro {
   animation: kaiaIn 0.25s ease;
 }
 .kaia-card-notif h4 {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   color: var(--profundo);
-  font-size: 15px;
+  font-size: 17px;
 }
 .kaia-card-notif p {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   color: var(--tinta);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 15px;
+  line-height: 1.5;
+}
+/* Os botões do feedback acompanham — escopado no card para não engordar o strip
+   das outras 6, que é compartilhado. */
+.kaia-card-notif .kaia-fb button {
+  padding: 9px 0;
+  font-size: 14px;
 }
 #kaia-intervencao { display: none; }
 

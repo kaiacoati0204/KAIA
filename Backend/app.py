@@ -1911,21 +1911,17 @@ async def dados_grafico(request: Request):
 
 
 # ================== API: DADOS DO DASHBOARD =================================
-# Duas fontes possíveis, nesta ordem de prioridade:
-#   1) data/KaIA_Base_Sintetica.xlsx  → base EXPERIMENTAL (600 sessões, 1 linha
-#      por sessão, com as features de atenção e o rótulo `target`). O backend
-#      AGREGA essa base nos blocos que o dashboard consome.
-#   2) Backend/dados_dashboard.xlsx   → planilha manual (uma aba por bloco),
-#      criada por `python gerar_planilha_dashboard.py`.
-# Se nenhuma existir, o frontend cai no fallback de demonstração (script.js).
+# FONTE ÚNICA: o Supabase, via _agregar_supabase(). Sem banco, a rota responde
+# 503 como todas as outras rotas de dados.
 #
-# ATENÇÃO: a base sintética NÃO tem dados financeiros. Os blocos `mrr_mensal`,
-# `metas_fase` e `saude_financeira` (aba FINANCEIRO) não são emitidos aqui —
-# o frontend preenche esses com o demo. Isso é intencional e sinalizado na UI.
-BASE_SINTETICA = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "data", "KaIA_Base_Sintetica.xlsx")
-)
-DASHBOARD_XLSX = os.path.join(os.path.dirname(__file__), "dados_dashboard.xlsx")
+# Havia um fallback offline em cascata (base sintética em xlsx → planilha manual
+# → demo do front), de quando o projeto ainda não tinha banco externo. Saiu: a
+# base sintética não era mais usada, a planilha manual nunca existiu no repo, e
+# manter a cascata custava ~120 linhas que ninguém exercitava.
+#
+# Os blocos financeiros (`mrr_mensal`, `metas_fase`, `saude_financeira`) nunca
+# foram emitidos por aqui — o frontend preenche com dados de demonstração e
+# sinaliza isso na UI. Segue valendo.
 
 # Rótulos amigáveis para o `target` (mantém a ordem verde → amarelo → vermelho,
 # que é a mesma ordem das cores do gráfico de rosca no frontend).
@@ -1943,140 +1939,6 @@ _SINAIS = [
     ("Pausas de digitação",  "pausas_digitacao_s"),
     ("Velocidade de scroll", "velocidade_scroll_px_s"),
 ]
-
-
-def _agregar_base_sintetica(df):
-    """Transforma a base (1 linha = 1 sessão) nos blocos que o dashboard espera."""
-    total = len(df)
-    pct = lambda n: round(100.0 * n / total, 1) if total else 0.0
-
-    df = df.copy()
-    df["hora"] = df["horario_estudo"].dt.hour
-    df["dia"] = df["horario_estudo"].dt.date
-
-    # --- sessões por hora + "alertas" (sessões muito distraídas) ---
-    por_hora = df.groupby("hora").size()
-    alertas_hora = df[df["target"] == "muito_distraido"].groupby("hora").size()
-    sessoes_hora = [
-        {"hora": f"{h}h", "sessoes": int(por_hora.get(h, 0)), "alertas": int(alertas_hora.get(h, 0))}
-        for h in range(24)
-    ]
-
-    # --- distribuição de perfis (ocupa o slot do gráfico de "planos") ---
-    perfis = [{"plano": str(k), "percentual": pct(v)} for k, v in df["perfil"].value_counts().items()]
-
-    # --- sessões mais recentes ---
-    recentes = df.sort_values("horario_estudo", ascending=False).head(6)
-    alunos_recentes = [
-        {
-            "aluno": str(r.session_id),
-            "plano": str(r.perfil),
-            "foco": f"{int(r.acertos_questoes)}/10",
-            "tema": str(r.tipo_atividade),
-        }
-        for r in recentes.itertuples()
-    ]
-
-    # --- sessões com maior dispersão viram os "alertas recentes" ---
-    nivel = _NIVEL_COR
-    piores = df.sort_values(["mudancas_aba", "tempo_fora_foco_s"], ascending=False).head(4)
-    alertas_recentes = [
-        {
-            "nivel": nivel.get(r.target, "amarelo"),
-            "mensagem": f"{r.session_id} — {int(r.mudancas_aba)} trocas de aba · {r.tempo_fora_foco_s:.0f}s fora de foco",
-            "tempo": str(r.perfil),
-        }
-        for r in piores.itertuples()
-    ]
-
-    # --- sessões por dia: iniciadas vs. concluídas (1 - taxa de abandono) ---
-    por_dia = df.groupby("dia").agg(
-        iniciadas=("session_id", "size"), abandono=("taxa_abandono_sessao", "mean")
-    )
-    sessoes_dia = [
-        {
-            "data": d.strftime("%d/%m"),
-            "iniciadas": int(r.iniciadas),
-            "concluidas": int(round(r.iniciadas * (1 - r.abandono))),
-        }
-        for d, r in por_dia.iterrows()
-    ]
-
-    # --- tipos de atividade (ocupa o slot de "temas estudados") ---
-    # Rótulos legíveis: a base guarda em snake_case (video_aula, exercicios).
-    rotulos = {
-        "leitura": "Leitura", "exercicios": "Exercícios", "simulado": "Simulado",
-        "video_aula": "Vídeo-aula", "quiz": "Quiz",
-    }
-    atividades = [
-        {"tema": rotulos.get(str(k), str(k)), "sessoes": int(v)}
-        for k, v in df["tipo_atividade"].value_counts().items()
-    ]
-
-    # --- distribuição do target ---
-    cont = df["target"].value_counts()
-    distribuicao = [{"faixa": rot, "percentual": pct(int(cont.get(chave, 0)))} for chave, rot in _TARGETS]
-
-    # --- sinais de dispersão: média relativa ao pico observado ---
-    eventos = []
-    for rotulo, col in _SINAIS:
-        pico = float(df[col].max())
-        media = float(df[col].mean())
-        eventos.append({"tipo": rotulo, "percentual": round(100.0 * media / pico) if pico else 0})
-
-    # --- engajamento (%) por hora ---
-    eng = df.assign(_e=(df["target"] == "engajado").astype(int)).groupby("hora")["_e"].mean() * 100
-    foco_hora = [{"hora": f"{h}h", "foco": round(float(eng.get(h, 0.0)), 1)} for h in range(24)]
-
-    # --- KPIs (a aba FINANCEIRO não é emitida: a base não tem receita) ---
-    p_eng = pct(int(cont.get("engajado", 0)))
-    p_dis = pct(int(cont.get("distraido", 0)))
-    p_mui = pct(int(cont.get("muito_distraido", 0)))
-    kpis = [
-        {"view": "geral", "icone": "layers", "rotulo": "SESSÕES ANALISADAS", "valor": f"{total}",
-         "subtexto": "base sintética"},
-        {"view": "geral", "icone": "smile", "rotulo": "ENGAJAMENTO", "valor": f"{p_eng}%",
-         "subtexto": "sessões rotuladas engajado", "cor": "verde"},
-        {"view": "geral", "icone": "check", "rotulo": "ACERTOS MÉDIOS",
-         "valor": f"{df['acertos_questoes'].mean():.1f}/10".replace(".", ","), "subtexto": "por sessão"},
-        {"view": "geral", "icone": "alert", "rotulo": "ABANDONO MÉDIO",
-         "valor": f"{df['taxa_abandono_sessao'].mean()*100:.0f}%", "subtexto": "taxa média da sessão",
-         "cor": "vermelho"},
-
-        {"view": "sessoes", "icone": "clock", "rotulo": "DURAÇÃO MÉDIA",
-         "valor": f"{df['duracao_sessao_min'].mean():.0f} min", "subtexto": "por sessão"},
-        {"view": "sessoes", "icone": "list", "rotulo": "TEMPO DE RESPOSTA",
-         "valor": f"{df['tempo_resposta_ms'].mean()/1000:.1f}s".replace(".", ","), "subtexto": "média por questão"},
-        {"view": "sessoes", "icone": "target", "rotulo": "DIFICULDADE MÉDIA",
-         "valor": f"{df['nivel_dificuldade_atividade'].mean():.1f}/5".replace(".", ","), "subtexto": "nível da atividade"},
-        {"view": "sessoes", "icone": "calendar", "rotulo": "DIAS COBERTOS",
-         "valor": f"{df['dia'].nunique()}", "subtexto": "período da base"},
-
-        {"view": "atencao", "icone": "smile", "rotulo": "ENGAJADO", "valor": f"{p_eng}%",
-         "subtexto": "do total de sessões", "cor": "verde"},
-        {"view": "atencao", "icone": "meh", "rotulo": "DISTRAÍDO", "valor": f"{p_dis}%",
-         "subtexto": "do total de sessões", "cor": "amarelo"},
-        {"view": "atencao", "icone": "frown", "rotulo": "MUITO DISTRAÍDO", "valor": f"{p_mui}%",
-         "subtexto": "do total de sessões", "cor": "vermelho"},
-        {"view": "atencao", "icone": "bolt", "rotulo": "TEMPO FORA DE FOCO",
-         "valor": f"{df['tempo_fora_foco_s'].mean():.0f}s", "subtexto": "média por sessão"},
-    ]
-
-    return {
-        "fonte": "base_sintetica",
-        "total_sessoes": total,
-        "periodo": f"{df['dia'].min():%d/%m/%Y} — {df['dia'].max():%d/%m/%Y}",
-        "kpis": kpis,
-        "sessoes_hora": sessoes_hora,
-        "planos": perfis,
-        "alunos_recentes": alunos_recentes,
-        "alertas_recentes": alertas_recentes,
-        "sessoes_14dias": sessoes_dia,
-        "temas_estudados": atividades,
-        "distribuicao_foco": distribuicao,
-        "eventos_tipo": eventos,
-        "foco_hora": foco_hora,
-    }
 
 
 async def _role_do_usuario(pool, user_id, email=None):
@@ -2273,33 +2135,6 @@ async def _agregar_supabase(conn, modelo, scaler):
     }
 
 
-def _dashboard_offline():
-    """Fallback SEM banco: base sintética (xlsx) → planilha manual → demo do front."""
-    if os.path.exists(BASE_SINTETICA):
-        try:
-            df = pd.read_excel(BASE_SINTETICA)
-            return _agregar_base_sintetica(df)
-        except Exception as e:
-            print("[KaIA] erro ao agregar a base sintética:", e)
-            return JSONResponse({"erro": "Não foi possível ler a base sintética."}, status_code=500)
-
-    if os.path.exists(DASHBOARD_XLSX):
-        try:
-            planilhas = pd.read_excel(DASHBOARD_XLSX, sheet_name=None)
-        except Exception as e:
-            print("[KaIA] erro ao ler dados_dashboard.xlsx:", e)
-            return JSONResponse({"erro": "Não foi possível ler a planilha."}, status_code=500)
-        saida = {"fonte": "planilha_manual"}
-        for nome, df in planilhas.items():
-            if nome.startswith("_"):
-                continue
-            df = df.where(pd.notnull(df), None)
-            saida[nome] = df.to_dict(orient="records")
-        return saida
-
-    return {"vazio": True, "motivo": "nenhuma planilha encontrada"}
-
-
 @app.get("/dashboard/dados")
 async def dashboard_dados(request: Request, ident: dict = Depends(usuario_identidade)):
     # --- Porteiro de acesso -------------------------------------------------
@@ -2307,21 +2142,23 @@ async def dashboard_dados(request: Request, ident: dict = Depends(usuario_identi
     # X-Kaia-User (que o front apenas afirmava e era spoofável). A decisão de acesso
     # continua vindo do BANCO (perfis.role), nunca de e-mail hardcoded no código.
     pool = request.app.state.pool
-    if pool is not None:
-        if await _role_do_usuario(pool, ident.get("sub"), ident.get("email")) != "admin":
-            return JSONResponse({"erro": "Acesso restrito ao dashboard interno."}, status_code=403)
+    # Sem banco não há dashboard: 503, igual às demais rotas de dados. Antes daqui
+    # saía o fallback offline — e, de quebra, ele saía SEM passar pelo porteiro:
+    # qualquer usuário autenticado recebia os dados agregados sem ser admin.
+    if pool is None:
+        return _SEM_BANCO
+    if await _role_do_usuario(pool, ident.get("sub"), ident.get("email")) != "admin":
+        return JSONResponse({"erro": "Acesso restrito ao dashboard interno."}, status_code=403)
 
-        # Dados reais do Supabase (prioridade quando há banco).
-        modelo, scaler = request.app.state.modelo, request.app.state.scaler
-        try:
-            async with pool.acquire() as conn:
-                return await _agregar_supabase(conn, modelo, scaler)
-        except Exception as e:
-            print("[KaIA] erro ao agregar dados do Supabase:", e)
-            # cai para o fallback offline (não derruba a página)
-
-    # Sem banco (dev) ou erro na agregação → base sintética / planilha / demo.
-    return _dashboard_offline()
+    modelo, scaler = request.app.state.modelo, request.app.state.scaler
+    try:
+        async with pool.acquire() as conn:
+            return await _agregar_supabase(conn, modelo, scaler)
+    except Exception as e:
+        # Sem cascata para onde cair: o erro vira 500 explícito em vez de uma
+        # página montada com dados de outra fonte, que escondia a falha.
+        print("[KaIA] erro ao agregar dados do Supabase:", e)
+        return JSONResponse({"erro": "Não foi possível montar o dashboard."}, status_code=500)
 
 # ========================================= PERFIL =============================================
 # AUTH: a validação de JWT do Supabase existe em auth.py (dependência

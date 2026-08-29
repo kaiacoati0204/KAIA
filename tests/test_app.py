@@ -167,11 +167,6 @@ def test_distribuicao_status():
     assert app_mod._distribuicao_status([0.3, 0.6, 0.8, None]) == {"bem": 1, "atencao": 1, "risco": 1}
 
 
-def test_dashboard_offline_vazio(monkeypatch):
-    monkeypatch.setattr(app_mod.os.path, "exists", lambda p: False)
-    assert app_mod._dashboard_offline() == {"vazio": True, "motivo": "nenhuma planilha encontrada"}
-
-
 # ---------------------------------------------- helpers de cache de questões
 async def test_buscar_cache_limite_zero():
     assert await app_mod._buscar_cache(FakeConn(fetch=[]), "u", "mat", "tem", 2, "jogos", 0) == []
@@ -236,6 +231,9 @@ async def test_gerar_questao_erro(monkeypatch):
     ("post", "/perfil", {"json": {"user_id": "u"}}),
     ("get", "/perfil?email=a@b.com", {}),
     ("get", "/responsavel/painel?email=a@b.com", {}),
+    # entrou quando o fallback offline saiu: sem banco o dashboard passou a
+    # responder 503 como as demais, em vez de montar a página com xlsx.
+    ("get", "/dashboard/dados", {}),
 ])
 async def test_guarda_sem_banco(metodo, rota, kwargs):
     _set_state(pool=None)
@@ -633,12 +631,6 @@ async def test_resolver_rewards_sem_thompson():
     conn = FakeConn(fetch={"select intervention_id": pend})
     await app_mod.resolver_rewards(conn, None, "sid", "engajado")     # sem bandit: não faz nada
     assert conn.executed == []
-
-
-# ============================================================ dashboard offline (base sintética)
-def test_dashboard_offline_base_sintetica():
-    resultado = app_mod._dashboard_offline()   # lê o xlsx real -> _agregar_base_sintetica
-    assert resultado is not None
 
 
 # ============================================================ /temas (Gemini + cache)

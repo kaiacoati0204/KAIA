@@ -14,6 +14,24 @@ const ROTA_POR_ROLE = {
     pai:         'responsaveis.html',
 };
 
+// ---- Rede fora do ar NÃO é credencial errada -------------------------------
+// O signInWithPassword/signUp devolve `error` para QUALQUER falha, inclusive
+// quando o servidor de auth não respondeu. O código tratava tudo como senha
+// errada — e isso custou uma investigação inteira: o projeto do Supabase parou
+// de resolver (NXDOMAIN) e a tela continuou dizendo "Email ou senha incorretos",
+// apontando a suspeita para o código do login em vez da infraestrutura.
+// As duas assinaturas são bem distintas:
+//   rede ....... AuthRetryableFetchError · status 0   · "Failed to fetch"
+//   credencial . AuthApiError            · status 400 · "Invalid login credentials"
+function _authForaDoAr(error) {
+    return error?.status === 0
+        || error?.name === 'AuthRetryableFetchError'
+        || /failed to fetch|networkerror|load failed/i.test(error?.message || '');
+}
+const MSG_AUTH_FORA = 'Não foi possível falar com o servidor de login. '
+    + 'Verifique sua conexão — o Supabase '
+    + 'pode estar pausado ou fora do ar.';
+
 // Passos comuns ao login e ao cadastro: com o usuário já autenticado no Auth,
 // busca o perfil no backend (por id; fallback por email), guarda a sessão do
 // app e redireciona por role.
@@ -78,7 +96,13 @@ async function salvarLogin(event) {
     try {
         const { data, error } = await window.supabaseClient.auth
             .signInWithPassword({ email, password: senha });
-        if (error) return falhar('Email ou senha incorretos');
+        if (error) {
+            if (_authForaDoAr(error)) {
+                console.error('[KaIA] servidor de auth inacessível:', error);
+                return falhar(MSG_AUTH_FORA);
+            }
+            return falhar('Email ou senha incorretos');
+        }
         await finalizarLogin(data.user, falhar, lembrar);
     } catch (e) {
         console.error('[KaIA] falha no login:', e);
@@ -110,6 +134,10 @@ async function criarConta(event) {
             email, password: senha, options: { data: { nome } },
         });
         if (error) {
+            if (_authForaDoAr(error)) {
+                console.error('[KaIA] servidor de auth inacessível:', error);
+                return falhar(MSG_AUTH_FORA);
+            }
             const jaExiste = /registered|already/i.test(error.message || '');
             return falhar(jaExiste ? 'Este email já tem conta. Faça login.'
                                    : 'Não foi possível criar a conta. Tente outro email.');

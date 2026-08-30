@@ -1837,27 +1837,157 @@ function proximaQuestao() {
 // ============================================================
 // Pergunta discreta ("sua mente estava na questão?") pareada com o momento.
 // 3 opções = as 3 classes do modelo. Vira evento 'probe_atencao' no /events.
-let probeTimeout = null;
+//
+// ============================================================
+//   COMO EDITAR AS PERGUNTAS (é só mexer no PERGUNTAS_PROBE abaixo)
+// ============================================================
+// Adicionar uma pergunta = colar mais um objeto na lista. Nada de lógica muda.
+// Só duas regras, e as duas existem porque isto aqui NÃO é texto de tela — é o
+// rótulo que treina o modelo de atenção:
+//
+//   1. SEMPRE três opções, SEMPRE nesta ordem:
+//         [engajado, distraido, muito_distraido]
+//      A 2ª é "a mente vagou mas eu continuei aqui"; a 3ª é "eu saí para outra
+//      coisa". Inverter a ordem não muda a tela, corrompe o dataset em silêncio.
+//      (Há uma checagem em _validarPergunta que descarta entrada malformada.)
+//
+//   2. O `id` é ESTÁVEL e nunca se reaproveita. É ele que vai no evento, não a
+//      posição na lista — se a análise dependesse do índice, inserir uma
+//      pergunta no meio reescreveria o significado de todo o dado já coletado.
+//
+// Ao escrever: nenhuma opção pode soar como "a resposta certa". Autorrelato que
+// premia o foco devolve dado enviesado, e é esse dado que vira modelo. Daí o
+// "sem certo nem errado" e o "sem julgamento" em algumas frases.
+const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 
-function _garantirCardProbe() {
-    if ($('kaia-probe')) return;
-    const card = document.createElement('div');
-    card.id = 'kaia-probe';
-    card.innerHTML =
-        '<p class="probe-q">Rapidinho: sua mente estava na questão agora?</p>'
-        + '<div class="probe-btns">'
-        + '<button type="button" data-estado="engajado">Sim, estava focado</button>'
-        + '<button type="button" data-estado="distraido">Minha mente estava viajando</button>'
-        + '<button type="button" data-estado="muito_distraido">Fui ver outra coisa</button>'
-        + '</div>';
-    document.body.appendChild(card);
-    $$('#kaia-probe button').forEach(b =>
-        b.addEventListener('click', () => responderProbe(b.dataset.estado)));
+// PENDENTE (Bia + Vitor) — decisão de CONTEÚDO, não de código:
+//   - Quais destas oito ficam. As sete últimas são proposta; a 1ª é a original.
+//   - Variar a frase resolve o clique automático, mas introduz variância de
+//     medida: formulações diferentes deslocam um pouco a distribuição das
+//     respostas. É para isso que o `pergunta_id` vai no evento — dá para checar
+//     depois se alguma frase puxa demais para um lado e aposentá-la.
+const PERGUNTAS_PROBE = [
+    { id: 'mente-na-questao',
+      pergunta: 'Rapidinho: sua mente estava na questão agora?',
+      opcoes: ['Sim, estava focado', 'Minha mente estava viajando', 'Fui ver outra coisa'] },
+
+    { id: 'onde-estava-cabeca',
+      pergunta: 'Só pra saber: onde estava sua cabeça nos últimos segundos?',
+      opcoes: ['Na questão', 'Vagando por aí', 'Em outra coisa, fora daqui'] },
+
+    { id: 'como-estava-atencao',
+      pergunta: 'Sem certo nem errado: como estava sua atenção agora?',
+      opcoes: ['Inteira na questão', 'Meio dispersa', 'Longe daqui'] },
+
+    { id: 'lendo-ou-passando-olho',
+      pergunta: 'Você estava lendo de verdade ou passando o olho?',
+      opcoes: ['Lendo de verdade', 'Passando o olho, pensando noutra coisa', 'Nem estava aqui'] },
+
+    { id: 'percebeu-mente-sair',
+      pergunta: 'Um segundo: você percebeu sua mente sair da questão?',
+      opcoes: ['Não, fiquei nela', 'Saiu e voltou', 'Saiu de vez'] },
+
+    { id: 'questao-teve-atencao',
+      pergunta: 'E aí, essa questão teve sua atenção?',
+      opcoes: ['Teve', 'Mais ou menos, a cabeça fugiu', 'Não, fui fazer outra coisa'] },
+
+    { id: 'o-que-rolava',
+      pergunta: 'Checagem rápida: o que rolava na sua cabeça?',
+      opcoes: ['Estava resolvendo', 'Estava pensando noutra coisa', 'Estava em outra tela'] },
+
+    { id: 'estava-aqui',
+      pergunta: 'Sem julgamento: você estava aqui agora?',
+      opcoes: ['Estava', 'Meio aqui, meio não', 'Não, estava fora'] },
+];
+
+// ---- JANELAS DE TAMANHOS VARIADOS ---------------------------------------
+// A CAPACIDADE está pronta; a LÓGICA de quando usar cada uma, não — é decisão
+// de ML (Bia + Vitor). Enquanto _escolherTamanhoProbe devolver 'medio', a
+// janelinha fica idêntica à de sempre: 'medio' É o tamanho atual, 340px.
+// As classes CSS correspondentes estão no style.css, no bloco do #kaia-probe.
+const TAMANHOS_PROBE = {
+    pequeno: 'probe-pequeno',   // 260px
+    medio:   'probe-medio',     // 340px — o de hoje, e o padrão
+    grande:  'probe-grande',    // 460px
+};
+
+// PENDENTE (Bia + Vitor): QUANDO cada tamanho aparece e POR QUÊ.
+// Para ligar a variação, troque SÓ o corpo desta função — devolva a chave de
+// TAMANHOS_PROBE que quiser ('pequeno' | 'medio' | 'grande'). O tamanho
+// escolhido já viaja no evento (campo `tamanho`), então o experimento nasce
+// analisável: sem esse registro dá para ver os rótulos, mas não com qual
+// janela cada um foi colhido.
+// Ideias que ficaram na mesa, nenhuma decidida: sortear por sessão (mantém o
+// tamanho estável para o aluno e compara ENTRE alunos), alternar por rodada
+// (compara DENTRO do mesmo aluno), ou amarrar ao estado previsto pelo modelo.
+function _escolherTamanhoProbe() {
+    return 'medio';
+}
+
+let probeTimeout = null;
+let probeAtual   = null;   // { id, tamanho } do que está na tela — vai no evento
+let _probeUltimoId = null; // evita repetir a mesma frase em dois disparos seguidos
+
+// Descarta entrada malformada em vez de gravar rótulo errado: com menos (ou
+// mais) de três opções, o pareamento opção→estado sairia deslocado e o erro só
+// apareceria meses depois, no dataset.
+const _validarPergunta = (p) =>
+    !!p && typeof p.id === 'string' && typeof p.pergunta === 'string'
+    && Array.isArray(p.opcoes) && p.opcoes.length === ESTADOS_PROBE.length;
+
+// PENDENTE (Bia + Vitor): sorteio ou rotação fixa? Por ora sorteia evitando
+// repetir a frase anterior — variedade sem virar previsível.
+function _sortearPergunta() {
+    const validas = PERGUNTAS_PROBE.filter(_validarPergunta);
+    if (!validas.length) return null;
+    const candidatas = validas.length > 1
+        ? validas.filter(p => p.id !== _probeUltimoId)
+        : validas;
+    return candidatas[Math.floor(Math.random() * candidatas.length)];
+}
+
+// Remonta o conteúdo a CADA disparo — o card é o mesmo nó (o CSS e o
+// _probeNaTela contam com isso), mas a pergunta e o tamanho mudam. Montado com
+// textContent, não com innerHTML: o texto vem de uma lista que humanos editam,
+// e um `&` ou um apóstrofo não podem virar marcação.
+function _montarCardProbe(pergunta, tamanho) {
+    let card = $('kaia-probe');
+    if (!card) {
+        card = document.createElement('div');
+        card.id = 'kaia-probe';
+        document.body.appendChild(card);
+    }
+    card.classList.remove(...Object.values(TAMANHOS_PROBE));
+    card.classList.add(TAMANHOS_PROBE[tamanho] || TAMANHOS_PROBE.medio);
+    card.replaceChildren();
+
+    const q = document.createElement('p');
+    q.className = 'probe-q';
+    q.textContent = pergunta.pergunta;
+    card.appendChild(q);
+
+    const caixa = document.createElement('div');
+    caixa.className = 'probe-btns';
+    pergunta.opcoes.forEach((rotulo, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.estado = ESTADOS_PROBE[i];   // a ORDEM é o contrato (ver acima)
+        b.textContent = rotulo;
+        b.addEventListener('click', () => responderProbe(b.dataset.estado));
+        caixa.appendChild(b);
+    });
+    card.appendChild(caixa);
+    return card;
 }
 
 function dispararProbe() {
-    _garantirCardProbe();
-    $('kaia-probe').style.display = 'block';
+    const pergunta = _sortearPergunta();
+    if (!pergunta) return;            // banco vazio ou todo malformado: não pergunta nada
+    const tamanho = _escolherTamanhoProbe();
+    const card = _montarCardProbe(pergunta, tamanho);
+    probeAtual = { id: pergunta.id, tamanho };
+    _probeUltimoId = pergunta.id;
+    card.style.display = 'block';
     clearTimeout(probeTimeout);
     probeTimeout = setTimeout(esconderProbe, 25000);   // o momento passa se for ignorado
 }
@@ -1866,11 +1996,19 @@ function esconderProbe() {
     clearTimeout(probeTimeout);
     const c = $('kaia-probe');
     if (c) c.style.display = 'none';
+    probeAtual = null;
 }
 
 function responderProbe(estado) {
     logEvent('probe_atencao', {
         estado,
+        // QUAL frase e QUAL janela geraram este rótulo. Vai no payload do evento
+        // (session_events.payload é jsonb — não precisa de migration). A tabela
+        // probe_labels segue só com estado + as 20 features.
+        // PENDENTE (Bia + Vitor): se o treinar_com_probe.py precisar destes dois
+        // campos direto em probe_labels, aí sim é uma migration.
+        pergunta_id: probeAtual?.id ?? null,
+        tamanho: probeAtual?.tamanho ?? null,
         questao_na_rodada: questoesNaRodada,
         questoes_respondidas: questoesRespondidas,
     });

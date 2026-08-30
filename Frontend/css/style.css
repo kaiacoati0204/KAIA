@@ -3025,6 +3025,9 @@ body.kaia-reancorar .option-btn {
   z-index: 5500;   /* o probe gera o RÓTULO do modelo: não pode ficar sob o overlay */
   display: none;
   width: calc(100% - 32px);
+  /* Fallback: se por algum motivo nenhuma classe de tamanho for aplicada, a
+     janelinha continua sendo a de sempre. As três variantes abaixo (id+classe)
+     ganham desta linha por especificidade. */
   max-width: 340px;
   padding: 14px 16px;
   border: 1px solid var(--border);
@@ -3034,6 +3037,18 @@ body.kaia-reancorar .option-btn {
   box-shadow: 0 8px 30px rgba(var(--profundo-rgb), 0.14);
   transform: translateX(-50%);
 }
+/* ---- JANELAS DE TAMANHOS VARIADOS --------------------------------------
+   A CAPACIDADE, sem a lógica: quem escolhe a classe é o _escolherTamanhoProbe
+   no materias.js, que hoje devolve sempre 'medio'. Por isso a janelinha está
+   EXATAMENTE como sempre esteve — 'probe-medio' repete os 340px da regra acima
+   de propósito, para que ligar a variação não seja também mudar o padrão.
+   PENDENTE (Bia + Vitor): quais tamanhos de fato entram no teste. Os 260 e os
+   460 são um ponto de partida (−24% e +35%), não uma decisão — mexer nos
+   valores aqui não pede nada do JS. */
+#kaia-probe.probe-pequeno { max-width: 260px; }
+#kaia-probe.probe-medio   { max-width: 340px; }
+#kaia-probe.probe-grande  { max-width: 460px; }
+
 #kaia-probe .probe-q {
   margin: 0 0 10px;
   color: var(--profundo);

@@ -243,7 +243,7 @@ function _dashboardNegado() {
     if (shell) shell.innerHTML =
         '<div class="db-negado"><h1>Acesso restrito</h1>'
         + '<p>O dashboard interno é exclusivo da equipe (perfil admin).</p>'
-        + '<a href="index.html">Voltar ao início</a></div>';
+        + '<a href="materias.html">Voltar ao início</a></div>';
 }
 
 // ── GRÁFICOS (Chart.js) ──

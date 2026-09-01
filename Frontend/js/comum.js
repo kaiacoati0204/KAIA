@@ -6,19 +6,29 @@
 const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 
 // ============================================================
-//   BETA: gestão desligada (Acompanhar / Dashboard)
+//   BETA: gestão desligada (Dashboard)
 // ============================================================
-// Durante o beta, os painéis de professor/responsável (responsaveis.html) e de
-// admin (dashboard.html) ficam SEM entrada na rail e SEM acesso por URL — para
-// TODOS, inclusive admin. Páginas e backend seguem intactos.
+// Durante o beta o painel de admin (dashboard.html) fica SEM entrada na rail e
+// SEM acesso por URL — para TODOS, inclusive admin. Página e backend intactos.
 // PARA REATIVAR: troque para false (volta o link na rail e o acesso).
+//
+// responsaveis.html SAIU desta lista na Fase 4: em vez de bloqueio para todos,
+// ela agora é liberada por ROLE (ver ROLES_RESPONSAVEL abaixo). A troca é de um
+// bloqueio grosso por um controle de acesso de verdade — o que o painel precisa
+// para valer alguma coisa no beta.
 const BETA_SEM_GESTAO = true;
-const PAGINAS_GESTAO  = ['responsaveis.html', 'dashboard.html'];
+const PAGINAS_GESTAO  = ['dashboard.html'];
 
 if (BETA_SEM_GESTAO) {
     const _pg = location.pathname.split('/').pop() || 'index.html';
-    if (PAGINAS_GESTAO.includes(_pg)) location.replace('index.html');   // digitar a URL não entra
+    if (PAGINAS_GESTAO.includes(_pg)) location.replace('materias.html');   // digitar a URL não entra
 }
+
+// Quem enxerga o painel "Acompanhar" (responsaveis.html). A guarda de rota da
+// própria página repete esta lista INLINE no <head> — ela precisa rodar antes de
+// qualquer render, e o comum.js só carrega no fim do <body>. Mudou aqui, mude lá.
+const ROLES_RESPONSAVEL = ['professor', 'coordenador', 'pai'];
+const ehResponsavel = (u) => ROLES_RESPONSAVEL.includes((u?.role || '').toLowerCase());
 
 // --- Atalhos de DOM ---------------------------------------------------------
 const $  = (id) => document.getElementById(id);
@@ -63,15 +73,26 @@ const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p
 // matérias/perfil leem para mandar ao backend (alimentam o prompt da IA).
 const lerHobbies = () => JSON.parse(sessionStorage.getItem('hobbies') || '[]');
 
+// Usuário logado. O padrão é sessionStorage (morre com a aba); com "lembre de
+// mim" (Fase 3) existe também uma cópia em localStorage. Ler os dois nesta ordem
+// importa: a sessionStorage é a mais fresca, e o fallback é o que faz uma aba
+// recém-aberta reconhecer quem está logado em vez de mostrar a rail sem nome.
+const lerUsuario = () => JSON.parse(
+    sessionStorage.getItem('kaia_usuario') || localStorage.getItem('kaia_usuario') || 'null'
+);
+
 // ============================================================
 //                    NAVEGAÇÃO (rail)
 // ============================================================
 // MENU_LINKS alimenta a barra lateral estática (montarRail) — fica aqui para
 // o markup do menu não ser copiado (e divergir) em cada HTML.
+// "Início" saiu: apontava para o index.html, que virou a LANDING PÚBLICA (página
+// de vendas, sem rail e sem login). Dentro do produto ele era um botão que
+// jogava o aluno logado para fora — e Matérias já era, na prática, a home.
+// Matérias assume o topo da lista.
 const MENU_LINKS = [
-    ['index.html',        'Início'],
-    ['perfil.html',       'Perfil'],
     ['materias.html',     'Matérias'],
+    ['perfil.html',       'Perfil'],
     ['meu-coati.html',    'Meu Coati'],
     ['responsaveis.html', 'Acompanhar'],
     ['dashboard.html',    'Dashboard'],
@@ -88,7 +109,6 @@ const MENU_LINKS = [
 // real do layout (o body vira flex): empurra o conteúdo em vez de sobrepor.
 const RAIL_ICONES = {
     menu:                '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
-    'index.html':        '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>',
     'login.html':        '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
     'perfil.html':       '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>',
     'materias.html':     '<svg viewBox="0 0 24 24"><path d="M4 4h13a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M4 4v14"/></svg>',
@@ -104,15 +124,18 @@ function montarRail() {
 
     const item = (ic, tx) => `<span class="rail-ic">${ic}</span><span class="rail-tx">${tx}</span>`;
 
+    const u = lerUsuario();
     const links = MENU_LINKS
         .filter(([href]) => !(BETA_SEM_GESTAO && PAGINAS_GESTAO.includes(href)))
+        // "Acompanhar" só para quem tem painel. Sem isto o aluno veria um link que
+        // a guarda de rota rejeita — pior que não mostrar.
+        .filter(([href]) => href !== 'responsaveis.html' || ehResponsavel(u))
         .map(([href, rotulo]) => {
             const ativo = href === atual ? ' ativo' : '';
             return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;
         }).join('');
 
     // Rodapé da rail: identidade do usuário + Sair, separados dos links de nav.
-    const u = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
     const nome = u ? (u.nome || u.email || '').trim() : '';
     const inicial = nome ? nome[0].toUpperCase() : '·';
     const saudacao = nome
@@ -141,8 +164,12 @@ function montarRail() {
 
     // Sair: encerra a sessão do Supabase Auth, limpa o sessionStorage e volta ao
     // login. O signOut é best-effort (não trava o logout se o cliente faltar).
+    // Derruba TAMBÉM o "lembre de mim" (Fase 3): sair tem que desfazer o lembrar,
+    // senão o próximo a abrir o navegador entraria na conta de quem saiu.
     rail.querySelector('.rail-sair').addEventListener('click', async () => {
         try { await window.supabaseClient?.auth.signOut(); } catch (_) {}
+        localStorage.removeItem('kaia_lembrar');
+        localStorage.removeItem('kaia_usuario');
         sessionStorage.clear();
         window.location.href = 'login.html';
     });

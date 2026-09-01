@@ -10,7 +10,8 @@ Usa os rótulos REAIS do probe (tabela probe_labels) para VALIDAR e RE-TREINAR o
 Offline/manual. Precisa de DATABASE_URL (mesmo banco do backend). Rode na raiz:
     python ml/treinar_com_probe.py
 
-Antes, rode a migration uma vez: sql/probe_labels.sql (no Supabase).
+A tabela `probe_labels` já faz parte do schema versionado
+(supabase/migrations/*_remote_schema.sql) — não precisa rodar nada à mão.
 """
 import os
 import sys

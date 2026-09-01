@@ -40,6 +40,13 @@ htmlcov/
 # Node / testes de front (Vitest). package-lock.json É versionado (CI reproduzível).
 node_modules/
 
+# Saídas do Playwright (e2e): relatório HTML e artefatos de execução. São
+# REGERADOS a cada `playwright test` — estavam versionados por engano, e o
+# index.html sozinho tinha 528 KB (23% do repositório). Ficam no disco, só
+# param de ir para o GitHub.
+e2e/playwright-report/
+e2e/test-results/
+
 # Documentação pessoal (explicação da arquitetura) — não versionar, é só da dona do projeto
 docs/
 

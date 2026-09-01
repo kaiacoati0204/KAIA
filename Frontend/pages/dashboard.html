@@ -23,7 +23,7 @@
 <script>
     const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
     if (!usuario) window.location.href = 'login.html';
-    else if (usuario.role !== 'admin') window.location.href = 'index.html';
+    else if (usuario.role !== 'admin') window.location.href = 'materias.html';
 </script>
 </head>
 

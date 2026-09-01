@@ -19,6 +19,11 @@
     <!-- Preloader de entrada — ver comentário equivalente em login.html. -->
     <div id="kaia-preloader" aria-hidden="true">
         <div class="kaia-pre-saudacoes">
+            <!-- A MESMA esfera da espera da IA (.kaia-ail__esfera): reaproveitada
+                 aqui em variante clara, via .kaia-pre-esfera no style.css. É só
+                 CSS — sem React, porque esta tela precisa aparecer no primeiro
+                 paint e não carrega a ilha do ai-loader.js. -->
+            <div class="kaia-pre-esfera kaia-ail__esfera"></div>
             <p class="kaia-pre-item">Olá</p>
             <p class="kaia-pre-item" lang="ja">こんにちは</p>
             <p class="kaia-pre-item">Hello</p>

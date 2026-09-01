@@ -162,6 +162,30 @@ function mostrarIntervencao(intv) {
     $('kaia-intervencao').style.display = 'block';
 }
 
+// ==== MODO DEMO (gravação de vídeo) ====
+// Ativa SÓ com ?demo=1 na URL. Atalhos Alt+1..7 disparam cada intervenção SEM console;
+// Alt+0 esconde. Invisível na gravação. Não afeta usuários normais.
+(function () {
+    if (new URLSearchParams(location.search).get('demo') !== '1') return;
+    const MAPA = {
+        Digit1: 'pausa_ativa',   Digit2: 'micro_refoco',      Digit3: 'troca_atividade',
+        Digit4: 'checkpoint',    Digit5: 'reancoragem',       Digit6: 'auto_monitoramento',
+        Digit7: 'alerta_fadiga',
+    };
+    console.log('[KaIA demo] Alt+1..7 = intervenções | Alt+0 = esconder');
+    document.addEventListener('keydown', (e) => {
+        if (!e.altKey) return;
+        if (e.code === 'Digit0') { try { esconderIntervencao(); } catch (_) {} return; }
+        const tipo = MAPA[e.code];
+        if (!tipo) return;
+        e.preventDefault();
+        try {
+            esconderIntervencao();                             // limpa a anterior
+            mostrarIntervencao({ intervention_type: tipo });
+        } catch (err) { console.warn('[KaIA demo] erro:', err); }
+    });
+})();
+
 function esconderIntervencao() {
     const c = $('kaia-intervencao');
     if (c) c.style.display = 'none';

@@ -942,11 +942,33 @@ html {
   font-weight: 800;
   letter-spacing: 0.08em;
 }
+/* Selo secundário: mesma pílula, contorno dourado no lugar do preenchimento.
+   O card do Açu tem um argumento próprio ("2 meses grátis") mas NÃO disputa o
+   "mais escolhido" do Porã — dois selos sólidos lado a lado anulam os dois. */
+.plano-selo-suave {
+  background: var(--card);
+  border: 1px solid var(--gravata-kinrou);
+}
 .plano h4 {
   margin-top: 6px;
   font-size: 1.6rem;
   font-weight: 800;
+  line-height: 1.15;
   color: var(--profundo);
+}
+/* Nome em duas linhas: o nome indígena manda no tamanho e o rótulo comercial
+   ("Básico", "Pro"...) fica de legenda — quem chega comparando com o mercado
+   ainda se localiza sem que o rótulo dispute o nome próprio. Vai DENTRO do
+   <h4> de propósito: o leitor de tela anuncia "Mirim, Básico" como um título
+   só, em vez de um cabeçalho órfão seguido de um texto solto. */
+.plano-nome-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--bege);
 }
 .plano-preco {
   margin: 10px 0 4px;
@@ -4178,6 +4200,7 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 }
 .lp-page .plano-tipo,
 .lp-page .plano-alvo,
+.lp-page .plano-nome-desc,
 .lp-page .plano-preco span,
 .lp-page .coati-imagem figcaption,
 .lp-passo-num { color: var(--bege-legivel); }

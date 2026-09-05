@@ -600,6 +600,7 @@ Regras:
 - "ans" é o índice (0 a 4) da alternativa correta.
 - "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da correta use "".
 - As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
+- Alternativas (corretas E erradas) devem ser termos/conceitos REAIS e plausíveis; NUNCA invente palavras ou termos que não existam.
 - Enunciados em TEXTO CORRIDO — sem markdown (nada de ##, **, títulos ou listas).
 - Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre a esse nível.
 {regra_hobbie}- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
@@ -706,12 +707,13 @@ async def _exemplos_similares(conn, materia, tema, k=5):
     if not vetor:
         return None
     area = _AREA_ENEM.get(materia, materia)
+    alvos = list(dict.fromkeys([materia, area]))   # matéria fina (BLUEX) + área (maritaca)
     try:
         rows = await conn.fetch(
             "select enunciado, alternativas, gabarito from questoes_reais "
-            "where materia = $1 and embedding is not null "
+            "where materia = any($1::text[]) and embedding is not null "
             "order by embedding <=> $2::vector limit $3",
-            area, _vec_literal(vetor), k)
+            alvos, _vec_literal(vetor), k)
     except Exception as e:
         print("[KaIA] busca similares (pgvector) indisponível:", e)
         return None

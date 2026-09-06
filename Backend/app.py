@@ -103,6 +103,11 @@ TEMAS_CALCULO = {
 def _eh_calculo(materia, tema):
     return tema in TEMAS_CALCULO.get(materia, ())
 
+
+def _exatas_natureza(materia):
+    # onde a estrutura da questão muda por tema -> few-shot prefere o MESMO tema
+    return materia in ("MAT", "FIS", "QUI", "BIO")
+
 # Resposta padrão quando o servidor está sem banco (pool = None).
 _SEM_BANCO = JSONResponse(
     {"erro": "Banco de dados indisponível. Configure DATABASE_URL no .env (string do Supabase)."},
@@ -859,7 +864,7 @@ async def _resetar_vistas_antigas(conn, user_id, materia, tema, nivel):
 # Few-shot DINÂMICO: recupera do banco de questões reais (pgvector) as k mais parecidas
 # com o tema pedido. Devolve no formato de _exemplos_few_shot, ou None em qualquer falha
 # (sem pgvector, sem embedding, tabela vazia) — aí o caller usa os exemplos FIXOS.
-async def _exemplos_similares(conn, materia, tema, nivel=None, calculo=None, k=5):
+async def _exemplos_similares(conn, materia, tema, nivel=None, calculo=None, por_tema=False, k=5):
     vetor = await asyncio.to_thread(_embed, f"{MATERIAS.get(materia, materia)}: {tema}")
     if not vetor:
         return None
@@ -870,23 +875,27 @@ async def _exemplos_similares(conn, materia, tema, nivel=None, calculo=None, k=5
            "where materia = any($1::text[]) and embedding is not null ")
     fcalc = ("and calculo is true " if calculo is True
              else "and (calculo is not true) " if calculo is False else "")
-    fniv = "and (nivel is null or abs(nivel - $2) <= 1) " if nivel is not None else ""
-    # do mais específico ao mais amplo — degrada se coluna/rótulo faltar ou nível não tiver
-    tentativas = []
-    if fniv or fcalc:
-        tentativas.append((sel + fcalc + fniv, nivel is not None))
+    fniv = "and (nivel is null or abs(nivel - $2) <= 1) "
+    # candidatos (sql, params) do mais específico ao mais amplo. Em Exatas/Natureza,
+    # `por_tema` põe as do MESMO tema PRIMEIRO (backfill pelo pool da matéria). Degrada
+    # gracioso se a coluna (tema/nivel) faltar.
+    cand = []
+    if por_tema and nivel is not None:
+        cand.append((sel + fcalc + fniv + "order by (tema is distinct from $3), embedding <=> $4::vector limit $5",
+                     [alvos, nivel, tema, vec, k]))
+    if por_tema:
+        cand.append((sel + fcalc + "order by (tema is distinct from $2), embedding <=> $3::vector limit $4",
+                     [alvos, tema, vec, k]))
+    if nivel is not None:
+        cand.append((sel + fcalc + fniv + "order by embedding <=> $3::vector limit $4",
+                     [alvos, nivel, vec, k]))
     if fcalc:
-        tentativas.append((sel + fcalc, False))
-    tentativas.append((sel, False))
+        cand.append((sel + fcalc + "order by embedding <=> $2::vector limit $3", [alvos, vec, k]))
+    cand.append((sel + "order by embedding <=> $2::vector limit $3", [alvos, vec, k]))
     rows = None
-    for consulta, usa_niv in tentativas:
+    for sql, params in cand:
         try:
-            if usa_niv:
-                rows = await conn.fetch(consulta + "order by embedding <=> $3::vector limit $4",
-                                        alvos, nivel, vec, k)
-            else:
-                rows = await conn.fetch(consulta + "order by embedding <=> $2::vector limit $3",
-                                        alvos, vec, k)
+            rows = await conn.fetch(sql, *params)
             if rows:
                 break
         except Exception:
@@ -946,7 +955,8 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
         # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo não
         exemplos = None
         if FEWSHOT_DINAMICO:
-            exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=calc)
+            exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=calc,
+                                                 por_tema=_exatas_natureza(materia))
         exemplos = exemplos or (None if calc else _exemplos_few_shot(materia))
         for _ in range(3):
             if n - len(entregues) <= 0:

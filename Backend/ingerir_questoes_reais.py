@@ -74,6 +74,19 @@ _AREA_MATERIA = {  # matéria fina -> ÁREA do ENEM (p/ o filtro --area)
     "BIO": "NATUREZA", "FIS": "NATUREZA", "QUI": "NATUREZA", "MAT": "MAT",
 }
 
+# Temas por matéria (cópia do TEMAS_FIXOS do app.py) — usados p/ classificar por TEMA
+# só as EXATAS/NATUREZA, onde a estrutura muda por tema. Humanas/PORT ficam no geral.
+TEMAS_EXATAS = {
+    "MAT": ["Funções", "Progressões", "Análise Combinatória", "Geometria Plana",
+            "Geometria Espacial", "Estatística", "Probabilidade", "Porcentagem"],
+    "FIS": ["Leis de Newton", "Trabalho e Energia", "Cinemática", "Eletricidade",
+            "Termodinâmica", "Ondas"],
+    "QUI": ["Química Geral", "Físico-Química", "Química Orgânica", "Estequiometria",
+            "Soluções", "Eletroquímica"],
+    "BIO": ["Ecologia", "Genética", "Evolução", "Citologia", "Fisiologia Humana",
+            "Biotecnologia"],
+}
+
 
 def _num(id_str):
     m = re.search(r"(\d+)", id_str or "")
@@ -282,6 +295,29 @@ def _extrair_niveis(txt, n):
     return nums[:n] if len(nums) >= n else None
 
 
+def _extrair_temas(txt, temas, n):
+    """Extrai N temas da resposta (array JSON de strings), casando com a lista permitida."""
+    if not txt:
+        return [None] * n
+    m = re.search(r"\[.*\]", txt, re.S)
+    arr = None
+    if m:
+        try:
+            arr = json.loads(m.group(0))
+        except Exception:
+            arr = None
+    if not isinstance(arr, list):
+        arr = [l.strip("-•. \t") for l in txt.splitlines() if l.strip()]
+    norm = lambda s: re.sub(r"\s+", " ", str(s)).strip().lower()
+    tmap = {norm(t): t for t in temas}
+    out = []
+    for x in arr[:n]:
+        k = norm(x)
+        best = tmap.get(k) or next((t for nt, t in tmap.items() if nt in k or k in nt), None)
+        out.append(best)
+    return out + [None] * (n - len(out))
+
+
 def _vec_literal(v):
     return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
 
@@ -390,8 +426,55 @@ async def classificar_niveis():
         await conn.close()
 
 
+# ==== Classifica EXATAS/NATUREZA por TEMA (a estrutura muda por tema lá) ====
+async def classificar_temas():
+    if not DATABASE_URL or not API_KEY:
+        print("Defina DATABASE_URL e API_KEY no .env."); return
+    refazer = "--refazer" in sys.argv
+    # matéria no banco -> lista de temas permitidos (NATUREZA = união bio/fis/qui)
+    grupos = {
+        "MAT": TEMAS_EXATAS["MAT"], "FIS": TEMAS_EXATAS["FIS"],
+        "QUI": TEMAS_EXATAS["QUI"], "BIO": TEMAS_EXATAS["BIO"],
+        "NATUREZA": TEMAS_EXATAS["BIO"] + TEMAS_EXATAS["FIS"] + TEMAS_EXATAS["QUI"],
+    }
+    conn = await asyncpg.connect(DATABASE_URL, statement_cache_size=0)
+    try:
+        await conn.execute("alter table questoes_reais add column if not exists tema text")
+        for materia, temas in grupos.items():
+            cond = "" if refazer else " and tema is null"
+            rows = await conn.fetch(
+                f"select id, enunciado, alternativas from questoes_reais "
+                f"where materia = $1{cond}", materia)
+            if not rows:
+                continue
+            print(f"[{materia}] {len(rows)} p/ classificar por tema...")
+            LOTE = 10
+            for i in range(0, len(rows), LOTE):
+                bloco = rows[i:i + LOTE]
+                linhas = [f"{j}. {r['enunciado'][:450]}" for j, r in enumerate(bloco, 1)]
+                prompt = (
+                    "Classifique cada questão em UM tema desta lista (use o nome EXATO):\n"
+                    + "; ".join(temas) + "\n\nResponda APENAS com um array JSON de "
+                    f"{len(bloco)} strings, na ordem.\n\nQuestões:\n" + "\n".join(linhas))
+                temas_cls = _extrair_temas(await asyncio.to_thread(_gerar_texto, prompt), temas, len(bloco))
+                for r, t in zip(bloco, temas_cls):
+                    if t:
+                        await conn.execute("update questoes_reais set tema = $1 where id = $2", t, r["id"])
+                print(f"  [{materia}] {min(i + LOTE, len(rows))}/{len(rows)}")
+        dist = await conn.fetch(
+            "select materia, tema, count(*) c from questoes_reais where tema is not null "
+            "group by materia, tema order by materia, c desc")
+        print("Distribuição por tema:")
+        for r in dist:
+            print(f"  {r['materia']}/{r['tema']}: {r['c']}")
+    finally:
+        await conn.close()
+
+
 if __name__ == "__main__":
     if "--classificar-nivel" in sys.argv:
         asyncio.run(classificar_niveis())
+    elif "--classificar-tema" in sys.argv:
+        asyncio.run(classificar_temas())
     else:
         asyncio.run(main())

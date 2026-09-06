@@ -8,6 +8,8 @@ import random
 import asyncio
 import pickle
 import uuid
+import ast
+import math
 
 import asyncpg
 import pandas as pd
@@ -88,6 +90,18 @@ TEMAS_FIXOS = {
     "QUI":  ["Química Geral", "Físico-Química", "Química Orgânica", "Estequiometria",
              "Soluções", "Eletroquímica"],
 }
+
+# Tópicos de CÁLCULO -> geração via PoT (a IA dá a fórmula, o backend executa).
+# Os demais seguem a geração normal. QUI é misto (Orgânica/Geral são conceituais).
+TEMAS_CALCULO = {
+    "MAT": set(TEMAS_FIXOS["MAT"]),
+    "FIS": set(TEMAS_FIXOS["FIS"]),
+    "QUI": {"Físico-Química", "Estequiometria", "Soluções", "Eletroquímica"},
+}
+
+
+def _eh_calculo(materia, tema):
+    return tema in TEMAS_CALCULO.get(materia, ())
 
 # Resposta padrão quando o servidor está sem banco (pool = None).
 _SEM_BANCO = JSONResponse(
@@ -500,6 +514,68 @@ def _normalizar_questao(questao):
     questao.setdefault("explicacao", "")
     return questao
 
+
+# ==== PoT (cálculo): a IA dá a FÓRMULA, o backend EXECUTA -> gabarito correto ====
+_POT_OPS = {ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b,
+            ast.Mult: lambda a, b: a * b, ast.Div: lambda a, b: a / b,
+            ast.Pow: lambda a, b: a ** b, ast.Mod: lambda a, b: a % b}
+_POT_UN = {ast.USub: lambda a: -a, ast.UAdd: lambda a: +a}
+_POT_FUN = {"sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan,
+            "log": math.log, "log10": math.log10, "ln": math.log, "exp": math.exp, "abs": abs}
+_POT_CONST = {"pi": math.pi, "e": math.e}
+
+
+def _pot_eval(expr):
+    """Avalia SÓ aritmética + funções básicas (sem nomes/atributos livres) — seguro."""
+    def ev(n):
+        if isinstance(n, ast.Expression):
+            return ev(n.body)
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, ast.BinOp) and type(n.op) in _POT_OPS:
+            return _POT_OPS[type(n.op)](ev(n.left), ev(n.right))
+        if isinstance(n, ast.UnaryOp) and type(n.op) in _POT_UN:
+            return _POT_UN[type(n.op)](ev(n.operand))
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in _POT_FUN:
+            return _POT_FUN[n.func.id](*[ev(a) for a in n.args])
+        if isinstance(n, ast.Name) and n.id in _POT_CONST:
+            return _POT_CONST[n.id]
+        raise ValueError("expressão não permitida")
+    return ev(ast.parse(expr, mode="eval"))
+
+
+def _pot_limpar_formula(f):
+    f = str(f).split("=")[-1]
+    f = f.replace("^", "**").replace("×", "*").replace("·", "*").replace("÷", "/").replace(",", ".")
+    return re.sub(r"[^\d+\-*/().\sa-zA-Z_]", "", f).strip()
+
+
+def _pot_num(s):
+    m = re.search(r"[-+]?\d[\d.,\s]*", str(s))
+    if not m:
+        return None
+    t = m.group(0).replace(" ", "")
+    if "." in t and "," in t:
+        t = t.replace(".", "").replace(",", ".") if t.rfind(",") > t.rfind(".") else t.replace(",", "")
+    elif "," in t:
+        t = t.replace(",", ".")
+    elif t.count(".") > 1:
+        p = t.split("."); t = "".join(p[:-1]) + "." + p[-1]
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def _pot_acha_opcao(calc, opts, tol=0.03):
+    """Índice da opção cujo valor bate com o calculado (tolerância p/ arredondamento)."""
+    for i, o in enumerate(opts):
+        v = _pot_num(o)
+        if v is not None and abs(v - calc) <= tol * max(1.0, abs(calc)):
+            return i
+    return None
+
+
 # Formato EXATO de cada questão (string literal — as chaves NÃO são interpoladas).
 _FORMATO_QUESTAO = (
     '{"q": "enunciado da questão", "opts": ["a", "b", "c", "d", "e"], "ans": 0,\n'
@@ -633,6 +709,74 @@ Regras:
         print("[KaIA] erro Gemini /gerar-questao:", e)
         return []
 
+
+_FORMATO_POT = (
+    '{"q": "enunciado", "opts": ["v1","v2","v3","v4","v5"], '
+    '"formula": "expressão aritmética SÓ com números e + - * / ** e funções '
+    'sqrt/sin/cos/log/pi, com os valores JÁ substituídos (sem variáveis, sem unidades, '
+    'sem =), que calcula a resposta correta", '
+    '"porque_erradas": ["por que v1 erra", "...", "...", "...", "..."]}'
+)
+
+
+async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=None, evitar=None):
+    """PoT: a IA gera a questão de cálculo COM a fórmula; o backend EXECUTA a fórmula e
+    usa a opção que bate como gabarito (a CONTA, não o 'achismo'), DESCARTANDO as que não
+    fecham. Devolve no formato normal (q/opts/ans/porque_erradas)."""
+    dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
+    regra_hobbie = ""
+    if hobbie:
+        regra_hobbie = (f'- Em ~{max(1, round(n * 0.6))} das {n}, use "{hobbie}" como contexto '
+                        f'central do enunciado (a conta continua a mesma).\n')
+    bloco_ex = ""
+    if exemplos:
+        refs = "\n---\n".join(
+            f"Enunciado: {e['enunciado'][:400]}\nAlternativas: {' / '.join(e.get('alternativas') or [])}"
+            for e in exemplos)
+        bloco_ex = ("\nExemplos de questões REAIS de cálculo desta matéria — copie o ESTILO e o "
+                    "tipo de conta (NÃO copie os números):\n" + refs + "\n")
+    bloco_evitar = ""
+    if evitar:
+        lst = "\n".join(f"- {e[:150]}" for e in evitar[:8] if e)
+        if lst:
+            bloco_evitar = "\nEstas JÁ EXISTEM — mude os números e o contexto:\n" + lst + "\n"
+    prompt = f"""Crie {n} questões objetivas de CÁLCULO sobre "{tema}" ({nome}) para o ensino médio.
+Responda APENAS com um ARRAY JSON de {n} objetos no formato EXATO:
+{_FORMATO_POT}
+Regras:
+- A resposta CORRETA tem de ser EXATAMENTE o valor que a "formula" calcula, e estar entre as 5 "opts".
+- As outras 4 "opts" são distratores plausíveis (erros comuns), com a MESMA unidade/formato.
+- "opts" com número + unidade (ex.: "12 m/s"); use ponto decimal.
+- Dificuldade: nível {nivel}/5 ({dificuldade}). Termos/unidades REAIS, nunca invente.
+- Enunciado em texto corrido, sem markdown.
+{regra_hobbie}{bloco_evitar}{bloco_ex}"""
+    try:
+        dados = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
+    except Exception as e:
+        print("[KaIA] erro Gemini PoT:", e)
+        return []
+    itens = dados if isinstance(dados, list) else (
+        dados.get("questoes") if isinstance(dados, dict) and "questoes" in dados else [dados])
+    saida = []
+    for q in itens or []:
+        if not isinstance(q, dict) or not q.get("opts") or not q.get("formula"):
+            continue
+        try:
+            calc = _pot_eval(_pot_limpar_formula(q["formula"]))
+        except Exception:
+            continue                                   # fórmula inválida -> descarta
+        opts = [_sem_markdown(o) for o in q["opts"]]
+        idx = _pot_acha_opcao(calc, opts)
+        if idx is None:
+            continue                                   # a conta não bate com opção -> furada, descarta
+        q["opts"] = opts
+        q["ans"] = idx                                 # gabarito = a CONTA (não o que a IA disse)
+        q.pop("formula", None)
+        saida.append(_normalizar_questao(q))
+    print(f"[KaIA] PoT: {len(saida)}/{len(itens or [])} de cálculo válidas p/ {materia}/{tema} (nível {nivel})")
+    return saida
+
+
 # Busca no cache até `limite` questões (materia+tema+nivel+hobbie) NÃO vistas pelo
 # aluno. `excluir`: ids já coletados nesta mesma chamada (evita duplicar no lote).
 async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, excluir=None):
@@ -715,33 +859,38 @@ async def _resetar_vistas_antigas(conn, user_id, materia, tema, nivel):
 # Few-shot DINÂMICO: recupera do banco de questões reais (pgvector) as k mais parecidas
 # com o tema pedido. Devolve no formato de _exemplos_few_shot, ou None em qualquer falha
 # (sem pgvector, sem embedding, tabela vazia) — aí o caller usa os exemplos FIXOS.
-async def _exemplos_similares(conn, materia, tema, nivel=None, k=5):
+async def _exemplos_similares(conn, materia, tema, nivel=None, calculo=None, k=5):
     vetor = await asyncio.to_thread(_embed, f"{MATERIAS.get(materia, materia)}: {tema}")
     if not vetor:
         return None
     area = _AREA_ENEM.get(materia, materia)
     alvos = list(dict.fromkeys([materia, area]))   # matéria fina (BLUEX) + área (maritaca)
     vec = _vec_literal(vetor)
-    base = ("select enunciado, alternativas, gabarito from questoes_reais "
-            "where materia = any($1::text[]) and embedding is not null ")
+    sel = ("select enunciado, alternativas, gabarito from questoes_reais "
+           "where materia = any($1::text[]) and embedding is not null ")
+    fcalc = ("and calculo is true " if calculo is True
+             else "and (calculo is not true) " if calculo is False else "")
+    fniv = "and (nivel is null or abs(nivel - $2) <= 1) " if nivel is not None else ""
+    # do mais específico ao mais amplo — degrada se coluna/rótulo faltar ou nível não tiver
+    tentativas = []
+    if fniv or fcalc:
+        tentativas.append((sel + fcalc + fniv, nivel is not None))
+    if fcalc:
+        tentativas.append((sel + fcalc, False))
+    tentativas.append((sel, False))
     rows = None
-    if nivel is not None:   # ancora no NÍVEL pedido (±1); sem-nível entra como reserva
+    for consulta, usa_niv in tentativas:
         try:
-            rows = await conn.fetch(
-                base + "and (nivel is null or abs(nivel - $2) <= 1) "
-                "order by embedding <=> $3::vector limit $4",
-                alvos, nivel, vec, k)
-        except Exception as e:
-            print("[KaIA] filtro por nível indisponível (usando só tema):", e)
+            if usa_niv:
+                rows = await conn.fetch(consulta + "order by embedding <=> $3::vector limit $4",
+                                        alvos, nivel, vec, k)
+            else:
+                rows = await conn.fetch(consulta + "order by embedding <=> $2::vector limit $3",
+                                        alvos, vec, k)
+            if rows:
+                break
+        except Exception:
             rows = None
-    if not rows:   # sem nível, filtro vazio, ou coluna ausente -> só por tema
-        try:
-            rows = await conn.fetch(
-                base + "order by embedding <=> $2::vector limit $3",
-                alvos, vec, k)
-        except Exception as e:
-            print("[KaIA] busca similares (pgvector) indisponível:", e)
-            return None
     if not rows:
         return None
     exemplos = []
@@ -792,19 +941,21 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
     #    MENOS que o pedido (faixa concentrada, tema estreito) -> re-tenta até completar
     #    (com anti-repetição a cada volta) pra não devolver o buffer curto.
     if n - len(entregues) > 0:
-        # few-shot dinâmico (pgvector) SE ligado, com fallback pros exemplos fixos (1x)
+        calc = _eh_calculo(materia, tema)               # cálculo -> PoT (fórmula executada)
+        gerar = _gerar_calculo_pot if calc else _gerar_no_gemini
+        # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo não
         exemplos = None
         if FEWSHOT_DINAMICO:
-            exemplos = await _exemplos_similares(conn, materia, tema, nivel)
-        exemplos = exemplos or _exemplos_few_shot(materia)
+            exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=calc)
+        exemplos = exemplos or (None if calc else _exemplos_few_shot(materia))
         for _ in range(3):
             if n - len(entregues) <= 0:
                 break
             evitar = await _enunciados_existentes(conn, materia, tema, nivel)
-            novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel,
-                                           exemplos=exemplos, evitar=evitar)
+            novas = await gerar(n - len(entregues), materia, nome, tema, hobbie, nivel,
+                                exemplos=exemplos, evitar=evitar)
             if not novas:
-                break   # Gemini vazio/erro -> não insiste (evita loop e gasto de cota)
+                break   # vazio/erro -> não insiste (evita loop e gasto de cota)
             entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
     # 5) marca vistas + etiqueta o nível
     await _marcar_vistas(conn, user_id, entregues)

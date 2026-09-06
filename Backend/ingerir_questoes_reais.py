@@ -294,16 +294,21 @@ async def main():
     fonte = (sys.argv[sys.argv.index("--fonte") + 1].lower() if "--fonte" in sys.argv else "ambas")
     area_filtro = (sys.argv[sys.argv.index("--area") + 1].upper() if "--area" in sys.argv else None)
     sem_calculo = "--sem-calculo" in sys.argv
+    somente_calculo = "--somente-calculo" in sys.argv
 
-    vistos, regs, pulados_calc = set(), [], 0
+    def _filtra(r):
+        r["calculo"] = _parece_calculo(r)
+        return not ((sem_calculo and r["calculo"]) or (somente_calculo and not r["calculo"]))
+
+    vistos, regs, pulados = set(), [], 0
     if fonte in ("ambas", "maritaca"):
         for ano in ANOS:
             for row in _baixar(ano):
                 r = _reg(row)
                 if not r or (area_filtro and r["materia"] != area_filtro):
                     continue
-                if sem_calculo and _parece_calculo(r):
-                    pulados_calc += 1; continue
+                if not _filtra(r):
+                    pulados += 1; continue
                 if r["enunciado"] not in vistos:
                     vistos.add(r["enunciado"]); regs.append(r)
     if fonte in ("ambas", "bluex"):
@@ -311,19 +316,20 @@ async def main():
             r = _reg_bluex(row, area_filtro)
             if not r:
                 continue
-            if sem_calculo and _parece_calculo(r):
-                pulados_calc += 1; continue
+            if not _filtra(r):
+                pulados += 1; continue
             if r["enunciado"] not in vistos:
                 vistos.add(r["enunciado"]); regs.append(r)
     if limite:
         regs = regs[:limite]
     from collections import Counter
     print(f"{len(regs)} questões reais (texto) coletadas -> {dict(Counter(r['materia'] for r in regs))}"
-          + (f" | {pulados_calc} de cálculo puladas" if sem_calculo else ""))
+          + (f" | {pulados} puladas pelo filtro" if (sem_calculo or somente_calculo) else ""))
     print("Gerando embeddings + inserindo...")
 
     conn = await asyncpg.connect(DATABASE_URL, statement_cache_size=0)
     try:
+        await conn.execute("alter table questoes_reais add column if not exists calculo bool")
         if zerar:
             await conn.execute("truncate questoes_reais")
         ok = 0
@@ -332,10 +338,10 @@ async def main():
             if not vec:
                 continue
             await conn.execute(
-                "insert into questoes_reais (materia, enunciado, alternativas, gabarito, embedding) "
-                "values ($1, $2, $3::jsonb, $4, $5::vector)",
+                "insert into questoes_reais (materia, enunciado, alternativas, gabarito, embedding, calculo) "
+                "values ($1, $2, $3::jsonb, $4, $5::vector, $6)",
                 r["materia"], r["enunciado"], json.dumps(r["alternativas"]),
-                r["gabarito"], _vec_literal(vec))
+                r["gabarito"], _vec_literal(vec), bool(r.get("calculo")))
             ok += 1
             if i % 25 == 0:
                 print(f"  {i}/{len(regs)} ({ok} inseridas)")

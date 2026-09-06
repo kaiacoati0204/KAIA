@@ -715,21 +715,33 @@ async def _resetar_vistas_antigas(conn, user_id, materia, tema, nivel):
 # Few-shot DINÂMICO: recupera do banco de questões reais (pgvector) as k mais parecidas
 # com o tema pedido. Devolve no formato de _exemplos_few_shot, ou None em qualquer falha
 # (sem pgvector, sem embedding, tabela vazia) — aí o caller usa os exemplos FIXOS.
-async def _exemplos_similares(conn, materia, tema, k=5):
+async def _exemplos_similares(conn, materia, tema, nivel=None, k=5):
     vetor = await asyncio.to_thread(_embed, f"{MATERIAS.get(materia, materia)}: {tema}")
     if not vetor:
         return None
     area = _AREA_ENEM.get(materia, materia)
     alvos = list(dict.fromkeys([materia, area]))   # matéria fina (BLUEX) + área (maritaca)
-    try:
-        rows = await conn.fetch(
-            "select enunciado, alternativas, gabarito from questoes_reais "
-            "where materia = any($1::text[]) and embedding is not null "
-            "order by embedding <=> $2::vector limit $3",
-            alvos, _vec_literal(vetor), k)
-    except Exception as e:
-        print("[KaIA] busca similares (pgvector) indisponível:", e)
-        return None
+    vec = _vec_literal(vetor)
+    base = ("select enunciado, alternativas, gabarito from questoes_reais "
+            "where materia = any($1::text[]) and embedding is not null ")
+    rows = None
+    if nivel is not None:   # ancora no NÍVEL pedido (±1); sem-nível entra como reserva
+        try:
+            rows = await conn.fetch(
+                base + "and (nivel is null or abs(nivel - $2) <= 1) "
+                "order by embedding <=> $3::vector limit $4",
+                alvos, nivel, vec, k)
+        except Exception as e:
+            print("[KaIA] filtro por nível indisponível (usando só tema):", e)
+            rows = None
+    if not rows:   # sem nível, filtro vazio, ou coluna ausente -> só por tema
+        try:
+            rows = await conn.fetch(
+                base + "order by embedding <=> $2::vector limit $3",
+                alvos, vec, k)
+        except Exception as e:
+            print("[KaIA] busca similares (pgvector) indisponível:", e)
+            return None
     if not rows:
         return None
     exemplos = []
@@ -738,7 +750,7 @@ async def _exemplos_similares(conn, materia, tema, k=5):
         exemplos.append({"enunciado": r["enunciado"],
                          "alternativas": json.loads(alts) if isinstance(alts, str) else alts,
                          "gabarito": r["gabarito"]})
-    print(f"[KaIA] few-shot dinâmico: {len(exemplos)} exemplos reais p/ {materia}/{tema}")
+    print(f"[KaIA] few-shot dinâmico: {len(exemplos)} exemplos reais p/ {materia}/{tema} (nível {nivel})")
     return exemplos
 
 
@@ -783,7 +795,7 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
         # few-shot dinâmico (pgvector) SE ligado, com fallback pros exemplos fixos (1x)
         exemplos = None
         if FEWSHOT_DINAMICO:
-            exemplos = await _exemplos_similares(conn, materia, tema)
+            exemplos = await _exemplos_similares(conn, materia, tema, nivel)
         exemplos = exemplos or _exemplos_few_shot(materia)
         for _ in range(3):
             if n - len(entregues) <= 0:

@@ -43,6 +43,16 @@ API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
 DATABASE_URL = os.getenv("DATABASE_URL")
 EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 EMBED_DIM = 768   # TEM de bater com a coluna vector(768) e com EMBED_DIM no app.py
+GEN_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")   # p/ classificar nível
+
+# Rubrica cognitiva (igual à _NIVEIS_DIF do app.py) — usada p/ classificar o banco.
+RUBRICA = (
+    "1 = reconhecer/lembrar um conceito isolado (definição direta)\n"
+    "2 = aplicar um conceito em situação direta, um único passo\n"
+    "3 = interpretar um texto/gráfico/dado e relacionar a um conceito (padrão ENEM)\n"
+    "4 = combinar 2+ conceitos/etapas; interpretar e inferir\n"
+    "5 = integrar áreas/ideias, raciocínio contra-intuitivo, distrator forte"
+)
 
 # BLUEX rotula por DISCIPLINA (mais fino que o maritaca, que é por posição/área).
 # Guardamos a matéria FINA (o app busca por [matéria_fina, área], unindo as duas bases).
@@ -233,6 +243,45 @@ def _embed(texto):
     return None
 
 
+def _gerar_texto(prompt):
+    url = (f"https://generativelanguage.googleapis.com/v1beta/"
+           f"models/{GEN_MODEL}:generateContent?key={API_KEY}")
+    body = {"contents": [{"parts": [{"text": prompt}]}]}
+    for tent in range(4):
+        try:
+            r = requests.post(url, json=body, timeout=40).json()
+            err = r.get("error")
+            if isinstance(err, dict) and err.get("code") in (429, 500, 503):
+                time.sleep(5 * (tent + 1)); continue   # cota/sobrecarga -> espera e re-tenta
+            cands = r.get("candidates") or []
+            if cands:
+                partes = cands[0].get("content", {}).get("parts", [])
+                txt = "".join(p.get("text", "") for p in partes)
+                if txt.strip():
+                    return txt
+            print("  [gen] resposta inesperada:", str(r)[:200]); return None
+        except Exception as e:
+            print("  [gen] erro:", e); time.sleep(2)
+    return None
+
+
+def _extrair_niveis(txt, n):
+    """Extrai N inteiros 1..5 da resposta (array JSON de preferência)."""
+    if not txt:
+        return None
+    m = re.search(r"\[[^\]]*\]", txt)
+    if m:
+        try:
+            arr = json.loads(m.group(0))
+            vals = [int(x) for x in arr if 1 <= int(x) <= 5]
+            if len(vals) >= n:
+                return vals[:n]
+        except Exception:
+            pass
+    nums = [int(x) for x in re.findall(r"[1-5]", txt)]
+    return nums[:n] if len(nums) >= n else None
+
+
 def _vec_literal(v):
     return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
 
@@ -295,5 +344,48 @@ async def main():
         await conn.close()
 
 
+# ==== Reforço 1: classifica o banco por NÍVEL (rubrica cognitiva) ====
+async def classificar_niveis():
+    """Rotula cada questão de `questoes_reais` com um nível 1..5 (rubrica), em lotes.
+    Assim o few-shot pode escolher exemplos DO NÍVEL pedido (não só do tema)."""
+    if not DATABASE_URL or not API_KEY:
+        print("Defina DATABASE_URL e API_KEY no .env."); return
+    refazer = "--refazer" in sys.argv
+    conn = await asyncpg.connect(DATABASE_URL, statement_cache_size=0)
+    try:
+        await conn.execute("alter table questoes_reais add column if not exists nivel int")
+        cond = "" if refazer else " where nivel is null"
+        rows = await conn.fetch(f"select id, enunciado, alternativas from questoes_reais{cond}")
+        print(f"{len(rows)} questões p/ classificar por nível...")
+        LOTE, feitas = 10, 0
+        for i in range(0, len(rows), LOTE):
+            bloco = rows[i:i + LOTE]
+            linhas = []
+            for j, r in enumerate(bloco, 1):
+                alts = r["alternativas"]
+                alts = json.loads(alts) if isinstance(alts, str) else alts
+                linhas.append(f"{j}. {r['enunciado'][:500]} | Alternativas: {' / '.join(alts)[:300]}")
+            prompt = (
+                "Classifique a DIFICULDADE de cada questão de 1 a 5 por esta rubrica de "
+                "DEMANDA COGNITIVA:\n" + RUBRICA + "\n\nResponda APENAS com um array JSON de "
+                f"{len(bloco)} inteiros (1 a 5), na ordem das questões.\n\nQuestões:\n"
+                + "\n".join(linhas)
+            )
+            niveis = _extrair_niveis(await asyncio.to_thread(_gerar_texto, prompt), len(bloco))
+            if not niveis:
+                print(f"  bloco {i // LOTE + 1}: resposta inválida, pulando"); continue
+            for r, nv in zip(bloco, niveis):
+                await conn.execute("update questoes_reais set nivel = $1 where id = $2", nv, r["id"])
+            feitas += len(bloco)
+            print(f"  {min(i + LOTE, len(rows))}/{len(rows)} classificadas")
+        dist = await conn.fetch("select nivel, count(*) c from questoes_reais group by nivel order by nivel")
+        print(f"Concluído: {feitas} classificadas. Distribuição:", {r['nivel']: r['c'] for r in dist})
+    finally:
+        await conn.close()
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    if "--classificar-nivel" in sys.argv:
+        asyncio.run(classificar_niveis())
+    else:
+        asyncio.run(main())

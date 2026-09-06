@@ -200,14 +200,15 @@
         </section>
 
         <!-- ===================== PLANOS ===================== -->
-        <!-- ⚠️ NOMES DOS PLANOS SÃO PROVISÓRIOS ⚠️
-             "Básico", "Pro", "Pro Anual", "Escola" e "Escola Rede" são rótulos de
-             trabalho. A Bia vai trocar por nomes indígenas (mesma família do
-             "kaiá"/Coati que dá nome à marca).
-             PARA TROCAR: cada nome aparece em DOIS lugares por card — o <h4> e,
-             quando o card cita o plano de baixo, o primeiro <li> ("Tudo do X").
-             Busque por `data-plano-nome` abaixo: todo <h4> de plano tem esse
-             atributo justamente para achar os cinco de uma vez. -->
+        <!-- Nomes definitivos: Mirim, Porã, Açu, Ara e Guará — mesma família
+             indígena do "kaiá"/Coati que dá nome à marca. O rótulo comercial
+             ("Básico", "Pro"...) vira SUBTÍTULO dentro do próprio <h4>: quem
+             chega comparando com o mercado precisa se localizar, mas quem manda
+             no card é o nome próprio.
+             SE FOR RENOMEAR DE NOVO: cada nome aparece em DOIS lugares por card —
+             o <h4> e, quando o card cita o plano de baixo, o primeiro <li>
+             ("Tudo do X"). Busque por `data-plano-nome`: todo <h4> de plano tem
+             esse atributo justamente para achar os cinco de uma vez. -->
         <section class="lp-secao lp-planos" id="planos">
             <h2 class="lp-secao-titulo">Planos</h2>
             <p class="lp-secao-sub">
@@ -219,46 +220,46 @@
 
                 <div class="plano">
                     <span class="plano-tipo">INDIVIDUAL</span>
-                    <h4 data-plano-nome>Básico</h4>
-                    <div class="plano-preco">R$ 19,90<span>/mês</span></div>
+                    <h4 data-plano-nome>Mirim<span class="plano-nome-desc">Básico</span></h4>
+                    <div class="plano-preco">R$ 26,90<span>/mês</span></div>
                     <p class="plano-alvo">1 aluno</p>
                     <ul class="plano-itens">
-                        <li>3 sessões por dia, de até 10 questões cada</li>
-                        <li>Questões personalizadas geradas por IA</li>
-                        <li>As 9 intervenções de foco</li>
-                        <li>Streak e meta diária</li>
-                        <li>Caderno de anotações</li>
-                        <li>Painel da semana</li>
-                    </ul>
-                    <a href="login.html" class="plano-btn">Começar</a>
-                </div>
-
-                <div class="plano">
-                    <span class="plano-tipo">INDIVIDUAL</span>
-                    <h4 data-plano-nome>Pro</h4>
-                    <div class="plano-preco">R$ 29,90<span>/mês</span></div>
-                    <p class="plano-alvo">1 aluno</p>
-                    <ul class="plano-itens">
-                        <li>Tudo do Básico</li>
-                        <li>Sessões ilimitadas</li>
-                        <li>Histórico completo</li>
-                        <li>Relatórios semanais por matéria</li>
+                        <li>Todas as matérias e temas</li>
+                        <li>Questões personalizadas por hobbie</li>
                         <li>Dificuldade adaptativa</li>
-                        <li>Revisão com 2ª tentativa</li>
+                        <li>Leitura de atenção + intervenções de foco</li>
+                        <li>Estatísticas básicas, streak e caderno</li>
                     </ul>
                     <a href="login.html" class="plano-btn">Começar</a>
                 </div>
 
                 <div class="plano plano-destaque">
                     <span class="plano-tipo">INDIVIDUAL</span>
-                    <span class="plano-selo">MELHOR CUSTO-BENEFÍCIO</span>
-                    <h4 data-plano-nome>Pro Anual</h4>
-                    <div class="plano-preco">R$ 19,90<span>/mês</span></div>
-                    <p class="plano-alvo">R$ 238,90 por ano · 33% de desconto</p>
+                    <span class="plano-selo">MAIS ESCOLHIDO</span>
+                    <h4 data-plano-nome>Porã<span class="plano-nome-desc">Pro</span></h4>
+                    <div class="plano-preco">R$ 35,90<span>/mês</span></div>
+                    <p class="plano-alvo">1 aluno</p>
                     <ul class="plano-itens">
-                        <li>Tudo do Pro</li>
-                        <li>Acesso durante todo o ciclo do ENEM</li>
-                        <li>Parcelável em 12x, ou à vista no Pix</li>
+                        <li>Tudo do plano Mirim</li>
+                        <li>Sessões ilimitadas por dia</li>
+                        <li>Simulados gerais e por matéria</li>
+                        <li>Relatórios detalhados de evolução e foco</li>
+                        <li>Modo revisão e recomendações personalizadas</li>
+                        <li>Prioridade na geração de questões</li>
+                    </ul>
+                    <a href="login.html" class="plano-btn">Começar</a>
+                </div>
+
+                <div class="plano">
+                    <span class="plano-tipo">INDIVIDUAL</span>
+                    <span class="plano-selo plano-selo-suave">2 MESES GRÁTIS</span>
+                    <h4 data-plano-nome>Açu<span class="plano-nome-desc">Pro Anual</span></h4>
+                    <div class="plano-preco">R$ 339,90<span>/ano</span></div>
+                    <p class="plano-alvo">Equivale a R$ 28,32/mês · 1 aluno</p>
+                    <ul class="plano-itens">
+                        <li>Tudo do plano Porã</li>
+                        <li>Acesso garantido por 12 meses</li>
+                        <li>Parcelável em 12× via Pix recorrente</li>
                         <li>Prioridade em novas funcionalidades</li>
                     </ul>
                     <a href="login.html" class="plano-btn">Começar</a>
@@ -273,27 +274,30 @@
 
                 <div class="plano plano-escolar">
                     <span class="plano-tipo">ESCOLAR</span>
-                    <h4 data-plano-nome>Escola</h4>
-                    <div class="plano-preco">R$ 9,90<span>/aluno/mês</span></div>
+                    <h4 data-plano-nome>Ara<span class="plano-nome-desc">Turma</span></h4>
+                    <div class="plano-preco">R$ 27,90<span>/aluno/mês</span></div>
                     <p class="plano-alvo">Mínimo de 20 alunos</p>
                     <ul class="plano-itens">
-                        <li>Tudo do Pro, para cada aluno</li>
-                        <li>Painel do professor</li>
-                        <li>Relatórios por turma</li>
-                        <li>Onboarding do corpo docente</li>
+                        <li>Acesso equivalente ao Pro para todos os alunos</li>
+                        <li>Sessões ilimitadas, simulados e relatórios</li>
+                        <li>Painel da turma pro professor (desempenho, foco, engajamento)</li>
+                        <li>Onboarding guiado</li>
                     </ul>
                     <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
                 </div>
 
-                <div class="plano plano-escolar">
+                <div class="plano plano-escolar plano-destaque">
                     <span class="plano-tipo">ESCOLAR</span>
-                    <h4 data-plano-nome>Escola Rede</h4>
-                    <div class="plano-preco">R$ 9,90<span>/aluno/mês</span></div>
+                    <span class="plano-selo">PARA INSTITUIÇÕES</span>
+                    <h4 data-plano-nome>Guará<span class="plano-nome-desc">Rede</span></h4>
+                    <div class="plano-preco">R$ 23,90<span>/aluno/mês</span></div>
                     <p class="plano-alvo">Mínimo de 80 alunos</p>
                     <ul class="plano-itens">
-                        <li>Tudo do Escola</li>
-                        <li>Painel do coordenador</li>
-                        <li>Relatórios comparativos entre unidades</li>
+                        <li>Tudo do plano Ara</li>
+                        <li>Painel de coordenação (visão institucional)</li>
+                        <li>Múltiplos professores e turmas</li>
+                        <li>Relatórios institucionais consolidados</li>
+                        <li>Suporte prioritário</li>
                     </ul>
                     <a href="responsaveis.html" class="plano-btn">Falar com o time</a>
                 </div>

@@ -17,6 +17,7 @@ Pré-requisitos:
 Rodar (DEV; DEMORA — um embedding por questão, sujeito à cota do Gemini):
     python Backend/ingerir_questoes_reais.py                    # tudo, as duas bases
     python Backend/ingerir_questoes_reais.py --area HUMANAS     # só Humanas (His/Geo/Fil/Soc)
+    python Backend/ingerir_questoes_reais.py --area NATUREZA --sem-calculo  # só conceituais (pula conta)
     python Backend/ingerir_questoes_reais.py --fonte bluex      # só uma base
     python Backend/ingerir_questoes_reais.py --limite 20        # teste rápido
     python Backend/ingerir_questoes_reais.py --zerar            # limpa a tabela antes
@@ -192,6 +193,25 @@ def _reg_bluex(row, area_filtro=None):
             "gabarito": ord(label) - ord("A")}
 
 
+def _alt_numerica(a):
+    """Alternativa que é um VALOR (número + unidade curta) -> sinal de questão de conta."""
+    a = (a or "").strip()
+    if not re.match(r'^[-+(]?\s*\d', a):        # começa com número (ou sinal/parêntese)
+        return False
+    letras = sum(c.isalpha() for c in a)
+    return letras <= 6 and len(a) <= 25          # curta, poucas letras (só a unidade)
+
+
+def _parece_calculo(reg):
+    """Heurística p/ pular questões de CÁLCULO na ingestão (--sem-calculo): alternativas
+    majoritariamente numéricas, ou verbo de conta no enunciado."""
+    alts = reg.get("alternativas") or []
+    if sum(1 for a in alts if _alt_numerica(a)) >= 3:
+        return True
+    en = (reg.get("enunciado") or "").lower()
+    return bool(re.search(r'\bcalcul\w+|\bdetermine o valor\b|valor (aproximado|numérico)', en))
+
+
 def _embed(texto):
     url = (f"https://generativelanguage.googleapis.com/v1beta/"
            f"models/{EMBED_MODEL}:embedContent?key={API_KEY}")
@@ -224,25 +244,33 @@ async def main():
     limite = int(sys.argv[sys.argv.index("--limite") + 1]) if "--limite" in sys.argv else None
     fonte = (sys.argv[sys.argv.index("--fonte") + 1].lower() if "--fonte" in sys.argv else "ambas")
     area_filtro = (sys.argv[sys.argv.index("--area") + 1].upper() if "--area" in sys.argv else None)
+    sem_calculo = "--sem-calculo" in sys.argv
 
-    vistos, regs = set(), []
+    vistos, regs, pulados_calc = set(), [], 0
     if fonte in ("ambas", "maritaca"):
         for ano in ANOS:
             for row in _baixar(ano):
                 r = _reg(row)
                 if not r or (area_filtro and r["materia"] != area_filtro):
                     continue
+                if sem_calculo and _parece_calculo(r):
+                    pulados_calc += 1; continue
                 if r["enunciado"] not in vistos:
                     vistos.add(r["enunciado"]); regs.append(r)
     if fonte in ("ambas", "bluex"):
         for row in _baixar_bluex():
             r = _reg_bluex(row, area_filtro)
-            if r and r["enunciado"] not in vistos:
+            if not r:
+                continue
+            if sem_calculo and _parece_calculo(r):
+                pulados_calc += 1; continue
+            if r["enunciado"] not in vistos:
                 vistos.add(r["enunciado"]); regs.append(r)
     if limite:
         regs = regs[:limite]
     from collections import Counter
-    print(f"{len(regs)} questões reais (texto) coletadas -> {dict(Counter(r['materia'] for r in regs))}")
+    print(f"{len(regs)} questões reais (texto) coletadas -> {dict(Counter(r['materia'] for r in regs))}"
+          + (f" | {pulados_calc} de cálculo puladas" if sem_calculo else ""))
     print("Gerando embeddings + inserindo...")
 
     conn = await asyncpg.connect(DATABASE_URL, statement_cache_size=0)

@@ -484,6 +484,19 @@ def _normalizar_questao(questao):
             (pe[i] if isinstance(pe, list) and i < len(pe) else "")
             for i in range(len(opts))
         ]
+    # Embaralha as alternativas -> posição da correta fica UNIFORME. O LLM tende a pôr
+    # a certa na 2ª e quase nunca na última; aqui remapeamos ans e mantemos o
+    # porque_erradas alinhado por índice.
+    ans = questao.get("ans")
+    n = len(opts)
+    if isinstance(ans, int) and 0 <= ans < n and n > 1:
+        ordem = list(range(n))
+        random.shuffle(ordem)
+        questao["opts"] = [opts[i] for i in ordem]
+        pe2 = questao.get("porque_erradas") or []
+        if len(pe2) == n:
+            questao["porque_erradas"] = [pe2[i] for i in ordem]
+        questao["ans"] = ordem.index(ans)
     questao.setdefault("explicacao", "")
     return questao
 

@@ -78,6 +78,7 @@ function logEvent(type, payload) {
 let intervencaoInterval   = null;
 let intervencaoAtual      = null;   // tipo em exibição (evita duplicar)
 let intervencaoMostradaEm = 0;      // p/ calcular tempo_ate_aceitar_s
+let _dockShowTimer        = null;   // atraso pra dock de teste reaparecer (gravação limpa)
 
 // Sorteia uma variação (usado nas frases das intervenções — evita repetir sempre
 // a mesma, combatendo a habituação).
@@ -357,6 +358,8 @@ function _garantirCardIntervencao() {
 function mostrarIntervencao(intv) {
     intervencaoAtual = intv.intervention_type;   // trava o polling até resolver
     intervencaoMostradaEm = performance.now();
+    clearTimeout(_dockShowTimer);                                            // cancela reaparecimento pendente
+    const _dk = $('kaia-dock-teste'); if (_dk) _dk.style.display = 'none';   // esconde a dock durante a intervenção (gravação limpa)
     if (intv.intervention_type === 'pausa_ativa')     { iniciarPausaAtiva();      return; }   // ação, não card
     if (intv.intervention_type === 'micro_refoco')    { iniciarMicroRefoco();     return; }
     if (intv.intervention_type === 'troca_atividade') { mostrarTrocaTema();       return; }
@@ -386,31 +389,11 @@ function mostrarIntervencao(intv) {
 // Esconder o card e liberar o polling eram a MESMA coisa; separá-los é o que
 // permite pedir feedback depois que a intervenção de ação já acabou, sem deixar
 // o polling travado enquanto o strip espera (aluno pode simplesmente ignorar).
-function liberarPolling() { intervencaoAtual = null; }
-
-// ==== MODO DEMO (gravação de vídeo) ====
-// Ativa SÓ com ?demo=1 na URL. Atalhos Alt+1..7 disparam cada intervenção SEM console;
-// Alt+0 esconde. Invisível na gravação. Não afeta usuários normais.
-(function () {
-    if (new URLSearchParams(location.search).get('demo') !== '1') return;
-    const MAPA = {
-        Digit1: 'pausa_ativa',   Digit2: 'micro_refoco',      Digit3: 'troca_atividade',
-        Digit4: 'checkpoint',    Digit5: 'reancoragem',       Digit6: 'auto_monitoramento',
-        Digit7: 'alerta_fadiga',
-    };
-    console.log('[KaIA demo] Alt+1..7 = intervenções | Alt+0 = esconder');
-    document.addEventListener('keydown', (e) => {
-        if (!e.altKey) return;
-        if (e.code === 'Digit0') { try { esconderIntervencao(); } catch (_) {} return; }
-        const tipo = MAPA[e.code];
-        if (!tipo) return;
-        e.preventDefault();
-        try {
-            esconderIntervencao();                             // limpa a anterior
-            mostrarIntervencao({ intervention_type: tipo });
-        } catch (err) { console.warn('[KaIA demo] erro:', err); }
-    });
-})();
+function liberarPolling() {
+    intervencaoAtual = null;
+    const dk = $('kaia-dock-teste');   // dock reaparece ~3s depois (dá tempo de cortar a gravação)
+    if (dk) { clearTimeout(_dockShowTimer); _dockShowTimer = setTimeout(() => { dk.style.display = ''; }, 3000); }
+}
 
 function esconderIntervencao() {
     const c = $('kaia-intervencao');
@@ -573,6 +556,7 @@ function _montarDockTeste() {
     const dock = document.createElement('div');
     dock.id = 'kaia-dock-teste';
     dock.innerHTML = '<span class="dk-rot">TESTE</span>';
+    let _dockDelay = null;
     GATILHO_TESTE_ORDEM.forEach(tipo => {
         const b = document.createElement('button');
         b.type = 'button';
@@ -580,9 +564,11 @@ function _montarDockTeste() {
         b.setAttribute('aria-label', `Disparar ${tipo}`);
         b.innerHTML = ICONES_INTERVENCAO[tipo] || '';
         b.addEventListener('click', () => {
-            // fecha o que estiver aberto antes, senão o clique não faz nada
-            esconderIntervencao();
-            dispararIntervencaoTeste(tipo);
+            esconderIntervencao();                                  // fecha o que estiver aberto
+            clearTimeout(_dockShowTimer);                           // cancela reaparecimento pendente (vamos disparar outra)
+            const dk = $('kaia-dock-teste'); if (dk) dk.style.display = 'none';   // some já (tela limpa nos 5s)
+            clearTimeout(_dockDelay);
+            _dockDelay = setTimeout(() => dispararIntervencaoTeste(tipo), 10000);  // aparece 10s após o clique
         });
         dock.appendChild(b);
     });
@@ -1171,7 +1157,7 @@ function checkpointRecuperacao() {
         b.type = 'button';
         b.className = 'kaia-cp-opt';
         b.textContent = opt;
-        b.addEventListener('click', () => _responderCheckpoint(i === q.ans));
+        b.addEventListener('click', () => _responderCheckpoint(i, q.ans));
         opts.appendChild(b);
     });
     const fb = document.createElement('p');
@@ -1188,12 +1174,22 @@ function checkpointRecuperacao() {
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function _responderCheckpoint(acertou) {
+function _responderCheckpoint(escolhido, correta) {
+    const acertou = escolhido === correta;
     const certa = _cpQuestao ? _cpQuestao.opts[_cpQuestao.ans] : '';
     $('kaia-cp-fb').textContent = acertou
         ? _variar(CHECKPOINT_ACERTO)
         : _variar(CHECKPOINT_ERRO).replace('{r}', certa);
-    $$('#kaia-cp .kaia-cp-opt').forEach(b => b.disabled = true);   // trava após responder
+    $$('#kaia-cp .kaia-cp-opt').forEach((b, i) => {
+        b.disabled = true;                                        // trava após responder
+        if (i === correta) {                                      // a certa fica verde
+            b.style.background = 'var(--acerto-bg)'; b.style.color = 'var(--acerto-tx)';
+            b.style.borderColor = 'var(--acerto-tx)';
+        } else if (i === escolhido) {                             // a escolhida errada fica vermelha
+            b.style.background = 'var(--erro-bg)'; b.style.color = 'var(--erro-tx)';
+            b.style.borderColor = 'var(--erro-tx)';
+        }
+    });
     // Feedback só depois de responder (Fase 2): antes disso competiria com a questão.
     const card = $('kaia-cp');
     if (card && !card.querySelector('.kaia-fb-wrap')) {
@@ -1452,32 +1448,38 @@ function sortearHobbiesSessao() {
     }
 }
 
-// Distribuição de níveis do buffer (~META_QUESTOES), centrada no nível atual; o peso
-// que cairia fora de [1..5] nas bordas vai pro centro. Ex.: nível 2 -> {1:3, 2:4, 3:3}.
-function janelaDistribuicao(centro) {
+// Sorteia a distribuição de níveis da rodada (~META_QUESTOES questões): pesos
+// concentrados no centro (dist 0->4, ±1->2, ±2->1) e AMOSTRADOS aleatoriamente ->
+// as quantidades por nível variam a cada rodada, como uma prova real puxada pro nível
+// do aluno. Nas pontas (centro 1/5), os níveis fora da régua saem e concentra ainda
+// mais nos disponíveis.
+function sortearDistribuicao(centro, total = META_QUESTOES) {
     const c = Math.max(NIVEL_MIN, Math.min(centro, NIVEL_MAX));
-    const pesos = { [c - 1]: 3, [c]: 4, [c + 1]: 3 };
-    const dist = {};
-    let perdido = 0;
-    for (const nvStr of Object.keys(pesos)) {
-        const nv = Number(nvStr);
-        if (nv >= NIVEL_MIN && nv <= NIVEL_MAX) dist[nv] = pesos[nvStr];
-        else perdido += pesos[nvStr];
+    const pesoDist = d => (d === 0 ? 4 : d === 1 ? 2 : d === 2 ? 1 : 0);
+    const pesos = {};
+    let soma = 0;
+    for (let nv = NIVEL_MIN; nv <= NIVEL_MAX; nv++) {
+        const w = pesoDist(Math.abs(nv - c));
+        if (w > 0) { pesos[nv] = w; soma += w; }
     }
-    dist[c] = (dist[c] || 0) + perdido;
+    const niveis = Object.keys(pesos).map(Number);
+    const dist = {};
+    for (let i = 0; i < total; i++) {
+        let r = Math.random() * soma, nv = c;
+        for (const k of niveis) { r -= pesos[k]; if (r <= 0) { nv = k; break; } }
+        dist[nv] = (dist[nv] || 0) + 1;
+    }
     return dist;
 }
 
-// Tira da fila a questão de nível mais próximo do alvo (degradação graciosa: se
-// esgotou a faixa exata, serve a vizinha).
-function pegarDaFila(nivelAlvo) {
-    if (!filaQuestoes.length) return null;
-    let idx = 0, melhor = Infinity;
-    filaQuestoes.forEach((q, i) => {
-        const d = Math.abs((q.nivel != null ? q.nivel : nivelAlvo) - nivelAlvo);
-        if (d < melhor) { melhor = d; idx = i; }
-    });
-    return filaQuestoes.splice(idx, 1)[0];
+// A rodada é uma MISTURA de níveis servida em ordem ALEATÓRIA (como uma prova real,
+// não ordenada por dificuldade). Embaralha no lugar (Fisher-Yates); serve-se em FIFO.
+function embaralhar(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
 }
 
 // Busca UM buffer no backend e devolve as questões válidas (ou [] em falha silenciosa).
@@ -1486,10 +1488,10 @@ async function buscarBufferQuestoes(subject, tema) {
     const data = await postJSON('/gerar-questao', {
         materia: subject, tema, user_id: userId,
         hobbies: hobbiesSessao.length ? hobbiesSessao : lerHobbies(),
-        distribuicao: janelaDistribuicao(nivelDificuldade),
+        distribuicao: sortearDistribuicao(nivelDificuldade),
     });
     const lote = Array.isArray(data?.questoes) ? data.questoes : [];
-    return lote.filter(q => q && Array.isArray(q.opts));
+    return embaralhar(lote.filter(q => q && Array.isArray(q.opts)));   // mistura os níveis da rodada
 }
 
 async function obterProximaQuestao(subject, tema) {
@@ -1509,17 +1511,24 @@ async function obterProximaQuestao(subject, tema) {
             return questaoFallback(subject, tema);
         }
     }
-    return pegarDaFila(nivelDificuldade) || questaoFallback(subject, tema);
+    return filaQuestoes.shift() || questaoFallback(subject, tema);   // mistura já embaralhada -> FIFO
 }
 
 // Reabastece a fila em BACKGROUND quando ela fica baixa — sem loader, pra o
 // "carregando" nunca aparecer no meio da rodada. Blindado contra chamadas concorrentes.
 const LIMIAR_REABASTECER = 3;
 let reabastecendoFila = false;
-function talvezReabastecerFila(subject, tema) {
+function talvezReabastecerFila(subject, tema, forcar = false) {
     if (reabastecendoFila || filaChave !== `${subject}::${tema}`) return;
-    if (filaQuestoes.length > LIMIAR_REABASTECER) return;
     if (performance.now() < loteBloqueadoAte) return;
+    if (!forcar) {
+        // Durante a rodada: só reabastece se a fila NÃO dá pra fechar as META questões
+        // (rede de segurança p/ buffer curto). A próxima rodada é adiantada no FIM (forçado).
+        if (filaQuestoes.length > LIMIAR_REABASTECER) return;
+        if (questoesNaRodada + filaQuestoes.length >= META_QUESTOES) return;
+    } else if (filaQuestoes.length >= META_QUESTOES) {
+        return;   // já há uma rodada cheia adiantada
+    }
     reabastecendoFila = true;
     buscarBufferQuestoes(subject, tema)
         .then(novas => {
@@ -1622,32 +1631,30 @@ let revisaoFila = [];
 let revisaoTotal = 0;
 let revisaoRespondidas = 0;
 
-// Dificuldade adaptativa (Parte 6): começa em 2; +1 a cada 2 acertos seguidos
-// (máx 5), -1 a cada 2 erros seguidos (mín 1). Passa no /gerar-questao.
-let nivelDificuldade = 2;
-let acertosSeguidos  = 0;
-let errosSeguidos    = 0;
+// Dificuldade adaptativa (Parte 6): centro começa em 2. NÃO muda no meio da rodada —
+// cada rodada é um SORTEIO de níveis com peso no centro (sortearDistribuicao). No FIM
+// das META questões, a NOTA move o centro em ±1 (>=7 sobe, <=4 desce).
+let nivelDificuldade = 2;    // centro atual (1..5)
+let acertosNaRodada  = 0;    // acertos da rodada corrente -> define a troca de nível
 const NIVEL_MIN = 1, NIVEL_MAX = 5;
 
-function ajustarNivel(acertou) {
-    if (acertou) {
-        acertosSeguidos++; errosSeguidos = 0;
-        if (acertosSeguidos >= 2 && nivelDificuldade < NIVEL_MAX) { nivelDificuldade++; acertosSeguidos = 0; }
-    } else {
-        errosSeguidos++; acertosSeguidos = 0;
-        if (errosSeguidos >= 2 && nivelDificuldade > NIVEL_MIN) { nivelDificuldade--; errosSeguidos = 0; }
-    }
-    // O buffer cobre VÁRIOS níveis: mudar de nível NÃO descarta a fila (pegarDaFila serve
-    // a faixa certa; o reabastecimento em background re-centra no novo nível).
+// Fecha a rodada: a nota das META questões desloca o centro em ±1. Retorna se mudou.
+function fecharNivelDaRodada() {
+    const antigo = nivelDificuldade;
+    if (acertosNaRodada >= 7 && nivelDificuldade < NIVEL_MAX) nivelDificuldade++;
+    else if (acertosNaRodada <= 4 && nivelDificuldade > NIVEL_MIN) nivelDificuldade--;
+    acertosNaRodada = 0;
     atualizarNivel();
+    return nivelDificuldade !== antigo;
 }
 
-// Indicador discreto do nível (●●○○○) no quiz-nav.
+// Indicador do NÍVEL DO ALUNO (●●○○○) no quiz-nav — o centro em torno do qual a
+// rodada é sorteada. Muda entre rodadas (não é a dificuldade da questão atual).
 function atualizarNivel() {
     const el = $('nivel-dif');
     if (!el) return;
-    el.textContent = 'Nível ' + '●'.repeat(nivelDificuldade) + '○'.repeat(NIVEL_MAX - nivelDificuldade);
-    el.title = `Dificuldade ${nivelDificuldade} de ${NIVEL_MAX}`;
+    el.textContent = 'Seu nível ' + '●'.repeat(nivelDificuldade) + '○'.repeat(NIVEL_MAX - nivelDificuldade);
+    el.title = `Seu nível ${nivelDificuldade} de ${NIVEL_MAX}`;
 }
 
 // Total do DIA = base do backend + as respondidas nesta sessão.
@@ -1674,8 +1681,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     errosSessao = [];
     emRevisao = false;
     nivelDificuldade = 2;
-    acertosSeguidos = 0;
-    errosSeguidos = 0;
+    acertosNaRodada = 0;
     sortearHobbiesSessao();                     // 2 hobbies fixos p/ a sessão (variedade)
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
@@ -1829,7 +1835,7 @@ function checkAnswer(idx, btn) {
         logEvent('question_answer', {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
             tempo_iniciacao_resposta_ms: firstInteractionAt ? Math.round(firstInteractionAt - questionShownAt) : null,
-            nivel_dificuldade: nivelDificuldade,   // dificuldade REAL (adaptativa), não mais constante
+            nivel_dificuldade: currentQuestion.nivel || nivelDificuldade,   // nível REAL da questão servida (mistura da rodada)
             mouse_track: mouseSamples,             // trajeto [dt_ms, x, y] → features de mouse no Incr. B
             tempo_ocioso_s: Math.round(tempoOciosoMs / 1000),   // ocioso c/ aba focada
             tempo_dwell_sem_responder_s: Math.round(tempoDwellMs / 100) / 10,   // hesitação sobre as alternativas
@@ -1844,7 +1850,7 @@ function checkAnswer(idx, btn) {
     if (acertou) acertosSessao++;
     else errosSessao.push({ ...currentQuestion, escolhaAluno: idx, pendenteRevisao: true });   // revisão (Parte 7): resposta do aluno (accordion) + ainda pendente de revisão (Fase 1.1)
     questoesNaRodada++;
-    ajustarNivel(acertou);        // dificuldade adaptativa (Parte 6)
+    if (acertou) acertosNaRodada++;   // nota da rodada -> troca de nível no fim (fecharNivelDaRodada)
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
     if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // probe de self-report (1/rodada, 5ª–9ª)
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
@@ -2133,6 +2139,10 @@ function preencherResumo() {
 
 // Ao completar a rodada de 10: modal SEM título — só o resumo rápido + escolha.
 function abrirModalRodada() {
+    // Fecha o nível da rodada (nota move o centro em ±1) e ADIANTA a próxima rodada no
+    // centro novo, em background, enquanto o aluno lê o resultado -> sem loader ao continuar.
+    if (fecharNivelDaRodada()) devolverFila();   // centro mudou -> buffer do centro antigo não serve
+    talvezReabastecerFila(currentSubject, currentTema, true);
     preencherResumo();
     $('resumo-titulo').hidden = true;
     $('resumo-frase').hidden  = true;

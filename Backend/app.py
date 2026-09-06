@@ -496,11 +496,11 @@ _FORMATO_QUESTAO = (
 
 # Descrição da dificuldade por nível (1..5) para o prompt do Gemini (Parte 6).
 _NIVEIS_DIF = {
-    1: "muito fácil — conceito básico, direto ao ponto",
-    2: "fácil",
-    3: "médio, no padrão do ENEM",
-    4: "difícil — exige interpretação e mais de um passo",
-    5: "muito difícil — pegadinhas e raciocínio elaborado",
+    1: "reconhecer/lembrar um conceito isolado (definição direta)",
+    2: "aplicar um conceito em situação direta, um único passo",
+    3: "interpretar um texto/gráfico/dado e relacionar a um conceito (padrão ENEM)",
+    4: "combinar 2 ou mais conceitos/etapas; interpretar e inferir",
+    5: "integrar áreas/ideias, com raciocínio contra-intuitivo e distrator forte que exige eliminação",
 }
 
 # Formato com a marca usa_hobbie (para o cache saber quais salvar com hobbie).

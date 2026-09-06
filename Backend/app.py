@@ -53,7 +53,6 @@ MATERIAS = {
     "BIO":  "Biologia",
     "FIS":  "Física",
     "QUI":  "Química",
-    "ING":  "Inglês",
     "FIL":  "Filosofia",
     "SOC":  "Sociologia",
 }
@@ -61,7 +60,7 @@ MATERIAS = {
 # Área do ENEM p/ o banco de questões reais (o dataset rotula por ÁREA, não matéria fina).
 # O filtro por área estreita o pool; o embedding faz o casamento fino do tema.
 _AREA_ENEM = {
-    "ING": "ING", "PORT": "PORT",
+    "PORT": "PORT",
     "HIS": "HUMANAS", "GEO": "HUMANAS", "FIL": "HUMANAS", "SOC": "HUMANAS",
     "BIO": "NATUREZA", "FIS": "NATUREZA", "QUI": "NATUREZA",
     "MAT": "MAT",
@@ -82,7 +81,6 @@ TEMAS_FIXOS = {
              "Teoria Crítica", "Existencialismo"],
     "SOC":  ["Cultura e Sociedade", "Movimentos Sociais", "Estado e Cidadania",
              "Trabalho e Sociedade", "Sociologia Brasileira", "Indústria Cultural"],
-    "ING":  ["Interpretação de Texto", "Vocabulário em Contexto", "Ideia Central"],
     "MAT":  ["Funções", "Progressões", "Análise Combinatória", "Geometria Plana",
              "Geometria Espacial", "Estatística", "Probabilidade", "Porcentagem"],
     "FIS":  ["Leis de Newton", "Trabalho e Energia", "Cinemática", "Eletricidade",

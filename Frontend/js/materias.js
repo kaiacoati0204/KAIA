@@ -78,7 +78,8 @@ function logEvent(type, payload) {
 let intervencaoInterval   = null;
 let intervencaoAtual      = null;   // tipo em exibição (evita duplicar)
 let intervencaoMostradaEm = 0;      // p/ calcular tempo_ate_aceitar_s
-let _dockShowTimer        = null;   // atraso pra dock de teste reaparecer (gravação limpa)
+let _dockShowTimer        = null;   // atraso pra dock de teste reaparecer
+const DOCK_REAPARECE_MS   = 1500;   // barra volta logo após disparar (teste rápido)
 
 // Sorteia uma variação (usado nas frases das intervenções — evita repetir sempre
 // a mesma, combatendo a habituação).
@@ -391,8 +392,8 @@ function mostrarIntervencao(intv) {
 // o polling travado enquanto o strip espera (aluno pode simplesmente ignorar).
 function liberarPolling() {
     intervencaoAtual = null;
-    const dk = $('kaia-dock-teste');   // dock reaparece ~3s depois (dá tempo de cortar a gravação)
-    if (dk) { clearTimeout(_dockShowTimer); _dockShowTimer = setTimeout(() => { dk.style.display = ''; }, 3000); }
+    const dk = $('kaia-dock-teste');   // dock volta logo (teste rápido)
+    if (dk) { clearTimeout(_dockShowTimer); _dockShowTimer = setTimeout(() => { dk.style.display = ''; }, DOCK_REAPARECE_MS); }
 }
 
 function esconderIntervencao() {
@@ -556,7 +557,6 @@ function _montarDockTeste() {
     const dock = document.createElement('div');
     dock.id = 'kaia-dock-teste';
     dock.innerHTML = '<span class="dk-rot">TESTE</span>';
-    let _dockDelay = null;
     GATILHO_TESTE_ORDEM.forEach(tipo => {
         const b = document.createElement('button');
         b.type = 'button';
@@ -565,35 +565,26 @@ function _montarDockTeste() {
         b.innerHTML = ICONES_INTERVENCAO[tipo] || '';
         b.addEventListener('click', () => {
             esconderIntervencao();                                  // fecha o que estiver aberto
-            clearTimeout(_dockShowTimer);                           // cancela reaparecimento pendente (vamos disparar outra)
-            const dk = $('kaia-dock-teste'); if (dk) dk.style.display = 'none';   // some já (tela limpa nos 5s)
-            clearTimeout(_dockDelay);
-            _dockDelay = setTimeout(() => dispararIntervencaoTeste(tipo), 10000);  // aparece 10s após o clique
+            dispararIntervencaoTeste(tipo);                         // dispara na HORA (sem espera de gravação)
+            clearTimeout(_dockShowTimer);                           // e traz a barra de volta logo, pra testar a próxima
+            _dockShowTimer = setTimeout(() => { const dk = $('kaia-dock-teste'); if (dk) dk.style.display = ''; }, DOCK_REAPARECE_MS);
         });
         dock.appendChild(b);
     });
     document.body.appendChild(dock);
+    console.log('[KaIA] Dock de teste ligada — clique um ícone pra disparar. As intervenções '
+              + 'automáticas vêm só do modelo. kaiaGatilhoTeste(false) some com a barra.');
 }
 
 function iniciarGatilhoTeste() {
     if (!GATILHO_TESTE) return;
-    _montarDockTeste();
-    clearInterval(_gtInterval);
-    console.log('[KaIA] GATILHO DE TESTE ligado — %ds parado dispara a próxima das 7. '
-              + 'No console: kaiaTestar() lista, kaiaTestar("checkpoint") dispara uma, '
-              + 'kaiaGatilhoTeste(false) desliga.', GATILHO_TESTE_IDLE_S);
-    _gtInterval = setInterval(() => {
-        if (!GATILHO_TESTE) return;
-        if (!isMissionActive || pausaAtiva) return;   // não invade pausa/descanso
-        if (intervencaoAtual) return;                 // já tem uma na tela
-        if (idleTime < GATILHO_TESTE_IDLE_S) return;
-        if (performance.now() - _gtUltimoEm < GATILHO_TESTE_ESPERA_MS) return;
-        _gtIdx = (_gtIdx + 1) % GATILHO_TESTE_ORDEM.length;
-        dispararIntervencaoTeste(GATILHO_TESTE_ORDEM[_gtIdx]);
-    }, 1000);
+    _montarDockTeste();   // só a BARRA manual (loga 1x lá dentro); o disparo AUTOMÁTICO foi removido
 }
 
-function pararGatilhoTeste() { clearInterval(_gtInterval); _gtInterval = null; }
+function pararGatilhoTeste() {
+    clearInterval(_gtInterval); _gtInterval = null;
+    const dk = $('kaia-dock-teste'); if (dk) dk.remove();
+}
 
 // Dispara UMA intervenção pelo caminho normal (mostrarIntervencao), só que
 // marcada como teste. Reancoragem e checkpoint precisam da questão na tela.
@@ -1438,6 +1429,14 @@ let loteBloqueadoAte = 0;      // enquanto performance.now() < isto, não re-cha
 let hobbiesSessao    = [];     // 2 hobbies sorteados por sessão (variedade sem trocar de tema a cada questão)
 const LOTE_COOLDOWN_MS  = 120000;   // após uma falha (ex.: cota estourada), 2 min sem re-tentar
 
+// Debug opcional da dificuldade (só no console do dev): kaiaDebug(true) liga e persiste.
+// Loga a distribuição sorteada, o nível de cada questão servida e a troca de nível.
+function _dbg(...a) { if (localStorage.getItem('kaia_debug') === '1') console.log('[dificuldade]', ...a); }
+window.kaiaDebug = (on = true) => {
+    localStorage.setItem('kaia_debug', on ? '1' : '0');
+    console.log('[KaIA] debug da dificuldade', on ? 'LIGADO — faça uma rodada' : 'desligado');
+};
+
 // Sorteia até 2 hobbies do aluno pra sessão inteira — mistura os temas sem virar
 // "tudo sobre a mesma coisa". Zera/re-sorteia a cada sessão.
 function sortearHobbiesSessao() {
@@ -1485,60 +1484,66 @@ function embaralhar(arr) {
 // Busca UM buffer no backend e devolve as questões válidas (ou [] em falha silenciosa).
 // Envia os 2 hobbies da sessão; o backend faz rodízio deles por faixa.
 async function buscarBufferQuestoes(subject, tema) {
+    const dist = sortearDistribuicao(nivelDificuldade);
+    _dbg(`buffer pedido: centro ${nivelDificuldade}, distribuição`, dist);
     const data = await postJSON('/gerar-questao', {
         materia: subject, tema, user_id: userId,
         hobbies: hobbiesSessao.length ? hobbiesSessao : lerHobbies(),
-        distribuicao: sortearDistribuicao(nivelDificuldade),
+        distribuicao: dist,
     });
     const lote = Array.isArray(data?.questoes) ? data.questoes : [];
-    return embaralhar(lote.filter(q => q && Array.isArray(q.opts)));   // mistura os níveis da rodada
+    const validas = embaralhar(lote.filter(q => q && Array.isArray(q.opts)));   // mistura os níveis
+    _dbg(`buffer recebido: ${validas.length} questões, níveis`, validas.map(q => q.nivel));
+    return validas;
 }
 
 async function obterProximaQuestao(subject, tema) {
     const chave = `${subject}::${tema}`;
     if (filaChave !== chave) { devolverFila(); filaChave = chave; }   // tema novo → devolve o buffer antigo
     if (!filaQuestoes.length) {
-        // Fila vazia (início da sessão / o prefetch não deu conta) → busca BLOQUEANTE.
+        // Fronteira: espera a fila encher (compartilha o preenchimento do prefetch, se
+        // estiver em curso) → nada carrega no meio, e nunca busca duplicado.
         if (performance.now() < loteBloqueadoAte) return questaoFallback(subject, tema);
-        try {
-            const novas = await buscarBufferQuestoes(subject, tema);
-            if (!novas.length) throw new Error('buffer vazio');
-            filaQuestoes = novas;
-            loteBloqueadoAte = 0;   // sucesso limpa o cooldown
-        } catch (e) {
-            console.warn('[KaIA] /gerar-questao (buffer) indisponível, usando questão local:', e);
-            loteBloqueadoAte = performance.now() + LOTE_COOLDOWN_MS;
-            return questaoFallback(subject, tema);
-        }
+        await garantirFila(subject, tema);
+        if (!filaQuestoes.length) return questaoFallback(subject, tema);
     }
-    return filaQuestoes.shift() || questaoFallback(subject, tema);   // mistura já embaralhada -> FIFO
+    const q = filaQuestoes.shift() || questaoFallback(subject, tema);   // mistura já embaralhada -> FIFO
+    _dbg('questão servida: nível', q && q.nivel, '| Seu nível (centro):', nivelDificuldade);
+    return q;
 }
 
-// Reabastece a fila em BACKGROUND quando ela fica baixa — sem loader, pra o
-// "carregando" nunca aparecer no meio da rodada. Blindado contra chamadas concorrentes.
-const LIMIAR_REABASTECER = 3;
-let reabastecendoFila = false;
-function talvezReabastecerFila(subject, tema, forcar = false) {
-    if (reabastecendoFila || filaChave !== `${subject}::${tema}`) return;
-    if (performance.now() < loteBloqueadoAte) return;
-    if (!forcar) {
-        // Durante a rodada: só reabastece se a fila NÃO dá pra fechar as META questões
-        // (rede de segurança p/ buffer curto). A próxima rodada é adiantada no FIM (forçado).
-        if (filaQuestoes.length > LIMIAR_REABASTECER) return;
-        if (questoesNaRodada + filaQuestoes.length >= META_QUESTOES) return;
-    } else if (filaQuestoes.length >= META_QUESTOES) {
-        return;   // já há uma rodada cheia adiantada
-    }
-    reabastecendoFila = true;
-    buscarBufferQuestoes(subject, tema)
-        .then(novas => {
-            if (novas.length && filaChave === `${subject}::${tema}`) {
-                filaQuestoes.push(...novas);   // só aproveita se ainda é o mesmo tema
-                loteBloqueadoAte = 0;
+// Enche a fila até META (loop) — UMA promessa compartilhada: se já está enchendo,
+// todos aguardam a MESMA (nunca busca em paralelo/duplicado). obterProximaQuestao
+// aguarda; o prefetch de fim de rodada dispara em background.
+let _fillPromise = null;
+function garantirFila(subject, tema) {
+    if (_fillPromise) return _fillPromise;                          // já enchendo -> mesma promessa
+    if (performance.now() < loteBloqueadoAte) return Promise.resolve();
+    _fillPromise = (async () => {
+        try {
+            for (let i = 0; i < 3 && filaQuestoes.length < META_QUESTOES; i++) {
+                if (filaChave !== `${subject}::${tema}`) break;    // trocou de tema
+                const novas = await buscarBufferQuestoes(subject, tema);
+                if (!novas.length) break;
+                if (filaChave === `${subject}::${tema}`) filaQuestoes.push(...novas);
             }
-        })
-        .catch(e => console.warn('[KaIA] reabastecimento em background falhou:', e))
-        .finally(() => { reabastecendoFila = false; });
+            loteBloqueadoAte = 0;
+        } catch (e) {
+            console.warn('[KaIA] preenchimento da fila falhou:', e);
+            loteBloqueadoAte = performance.now() + LOTE_COOLDOWN_MS;
+        } finally { _fillPromise = null; }
+    })();
+    return _fillPromise;
+}
+
+// Decide SE vale encher agora (fim de rodada = força a próxima; durante a rodada =
+// só se o buffer veio curto) e delega pro garantirFila (que nunca duplica).
+function talvezReabastecerFila(subject, tema, forcar = false) {
+    if (filaChave !== `${subject}::${tema}`) return;
+    if (filaQuestoes.length >= META_QUESTOES) return;                        // já cheia
+    // +1 conta a questão em tela (já saiu da fila, ainda não foi respondida).
+    if (!forcar && questoesNaRodada + 1 + filaQuestoes.length >= META_QUESTOES) return;
+    garantirFila(subject, tema);   // background; compartilha a promessa em curso
 }
 
 // Devolve ao pool as questões do lote que NÃO foram usadas (mudou de nível/tema
@@ -1643,6 +1648,7 @@ function fecharNivelDaRodada() {
     const antigo = nivelDificuldade;
     if (acertosNaRodada >= 7 && nivelDificuldade < NIVEL_MAX) nivelDificuldade++;
     else if (acertosNaRodada <= 4 && nivelDificuldade > NIVEL_MIN) nivelDificuldade--;
+    _dbg(`fim da rodada: ${acertosNaRodada}/${META_QUESTOES} acertos -> centro ${antigo}${nivelDificuldade !== antigo ? '→' + nivelDificuldade : ' (mantém)'}`);
     acertosNaRodada = 0;
     atualizarNivel();
     return nivelDificuldade !== antigo;

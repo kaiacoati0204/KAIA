@@ -763,17 +763,24 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
         if len(entregues) < n:
             ja = [q["questao_id"] for q in entregues if q.get("questao_id")]
             entregues += await _buscar_cache(conn, user_id, materia, tema, nivel, None, n - len(entregues), ja)
-    # 4) ainda falta -> Gemini (few-shot) + salva no cache
+    # 4) ainda falta -> Gemini (few-shot) + salva no cache. O Gemini às vezes devolve
+    #    MENOS que o pedido (faixa concentrada, tema estreito) -> re-tenta até completar
+    #    (com anti-repetição a cada volta) pra não devolver o buffer curto.
     if n - len(entregues) > 0:
-        evitar = await _enunciados_existentes(conn, materia, tema, nivel)
-        # few-shot dinâmico (pgvector) SE ligado, com fallback pros exemplos fixos
+        # few-shot dinâmico (pgvector) SE ligado, com fallback pros exemplos fixos (1x)
         exemplos = None
         if FEWSHOT_DINAMICO:
             exemplos = await _exemplos_similares(conn, materia, tema)
         exemplos = exemplos or _exemplos_few_shot(materia)
-        novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel,
-                                       exemplos=exemplos, evitar=evitar)
-        entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
+        for _ in range(3):
+            if n - len(entregues) <= 0:
+                break
+            evitar = await _enunciados_existentes(conn, materia, tema, nivel)
+            novas = await _gerar_no_gemini(n - len(entregues), materia, nome, tema, hobbie, nivel,
+                                           exemplos=exemplos, evitar=evitar)
+            if not novas:
+                break   # Gemini vazio/erro -> não insiste (evita loop e gasto de cota)
+            entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
     # 5) marca vistas + etiqueta o nível
     await _marcar_vistas(conn, user_id, entregues)
     for q in entregues:

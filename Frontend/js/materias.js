@@ -28,6 +28,18 @@ let lastMouseSampleAt = 0;    // throttle da amostragem do mouse
 let tempoOciosoMs = 0;  // tempo ocioso COM a aba focada, na questão (proxy do estado interno)
 let mexeuDesdeUltimoTick = false;  // houve mousemove desde o último tick do idle?
 let tempoDwellMs = 0;   // tempo com o cursor sobre as alternativas SEM responder (hesitação)
+// Scroll: sozinho NÃO é comparável entre alunos (tela grande não rola). Por isso vai
+// junto o contexto que normaliza — quanto DAVA pra rolar e que fração foi alcançada.
+// Sem `scroll_rolavel_px`, "não rolou" é ambíguo: tela grande, ou não leu o fim?
+let scrollEventos = 0;
+let scrollAlcanceFrac = 0;
+let scrollRolavelPx = 0;
+let ultimoScrollEm = 0;
+// Caderno: o listener de `input` já zerava a ociosidade, mas não registrava NADA —
+// dava pra saber que escreveu, não quanto nem quando.
+let escritaEventos = 0;
+let tempoEscrevendoMs = 0;
+let escreveuDesdeUltimoTick = false;
 let dwellEntrouEm = 0;  // performance.now() de quando o cursor entrou nas alternativas (0 = fora)
 let currentQuestion = null;
 let currentSubject  = null;   // matéria/tema da questão atual — para "Próxima questão"
@@ -70,6 +82,14 @@ function logEvent(type, payload) {
     const event = { session_id: sessionId, ts: new Date().toISOString(), event_type: type, payload };
     console.log('[KaIA Event]', event);
     postJSON('/events', event, true).catch(() => {});
+}
+
+// Maior extensão rolável entre os candidatos — qual container rola muda com a tela.
+function _medirRolavel() {
+    const cands = [document.scrollingElement, document.querySelector('.main-content'), $('quiz-view')];
+    let m = 0;
+    for (const el of cands) if (el) m = Math.max(m, el.scrollHeight - el.clientHeight);
+    return m;
 }
 
 // ============================================================
@@ -1290,7 +1310,9 @@ function iniciarIdleMonitor() {
         // A tela escurecida ainda conta (segue parado); dispensá-la com o mouse só interrompe a
         // contagem daqui pra frente, não apaga o acumulado.
         if (!document.hidden && !mexeuDesdeUltimoTick) tempoOciosoMs += 1000;
+        if (escreveuDesdeUltimoTick) tempoEscrevendoMs += 1000;
         mexeuDesdeUltimoTick = false;
+        escreveuDesdeUltimoTick = false;
         const timer = $('timer');
         if (timer) timer.innerText = idleTime;
         // O overlay de inatividade NÃO sobe enquanto há intervenção na tela.
@@ -1330,6 +1352,8 @@ function registrarSensores() {
         if (!isMissionActive) return;      // o idle-monitor só corre nesse estado
         idleTime = 0;                      // não escurece por causa da escrita
         mexeuDesdeUltimoTick = true;       // e a escrita não vira tempo ocioso (dado limpo)
+        escritaEventos++;
+        escreveuDesdeUltimoTick = true;
         setEstado('ESTUDANDO');            // baixa o overlay se já tinha subido
     });
 
@@ -1369,8 +1393,21 @@ function registrarSensores() {
         mostrarAvisoSaida();
     });
 
-    // (v2: scroll removido — múltipla escolha não rola, feature velocidade_scroll saiu)
-    // (v2: keystroke_pause removido — quase não há digitação, feature pausas_digitacao saiu)
+    // (v2 dizia: scroll removido porque múltipla escolha não rola. A premissa mudou —
+    //  enunciado de Humanas com texto-base NÃO cabe na tela, e rolar é a evidência mais
+    //  direta de leitura que existe. Voltou como CAPTURA; virar feature é decisão futura.)
+    // `capture: true` porque scroll não borbulha — pega o container que realmente rolou.
+    document.addEventListener('scroll', (e) => {
+        if (!isMissionActive || questionShownAt === 0) return;
+        const agora = performance.now();
+        if (agora - ultimoScrollEm < 100) return;          // throttle, igual ao do mouse
+        ultimoScrollEm = agora;
+        const el = (e.target === document || e.target === window) ? document.scrollingElement : e.target;
+        if (!el || !el.scrollHeight) return;
+        if (el.scrollHeight - el.clientHeight < 40) return;  // não rolava: evento irrelevante
+        scrollEventos++;
+        scrollAlcanceFrac = Math.max(scrollAlcanceFrac, (el.scrollTop + el.clientHeight) / el.scrollHeight);
+    }, true);
 
     // --- cliques fora da área da questão ---
     // Overlays da própria KaIA (intervenção, probe, avisos — id^="kaia-") contam
@@ -1739,6 +1776,12 @@ async function carregarQuestao(subject, tema) {
     tempoOciosoMs = 0;
     tempoDwellMs = 0;
     dwellEntrouEm = 0;
+    scrollEventos = 0;
+    scrollAlcanceFrac = 0;
+    escritaEventos = 0;
+    tempoEscrevendoMs = 0;
+    // medido DEPOIS do layout: é o que torna "não rolou" interpretável
+    requestAnimationFrame(() => { scrollRolavelPx = _medirRolavel(); });
     iniciarIdleMonitor();
     iniciarPollIntervencao();
     iniciarGatilhoTeste();   // (gatilho de teste) PROVISÓRIO — REMOVER esta linha
@@ -1851,6 +1894,13 @@ function checkAnswer(idx, btn) {
             mouse_track: mouseSamples,             // trajeto [dt_ms, x, y] → features de mouse no Incr. B
             tempo_ocioso_s: Math.round(tempoOciosoMs / 1000),   // ocioso c/ aba focada
             tempo_dwell_sem_responder_s: Math.round(tempoDwellMs / 100) / 10,   // hesitação sobre as alternativas
+            // Só CAPTURA (nenhuma feature usa ainda). Os três de scroll andam juntos:
+            // sem o rolavel_px os outros dois não são comparáveis entre telas.
+            scroll_eventos: scrollEventos,
+            scroll_alcance_frac: Math.round(scrollAlcanceFrac * 100) / 100,
+            scroll_rolavel_px: Math.round(scrollRolavelPx),
+            caderno_eventos: escritaEventos,
+            tempo_escrevendo_s: Math.round(tempoEscrevendoMs / 1000),
             acertou,
             opcao_escolhida: idx,
             opcao_correta: currentQuestion.ans,

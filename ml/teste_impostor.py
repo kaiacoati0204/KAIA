@@ -23,7 +23,8 @@ Uso (na raiz do projeto):
     python ml/teste_impostor.py --modelo gemini-3.1-flash-lite
 
 Saída em ml/artifacts/impostor/:
-    teste_<materia>.html   — uma página por professor (só enunciado + alternativas)
+    teste_<materia>.txt    — o que circula: manda por mensagem, imprime, responde na hora
+    teste_<materia>.html   — mesma coisa em página (soma as respostas sozinho)
     gabarito_<ts>.json     — quem é quem. NÃO abra antes de coletar as respostas.
 """
 import os
@@ -33,6 +34,7 @@ import random
 import asyncio
 import argparse
 import html as _html
+import textwrap
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -106,6 +108,35 @@ async def reais(conn, materia, area, n):
                     "alternativas": json.loads(alts) if isinstance(alts, str) else alts,
                     "origem": "real", "materia": r["materia"], "tema": None, "nivel": r["nivel"]})
     return out
+
+
+# ==== TEXTO ====
+# Formato principal: e o que se manda por WhatsApp, imprime e o professor responde
+# na hora. O HTML e conveniencia (soma as respostas sozinho); o .txt e o que circula.
+def montar_texto(nome, itens):
+    larg = 78
+    fora = [f"AVALIACAO DE QUESTOES — {nome.upper()}", ""]
+    fora += textwrap.wrap(
+        "Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais "
+        "de vestibular/ENEM, outras foram escritas por um sistema automatico. Nao "
+        "dizemos quantas sao de cada.", larg)
+    fora += ["", "Para cada uma, responda duas coisas:",
+             "  1. E de PROVA ou GERADA?",
+             "  2. O que te fez decidir? (uma linha basta)", ""]
+    fora += textwrap.wrap(
+        "Nao precisa resolver a questao — o que interessa e se ela parece questao de "
+        "prova.", larg)
+    fora += ["", "-" * larg, ""]
+    for i, q in enumerate(itens, 1):
+        fora += [f"QUESTAO {i}", ""]
+        fora += textwrap.wrap(q["enunciado"], larg)
+        fora += [""]
+        for j, a in enumerate(q["alternativas"] or []):
+            fora += textwrap.wrap(f"{chr(65 + j)}) {a}", larg, subsequent_indent="   ")
+        fora += ["", "   ( ) de PROVA      ( ) GERADA",
+                 "   Por que: _______________________________________________",
+                 "", "-" * larg, ""]
+    return "\n".join(fora)
 
 
 # ==== PÁGINA ====
@@ -219,8 +250,10 @@ async def main(n, modelo):
             itens = g + r
             rng.shuffle(itens)
 
-            arq = SAIDA / f"teste_{materia.lower()}.html"
-            arq.write_text(montar_html(f"Avaliação de questões — {nome}", itens), encoding="utf-8")
+            arq = SAIDA / f"teste_{materia.lower()}.txt"
+            arq.write_text(montar_texto(nome, itens), encoding="utf-8")
+            (SAIDA / f"teste_{materia.lower()}.html").write_text(
+                montar_html(f"Avaliação de questões — {nome}", itens), encoding="utf-8")
             gabarito["blocos"][materia] = [
                 {"n": i, "origem": q["origem"], "tema": q["tema"], "nivel": q["nivel"]}
                 for i, q in enumerate(itens, 1)]

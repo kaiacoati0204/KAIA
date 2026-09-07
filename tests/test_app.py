@@ -591,8 +591,13 @@ def test_leitura_confiavel():
     assert app_mod.leitura_confiavel(feats) is False       # internas todas zeradas
     feats["duracao_sessao_min"] = 20.0                     # externa não conta
     assert app_mod.leitura_confiavel(feats) is False
+    # sem baseline, off-task externo ainda se lê: as absolutas não dependem dele
+    assert app_mod.leitura_confiavel(feats, "muito_distraido") is True
+    assert app_mod.leitura_confiavel(feats, "distraido") is False
+    assert app_mod.leitura_confiavel(feats, "engajado") is False
     feats["tempo_resposta_ms"] = 0.4                       # uma interna basta
     assert app_mod.leitura_confiavel(feats) is True
+    assert app_mod.leitura_confiavel(feats, "distraido") is True
 
 
 async def test_rodar_intervencao_engajado(monkeypatch):

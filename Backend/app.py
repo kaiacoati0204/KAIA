@@ -1614,13 +1614,20 @@ def vetor_para_modelo(feats):
     return [float(feats[nome]) for nome in FEATURE_ORDER]
 
 
-def leitura_confiavel(feats):
-    """False quando as 10 internas estão TODAS zeradas — assinatura de cold-start
-    (< MIN_SESSOES_BASELINE) ou sessão sem resposta. Zero ali não significa "o aluno
-    está na média": significa que não há com o que comparar. E como o vetor todo em
-    0σ é o retrato do aluno concentrado, o modelo responde engajado com confiança
-    alta sobre informação nenhuma — o único caso em que ele erra em silêncio."""
-    return any(float(feats.get(k) or 0.0) != 0.0 for k in INTERNAS_RELATIVAS)
+def leitura_confiavel(feats, estado=None):
+    """As 10 internas TODAS zeradas é a assinatura de cold-start (< MIN_SESSOES_BASELINE)
+    ou sessão sem resposta: zero ali não é "o aluno está na média", é "não há com o que
+    comparar". Como o vetor todo em 0σ é o retrato do aluno concentrado, o modelo
+    responde engajado com confiança alta sobre informação nenhuma.
+
+    Mas a confiança depende de QUAL estado foi afirmado. `muito_distraido` se apoia nas
+    11 features ABSOLUTAS (trocar de aba, sumir da tela), que valem sem referência
+    pessoal nenhuma — medido: 0,894 de acerto com ou sem baseline. Já engajado e
+    distraído dependem das internas (o distraído cai para 0,379 sem elas). Sem `estado`
+    responde só se há baseline — é o que o probe quer saber sobre as features."""
+    if any(float(feats.get(k) or 0.0) != 0.0 for k in INTERNAS_RELATIVAS):
+        return True
+    return estado == "muito_distraido"
 
 
 async def predizer_estado(modelo, scaler, conn, session_id):
@@ -1639,7 +1646,7 @@ async def predizer_estado(modelo, scaler, conn, session_id):
     score = float(proba[list(modelo.classes_).index(pred)])
     estado = ESTADOS[pred] if 0 <= pred < len(ESTADOS) else str(pred)
     return {"estado": estado, "score": score, "feats": feats,
-            "confiavel": leitura_confiavel(feats)}
+            "confiavel": leitura_confiavel(feats, estado)}
 
 
 async def _dono_sessao(conn, session_id):

@@ -529,7 +529,9 @@ const GATILHO_TESTE = false;
 // só aparece pra quem está testando, sem tocar no GATILHO_TESTE=false de produção.
 function _barraTesteLigada() {
     try {
-        const email = (((typeof lerPerfil === 'function' && lerPerfil()) || {}).email || '').toLowerCase();
+        const p = (typeof lerPerfil === 'function' && lerPerfil()) || {};
+        const u = (typeof lerUsuario === 'function' && lerUsuario()) || {};
+        const email = (p.email || u.email || '').toLowerCase();
         if (email.endsWith('@teste.kaia')) return true;
         if (localStorage.getItem('kaia_teste_bar') === '1') return true;
     } catch (e) { /* perfil/localStorage indisponível */ }

@@ -69,6 +69,18 @@ CONTAGEM = {  # médias de contagens (Poisson) por estado
 # fica cego no comeco da sessao, quando tudo ainda esta baixo por definicao.
 DUR_REF = 20.0
 
+# O baseline do serving (_baseline_aluno) e a media das sessoes PASSADAS do aluno,
+# SEM filtrar estado. Logo o zero do sigma nao e "o eu engajado" — e "o eu medio".
+# O gerador dizia outra coisa (baseline so do engajado), e um sigma significava
+# coisas diferentes nos dois lados. Mistura tipica de um historico de estudo:
+MIX_BASELINE = {"engajado": 0.60, "distraido": 0.30, "muito_distraido": 0.10}
+
+# Desloca DESVIO para o centro da mistura: derivado, nao escolhido a mao.
+for _nome, _m in DESVIO.items():
+    _centro = sum(_m[_e] * _p for _e, _p in MIX_BASELINE.items())
+    for _e in list(_m):
+        _m[_e] = round(_m[_e] - _centro, 3)
+
 # ---- mouse ----
 def gerar_track(erratic, n):
     if n < 2:
@@ -85,9 +97,26 @@ def gerar_track(erratic, n):
         track.append([t, round(x), round(y)])
     return track
 
-def baseline_mouse(erratic_base):
-    """Baseline de mouse do aluno (features do estado engajado dele)."""
-    fs = [features_mouse(gerar_track(erratic_base, random.randint(30, 60))) for _ in range(8)]
+def _perfil_mouse(aluno, ef, z=0.8, imovel=False):
+    """(erratic, n) do trajeto BRUTO por estado — usado no baseline e na sessao."""
+    if ef == "muito_distraido":
+        return aluno["erratic_base"], random.randint(3, 10)
+    if imovel:
+        return aluno["erratic_base"], random.randint(4, 14)
+    if ef == "distraido":
+        return aluno["erratic_base"] + 0.32 * z, random.randint(30, 70)
+    return aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
+
+
+def baseline_mouse(aluno):
+    """Baseline de mouse do aluno: media/desvio sobre sessoes passadas com estados
+    MISTURADOS — o que o serving calcula. So-engajado inflaria os desvios."""
+    fs = []
+    for _ in range(8):
+        ef = random.choices(list(MIX_BASELINE), weights=list(MIX_BASELINE.values()))[0]
+        imovel = ef != "muito_distraido" and random.random() < 0.15
+        er, n = _perfil_mouse(aluno, ef, imovel=imovel)
+        fs.append(features_mouse(gerar_track(max(0.05, er), n)))
     base = {}
     for k in MOUSE_KEYS:
         vals = [f[k] for f in fs]
@@ -159,21 +188,13 @@ def gerar_sessao(estado, aluno, base_mouse):
     # LEITURA DENSA: parte das sessoes presentes fica quase imovel (enunciado longo,
     # hiperfoco). Sem esse contraexemplo o modelo aprende "mouse parado = ausente" e
     # confunde quem le concentrado com quem saiu — as externas e que separam os dois.
-    imovel = False
     if ef == "engajado":
-        imovel = random.random() < 0.18
-        if imovel:
-            erratic, n = aluno["erratic_base"], random.randint(4, 14)
-        else:
-            erratic, n = aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
+        imovel = random.random() < 0.18          # leitura densa de enunciado longo
     elif ef == "distraido":
         imovel = not chute and random.random() < 0.12   # mente vagando de olhar parado
-        if imovel:
-            erratic, n = aluno["erratic_base"], random.randint(4, 14)
-        else:
-            erratic, n = aluno["erratic_base"] + 0.32 * z, random.randint(30, 70)
-    else:                                        # muito_distraído: pouca mexida
-        erratic, n = aluno["erratic_base"], random.randint(3, 10)
+    else:
+        imovel = False
+    erratic, n = _perfil_mouse(aluno, ef, z, imovel)
     mf = features_mouse(gerar_track(max(0.05, erratic), n))
     for k in MOUSE_KEYS:
         mu, sd = base_mouse[k]
@@ -233,7 +254,7 @@ N_ALUNOS, POR_ESTADO = 40, 220
 
 def construir_base(n_alunos=N_ALUNOS, por_estado=POR_ESTADO):
     """Base sintética v2 -> (X DataFrame nomeado, y array, grupos por aluno)."""
-    alunos = [dict(a, base_mouse=baseline_mouse(a["erratic_base"]))
+    alunos = [dict(a, base_mouse=baseline_mouse(a))
               for a in (gerar_aluno() for _ in range(n_alunos))]
     X, y, grupos = [], [], []
     for estado in ESTADOS:

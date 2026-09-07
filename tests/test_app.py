@@ -573,9 +573,31 @@ async def test_rodar_intervencao_sem_thompson():
     await app_mod.rodar_intervencao(fake_app, "sid")   # retorna cedo, sem erro
 
 
+async def test_rodar_intervencao_sem_baseline(monkeypatch):
+    """Cold-start / sessão sem resposta: não intervém e não fecha reward."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": False}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn()
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert conn.executed == []
+
+
+def test_leitura_confiavel():
+    feats = {n: 0.0 for n in app_mod.FEATURE_ORDER}
+    assert app_mod.leitura_confiavel(feats) is False       # internas todas zeradas
+    feats["duracao_sessao_min"] = 20.0                     # externa não conta
+    assert app_mod.leitura_confiavel(feats) is False
+    feats["tempo_resposta_ms"] = 0.4                       # uma interna basta
+    assert app_mod.leitura_confiavel(feats) is True
+
+
 async def test_rodar_intervencao_engajado(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "engajado", "score": 0.9, "feats": {"sessoes_no_dia": 1}}
+        return {"estado": "engajado", "score": 0.9, "feats": {"sessoes_no_dia": 1}, "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn()
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
@@ -591,7 +613,7 @@ def _feats_ok():                                        # passa o warm-up (sess�
 
 async def test_rodar_intervencao_dispara(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}   # esta janela vira a 2ª (passa o debounce)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
@@ -605,7 +627,7 @@ async def test_rodar_intervencao_dispara(monkeypatch):
 
 async def test_rodar_intervencao_cooldown(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # já passa o debounce
     agora = datetime.now(timezone.utc)
@@ -620,7 +642,7 @@ async def test_rodar_intervencao_cooldown(monkeypatch):
 
 async def test_rodar_intervencao_debounce(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})
@@ -633,7 +655,7 @@ async def test_rodar_intervencao_debounce(monkeypatch):
 
 async def test_rodar_intervencao_score_baixo(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.4, "feats": _feats_ok()}   # < INTERV_SCORE_MIN
+        return {"estado": "distraido", "score": 0.4, "feats": _feats_ok(), "confiavel": True}   # < INTERV_SCORE_MIN
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # debounce já ok -> isola a confiança
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
@@ -647,7 +669,7 @@ async def test_rodar_intervencao_score_baixo(monkeypatch):
 
 async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok()}
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # passa debounce/score
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
@@ -661,7 +683,7 @@ async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
 
 async def test_rodar_intervencao_warmup_cedo(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": {"duracao_sessao_min": 1.0}}  # < 3 min
+        return {"estado": "distraido", "score": 0.9, "feats": {"duracao_sessao_min": 1.0}, "confiavel": True}  # < 3 min
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},

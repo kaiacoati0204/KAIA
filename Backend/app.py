@@ -1218,6 +1218,12 @@ async def rodar_intervencao(app, session_id):
         res = await predizer_estado(modelo, scaler, conn, session_id)
         if res is None:
             return
+        # Sem baseline não há leitura: nem intervir, nem fechar reward (o bandit
+        # aprenderia com uma transição inventada). Zera a streak: o que veio antes
+        # não se compara com o que vier depois.
+        if not res["confiavel"]:
+            _ESTADO_STREAK.pop(str(session_id), None)
+            return
         # Reward implícito: fecha intervenções passadas cuja janela já expirou,
         # comparando o estado de então com o atual. Roda mesmo se agora está engajado
         # (o sucesso é justamente ter virado engajado).
@@ -1608,6 +1614,15 @@ def vetor_para_modelo(feats):
     return [float(feats[nome]) for nome in FEATURE_ORDER]
 
 
+def leitura_confiavel(feats):
+    """False quando as 10 internas estão TODAS zeradas — assinatura de cold-start
+    (< MIN_SESSOES_BASELINE) ou sessão sem resposta. Zero ali não significa "o aluno
+    está na média": significa que não há com o que comparar. E como o vetor todo em
+    0σ é o retrato do aluno concentrado, o modelo responde engajado com confiança
+    alta sobre informação nenhuma — o único caso em que ele erra em silêncio."""
+    return any(float(feats.get(k) or 0.0) != 0.0 for k in INTERNAS_RELATIVAS)
+
+
 async def predizer_estado(modelo, scaler, conn, session_id):
     """Núcleo de predição compartilhado por /diagnose e pelo scheduler.
     Retorna dict {estado, score, feats} ou None se sessão/modelo indisponível."""
@@ -1623,7 +1638,8 @@ async def predizer_estado(modelo, scaler, conn, session_id):
     proba = modelo.predict_proba(Xs)[0]
     score = float(proba[list(modelo.classes_).index(pred)])
     estado = ESTADOS[pred] if 0 <= pred < len(ESTADOS) else str(pred)
-    return {"estado": estado, "score": score, "feats": feats}
+    return {"estado": estado, "score": score, "feats": feats,
+            "confiavel": leitura_confiavel(feats)}
 
 
 async def _dono_sessao(conn, session_id):
@@ -1663,6 +1679,8 @@ async def diagnose(request: Request, session_id: str,
         "session_id": session_id,
         "estado": res["estado"],
         "score": round(res["score"], 4),
+        # false = sem baseline do aluno: leia como "ainda calibrando", não como estado
+        "confiavel": res["confiavel"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -1907,10 +1925,13 @@ async def _capturar_probe(conn, session_id, payload):
             return
         uid = await conn.fetchval(
             "select user_id from sessions where session_id = $1::uuid", session_id)
+        # O rótulo vale sempre (é autorrelato); as FEATURES é que podem estar mudas.
+        # Marca fora do FEATURE_ORDER — treinar_com_probe lê só as chaves do modelo.
+        registro = dict(feats, _leitura_confiavel=leitura_confiavel(feats))
         await conn.execute(
             "insert into probe_labels (session_id, user_id, estado, features) "
             "values ($1::uuid, $2, $3, $4::jsonb)",
-            session_id, uid, estado, json.dumps(feats),
+            session_id, uid, estado, json.dumps(registro),
         )
     except Exception as e:
         print("[KaIA] erro ao capturar probe:", e)
@@ -2349,7 +2370,7 @@ async def _agregar_supabase(conn, modelo, scaler):
     if modelo is not None and scaler is not None:
         for s in sessions:
             res = await predizer_estado(modelo, scaler, conn, str(s["session_id"]))
-            if res:
+            if res and res["confiavel"]:      # sem base a sessão não entra na estatística
                 estado_por_sessao[s["session_id"]] = res["estado"]
     preditas = len(estado_por_sessao)
     cont = defaultdict(int)

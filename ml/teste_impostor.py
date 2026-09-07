@@ -23,8 +23,8 @@ Uso (na raiz do projeto):
     python ml/teste_impostor.py --modelo gemini-3.1-flash-lite
 
 Saída em ml/artifacts/impostor/:
-    teste_<materia>.txt    — um por professor; manda por mensagem, imprime, responde na hora
-    gabarito_<ts>.json     — quem é quem. NÃO abra antes de coletar as respostas.
+    teste_<materia>.txt    — um por professor. O gabarito vai no FIM do próprio arquivo,
+                             atrás de uma linha de corte: apague antes de enviar.
 """
 import os
 import sys
@@ -111,7 +111,7 @@ async def reais(conn, materia, area, n):
 # ==== TEXTO ====
 # Texto puro de proposito: e o que se manda por WhatsApp, imprime e o professor
 # responde na hora, sem precisar baixar arquivo nem abrir navegador.
-def montar_texto(nome, itens):
+def montar_texto(nome, itens, modelo, ts):
     larg = 78
     fora = [f"AVALIACAO DE QUESTOES — {nome.upper()}", ""]
     fora += textwrap.wrap(
@@ -134,6 +134,19 @@ def montar_texto(nome, itens):
         fora += ["", "   ( ) de PROVA      ( ) GERADA",
                  "   Por que: _______________________________________________",
                  "", "-" * larg, ""]
+    # Gabarito no proprio arquivo, atras de uma linha de corte: um arquivo so por
+    # materia e mais facil de administrar do que dois. O risco e obvio — quem
+    # recebe rola e ve. Apague daqui pra baixo antes de mandar.
+    fora += ["", "=" * larg,
+             "CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito",
+             "=" * larg, "",
+             f"modelo: {modelo}   gerado em: {ts}", ""]
+    for i, q in enumerate(itens, 1):
+        extra = (f"  ({q['tema']}, nivel {q['nivel']})" if q["tema"]
+                 else f"  (nivel {q['nivel']})")
+        fora.append(f"  {i:>2}. {q['origem'].upper():<7}{extra}")
+    ger = sum(1 for q in itens if q["origem"] == "gerada")
+    fora += ["", f"  total: {ger} geradas, {len(itens) - ger} reais", ""]
     return "\n".join(fora)
 
 
@@ -151,7 +164,6 @@ async def main(n, modelo):
     SAIDA.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M")
     rng = random.Random(42)
-    gabarito = {"modelo": app.GEMINI_MODEL, "gerado_em": ts, "blocos": {}}
 
     conn = await asyncpg.connect(url, statement_cache_size=0)
     try:
@@ -166,18 +178,10 @@ async def main(n, modelo):
             rng.shuffle(itens)
 
             arq = SAIDA / f"teste_{materia.lower()}.txt"
-            arq.write_text(montar_texto(nome, itens), encoding="utf-8")
-            gabarito["blocos"][materia] = [
-                {"n": i, "origem": q["origem"], "tema": q["tema"], "nivel": q["nivel"]}
-                for i, q in enumerate(itens, 1)]
+            arq.write_text(montar_texto(nome, itens, app.GEMINI_MODEL, ts), encoding="utf-8")
             print(f"  -> {arq.name} ({len(g)} geradas + {len(r)} reais)\n")
     finally:
         await conn.close()
-
-    if gabarito["blocos"]:
-        gab = SAIDA / f"gabarito_{ts}.json"
-        gab.write_text(json.dumps(gabarito, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"gabarito: {gab.name}  (não abra antes de coletar as respostas)")
 
 
 if __name__ == "__main__":

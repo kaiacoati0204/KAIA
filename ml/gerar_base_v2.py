@@ -135,10 +135,24 @@ def gerar_sessao(estado, aluno, base_mouse):
             val += 0.30 * (dif - 3)               # dificuldade -> mais lento que o normal
         f[nome] = round(val, 3)
 
+    # CHUTE RAPIDO: clicar qualquer coisa pra fechar a meta diaria. Responde MUITO
+    # mais rapido que o normal E erra — desengajamento, nao concentracao. A tabela
+    # DESVIO so modela ficar mais LENTO, entao o caso passava por engajado.
+    chute = ef == "distraido" and random.random() < 0.15
+    if chute:
+        f["tempo_resposta_ms"] = round(random.gauss(-1.8, 0.5), 3)
+        f["tempo_iniciacao_resposta_ms"] = round(random.gauss(-1.5, 0.5), 3)
+        f["tempo_dwell_sem_responder_s"] = round(random.gauss(-1.1, 0.4), 3)
+        f["tendencia_desempenho_sessao"] = round(random.gauss(-0.9, 0.4), 3)
+
     # contagens (Poisson), com efeito de dificuldade nos erros
     lam_l = CONTAGEM["contagem_lapsos_rt"][ef] * (0.6 + 0.4 * z) * fator
+    if chute:
+        lam_l *= 0.15                            # nao ha lapso: ele nem para pra pensar
     f["contagem_lapsos_rt"] = int(np.random.poisson(max(0.01, lam_l)))
     lam_e = CONTAGEM["erros_sem_offtask"][ef] * (0.7 + 0.15 * (dif - 3)) * fator
+    if chute:
+        lam_e *= 4.0                             # e o erro e a assinatura do chute
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
 
     # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno.
@@ -153,7 +167,7 @@ def gerar_sessao(estado, aluno, base_mouse):
         else:
             erratic, n = aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
     elif ef == "distraido":
-        imovel = random.random() < 0.12          # mente vagando de olhar parado, sem inquietacao
+        imovel = not chute and random.random() < 0.12   # mente vagando de olhar parado
         if imovel:
             erratic, n = aluno["erratic_base"], random.randint(4, 14)
         else:

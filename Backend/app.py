@@ -1377,6 +1377,7 @@ INTERNAS_RELATIVAS = (
 MIN_SESSOES_BASELINE = 3     # abaixo disso não dá pra personalizar -> desvio 0 (neutro)
 BASELINE_TTL_S = 600         # cache do baseline por aluno (sessões passadas não mudam)
 NIVEL_DIFICULDADE_PADRAO = 2  # fallback se a sessão ainda não tem resposta (CHECK 1..5)
+DURACAO_MAX_MIN = 240         # teto: acima disso é sessão que nunca fechou, não estudo
 
 # Mapeamento do rótulo (int) -> estado, conforme encoding do treino.
 ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
@@ -1528,6 +1529,13 @@ async def montar_features_sessao(conn, session_id):
     if sess is None:
         return None
 
+    # Duração ANTES das externas: ela é o teto físico do tempo fora de foco. Sessão
+    # que nunca fechou (o sendBeacon do /end não manda header) inflaria sem limite,
+    # e o modelo nunca viu nada acima de ~44 min no treino.
+    duracao_min = min(
+        max((datetime.now(timezone.utc) - sess["session_start_ts"]).total_seconds() / 60.0, 1e-6),
+        DURACAO_MAX_MIN)
+
     evs = await _carregar_eventos(conn, session_id)
     tab = [p for et, p in evs if et == "tab_change"]
     cliques = [p for et, p in evs if et == "click_outside"]
@@ -1551,9 +1559,12 @@ async def montar_features_sessao(conn, session_id):
     f["erros_sem_offtask"] = brutos["_erros"] if brutos else 0
 
     # externas absolutas
-    ausencias = [float(p.get("tempo_fora_foco_s") or 0) for p in tab]
+    # Aba suspensa pelo navegador reporta tempo fora maior que a própria sessão —
+    # impossível, e fora da distribuição de treino. Teto na duração.
+    teto_fora_s = duracao_min * 60.0
+    ausencias = [min(float(p.get("tempo_fora_foco_s") or 0), teto_fora_s) for p in tab]
     f["mudancas_aba"] = len(tab)
-    f["tempo_fora_foco_s"] = round(sum(ausencias), 1)
+    f["tempo_fora_foco_s"] = round(min(sum(ausencias), teto_fora_s), 1)
     # max, nao soma: uma saida de 5 min e outra coisa que quinze de 20s
     f["maior_ausencia_unica_s"] = round(max(ausencias), 1) if ausencias else 0.0
     f["cliques_fora_area_estudo"] = len(cliques)
@@ -1580,8 +1591,7 @@ async def montar_features_sessao(conn, session_id):
 
     # contexto absolutas
     f["nivel_dificuldade_atividade"] = round(mean(brutos["_niveis"])) if (brutos and brutos["_niveis"]) else NIVEL_DIFICULDADE_PADRAO
-    agora = datetime.now(timezone.utc)
-    f["duracao_sessao_min"] = round(max((agora - sess["session_start_ts"]).total_seconds() / 60.0, 1e-6), 2)
+    f["duracao_sessao_min"] = round(duracao_min, 2)
     local = datetime.now()
     f["hora_do_dia"] = round(local.hour + local.minute / 60.0, 2)
     f["tempo_estudo_acumulado_dia_min"] = round(float(await conn.fetchval(

@@ -37,6 +37,14 @@ let scrollRolavelPx = 0;
 let ultimoScrollEm = 0;
 let escondidoEm = 0;             // Date.now() de quando a aba sumiu (p/ detectar troca interna)
 let teclasQuestao = 0;           // interações por teclado na questão (aluno que não usa mouse)
+let scrollReversoes = 0;         // trocas de sentido: leitura progressiva x varredura
+let scrollUltimoTop = null;
+let scrollUltimoSentido = 0;
+let ordemHoverOpcoes = [];       // quais alternativas ele considerou, e em que ordem
+let ultimaOpcaoHover = -1;
+let pointerTipo = null;          // mouse | touch | pen — diz se as features de mouse valem
+let limiteLeituraMs = 0;         // tempo ESPERADO de leitura (calculateReadingTime)
+let questaoIniciadaEm = null;    // instante absoluto, p/ cruzar com tab_change na linha do tempo
 const CHAVE_ABA_VISIVEL = 'kaia_aba_visivel_em';
 // Caderno: o listener de `input` já zerava a ociosidade, mas não registrava NADA —
 // dava pra saber que escreveu, não quanto nem quando.
@@ -124,7 +132,7 @@ const _variar = (a) => a[Math.floor(Math.random() * a.length)];
 // Os tempos de PRODUÇÃO abaixo são os que estavam valendo antes desta fase e
 // ainda NÃO foram calibrados de verdade — isso é etapa própria, com dados de
 // uso. Não trate a segunda coluna como número final.
-const TEMPOS_DE_TESTE = true;
+const TEMPOS_DE_TESTE = false;
 const T = (teste, producao) => (TEMPOS_DE_TESTE ? teste : producao);
 
 // ============================================================
@@ -514,7 +522,7 @@ function iniciarPollIntervencao() {
 // caso — o Thompson do backend não recebe recompensa de intervenção falsa. Os
 // eventos que passarem por logEvent durante uma delas vão marcados com
 // origem: 'gatilho_teste' no payload, para dar para filtrar depois.
-const GATILHO_TESTE = true;
+const GATILHO_TESTE = false;
 
 // TODO: ajustar tempo pra produção — não se aplica: isto sai antes da produção.
 const GATILHO_TESTE_IDLE_S   = 9;      // segundos de inatividade até disparar
@@ -1280,11 +1288,18 @@ const definirDataProva = (iso)   => gravarPerfil({ ...lerPerfil(), data_prova: i
 //                  SENSORES DE COMPORTAMENTO
 // ============================================================
 // Escreve o estado da missão na sidebar + no overlay de inatividade.
+let _overlayVisivel = false;
 function setEstado(texto, alertar = false) {
     const overlay = $('overlay');
     const status  = $('system-status');
     if (overlay) overlay.style.opacity = alertar ? '0.95' : '0';
     if (status)  status.innerText = texto;
+    // O overlay é uma interrupção que o aluno VÊ e que muda o comportamento seguinte;
+    // sem registro ele não aparece em lugar nenhum do dado.
+    if (alertar !== _overlayVisivel) {
+        _overlayVisivel = alertar;
+        if (isMissionActive) logEvent('overlay_inatividade', { visivel: alertar, estado: texto });
+    }
 }
 
 // calculateReadingTime foi movida para puros.js (testável); carregada antes.
@@ -1380,6 +1395,20 @@ function registrarSensores() {
     opcoesArea?.addEventListener('mouseleave', () => {
         if (dwellEntrouEm) { tempoDwellMs += performance.now() - dwellEntrouEm; dwellEntrouEm = 0; }
     });
+    // QUAIS alternativas ele considerou e em que ordem — o dwell agregado não distingue
+    // hesitação real (vai e volta entre duas) de varredura automática (passa por todas).
+    opcoesArea?.addEventListener('mouseover', (e) => {
+        if (!isMissionActive || ordemHoverOpcoes.length >= 40) return;
+        const btn = e.target.closest?.('.option-btn');
+        if (!btn) return;
+        const idx = Array.prototype.indexOf.call(opcoesArea.querySelectorAll('.option-btn'), btn);
+        if (idx < 0 || idx === ultimaOpcaoHover) return;
+        ultimaOpcaoHover = idx;
+        ordemHoverOpcoes.push(idx);
+    });
+    // touch/trackpad/mouse: sem isto não dá pra saber se as 4 features de mouse são
+    // interpretáveis para aquele aluno (nem detectar celular).
+    document.addEventListener('pointerdown', (e) => { pointerTipo = e.pointerType || null; }, true);
 
     // --- trocas de aba ---
     document.addEventListener('visibilitychange', () => {
@@ -1431,6 +1460,15 @@ function registrarSensores() {
         if (el.scrollHeight - el.clientHeight < 40) return;  // não rolava: evento irrelevante
         scrollEventos++;
         scrollAlcanceFrac = Math.max(scrollAlcanceFrac, (el.scrollTop + el.clientHeight) / el.scrollHeight);
+        // sentido: descer sempre = leitura progressiva; vai-e-vem = varredura ou releitura
+        if (scrollUltimoTop !== null) {
+            const sentido = Math.sign(el.scrollTop - scrollUltimoTop);
+            if (sentido !== 0) {
+                if (scrollUltimoSentido !== 0 && sentido !== scrollUltimoSentido) scrollReversoes++;
+                scrollUltimoSentido = sentido;
+            }
+        }
+        scrollUltimoTop = el.scrollTop;
     }, true);
 
     // --- cliques fora da área da questão ---
@@ -1759,7 +1797,18 @@ async function iniciarSessaoEstudo(subject, tema) {
     await criarSessao();                        // 1 session_id para toda a série
     await carregarMetaHoje();                   // baseline do dia (contador diário)
     const features = registrarInicioSessao();
-    logEvent('session_start', { materia: subject, tema, features });
+    // Ambiente: px/s de mouse e scroll_rolavel_px dependem da tela. Sem isto nada
+    // disso e comparavel entre alunos — e e o que trava incluir o mouse no
+    // encolhimento por populacao la na frente.
+    logEvent('session_start', { materia: subject, tema, features, ambiente: {
+        viewport_w: window.innerWidth, viewport_h: window.innerHeight,
+        tela_w: screen?.width ?? null, tela_h: screen?.height ?? null,
+        dpr: window.devicePixelRatio || 1,
+        ponteiro_grosso: window.matchMedia?.('(pointer: coarse)').matches ?? null,
+        max_touch_points: navigator.maxTouchPoints ?? null,
+        idioma: navigator.language || null,
+        fuso_min: new Date().getTimezoneOffset(),
+    } });
     // Sessão de ESTADO INDUZIDO (estudo controlado): ?induzido=engajado|distraido|
     // muito_distraido marca o rótulo dado por INSTRUÇÃO. É a única âncora que não
     // depende do aluno saber o que sentiu — serve p/ medir o erro do próprio probe.
@@ -1797,6 +1846,8 @@ async function carregarQuestao(subject, tema) {
     atualizarContador();
 
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
+    limiteLeituraMs = dynamicLimit;      // ja era calculado e descartado: sem ele, "demorou
+    questaoIniciadaEm = new Date().toISOString();   // 90s" nao da pra interpretar
     $('question-display').innerText = currentQuestion.q;
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
@@ -1808,6 +1859,11 @@ async function carregarQuestao(subject, tema) {
     dwellEntrouEm = 0;
     scrollEventos = 0;
     scrollAlcanceFrac = 0;
+    scrollReversoes = 0;
+    scrollUltimoTop = null;
+    scrollUltimoSentido = 0;
+    ordemHoverOpcoes = [];
+    ultimaOpcaoHover = -1;
     teclasQuestao = 0;
     escritaEventos = 0;
     tempoEscrevendoMs = 0;
@@ -1930,7 +1986,15 @@ function checkAnswer(idx, btn) {
             scroll_eventos: scrollEventos,
             scroll_alcance_frac: Math.round(scrollAlcanceFrac * 100) / 100,
             scroll_rolavel_px: Math.round(scrollRolavelPx),
+            scroll_reversoes: scrollReversoes,
             teclas_questao: teclasQuestao,
+            // torna o tempo de resposta comparável ENTRE questões: 90s num enunciado
+            // de 40 palavras é dispersão, num de 400 é leitura normal
+            limite_leitura_ms: Math.round(limiteLeituraMs),
+            palavras_enunciado: (currentQuestion?.q || '').trim().split(/\s+/).length,
+            questao_iniciada_em: questaoIniciadaEm,
+            ordem_hover_opcoes: ordemHoverOpcoes,
+            pointer_tipo: pointerTipo,
             caderno_eventos: escritaEventos,
             tempo_escrevendo_s: Math.round(tempoEscrevendoMs / 1000),
             acertou,
@@ -2465,7 +2529,13 @@ function registrarQuestaoAbandonada() {
         scroll_eventos: scrollEventos,
         scroll_alcance_frac: Math.round(scrollAlcanceFrac * 100) / 100,
         scroll_rolavel_px: Math.round(scrollRolavelPx),
+        scroll_reversoes: scrollReversoes,
         teclas_questao: teclasQuestao,
+        limite_leitura_ms: Math.round(limiteLeituraMs),
+        palavras_enunciado: (currentQuestion?.q || '').trim().split(/\s+/).length,
+        questao_iniciada_em: questaoIniciadaEm,
+        ordem_hover_opcoes: ordemHoverOpcoes,
+        pointer_tipo: pointerTipo,
         caderno_eventos: escritaEventos,
         tempo_escrevendo_s: Math.round(tempoEscrevendoMs / 1000),
     });

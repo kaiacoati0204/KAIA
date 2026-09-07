@@ -248,8 +248,19 @@ EMBED_DIM = 768   # TEM de bater com a coluna vector(768) da tabela questoes_rea
 FEWSHOT_DINAMICO = os.getenv("KAIA_FEWSHOT_DINAMICO") == "1"
 
 
+# O texto embeddado no serving e sempre "Materia: tema" — conjunto pequeno e fixo, e a
+# conversao texto->vetor e deterministica. Sem cache, a MESMA frase ia pra API a cada
+# geracao: era o que estourava o limite do embedding (126/100 RPM) enquanto a geracao
+# em si ficava em 15. Cacheia o VETOR, nao o resultado da busca — assim os filtros
+# (nivel, calculo) e as questoes recem-ingeridas continuam valendo.
+_EMBED_CACHE = {}
+_EMBED_CACHE_MAX = 500        # teto de seguranca; materia x tema nao chega perto disso
+
+
 def _embed(texto):
     """Vetor de embedding (EMBED_DIM floats) do texto, ou None em falha."""
+    if texto in _EMBED_CACHE:
+        return _EMBED_CACHE[texto]
     url = (
         "https://generativelanguage.googleapis.com/v1beta/"
         f"models/{GEMINI_EMBED_MODEL}:embedContent?key={API_KEY}"
@@ -257,7 +268,11 @@ def _embed(texto):
     body = {"content": {"parts": [{"text": texto}]}, "outputDimensionality": EMBED_DIM}
     try:
         vals = requests.post(url, json=body, timeout=15).json().get("embedding", {}).get("values")
-        return vals if isinstance(vals, list) and vals else None
+        if not (isinstance(vals, list) and vals):
+            return None                       # falha NAO entra no cache: retenta na proxima
+        if len(_EMBED_CACHE) < _EMBED_CACHE_MAX:
+            _EMBED_CACHE[texto] = vals
+        return vals
     except Exception as e:
         print("[KaIA] erro embedding:", e)
         return None

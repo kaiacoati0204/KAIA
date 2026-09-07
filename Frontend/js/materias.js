@@ -35,6 +35,9 @@ let scrollEventos = 0;
 let scrollAlcanceFrac = 0;
 let scrollRolavelPx = 0;
 let ultimoScrollEm = 0;
+let escondidoEm = 0;             // Date.now() de quando a aba sumiu (p/ detectar troca interna)
+let teclasQuestao = 0;           // interações por teclado na questão (aluno que não usa mouse)
+const CHAVE_ABA_VISIVEL = 'kaia_aba_visivel_em';
 // Caderno: o listener de `input` já zerava a ociosidade, mas não registrava NADA —
 // dava pra saber que escreveu, não quanto nem quando.
 let escritaEventos = 0;
@@ -1343,6 +1346,17 @@ function registrarSensores() {
         }
     });
 
+    // --- teclado na questão: quem navega por Tab/setas não gera mousemove nenhum,
+    //     e sem isto a sessão inteira dele parece imóvel (4 features de mouse mudas).
+    quizView?.addEventListener('keydown', () => {
+        if (!isMissionActive) return;
+        idleTime = 0;
+        mexeuDesdeUltimoTick = true;
+        setEstado('ESTUDANDO');
+        teclasQuestao++;
+        if (firstInteractionAt === 0 && questionShownAt > 0) firstInteractionAt = performance.now();
+    });
+
     // --- teclado no caderno: escrever é foco, não ociosidade (Fase 5) ---
     // Espelha o mousemove acima, mas para a digitação. Listener DELEGADO no #caderno
     // (o container persiste; o evento `input` borbulha dos blocos .cad-texto criados
@@ -1372,13 +1386,23 @@ function registrarSensores() {
         if (!isMissionActive || pausaAtiva) return;   // trocar de aba na pausa não é distração
         if (document.hidden) {
             focusLostAt = performance.now();
+            escondidoEm = Date.now();
             mudancasAba++;
         } else if (focusLostAt !== null) {
+            // Sair do KaIA para OUTRA aba do KaIA não é off-task. Cada aba carimba o
+            // localStorage ao ficar visível; se alguém carimbou durante a nossa ausência,
+            // ela foi interna. Lê ANTES de carimbar, senão lê o próprio carimbo.
+            const carimbo = Number(localStorage.getItem(CHAVE_ABA_VISIVEL) || 0);
+            const interno = carimbo > escondidoEm;
             logEvent('tab_change', {
                 mudancas_aba: mudancasAba,
-                tempo_fora_foco_s: parseFloat(((performance.now() - focusLostAt) / 1000).toFixed(2))
+                tempo_fora_foco_s: parseFloat(((performance.now() - focusLostAt) / 1000).toFixed(2)),
+                interno,
             });
             focusLostAt = null;
+        }
+        if (!document.hidden) {
+            try { localStorage.setItem(CHAVE_ABA_VISIVEL, String(Date.now())); } catch (_) {}
         }
     });
 
@@ -1778,6 +1802,7 @@ async function carregarQuestao(subject, tema) {
     dwellEntrouEm = 0;
     scrollEventos = 0;
     scrollAlcanceFrac = 0;
+    teclasQuestao = 0;
     escritaEventos = 0;
     tempoEscrevendoMs = 0;
     // medido DEPOIS do layout: é o que torna "não rolou" interpretável
@@ -1899,6 +1924,7 @@ function checkAnswer(idx, btn) {
             scroll_eventos: scrollEventos,
             scroll_alcance_frac: Math.round(scrollAlcanceFrac * 100) / 100,
             scroll_rolavel_px: Math.round(scrollRolavelPx),
+            teclas_questao: teclasQuestao,
             caderno_eventos: escritaEventos,
             tempo_escrevendo_s: Math.round(tempoEscrevendoMs / 1000),
             acertou,
@@ -2230,6 +2256,7 @@ function continuarRodada() {
 
 // "Encerrar sessão": encerra de fato e vira a tela de resumo COMPLETO (com frase).
 function encerrarSessaoComResumo() {
+    registrarQuestaoAbandonada();   // antes de baixar isMissionActive, senão não registra
     sessaoDeEstudoAberta = false;
     isMissionActive = false;
     pararPomodoro();
@@ -2417,7 +2444,30 @@ function resetSystem() {
 
 // Fechar/recarregar a aba com a sessão contínua aberta também a encerra
 // (mesmo durante a explicação, quando isMissionActive já é false).
+// A questão EM CURSO só vira evento quando é respondida — quem sai no meio leva
+// consigo trajeto, ocioso, scroll e dwell. E é justo o caso mais informativo:
+// o aluno que saiu e não voltou. Aqui vai o parcial (logEvent usa keepalive).
+function registrarQuestaoAbandonada() {
+    if (!isMissionActive || questionShownAt === 0) return;
+    logEvent('question_abandon', {
+        tempo_ate_abandono_ms: Math.round(performance.now() - questionShownAt),
+        tempo_iniciacao_resposta_ms: firstInteractionAt ? Math.round(firstInteractionAt - questionShownAt) : null,
+        nivel_dificuldade: currentQuestion?.nivel ?? nivelDificuldade,
+        mouse_track: mouseSamples,
+        tempo_ocioso_s: Math.round(tempoOciosoMs / 1000),
+        tempo_dwell_sem_responder_s: Math.round(tempoDwellMs / 100) / 10,
+        scroll_eventos: scrollEventos,
+        scroll_alcance_frac: Math.round(scrollAlcanceFrac * 100) / 100,
+        scroll_rolavel_px: Math.round(scrollRolavelPx),
+        teclas_questao: teclasQuestao,
+        caderno_eventos: escritaEventos,
+        tempo_escrevendo_s: Math.round(tempoEscrevendoMs / 1000),
+    });
+    questionShownAt = 0;                 // não registra o mesmo abandono duas vezes
+}
+
 window.addEventListener('beforeunload', () => {
+    registrarQuestaoAbandonada();
     if (sessaoDeEstudoAberta) encerrarSessao();
 });
 

@@ -73,11 +73,11 @@ DUR_REF = 20.0
 # SEM filtrar estado. Logo o zero do sigma nao e "o eu engajado" — e "o eu medio".
 # O gerador dizia outra coisa (baseline so do engajado), e um sigma significava
 # coisas diferentes nos dois lados. Mistura tipica de um historico de estudo:
-MIX_BASELINE = {"engajado": 0.60, "distraido": 0.30, "muito_distraido": 0.10}
+MISTURA_HISTORICO = {"engajado": 0.60, "distraido": 0.30, "muito_distraido": 0.10}
 
 # Desloca DESVIO para o centro da mistura: derivado, nao escolhido a mao.
 for _nome, _m in DESVIO.items():
-    _centro = sum(_m[_e] * _p for _e, _p in MIX_BASELINE.items())
+    _centro = sum(_m[_e] * _p for _e, _p in MISTURA_HISTORICO.items())
     for _e in list(_m):
         _m[_e] = round(_m[_e] - _centro, 3)
 
@@ -113,7 +113,7 @@ def baseline_mouse(aluno):
     MISTURADOS — o que o serving calcula. So-engajado inflaria os desvios."""
     fs = []
     for _ in range(8):
-        ef = random.choices(list(MIX_BASELINE), weights=list(MIX_BASELINE.values()))[0]
+        ef = random.choices(list(MISTURA_HISTORICO), weights=list(MISTURA_HISTORICO.values()))[0]
         imovel = ef != "muito_distraido" and random.random() < 0.15
         er, n = _perfil_mouse(aluno, ef, imovel=imovel)
         fs.append(features_mouse(gerar_track(max(0.05, er), n)))
@@ -126,7 +126,9 @@ def baseline_mouse(aluno):
 # ---- geração de uma sessão ----
 def gerar_aluno():
     return {"erratic_base": random.uniform(0.3, 1.0),
-            "distraibilidade": random.uniform(0.0, 1.0)}
+            # taxa de abandono real e assimetrica: quase todo mundo abandona pouco,
+            # poucos abandonam muito. uniform(0,1) dava media 0,47 — implausivel.
+            "distraibilidade": random.betavariate(1.6, 4.0)}
 
 def gerar_sessao(estado, aluno, base_mouse):
     z = random.uniform(0.1, 1.5)                 # intensidade latente; perto de 0 = episódio fraco (parece engajado)
@@ -163,6 +165,15 @@ def gerar_sessao(estado, aluno, base_mouse):
         if nome == "tempo_resposta_ms":
             val += 0.30 * (dif - 3)               # dificuldade -> mais lento que o normal
         f[nome] = round(val, 3)
+
+    # PAPEL: resolve a conta no caderno/papel. Fica ocioso (mouse parado, aba visivel)
+    # E concentrado. Sem esse contraexemplo o engajado nunca nasce com ocioso alto, e
+    # o modelo trata ociosidade como prova de dispersao — em Exatas isso e o padrao.
+    papel = ef == "engajado" and random.random() < 0.16
+    if papel:
+        f["tempo_ocioso_s"] = round(random.gauss(1.1, 0.4), 3)
+        f["tempo_dwell_sem_responder_s"] = round(random.gauss(0.5, 0.3), 3)
+        f["tempo_resposta_ms"] = round(random.gauss(0.6, 0.4), 3)
 
     # CHUTE RAPIDO: clicar qualquer coisa pra fechar a meta diaria. Responde MUITO
     # mais rapido que o normal E erra — desengajamento, nao concentracao. A tabela

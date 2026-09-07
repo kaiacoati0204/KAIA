@@ -1693,6 +1693,13 @@ async function iniciarSessaoEstudo(subject, tema) {
     await carregarMetaHoje();                   // baseline do dia (contador diário)
     const features = registrarInicioSessao();
     logEvent('session_start', { materia: subject, tema, features });
+    // Sessão de ESTADO INDUZIDO (estudo controlado): ?induzido=engajado|distraido|
+    // muito_distraido marca o rótulo dado por INSTRUÇÃO. É a única âncora que não
+    // depende do aluno saber o que sentiu — serve p/ medir o erro do próprio probe.
+    const induzido = new URLSearchParams(location.search).get('induzido');
+    if (['engajado', 'distraido', 'muito_distraido'].includes(induzido)) {
+        logEvent('rotulo_induzido', { estado: induzido });
+    }
     enviarPerfil({ tipo: 'session_start', materia: subject, tema });
 }
 
@@ -2090,7 +2097,7 @@ function dispararProbe() {
     if (!pergunta) return;            // banco vazio ou todo malformado: não pergunta nada
     const tamanho = _escolherTamanhoProbe();
     const card = _montarCardProbe(pergunta, tamanho);
-    probeAtual = { id: pergunta.id, tamanho };
+    probeAtual = { id: pergunta.id, tamanho, mostradoEm: performance.now() };
     _probeUltimoId = pergunta.id;
     card.style.display = 'block';
     clearTimeout(probeTimeout);
@@ -2116,6 +2123,9 @@ function responderProbe(estado) {
         tamanho: probeAtual?.tamanho ?? null,
         questao_na_rodada: questoesNaRodada,
         questoes_respondidas: questoesRespondidas,
+        // latência da resposta: filtro de qualidade do rótulo (clique em 0,4s não
+        // é introspecção). Só se recupera capturando na hora — não dá pra derivar depois.
+        latencia_ms: probeAtual?.mostradoEm ? Math.round(performance.now() - probeAtual.mostradoEm) : null,
     });
     esconderProbe();
 }

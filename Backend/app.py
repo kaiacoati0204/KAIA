@@ -1392,7 +1392,10 @@ INTERV_MIN_JANELAS = 2         # freio: estado sustentado por N janelas (~60s) a
 INTERV_SCORE_MIN = 0.6         # freio: só intervir com confiança do modelo >= isto
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
 _ESTADO_STREAK = {}            # session_id -> {"estado", "n"}: janelas consecutivas no mesmo estado
-AB_TESTE_ATIVO = False         # A/B: liga um teste com grupo CONTROLE (sem intervenção). Off por padrão.
+# A/B: grupo CONTROLE (detecta e mede, mas NÃO intervém) para provar que a leitura
+# serve — sem depender de autorrelato. Ligar com KAIA_AB_TESTE=1 desde o 1º teste
+# real: sessão que passa sem controle é evidência causal que não volta.
+AB_TESTE_ATIVO = os.getenv("KAIA_AB_TESTE") == "1"
 
 
 def _grupo_ab(user_id):

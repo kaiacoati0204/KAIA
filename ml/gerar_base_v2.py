@@ -110,10 +110,18 @@ def gerar_sessao(estado, aluno, base_mouse):
     elif estado == "distraido" and random.random() < 0.05:
         ef = "muito_distraido"
 
-    # duracao sorteada ANTES das contagens: elas acumulam com o tempo (fator)
-    dist_ctx = {"engajado": 0, "distraido": 1, "muito_distraido": 1}[ef]
-    dur = round(max(3, random.gauss(18 + 4 * dist_ctx, 8)), 1)
+    # Contexto INDEPENDENTE do rotulo: hora e tempo acumulado vem da agenda do
+    # aluno, nao do estado dele. Escrever o rotulo aqui inverteria a causalidade
+    # e o modelo passaria a usar o relogio como prova em vez de regua.
+    dur = round(max(3, random.gauss(20.7, 8)), 1)
+    hora = min(23.9, max(7, random.gauss(17, 4)))
+    acum = max(dur, random.gauss(53, 30))          # o dia inclui esta sessao
     fator = dur / DUR_REF
+
+    # Fadiga (hora tardia + muito estudo acumulado) INTENSIFICA o episodio; nao
+    # decide qual e. E o papel legitimo do contexto: modulador, nao evidencia.
+    fadiga = 0.5 * min(1.0, max(0.0, (hora - 14) / 9)) + 0.5 * min(1.0, acum / 120)
+    z *= 0.85 + 0.30 * fadiga
 
     f = {}
     # internas relativas geradas direto (sigma); z faz co-variar
@@ -158,8 +166,8 @@ def gerar_sessao(estado, aluno, base_mouse):
     # contexto absolutas
     f["nivel_dificuldade_atividade"] = dif
     f["duracao_sessao_min"] = dur
-    f["hora_do_dia"] = round(min(23.9, max(7, random.gauss(15 + 3 * dist_ctx, 4))), 2)
-    f["tempo_estudo_acumulado_dia_min"] = round(max(0, random.gauss(40 + 20 * dist_ctx, 30)), 1)
+    f["hora_do_dia"] = round(hora, 2)
+    f["tempo_estudo_acumulado_dia_min"] = round(acum, 1)
     return f
 
 MODELO_PATH = os.path.join(BASE, "models", "modelo_rf_v2.pkl")

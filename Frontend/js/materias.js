@@ -1203,7 +1203,7 @@ function checkpointRecuperacao() {
     voltar.textContent = 'Voltar à questão';
     voltar.addEventListener('click', encerrarCheckpoint);
     card.append(topo, pq, opts, fb, voltar);
-    document.body.appendChild(card);           // flutua no canto (position:fixed no CSS)
+    lado.prepend(card);                        // inline no topo da coluna de estudo
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1337,7 +1337,7 @@ async function reancorarCompreensao(intv) {
         opts.appendChild(b);
     });
     card.append(topo, opts, fb);
-    document.body.appendChild(card);           // flutua no canto (position:fixed no CSS)
+    lado.prepend(card);                        // inline no topo da coluna de estudo
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 

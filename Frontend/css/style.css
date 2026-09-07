@@ -2818,24 +2818,18 @@ body.kaia-mr-aberta #kaia-notificacoes {
 
 /* ---- checkpoint: card inline com uma questão do histórico recente -------- */
 .kaia-cp-card {
-  /* Card de intervenção FLUTUANTE no canto inferior DIREITO (todos os cards ali). */
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  width: min(360px, calc(100vw - 40px));
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  z-index: 9998;
+  /* Inline no topo da coluna de estudo (checkpoint/reancoragem NÃO vão pro canto). */
   padding: 16px 18px;
+  margin-bottom: 16px;
   border: 1px solid var(--bege-linha);
   border-left: 4px solid var(--bege-forte);   /* filete: marca como intervenção, não questão */
   border-radius: 14px;
   background: var(--card);
-  box-shadow: 0 8px 28px rgba(var(--profundo-rgb), 0.16);
+  box-shadow: 0 6px 24px rgba(var(--profundo-rgb), 0.12);
   animation: kaiaCpEntra 0.32s ease-out both;
 }
 @keyframes kaiaCpEntra {
-  from { opacity: 0; transform: translateY(12px); }   /* desliza de baixo (canto) */
+  from { opacity: 0; transform: translateY(-8px); }   /* desliza de cima (prepend no topo) */
   to   { opacity: 1; transform: none; }
 }
 .kaia-cp-card .kaia-cp-topo {

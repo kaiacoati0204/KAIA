@@ -15,6 +15,8 @@ CHAVES = (
     "entropia_trajetoria_mouse",
     "flips_cursor_xy",
 )
+LIMIAR_BLOCO_S = 15.0          # abaixo disso e pausa de leitura normal, nao imobilidade
+
 _ZEROS = {"velocidade_mouse_media": 0.0, "variabilidade_velocidade_mouse": 0.0,
           "entropia_trajetoria_mouse": 0.0, "flips_cursor_xy": 0}
 
@@ -66,3 +68,24 @@ def features_mouse(track):
         "entropia_trajetoria_mouse":     round(entropia, 3),
         "flips_cursor_xy":               _flips(dxs) + _flips(dys),
     }
+
+
+# ==== RITMO DA IMOBILIDADE ====
+def blocos_parados(track, dur_ms, limiar_s=LIMIAR_BLOCO_S):
+    """Blocos de imobilidade de UMA questão a partir dos buracos do trajeto.
+    O listener só amostra em mousemove: o vão entre duas amostras JA E o tempo
+    parado. Conta tambem da abertura ate a 1a amostra e da ultima ate a resposta.
+    Retorna (maior_bloco_s, n_blocos) contando so os >= limiar_s."""
+    if dur_ms is None or dur_ms <= 0:
+        return (0.0, 0)
+    marcos = [0.0]
+    for a in (track or []):
+        if a and a[0] is not None:
+            t = float(a[0])
+            if 0.0 <= t <= dur_ms:
+                marcos.append(t)
+    marcos.append(float(dur_ms))
+    marcos.sort()
+    blocos = [(b - a) / 1000.0 for a, b in zip(marcos, marcos[1:]) if (b - a) / 1000.0 >= limiar_s]
+    return (round(max(blocos), 1) if blocos else 0.0, len(blocos))
+

@@ -39,7 +39,11 @@ FEATURE_ORDER = [
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
     # externas (absolutas)
-    "mudancas_aba", "tempo_fora_foco_s", "cliques_fora_area_estudo", "taxa_abandono_sessao",
+    "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
+    "cliques_fora_area_estudo", "taxa_abandono_sessao",
+    # ritmo (absolutas) — FORMA da imobilidade, nao o total: separa leitura densa
+    # (muitos blocos medios) de mente vagando/ausencia (um bloco longo).
+    "maior_bloco_parado_s", "n_blocos_parados",
     # contexto (absolutas)
     "nivel_dificuldade_atividade", "duracao_sessao_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
 ]
@@ -137,11 +141,23 @@ def gerar_sessao(estado, aluno, base_mouse):
     lam_e = CONTAGEM["erros_sem_offtask"][ef] * (0.7 + 0.15 * (dif - 3)) * fator
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
 
-    # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno
+    # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno.
+    # LEITURA DENSA: parte das sessoes presentes fica quase imovel (enunciado longo,
+    # hiperfoco). Sem esse contraexemplo o modelo aprende "mouse parado = ausente" e
+    # confunde quem le concentrado com quem saiu — as externas e que separam os dois.
+    imovel = False
     if ef == "engajado":
-        erratic, n = aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
+        imovel = random.random() < 0.18
+        if imovel:
+            erratic, n = aluno["erratic_base"], random.randint(4, 14)
+        else:
+            erratic, n = aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
     elif ef == "distraido":
-        erratic, n = aluno["erratic_base"] + 0.32 * z, random.randint(30, 70)
+        imovel = random.random() < 0.12          # mente vagando de olhar parado, sem inquietacao
+        if imovel:
+            erratic, n = aluno["erratic_base"], random.randint(4, 14)
+        else:
+            erratic, n = aluno["erratic_base"] + 0.32 * z, random.randint(30, 70)
     else:                                        # muito_distraído: pouca mexida
         erratic, n = aluno["erratic_base"], random.randint(3, 10)
     mf = features_mouse(gerar_track(max(0.05, erratic), n))
@@ -150,17 +166,42 @@ def gerar_sessao(estado, aluno, base_mouse):
         f[k] = round((mf[k] - mu) / sd, 3)
 
     # externas absolutas — muito_distraído = frequente+longo; presente (eng/dist) = blip ocasional
+    # Ausencias geradas UMA A UMA: soma e maximo saem delas, coerentes por construcao.
+    # ~45% dos muito_distraido saem UMA vez e ficam — o padrao real do aluno que abre
+    # a rede social e some. Sem isso o modelo so aprende a CONTAR saidas.
     if ef == "muito_distraido":
-        f["mudancas_aba"] = max(1, int(np.random.poisson(4 * fator)))
-        # fracao da sessao fora da tela: garante por construcao que nunca passa da duracao
-        frac = max(0.02, random.gauss(0.05, 0.025))
-        f["tempo_fora_foco_s"] = round(frac * dur * 60, 1)
+        unica = random.random() < 0.45
+        n_aus = max(1, int(np.random.poisson(1.2 if unica else 4 * fator)))
+        frac = min(max(0.02, random.gauss(0.05, 0.025)) * (2.2 if unica else 1.0), 0.80)
+        pesos = [random.random() + 0.05 for _ in range(n_aus)]
+        if unica:
+            pesos[0] += 4.0                      # uma ida domina o tempo fora
+        soma = sum(pesos)
+        ausencias = [frac * dur * 60 * w / soma for w in pesos]
         f["cliques_fora_area_estudo"] = int(np.random.poisson(3 * fator))
     else:
-        blips = int(np.random.poisson(0.13 * fator))     # risco por minuto, nao por sessao
-        f["mudancas_aba"] = blips
-        f["tempo_fora_foco_s"] = round(sum(random.uniform(2, 10) for _ in range(blips)), 1)
+        n_aus = int(np.random.poisson(0.13 * fator))     # risco por minuto, nao por sessao
+        ausencias = [random.uniform(2, 10) for _ in range(n_aus)]
         f["cliques_fora_area_estudo"] = int(np.random.poisson(0.10 * fator))
+    f["mudancas_aba"] = len(ausencias)
+    f["tempo_fora_foco_s"] = round(sum(ausencias), 1)
+    f["maior_ausencia_unica_s"] = round(max(ausencias), 1) if ausencias else 0.0
+
+    # Ritmo: leitura densa = MUITOS blocos medios; vagando/ausente = UM bloco longo.
+    if ef == "muito_distraido":
+        n_blocos = max(1, int(np.random.poisson(1.4 * fator)))
+        maior_bloco = max(f["maior_ausencia_unica_s"], random.gauss(90, 40))
+    elif imovel and ef == "distraido":
+        n_blocos = max(1, int(np.random.poisson(1.8 * fator)))
+        maior_bloco = max(20.0, random.gauss(120, 45))
+    elif imovel:                                 # engajado lendo enunciado longo
+        n_blocos = max(2, int(np.random.poisson(5.0 * fator)))
+        maior_bloco = max(15.0, random.gauss(45, 18))
+    else:                                        # mouse ativo
+        n_blocos = int(np.random.poisson(0.6 * fator))
+        maior_bloco = max(15.0, random.gauss(20, 6)) if n_blocos else 0.0
+    f["maior_bloco_parado_s"] = round(min(maior_bloco, 0.9 * dur * 60), 1)
+    f["n_blocos_parados"] = n_blocos
     f["taxa_abandono_sessao"] = round(min(1.0, max(0.0, aluno["distraibilidade"] + random.gauss(0, 0.1))), 3)
 
     # contexto absolutas

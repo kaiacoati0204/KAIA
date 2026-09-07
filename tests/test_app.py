@@ -132,7 +132,7 @@ def test_demo_aluno():
 
 def test_vetor_para_modelo_ordena():
     feats = {n: float(i) for i, n in enumerate(app_mod.FEATURE_ORDER)}
-    assert app_mod.vetor_para_modelo(feats) == [float(i) for i in range(20)]
+    assert app_mod.vetor_para_modelo(feats) == [float(i) for i in range(len(app_mod.FEATURE_ORDER))]
 
 
 async def test_dados_grafico_com_banco():

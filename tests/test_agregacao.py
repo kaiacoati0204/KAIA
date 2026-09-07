@@ -89,7 +89,7 @@ async def test_features_ordem():
     feats = await app_mod.montar_features_sessao(conn, "sid")
     scaler = pickle.load(open(ROOT / "ml" / "artifacts" / "scaler_v2.pkl", "rb"))
     assert list(feats.keys()) == app_mod.FEATURE_ORDER == list(scaler.feature_names_in_)
-    assert len(app_mod.vetor_para_modelo(feats)) == 20
+    assert len(app_mod.vetor_para_modelo(feats)) == len(app_mod.FEATURE_ORDER)
 
 
 async def test_baseline_relativiza_internas():

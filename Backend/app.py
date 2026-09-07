@@ -19,7 +19,7 @@ from statistics import mean, pstdev
 
 from thompson import ThompsonSampling, INTERVENCOES
 from auth import usuario_autenticado, usuario_identidade
-from mouse_features import features_mouse
+from mouse_features import features_mouse, blocos_parados
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
@@ -1357,7 +1357,11 @@ FEATURE_ORDER = [
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
     # externas (absolutas)
-    "mudancas_aba", "tempo_fora_foco_s", "cliques_fora_area_estudo", "taxa_abandono_sessao",
+    "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
+    "cliques_fora_area_estudo", "taxa_abandono_sessao",
+    # ritmo (absolutas) — FORMA da imobilidade, nao o total: separa leitura densa
+    # (muitos blocos medios) de mente vagando/ausencia (um bloco longo).
+    "maior_bloco_parado_s", "n_blocos_parados",
     # contexto (absolutas)
     "nivel_dificuldade_atividade", "duracao_sessao_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
 ]
@@ -1544,9 +1548,22 @@ async def montar_features_sessao(conn, session_id):
     f["erros_sem_offtask"] = brutos["_erros"] if brutos else 0
 
     # externas absolutas
+    ausencias = [float(p.get("tempo_fora_foco_s") or 0) for p in tab]
     f["mudancas_aba"] = len(tab)
-    f["tempo_fora_foco_s"] = round(sum(float(p.get("tempo_fora_foco_s") or 0) for p in tab), 1)
+    f["tempo_fora_foco_s"] = round(sum(ausencias), 1)
+    # max, nao soma: uma saida de 5 min e outra coisa que quinze de 20s
+    f["maior_ausencia_unica_s"] = round(max(ausencias), 1) if ausencias else 0.0
     f["cliques_fora_area_estudo"] = len(cliques)
+
+    # ritmo da imobilidade (absoluto: segue valendo no cold-start, quando as
+    # internas ficam mudas em 0 sigma)
+    maior_bloco, n_blocos = 0.0, 0
+    for p in (p for et, p in evs if et == "question_answer"):
+        mb, nb = blocos_parados(p.get("mouse_track") or [], p.get("tempo_resposta_ms"))
+        maior_bloco = max(maior_bloco, mb)
+        n_blocos += nb
+    f["maior_bloco_parado_s"] = round(maior_bloco, 1)
+    f["n_blocos_parados"] = n_blocos
     ab = await conn.fetchrow(
         """
         select count(*) filter (where session_end_ts is null and session_id <> $2::uuid) as abandonadas,

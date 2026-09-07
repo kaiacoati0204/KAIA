@@ -308,17 +308,17 @@ Responda APENAS com um objeto JSON EXATO:
             "leitura errada 2: foca num DETALHE secundário em vez do comando central"]}}
 As 3 frases devem ser curtas, do MESMO tamanho/estilo (não entregue qual é a certa),
 em texto corrido sem markdown."""
-    try:
-        d = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
-        pede = _sem_markdown((d or {}).get("pede", "") or "").strip()
-        erros = [_sem_markdown(e or "").strip() for e in ((d or {}).get("erros") or [])]
-        erros = [e for e in erros if e]
-        if not pede or len(erros) < 2:
-            return JSONResponse({"erro": "geração inválida"}, status_code=502)
-        return {"pede": pede, "erros": erros[:2]}
-    except Exception as e:
-        print("[KaIA] erro reancoragem:", e)
-        return JSONResponse({"erro": "falha na geração"}, status_code=502)
+    for _ in range(3):     # re-tenta: o Gemini às vezes dá soluço (429/timeout/JSON torto)
+        try:
+            d = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
+            pede = _sem_markdown((d or {}).get("pede", "") or "").strip()
+            erros = [_sem_markdown(e or "").strip() for e in ((d or {}).get("erros") or [])]
+            erros = [e for e in erros if e]
+            if pede and len(erros) >= 2:
+                return {"pede": pede, "erros": erros[:2]}
+        except Exception as e:
+            print("[KaIA] erro reancoragem (re-tentando):", e)
+    return JSONResponse({"erro": "falha na geração"}, status_code=502)
 
 
 # ================== API: ANOTAÇÕES (caderno do aluno por tema) ================

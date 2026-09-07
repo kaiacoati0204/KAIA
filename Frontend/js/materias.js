@@ -524,6 +524,13 @@ function iniciarPollIntervencao() {
 // origem: 'gatilho_teste' no payload, para dar para filtrar depois.
 const GATILHO_TESTE = false;
 
+// Barra de teste liga pela const acima (produção) OU por flag no localStorage
+// (kaiaGatilhoTeste(true)) — dá pra ligar em teste sem tocar na const de produção.
+function _barraTesteLigada() {
+    try { return GATILHO_TESTE || localStorage.getItem('kaia_teste_bar') === '1'; }
+    catch (e) { return GATILHO_TESTE; }
+}
+
 // TODO: ajustar tempo pra produção — não se aplica: isto sai antes da produção.
 const GATILHO_TESTE_IDLE_S   = 9;      // segundos de inatividade até disparar
 const GATILHO_TESTE_ESPERA_MS = 12000; // intervalo mínimo entre dois disparos
@@ -550,7 +557,7 @@ let _intervencaoDeTeste = false;   // lido por enviarFeedbackIntervencao e logEv
 // que não é usada nem pela questão (começa em 136) nem pelas 6 zonas dos cards
 // (metade de baixo) nem pelos botões Caderno/ABANDONAR (x 984→1220).
 function _montarDockTeste() {
-    if (!GATILHO_TESTE || $('kaia-dock-teste')) return;
+    if (!_barraTesteLigada() || $('kaia-dock-teste')) return;
 
     const st = document.createElement('style');
     st.id = 'kaia-dock-teste-css';
@@ -608,7 +615,7 @@ function _montarDockTeste() {
 }
 
 function iniciarGatilhoTeste() {
-    if (!GATILHO_TESTE) return;
+    if (!_barraTesteLigada()) return;
     _montarDockTeste();   // só a BARRA manual (loga 1x lá dentro); o disparo AUTOMÁTICO foi removido
 }
 
@@ -658,8 +665,12 @@ window.kaiaTestar = (tipo) => {
     dispararIntervencaoTeste(tipo);
 };
 window.kaiaGatilhoTeste = (ligado) => {
-    if (ligado === false) { pararGatilhoTeste(); console.log('[KaIA] gatilho de teste PARADO.'); }
-    else { iniciarGatilhoTeste(); }
+    try {
+        if (ligado === false) localStorage.removeItem('kaia_teste_bar');
+        else localStorage.setItem('kaia_teste_bar', '1');
+    } catch (e) { /* localStorage indisponível */ }
+    if (ligado === false) { pararGatilhoTeste(); console.log('[KaIA] barra de teste DESLIGADA.'); }
+    else { iniciarGatilhoTeste(); console.log('[KaIA] barra de teste LIGADA (persiste; kaiaGatilhoTeste(false) desliga).'); }
 };
 // =============================================================================
 // ===== FIM DO GATILHO DE TESTE (PROVISÓRIO) ==================================
@@ -1294,10 +1305,18 @@ async function reancorarCompreensao(intv) {
     const lado = document.querySelector('.quiz-lado-questao');
     const enun = currentQuestion && currentQuestion.q;
     if (!lado || !enun) { reancorarDestaque(); return; }   // sem questão na tela -> spotlight
-    pausaAtiva = true;                                      // suspende sensores durante o card
+    pausaAtiva = true;                                      // suspende sensores enquanto prepara/mostra
     _reMostradaEm = intervencaoMostradaEm;
-    const antigo = $('kaia-re'); if (antigo) antigo.remove();
 
+    // Gera POR TRÁS primeiro (sem "preparando" na tela); só mostra quando pronto.
+    let dados = null;
+    try { dados = await postJSON('/intervencao/reancoragem', { enunciado: enun }); } catch (e) { /* fallback abaixo */ }
+    if (!dados || !dados.pede || !(Array.isArray(dados.erros) && dados.erros.length >= 2)) {
+        pausaAtiva = false; reancorarDestaque(); return;   // geração falhou -> spotlight
+    }
+    if (!document.querySelector('.quiz-lado-questao')) { pausaAtiva = false; return; }   // saiu da tela
+
+    const antigo = $('kaia-re'); if (antigo) antigo.remove();
     const card = document.createElement('div');
     card.id = 'kaia-re';
     card.className = 'kaia-cp-card';                        // herda o visual do checkpoint
@@ -1308,27 +1327,19 @@ async function reancorarCompreensao(intv) {
     topo.append(' ' + _variar(REANCORA_ABERTURAS));
     const opts = document.createElement('div');
     opts.className = 'kaia-cp-opts';
-    opts.innerHTML = '<p class="kaia-cp-q" style="opacity:.55">preparando…</p>';
     const fb = document.createElement('p');
     fb.className = 'kaia-cp-fb'; fb.id = 'kaia-re-fb';
-    card.append(topo, opts, fb);
-    lado.prepend(card);
-    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    let dados = null;
-    try { dados = await postJSON('/intervencao/reancoragem', { enunciado: enun }); } catch (e) { /* fallback abaixo */ }
-    if (!dados || !dados.pede || !(Array.isArray(dados.erros) && dados.erros.length >= 2)) {
-        card.remove(); pausaAtiva = false; reancorarDestaque(); return;   // geração falhou -> spotlight
-    }
     const frases = embaralhar([{ t: dados.pede, ok: true }, { t: dados.erros[0] }, { t: dados.erros[1] }]);
     _reCorreta = frases.findIndex(f => f.ok);
-    opts.innerHTML = '';
     frases.forEach((f, i) => {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'kaia-cp-opt'; b.textContent = f.t;
         b.addEventListener('click', () => _responderReancora(i));
         opts.appendChild(b);
     });
+    card.append(topo, opts, fb);
+    lado.prepend(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function _responderReancora(escolhido) {

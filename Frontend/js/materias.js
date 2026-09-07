@@ -335,22 +335,10 @@ const _probeNaTela = () => {
 
 function _posicionarPilhaNotif() {
     const pilha = _pilhaNotif();
-    // O toast da meta diária divide este contêiner. Se ele estiver na tela,
-    // mover a pilha arrastaria o aviso junto — fica onde está (e a rotação não
-    // avança, para o próximo card ainda cair num lugar diferente deste).
+    // O toast da meta diária divide este contêiner — se estiver na tela, não mexe.
     if ([...pilha.children].some(el => el.id !== 'kaia-intervencao')) return;
-    for (let i = 0; i < POSICOES_CARD.length; i++) {
-        _posicaoCardIdx = (_posicaoCardIdx + 1) % POSICOES_CARD.length;
-        const zona = POSICOES_CARD[_posicaoCardIdx];
-        // O probe de autorrelato mora embaixo no centro e gera o rótulo do
-        // modelo: o card (z-index 9999) o taparia. Só a zona centro-BAIXA
-        // conflita — a centro-alta passa bem acima dele.
-        if (zona.includes('pos-centro') && !zona.includes('pos-alta') && _probeNaTela()) continue;
-        break;
-    }
-    localStorage.setItem(POS_CARD_CHAVE, String(_posicaoCardIdx));
     pilha.classList.remove(..._TODAS_POSICOES);
-    pilha.classList.add(...POSICOES_CARD[_posicaoCardIdx]);
+    pilha.classList.add('pos-dir');            // SEMPRE canto inferior direito
 }
 
 // Portão antes de o feedback aceitar clique. Vale para TODO card, não só o
@@ -360,6 +348,8 @@ function _posicionarPilhaNotif() {
 // mesmo na prática e deixaria o card com dois comportamentos para o mesmo
 // visual, que é a inconsistência que atrapalha TEA/TDAH.
 const CARD_GATE_MS = T(350, 900);   // TODO: ajustar tempo pra produção
+const FB_APOS_MS = T(3000, 4500);   // feedback aparece só APÓS a intervenção (não junto)
+let _fbCardTimer = null;
 
 function _travarFeedbackDoCard(alvo) {
     const strip = alvo.querySelector('.kaia-fb');
@@ -410,12 +400,14 @@ function mostrarIntervencao(intv) {
     $('kaia-int-texto').innerText  = _um(info.texto);
     const fb = $('kaia-int-fb');
     fb.textContent = '';
+    fb.hidden = true;                           // feedback só DEPOIS, não junto da intervenção
     fb.appendChild(_stripFeedback(intv.intervention_type, {
         mostradaEm: intervencaoMostradaEm, onResposta: esconderIntervencao,
     }));
     _posicionarPilhaNotif();
-    _travarFeedbackDoCard(fb);
     $('kaia-intervencao').style.display = 'block';
+    clearTimeout(_fbCardTimer);
+    _fbCardTimer = setTimeout(() => { fb.hidden = false; _travarFeedbackDoCard(fb); }, FB_APOS_MS);
 }
 
 // Esconder o card e liberar o polling eram a MESMA coisa; separá-los é o que
@@ -1211,7 +1203,7 @@ function checkpointRecuperacao() {
     voltar.textContent = 'Voltar à questão';
     voltar.addEventListener('click', encerrarCheckpoint);
     card.append(topo, pq, opts, fb, voltar);
-    lado.prepend(card);                        // INLINE no topo da área de estudo
+    document.body.appendChild(card);           // flutua no canto (position:fixed no CSS)
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1345,7 +1337,7 @@ async function reancorarCompreensao(intv) {
         opts.appendChild(b);
     });
     card.append(topo, opts, fb);
-    lado.prepend(card);
+    document.body.appendChild(card);           // flutua no canto (position:fixed no CSS)
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 

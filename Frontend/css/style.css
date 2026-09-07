@@ -2818,23 +2818,24 @@ body.kaia-mr-aberta #kaia-notificacoes {
 
 /* ---- checkpoint: card inline com uma questão do histórico recente -------- */
 .kaia-cp-card {
+  /* Card de intervenção FLUTUANTE no canto inferior DIREITO (todos os cards ali). */
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: min(360px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  z-index: 9998;
   padding: 16px 18px;
-  margin-bottom: 16px;
   border: 1px solid var(--bege-linha);
-  /* Mesmo filete do card de notificação: o checkpoint nasce DENTRO da coluna de
-     estudo, e o filete é o que o marca como intervenção e não como parte da
-     questão. Era um contorno verde inteiro — lia como "acertou". */
-  border-left: 4px solid var(--bege-forte);
+  border-left: 4px solid var(--bege-forte);   /* filete: marca como intervenção, não questão */
   border-radius: 14px;
   background: var(--card);
-  box-shadow: 0 6px 24px rgba(var(--profundo-rgb), 0.12);
-  /* O card é criado na hora pelo JS, então não há estado "fechado" para
-     transicionar — quem dá a entrada suave é a animation. Desliza de cima,
-     na mesma direção em que ele entra na página (prepend no topo da coluna). */
+  box-shadow: 0 8px 28px rgba(var(--profundo-rgb), 0.16);
   animation: kaiaCpEntra 0.32s ease-out both;
 }
 @keyframes kaiaCpEntra {
-  from { opacity: 0; transform: translateY(-8px); }
+  from { opacity: 0; transform: translateY(12px); }   /* desliza de baixo (canto) */
   to   { opacity: 1; transform: none; }
 }
 .kaia-cp-card .kaia-cp-topo {

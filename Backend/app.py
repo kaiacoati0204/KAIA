@@ -17,7 +17,7 @@ import requests
 
 from statistics import mean, pstdev
 
-from thompson import ThompsonSampling, INTERVENCOES
+from thompson import ThompsonSampling, INTERVENCOES, PARAMS_PATH
 from auth import usuario_autenticado, usuario_identidade
 from mouse_features import features_mouse, blocos_parados
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -169,10 +169,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print("[KaIA] AVISO: não foi possível carregar modelo/scaler:", e)
 
-    # Thompson Sampling (bandit das 9 intervenções) — carrega params persistidos.
+    # Thompson Sampling (bandit das intervenções) — carrega params persistidos. No modo
+    # sandbox usa um ARQUIVO separado (o params é local, não tabela; sem isso o teste
+    # treinaria o mesmo bandit da produção na mesma máquina).
     try:
-        app.state.thompson = ThompsonSampling()
-        print("[KaIA] Thompson Sampling carregado (9 intervenções).")
+        _tp = (PARAMS_PATH if DB_SCHEMA == "public"
+               else PARAMS_PATH.with_name(f"thompson_params_{DB_SCHEMA}.json"))
+        app.state.thompson = ThompsonSampling(params_path=_tp)
+        print(f"[KaIA] Thompson Sampling carregado (bandit={_tp.name}).")
     except Exception as e:
         app.state.thompson = None
         print("[KaIA] AVISO: não foi possível iniciar Thompson Sampling:", e)

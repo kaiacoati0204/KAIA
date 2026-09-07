@@ -586,6 +586,38 @@ async def test_rodar_intervencao_sem_baseline(monkeypatch):
     assert conn.executed == []
 
 
+def test_registrar_falha_geracao(capsys):
+    """Conta por dia e sobe o tom do log ao passar do alerta."""
+    app_mod._FALHAS_GERACAO.clear()
+    assert app_mod._registrar_falha_geracao("teste") == 1
+    assert "info" in capsys.readouterr().out
+    for _ in range(app_mod.FALHAS_GERACAO_ALERTA - 2):
+        app_mod._registrar_falha_geracao("teste")
+    capsys.readouterr()
+    n = app_mod._registrar_falha_geracao("teste")
+    assert n == app_mod.FALHAS_GERACAO_ALERTA
+    assert "AVISO" in capsys.readouterr().out
+    app_mod._FALHAS_GERACAO.clear()
+
+
+def test_embed_usa_cache(monkeypatch):
+    """Mesma frase não volta pra API — era o que estourava a cota do embedding."""
+    app_mod._EMBED_CACHE.clear()
+    chamadas = []
+
+    class _R:
+        def json(self):
+            chamadas.append(1)
+            return {"embedding": {"values": [0.1] * app_mod.EMBED_DIM}}
+
+    monkeypatch.setattr(app_mod.requests, "post", lambda *a, **k: _R())
+    for _ in range(5):
+        app_mod._embed("Historia: Segunda Guerra")
+    app_mod._embed("Biologia: Genetica")
+    assert len(chamadas) == 2          # 6 pedidos, 2 temas distintos
+    app_mod._EMBED_CACHE.clear()
+
+
 def test_leitura_confiavel():
     feats = {n: 0.0 for n in app_mod.FEATURE_ORDER}
     assert app_mod.leitura_confiavel(feats) is False       # internas todas zeradas

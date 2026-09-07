@@ -278,6 +278,25 @@ def _embed(texto):
         return None
 
 
+# ==== FALHA DE GERAÇÃO (proxy de cota estourada) ====
+# Cota estourada NÃO quebra o app: o cache-first serve questão antiga e o front entra
+# em cooldown. Ótimo pro aluno, péssimo pra você — passa despercebido até alguém notar
+# que as questões pararam de variar. O contador põe isso no log, com total do dia.
+_FALHAS_GERACAO = {}          # 'AAAA-MM-DD' -> n
+FALHAS_GERACAO_ALERTA = 10    # a partir daqui o log sobe de tom
+
+
+def _registrar_falha_geracao(onde):
+    """Conta e loga uma falha de geração. Devolve o total de hoje."""
+    dia = datetime.now(timezone.utc).date().isoformat()
+    for d in [d for d in _FALHAS_GERACAO if d < dia]:      # ISO ordena por data
+        _FALHAS_GERACAO.pop(d, None)
+    n = _FALHAS_GERACAO[dia] = _FALHAS_GERACAO.get(dia, 0) + 1
+    marca = "AVISO (cota?)" if n >= FALHAS_GERACAO_ALERTA else "info"
+    print(f"[KaIA] {marca}: falha de geração em {onde} — {n}ª hoje ({dia})")
+    return n
+
+
 def _vec_literal(v):
     """Vetor como literal pgvector ('[a,b,...]') p/ passar via asyncpg + cast ::vector."""
     return "[" + ",".join(f"{x:.6f}" for x in v) + "]"
@@ -333,6 +352,7 @@ em texto corrido sem markdown."""
                 return {"pede": pede, "erros": erros[:2]}
         except Exception as e:
             print("[KaIA] erro reancoragem (re-tentando):", e)
+    _registrar_falha_geracao("intervencao_reancoragem")
     return JSONResponse({"erro": "falha na geração"}, status_code=502)
 
 
@@ -1065,6 +1085,7 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
         entregues = [_frontend_q(q) for q in await _gerar_no_gemini(
             n, materia, nome, tema, hobbie, nivel, exemplos=_exemplos_few_shot(materia))]
         if not entregues:
+            _registrar_falha_geracao("gerar-questao (sem cache)")
             return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
         return {"questoes": entregues} if lote else entregues[0]
 
@@ -1092,6 +1113,7 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
         print("[KaIA] erro no cache /gerar-questao:", e)
 
     if not entregues:
+        _registrar_falha_geracao("gerar-questao")
         return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
     return {"questoes": entregues} if (lote or distribuicao) else entregues[0]
 

@@ -2549,6 +2549,16 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
   font-size: 17px;
   font-weight: 600;
 }
+/* Intro: a frase de acolhimento ocupa o slot de destaque (onde depois entra
+   "Inspira…"), maior, como único foco antes da respiração começar. O ícone
+   some para a frase respirar; volta ao normal quando os passos entram. */
+#kaia-mr.mr-intro .kaia-mr-msg {
+  max-width: 620px;
+  margin: 0 auto 8px;
+  font-size: 22px;
+  line-height: 1.4;
+}
+#kaia-mr.mr-intro .kaia-mr-msg .kaia-ic { display: none; }
 /* Frase de acolhimento sorteada UMA vez na abertura (FRASES_MICRO_REFOCO, no
    materias.js) e parada durante os 30s: variar entre aparições dá variedade,
    variar durante viraria movimento numa intervenção que existe para acalmar. */

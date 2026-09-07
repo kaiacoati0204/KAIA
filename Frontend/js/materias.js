@@ -934,17 +934,17 @@ function iniciarMicroRefoco() {
     $('kaia-mr').querySelector('.kaia-mr-track').style.display = '';
     $('kaia-mr-pular').textContent = 'Pular';
     // Sorteia AQUI, uma vez só: nada de trocar a frase durante a respiração.
-    const frase = $('kaia-mr-frase');
-    frase.style.display = '';
-    frase.textContent = _variar(FRASES_MICRO_REFOCO);
+    const fraseTxt = _variar(FRASES_MICRO_REFOCO);
+    $('kaia-mr-frase').style.display = 'none';  // a frase agora mora no slot de destaque (msg)
     pausaAtiva = true;                         // suspende idle/aba/exit durante a respiração
     const passos = ['Inspira… 🌬️', 'Segura…', 'Expira devagar…'];
     // TODO: ajustar tempo pra produção — 6s no teste, 30s de verdade. passoMs é
     // o tempo de cada fase da respiração (inspira/segura/expira).
     const dur = T(6 * 1000, 30 * 1000), passoMs = T(1.2 * 1000, 4 * 1000);
     $('kaia-mr').classList.add('aberto');
+    $('kaia-mr').classList.add('mr-intro');    // frase GRANDE no slot de destaque
     document.body.classList.add('kaia-mr-aberta');
-    $('kaia-mr-msg').innerText = '';           // intro: só a frase; "Inspira" entra quando a respiração começa
+    $('kaia-mr-msg').innerText = fraseTxt;      // intro: a frase ocupa o lugar do "Inspira"
     _medirBarraMicroRefoco();
     // A barra entra CHEIA e fica parada por MR_DELAY_MS — tempo de ler a frase.
     // Só depois ela começa a cair linearmente até 0 (via transition CSS, sem
@@ -960,6 +960,7 @@ function iniciarMicroRefoco() {
     _mrDelayTimer = setTimeout(() => {
         fill.style.transition = `width ${dur}ms linear`;
         fill.style.width = '0%';
+        $('kaia-mr').classList.remove('mr-intro'); // volta ao tamanho normal p/ a respiração
         $('kaia-mr-msg').innerText = passos[0];   // AGORA começa a respiração (após a frase)
         // a mensagem troca por fase da respiração
         const inicio = performance.now();

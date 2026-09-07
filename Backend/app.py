@@ -33,6 +33,9 @@ load_dotenv()
 # Aceita os dois nomes: API_KEY (prod/CI) ou CHAVE_ACESSO (.env local).
 API_KEY = os.getenv("API_KEY") or os.getenv("CHAVE_ACESSO")
 DATABASE_URL = os.getenv("DATABASE_URL")
+# Schema-alvo: 'public' (produção, padrão) ou 'teste' (sandbox isolado no MESMO banco).
+# No modo teste o search_path aponta pro schema `teste` -> dados separados do público.
+DB_SCHEMA = os.getenv("KAIA_DB_SCHEMA", "public")
 
 # Sessão sem NENHUM evento há mais de STALE_SESSAO_MIN minutos é encerrada pelo
 # sweep do scheduler (evita lixo de abas esquecidas/travadas). Ajustável por env
@@ -129,15 +132,12 @@ async def lifespan(app: FastAPI):
               "As rotas de dados (sessions/events/perfil/responsavel) ficarão indisponíveis.")
     else:
         try:
-            app.state.pool = await asyncpg.create_pool(
-                DATABASE_URL,
-                statement_cache_size=0,
-                min_size=1,
-                max_size=5,
-                timeout=8,            # connect timeout: falha rápido se a porta estiver bloqueada
-                command_timeout=15,
-            )
-            print("[KaIA] Pool de conexão com o Supabase criado.")
+            _pool_kwargs = dict(statement_cache_size=0, min_size=1, max_size=5,
+                                timeout=8, command_timeout=15)
+            if DB_SCHEMA != "public":     # sandbox: todo nome solto cai no schema de teste
+                _pool_kwargs["server_settings"] = {"search_path": f"{DB_SCHEMA}, public, extensions"}
+            app.state.pool = await asyncpg.create_pool(DATABASE_URL, **_pool_kwargs)
+            print(f"[KaIA] Pool de conexão com o Supabase criado (schema={DB_SCHEMA}).")
         except Exception as e:
             print("[KaIA] AVISO: não foi possível conectar ao banco — subindo SEM banco:", e)
 

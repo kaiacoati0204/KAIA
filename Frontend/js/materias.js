@@ -1687,7 +1687,13 @@ const META_QUESTOES = 10;       // meta = 10 (por rodada e por dia)
 // Probe de self-report (rótulo real de atenção p/ o ML): 1 por rodada, numa questão
 // sorteada da 5ª à 9ª — baseline de RT já aquecido e antes do fim da rodada.
 let probeAlvoRodada = 0;
-function sortearAlvoProbe() { probeAlvoRodada = 5 + Math.floor(Math.random() * 5); }  // 5..9
+// A abertura da sessão nunca era rotulada: o 1º probe só vinha na 5ª questão, mas o
+// sistema já pode intervir a partir de INTERV_WARMUP_MIN (3 min) — havia uma faixa em
+// que ele agia sem nenhum rótulo real para conferir depois. A 1ª rodada sorteia 3..7;
+// as seguintes voltam a 5..9, para não interromper mais do que o necessário.
+function sortearAlvoProbe(primeiraDaSessao = false) {
+    probeAlvoRodada = (primeiraDaSessao ? 3 : 5) + Math.floor(Math.random() * 5);
+}
 
 // Revisão de erros (Parte 7): guarda as questões erradas da sessão + estado da revisão.
 let errosSessao = [];
@@ -1743,7 +1749,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     acertosSessao = 0;
     questoesNaRodada = 0;
     metaDiariaContada = false;
-    sortearAlvoProbe();
+    sortearAlvoProbe(true);        // 1ª rodada da sessão: cobre a abertura
     errosSessao = [];
     emRevisao = false;
     nivelDificuldade = 2;
@@ -1940,7 +1946,7 @@ function checkAnswer(idx, btn) {
     questoesNaRodada++;
     if (acertou) acertosNaRodada++;   // nota da rodada -> troca de nível no fim (fecharNivelDaRodada)
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
-    if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // probe de self-report (1/rodada, 5ª–9ª)
+    if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // 1/rodada (3ª–7ª na 1ª, 5ª–9ª depois)
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
     if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {
         registrarMetaDiaria();

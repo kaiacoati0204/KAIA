@@ -60,6 +60,10 @@ CONTAGEM = {  # médias de contagens (Poisson) por estado
     "contagem_lapsos_rt": {"engajado": 0.3, "distraido": 1.8, "muito_distraido": 0.9},
     "erros_sem_offtask":  {"engajado": 0.2, "distraido": 1.0, "muito_distraido": 0.4},
 }
+# Contagens/tempos acima valem para uma sessao de DUR_REF min; sessoes mais curtas
+# acumulam proporcionalmente menos. Sem isso o modelo aprende contagem ABSOLUTA e
+# fica cego no comeco da sessao, quando tudo ainda esta baixo por definicao.
+DUR_REF = 20.0
 
 # ---- mouse ----
 def gerar_track(erratic, n):
@@ -106,6 +110,11 @@ def gerar_sessao(estado, aluno, base_mouse):
     elif estado == "distraido" and random.random() < 0.05:
         ef = "muito_distraido"
 
+    # duracao sorteada ANTES das contagens: elas acumulam com o tempo (fator)
+    dist_ctx = {"engajado": 0, "distraido": 1, "muito_distraido": 1}[ef]
+    dur = round(max(3, random.gauss(18 + 4 * dist_ctx, 8)), 1)
+    fator = dur / DUR_REF
+
     f = {}
     # internas relativas geradas direto (sigma); z faz co-variar
     for nome, m in DESVIO.items():
@@ -115,9 +124,9 @@ def gerar_sessao(estado, aluno, base_mouse):
         f[nome] = round(val, 3)
 
     # contagens (Poisson), com efeito de dificuldade nos erros
-    lam_l = CONTAGEM["contagem_lapsos_rt"][ef] * (0.6 + 0.4 * z)
+    lam_l = CONTAGEM["contagem_lapsos_rt"][ef] * (0.6 + 0.4 * z) * fator
     f["contagem_lapsos_rt"] = int(np.random.poisson(max(0.01, lam_l)))
-    lam_e = CONTAGEM["erros_sem_offtask"][ef] * (0.7 + 0.15 * (dif - 3))
+    lam_e = CONTAGEM["erros_sem_offtask"][ef] * (0.7 + 0.15 * (dif - 3)) * fator
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
 
     # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno
@@ -134,20 +143,21 @@ def gerar_sessao(estado, aluno, base_mouse):
 
     # externas absolutas — muito_distraído = frequente+longo; presente (eng/dist) = blip ocasional
     if ef == "muito_distraido":
-        f["mudancas_aba"] = max(2, int(np.random.poisson(4)))
-        f["tempo_fora_foco_s"] = round(max(15, random.gauss(60, 30)), 1)
-        f["cliques_fora_area_estudo"] = int(np.random.poisson(3))
+        f["mudancas_aba"] = max(1, int(np.random.poisson(4 * fator)))
+        # fracao da sessao fora da tela: garante por construcao que nunca passa da duracao
+        frac = max(0.02, random.gauss(0.05, 0.025))
+        f["tempo_fora_foco_s"] = round(frac * dur * 60, 1)
+        f["cliques_fora_area_estudo"] = int(np.random.poisson(3 * fator))
     else:
-        blip = random.random() < 0.13
-        f["mudancas_aba"] = 1 if blip else 0
-        f["tempo_fora_foco_s"] = round(random.uniform(2, 10), 1) if blip else 0.0
-        f["cliques_fora_area_estudo"] = 1 if random.random() < 0.10 else 0
+        blips = int(np.random.poisson(0.13 * fator))     # risco por minuto, nao por sessao
+        f["mudancas_aba"] = blips
+        f["tempo_fora_foco_s"] = round(sum(random.uniform(2, 10) for _ in range(blips)), 1)
+        f["cliques_fora_area_estudo"] = int(np.random.poisson(0.10 * fator))
     f["taxa_abandono_sessao"] = round(min(1.0, max(0.0, aluno["distraibilidade"] + random.gauss(0, 0.1))), 3)
 
     # contexto absolutas
     f["nivel_dificuldade_atividade"] = dif
-    dist_ctx = {"engajado": 0, "distraido": 1, "muito_distraido": 1}[ef]
-    f["duracao_sessao_min"] = round(max(3, random.gauss(18 + 4 * dist_ctx, 8)), 1)
+    f["duracao_sessao_min"] = dur
     f["hora_do_dia"] = round(min(23.9, max(7, random.gauss(15 + 3 * dist_ctx, 4))), 2)
     f["tempo_estudo_acumulado_dia_min"] = round(max(0, random.gauss(40 + 20 * dist_ctx, 30)), 1)
     return f

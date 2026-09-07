@@ -468,6 +468,7 @@ function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs 
             mostradaEm, agradecer: true, onResposta: () => setTimeout(sumir, 1200),
         }));
         _pilhaNotif().appendChild(card);
+        _posicionarPilhaNotif();        // canto inferior direito, como os outros cards
         setTimeout(sumir, vidaMs);      // ignorado: some sozinho, sem cobrar resposta
     }, atrasoMs);
 }
@@ -943,7 +944,7 @@ function iniciarMicroRefoco() {
     const dur = T(6 * 1000, 30 * 1000), passoMs = T(1.2 * 1000, 4 * 1000);
     $('kaia-mr').classList.add('aberto');
     document.body.classList.add('kaia-mr-aberta');
-    $('kaia-mr-msg').innerText = passos[0];
+    $('kaia-mr-msg').innerText = '';           // intro: só a frase; "Inspira" entra quando a respiração começa
     _medirBarraMicroRefoco();
     // A barra entra CHEIA e fica parada por MR_DELAY_MS — tempo de ler a frase.
     // Só depois ela começa a cair linearmente até 0 (via transition CSS, sem
@@ -959,6 +960,7 @@ function iniciarMicroRefoco() {
     _mrDelayTimer = setTimeout(() => {
         fill.style.transition = `width ${dur}ms linear`;
         fill.style.width = '0%';
+        $('kaia-mr-msg').innerText = passos[0];   // AGORA começa a respiração (após a frase)
         // a mensagem troca por fase da respiração
         const inicio = performance.now();
         _mrInterval = setInterval(() => {
@@ -1020,6 +1022,7 @@ function encerrarMicroRefoco() {
 // ESCOLHA "Trocar" / "Continuar" (dá agência ao aluno).
 let _trocaTemaAlvo   = null;
 let _trocaMostradaEm = 0;
+let _trocaFeedbackPendente = false;   // troca: feedback só APÓS responder (no tema novo)
 
 function _garantirCardTroca() {
     if ($('kaia-troca')) return;
@@ -1040,8 +1043,8 @@ function _garantirCardTroca() {
     document.body.appendChild(el);
     // Feedback só DEPOIS (Fase 2): somar 3 botões aos 2 daqui daria 5 escolhas de
     // uma vez, e no instante da escolha o aluno ainda não sentiu o efeito da troca.
-    $('kaia-troca-sim').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _trocarTema(); _perguntarDepoisDaTroca(); });
-    $('kaia-troca-nao').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _perguntarDepoisDaTroca(); });
+    $('kaia-troca-sim').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _trocarTema(); _trocaFeedbackPendente = true; });
+    $('kaia-troca-nao').addEventListener('click', () => { _esconderTroca(); liberarPolling(); _trocaFeedbackPendente = true; });
 }
 
 // tempo até perguntar (aluno já sentiu o efeito)
@@ -1052,7 +1055,7 @@ function _perguntarDepoisDaTroca() {
         titulo: 'Sobre a troca de tema',
         icone: 'troca_atividade',
         pergunta: 'A sugestão de trocar de tema ajudou seu foco?',
-        atrasoMs: TROCA_FEEDBACK_MS, mostradaEm: _trocaMostradaEm,
+        atrasoMs: T(1500, 2500), mostradaEm: _trocaMostradaEm,   // pouco depois da resposta no tema novo
     });
 }
 
@@ -2119,6 +2122,7 @@ function checkAnswer(idx, btn) {
     questoesNaRodada++;
     if (acertou) acertosNaRodada++;   // nota da rodada -> troca de nível no fim (fecharNivelDaRodada)
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
+    if (_trocaFeedbackPendente) { _trocaFeedbackPendente = false; _perguntarDepoisDaTroca(); }   // troca: feedback só depois de responder no tema novo
     if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // 1/rodada (3ª–7ª na 1ª, 5ª–9ª depois)
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
     if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {

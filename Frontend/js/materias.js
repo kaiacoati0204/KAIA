@@ -524,11 +524,16 @@ function iniciarPollIntervencao() {
 // origem: 'gatilho_teste' no payload, para dar para filtrar depois.
 const GATILHO_TESTE = false;
 
-// Barra de teste liga pela const acima (produção) OU por flag no localStorage
-// (kaiaGatilhoTeste(true)) — dá pra ligar em teste sem tocar na const de produção.
+// Barra de teste: AUTOMÁTICA nas contas @teste.kaia (as de teste que criamos), OU por
+// flag no localStorage (kaiaGatilhoTeste(true)), OU pela const de produção. Assim ela
+// só aparece pra quem está testando, sem tocar no GATILHO_TESTE=false de produção.
 function _barraTesteLigada() {
-    try { return GATILHO_TESTE || localStorage.getItem('kaia_teste_bar') === '1'; }
-    catch (e) { return GATILHO_TESTE; }
+    try {
+        const email = (((typeof lerPerfil === 'function' && lerPerfil()) || {}).email || '').toLowerCase();
+        if (email.endsWith('@teste.kaia')) return true;
+        if (localStorage.getItem('kaia_teste_bar') === '1') return true;
+    } catch (e) { /* perfil/localStorage indisponível */ }
+    return GATILHO_TESTE;
 }
 
 // TODO: ajustar tempo pra produção — não se aplica: isto sai antes da produção.

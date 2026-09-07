@@ -2817,7 +2817,7 @@ body.kaia-mr-aberta #kaia-notificacoes {
 }
 
 /* ---- checkpoint: card inline com uma questão do histórico recente -------- */
-#kaia-cp {
+.kaia-cp-card {
   padding: 16px 18px;
   margin-bottom: 16px;
   border: 1px solid var(--bege-linha);
@@ -2837,21 +2837,21 @@ body.kaia-mr-aberta #kaia-notificacoes {
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: none; }
 }
-#kaia-cp .kaia-cp-topo {
+.kaia-cp-card .kaia-cp-topo {
   margin-bottom: 8px;
   color: var(--bege-tinta);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-#kaia-cp .kaia-cp-q {
+.kaia-cp-card .kaia-cp-q {
   margin: 0 0 12px;
   color: var(--tinta);
   font-size: 15px;
   line-height: 1.4;
 }
-#kaia-cp .kaia-cp-opts { display: flex; flex-direction: column; gap: 8px; }
-#kaia-cp .kaia-cp-opt {
+.kaia-cp-card .kaia-cp-opts { display: flex; flex-direction: column; gap: 8px; }
+.kaia-cp-card .kaia-cp-opt {
   padding: 9px 12px;
   /* Contorno em bege no lugar do azul-profundo: quatro opções com borda escura
      pesavam mais que a própria questão logo abaixo. */
@@ -2865,21 +2865,21 @@ body.kaia-mr-aberta #kaia-notificacoes {
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
-#kaia-cp .kaia-cp-opt:hover:not(:disabled) {
+.kaia-cp-card .kaia-cp-opt:hover:not(:disabled) {
   border-color: var(--bege-forte);
   background: rgba(var(--bege-rgb), 0.24);
 }
-#kaia-cp .kaia-cp-opt:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
-#kaia-cp .kaia-cp-opt:disabled { opacity: 0.7; cursor: default; }
+.kaia-cp-card .kaia-cp-opt:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
+.kaia-cp-card .kaia-cp-opt:disabled { opacity: 0.7; cursor: default; }
 /* `color` explícito: sem ele a devolutiva herdava o azul-coati do <body> e saía
    azul no meio de um card que não tem mais nada azul. */
-#kaia-cp .kaia-cp-fb {
+.kaia-cp-card .kaia-cp-fb {
   margin: 10px 0 0;
   min-height: 1.2em;
   color: var(--tinta);
   font-size: 14px;
 }
-#kaia-cp .kaia-cp-voltar {
+.kaia-cp-card .kaia-cp-voltar {
   display: none;
   margin-top: 10px;
   padding: 9px 16px;
@@ -2891,7 +2891,7 @@ body.kaia-mr-aberta #kaia-notificacoes {
   font-size: 14px;
   cursor: pointer;
 }
-#kaia-cp .kaia-fb-wrap { margin-top: 12px; }
+.kaia-cp-card .kaia-fb-wrap { margin-top: 12px; }
 /* A questão atual atenua enquanto o checkpoint está aberto, e recebe um realce
    de re-entrada ao fechar (reduz o custo de retomada).
    A transição mora na BASE, não na classe: se ficasse só em .kaia-cp-dim, ao
@@ -3030,7 +3030,7 @@ body.kaia-reancorar .option-btn {
   /* O card de notificação entrava com `animation: kaiaIn` e tinha escapado
      desta lista — era a única das 7 que ainda se movia aqui. */
   .kaia-card-notif,
-  #kaia-cp,
+  .kaia-cp-card,
   body.kaia-reancorar #quiz-view::before,
   body.kaia-reancorar-saindo #quiz-view::before { animation: none; }
 }

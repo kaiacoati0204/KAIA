@@ -396,7 +396,7 @@ function mostrarIntervencao(intv) {
     if (intv.intervention_type === 'micro_refoco')    { iniciarMicroRefoco();     return; }
     if (intv.intervention_type === 'troca_atividade') { mostrarTrocaTema();       return; }
     if (intv.intervention_type === 'checkpoint')      { checkpointRecuperacao();  return; }
-    if (intv.intervention_type === 'reancoragem')     { reancorarDestaque();      return; }
+    if (intv.intervention_type === 'reancoragem')     { reancorarCompreensao(intv); return; }
     _garantirCardIntervencao();
     const info = INTERVENCOES_MSG[intv.intervention_type]
               || { titulo: 'Dica', texto: 'Continue focado!' };
@@ -1164,6 +1164,7 @@ function checkpointRecuperacao() {
 
     const card = document.createElement('div');
     card.id = 'kaia-cp';
+    card.className = 'kaia-cp-card';
     card.setAttribute('role', 'group');
     const topo = document.createElement('div');
     topo.className = 'kaia-cp-topo';
@@ -1268,6 +1269,104 @@ function reancorarDestaque() {
             () => document.body.classList.remove('kaia-reancorar', 'kaia-reancorar-saindo'),
             REANCORA_SAIDA_MS);
     }, REANCORA_MS);
+}
+
+// ---- REANCORAGEM POR COMPREENSÃO (mecanismo principal) ----------------------
+// Olha pro PRESENTE (vs checkpoint = passado): micro-check do ENUNCIADO ATUAL antes
+// de responder — "o que a questão realmente pede?" 3 frases (1 comando central + 2
+// leituras erradas plausíveis) geradas sob demanda. Falha na geração -> spotlight.
+const REANCORA_ABERTURAS = [
+    'Antes de responder — o que a questão está pedindo?',
+    'Foca no comando: o que ela realmente pede?',
+    'Rapidinho: qual é o comando central da questão?',
+    'Pra reancorar — o que a pergunta quer de você?',
+];
+const REANCORA_ACERTO = ['Isso — é esse o comando. Bora responder.',
+    'Certo, era isso mesmo. De volta pro foco.', 'Boa: você pegou o que ela pede.'];
+const REANCORA_ERRO = ['Na verdade, ela pede: {r}. Agora vai.',
+    'O comando é: {r}. Reancorado — segue.', 'Era: {r} — fácil se prender no resto, né?'];
+const REANCORA_ROTULO_FB = ['Isso te ajudou a reancorar?', 'Focar no comando ajudou?',
+    'Valeu pra achar o que a questão pede?'];
+
+let _reMostradaEm = 0, _reCorreta = 0;
+
+async function reancorarCompreensao(intv) {
+    const lado = document.querySelector('.quiz-lado-questao');
+    const enun = currentQuestion && currentQuestion.q;
+    if (!lado || !enun) { reancorarDestaque(); return; }   // sem questão na tela -> spotlight
+    pausaAtiva = true;                                      // suspende sensores durante o card
+    _reMostradaEm = intervencaoMostradaEm;
+    const antigo = $('kaia-re'); if (antigo) antigo.remove();
+
+    const card = document.createElement('div');
+    card.id = 'kaia-re';
+    card.className = 'kaia-cp-card';                        // herda o visual do checkpoint
+    card.setAttribute('role', 'group');
+    const topo = document.createElement('div');
+    topo.className = 'kaia-cp-topo';
+    topo.innerHTML = _iconeHTML('reancoragem');
+    topo.append(' ' + _variar(REANCORA_ABERTURAS));
+    const opts = document.createElement('div');
+    opts.className = 'kaia-cp-opts';
+    opts.innerHTML = '<p class="kaia-cp-q" style="opacity:.55">preparando…</p>';
+    const fb = document.createElement('p');
+    fb.className = 'kaia-cp-fb'; fb.id = 'kaia-re-fb';
+    card.append(topo, opts, fb);
+    lado.prepend(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    let dados = null;
+    try { dados = await postJSON('/intervencao/reancoragem', { enunciado: enun }); } catch (e) { /* fallback abaixo */ }
+    if (!dados || !dados.pede || !(Array.isArray(dados.erros) && dados.erros.length >= 2)) {
+        card.remove(); pausaAtiva = false; reancorarDestaque(); return;   // geração falhou -> spotlight
+    }
+    const frases = embaralhar([{ t: dados.pede, ok: true }, { t: dados.erros[0] }, { t: dados.erros[1] }]);
+    _reCorreta = frases.findIndex(f => f.ok);
+    opts.innerHTML = '';
+    frases.forEach((f, i) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'kaia-cp-opt'; b.textContent = f.t;
+        b.addEventListener('click', () => _responderReancora(i));
+        opts.appendChild(b);
+    });
+}
+
+function _responderReancora(escolhido) {
+    const acertou = escolhido === _reCorreta;
+    const btns = $$('#kaia-re .kaia-cp-opt');
+    const certa = btns[_reCorreta] ? btns[_reCorreta].textContent : '';
+    $('kaia-re-fb').textContent = acertou ? _variar(REANCORA_ACERTO)
+                                          : _variar(REANCORA_ERRO).replace('{r}', certa);
+    btns.forEach((b, i) => {
+        b.disabled = true;
+        if (i === _reCorreta) {
+            b.style.background = 'var(--acerto-bg)'; b.style.color = 'var(--acerto-tx)'; b.style.borderColor = 'var(--acerto-tx)';
+        } else if (i === escolhido) {
+            b.style.background = 'var(--erro-bg)'; b.style.color = 'var(--erro-tx)'; b.style.borderColor = 'var(--erro-tx)';
+        }
+    });
+    const card = $('kaia-re');
+    if (card && !card.querySelector('.kaia-fb-wrap')) {
+        card.appendChild(_stripFeedback('reancoragem', {
+            rotulo: _variar(REANCORA_ROTULO_FB), mostradaEm: _reMostradaEm, agradecer: true,
+        }));
+    }
+    let voltar = $('kaia-re-voltar');
+    if (!voltar) {
+        voltar = document.createElement('button');
+        voltar.type = 'button'; voltar.className = 'kaia-cp-voltar'; voltar.id = 'kaia-re-voltar';
+        voltar.textContent = 'Voltar à questão';
+        voltar.addEventListener('click', encerrarReancora);
+        card.appendChild(voltar);
+    }
+    voltar.style.display = 'inline-block';
+}
+
+function encerrarReancora() {
+    const card = $('kaia-re'); if (card) card.remove();
+    pausaAtiva = false; idleTime = 0;                      // retoma sensores sem contar o card
+    if (isMissionActive) setEstado('ESTUDANDO');
+    liberarPolling();
 }
 
 // ============================================================

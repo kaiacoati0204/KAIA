@@ -289,6 +289,38 @@ async def temas(dados: dict = Body(default={})):
     return {"temas": lista, "fonte": "fixo"}
 
 
+@app.post("/intervencao/reancoragem", dependencies=[Depends(usuario_autenticado)])
+async def intervencao_reancoragem(dados: dict = Body(default={})):
+    """Reancoragem (refeita): dado o ENUNCIADO da questão atual, gera 3 frases curtas —
+    o que a questão REALMENTE pede + 2 leituras erradas plausíveis (presa à moldura /
+    foca num detalhe). Micro-check de compreensão do PRESENTE (vs checkpoint = passado).
+    Escopo: trabalha no enunciado da questão (o produto foca em questões, não em textos)."""
+    enunciado = (dados.get("enunciado") or "").strip()
+    if not enunciado:
+        return JSONResponse({"erro": "sem enunciado"}, status_code=400)
+    prompt = f"""Um aluno se distraiu lendo esta questão. Antes de voltar às alternativas,
+ele vai reancorar identificando O QUE A QUESTÃO REALMENTE PEDE (o comando central).
+ENUNCIADO: {enunciado[:1500]}
+
+Responda APENAS com um objeto JSON EXATO:
+{{"pede": "frase curta (no máximo 12 palavras) do comando central da questão",
+  "erros": ["leitura errada 1: presa à MOLDURA/contexto do enunciado, não ao comando",
+            "leitura errada 2: foca num DETALHE secundário em vez do comando central"]}}
+As 3 frases devem ser curtas, do MESMO tamanho/estilo (não entregue qual é a certa),
+em texto corrido sem markdown."""
+    try:
+        d = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
+        pede = _sem_markdown((d or {}).get("pede", "") or "").strip()
+        erros = [_sem_markdown(e or "").strip() for e in ((d or {}).get("erros") or [])]
+        erros = [e for e in erros if e]
+        if not pede or len(erros) < 2:
+            return JSONResponse({"erro": "geração inválida"}, status_code=502)
+        return {"pede": pede, "erros": erros[:2]}
+    except Exception as e:
+        print("[KaIA] erro reancoragem:", e)
+        return JSONResponse({"erro": "falha na geração"}, status_code=502)
+
+
 # ================== API: ANOTAÇÕES (caderno do aluno por tema) ================
 # Canvas de anotações da tela de estudo (Etapa 9a — só texto). Uma linha por
 # (aluno_id, tema); os elementos ficam num array jsonb. Só o backend acessa a

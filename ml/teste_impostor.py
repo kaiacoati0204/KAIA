@@ -23,8 +23,7 @@ Uso (na raiz do projeto):
     python ml/teste_impostor.py --modelo gemini-3.1-flash-lite
 
 Saída em ml/artifacts/impostor/:
-    teste_<materia>.txt    — o que circula: manda por mensagem, imprime, responde na hora
-    teste_<materia>.html   — mesma coisa em página (soma as respostas sozinho)
+    teste_<materia>.txt    — um por professor; manda por mensagem, imprime, responde na hora
     gabarito_<ts>.json     — quem é quem. NÃO abra antes de coletar as respostas.
 """
 import os
@@ -33,7 +32,6 @@ import json
 import random
 import asyncio
 import argparse
-import html as _html
 import textwrap
 from pathlib import Path
 from datetime import datetime, timezone
@@ -111,8 +109,8 @@ async def reais(conn, materia, area, n):
 
 
 # ==== TEXTO ====
-# Formato principal: e o que se manda por WhatsApp, imprime e o professor responde
-# na hora. O HTML e conveniencia (soma as respostas sozinho); o .txt e o que circula.
+# Texto puro de proposito: e o que se manda por WhatsApp, imprime e o professor
+# responde na hora, sem precisar baixar arquivo nem abrir navegador.
 def montar_texto(nome, itens):
     larg = 78
     fora = [f"AVALIACAO DE QUESTOES — {nome.upper()}", ""]
@@ -137,89 +135,6 @@ def montar_texto(nome, itens):
                  "   Por que: _______________________________________________",
                  "", "-" * larg, ""]
     return "\n".join(fora)
-
-
-# ==== PÁGINA ====
-def montar_html(titulo, itens):
-    """Página autoexplicativa: só enunciado e alternativas, com as duas perguntas."""
-    linhas = []
-    for i, q in enumerate(itens, 1):
-        alts = "".join(
-            f"<li>{_html.escape(str(a))}</li>" for a in (q["alternativas"] or []))
-        linhas.append(f"""
-  <article>
-    <h2>Questão {i}</h2>
-    <p class="enun">{_html.escape(q["enunciado"])}</p>
-    <ol type="A">{alts}</ol>
-    <div class="perg">
-      <label><b>1. Esta questão é:</b>
-        <select data-q="{i}" class="voto">
-          <option value="">—</option>
-          <option value="real">de prova/vestibular</option>
-          <option value="gerada">gerada por IA</option>
-        </select>
-      </label>
-      <label><b>2. O que te fez decidir?</b>
-        <input type="text" data-q="{i}" class="motivo" placeholder="uma linha basta">
-      </label>
-    </div>
-  </article>""")
-
-    return f"""<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{_html.escape(titulo)}</title>
-<style>
-  :root {{ --marfim:#f4ecdd; --card:#fbf6ec; --tinta:#2b2a26; --profundo:#1a2b4c; --kinrou:#f3d009; }}
-  body {{ background:var(--marfim); color:var(--tinta); font:16px/1.6 Georgia, serif;
-          margin:0; padding:32px 20px; }}
-  main {{ max-width:760px; margin:0 auto; }}
-  h1 {{ color:var(--profundo); font-size:1.5rem; }}
-  .intro {{ background:var(--card); border-left:3px solid var(--kinrou);
-            padding:16px 20px; border-radius:6px; }}
-  article {{ background:var(--card); border-radius:8px; padding:20px 24px; margin:22px 0; }}
-  h2 {{ color:var(--profundo); font-size:1.05rem; margin:0 0 10px; }}
-  .enun {{ margin:0 0 12px; white-space:pre-wrap; }}
-  ol {{ margin:0 0 16px; padding-left:26px; }}
-  li {{ margin:4px 0; }}
-  .perg {{ border-top:1px solid #e4dcc9; padding-top:14px; display:grid; gap:10px; }}
-  label {{ display:block; font-size:.92rem; }}
-  select, input {{ font:inherit; padding:6px 8px; margin-top:4px;
-                   border:1px solid #cfc6b2; border-radius:5px; background:#fff; }}
-  input {{ width:100%; box-sizing:border-box; }}
-  button {{ font:inherit; padding:10px 18px; border:0; border-radius:6px;
-            background:var(--profundo); color:var(--card); cursor:pointer; }}
-  #saida {{ width:100%; height:150px; margin-top:12px; font:13px monospace;
-            display:none; box-sizing:border-box; }}
-</style></head><body><main>
-<h1>{_html.escape(titulo)}</h1>
-<div class="intro">
-  <p>Abaixo há questões de duas origens misturadas: algumas vieram de provas reais de
-  vestibular/ENEM, outras foram escritas por um sistema automático. <b>Não dizemos
-  quantas são de cada.</b></p>
-  <p>Para cada uma, diga de onde você acha que ela veio — e, mais importante,
-  <b>o que te fez decidir</b>. Não precisa resolver a questão; o que interessa é se ela
-  parece uma questão de prova.</p>
-  <p>Ao final, clique no botão e envie o texto que aparecer.</p>
-</div>
-{''.join(linhas)}
-<button onclick="montar()">Gerar minhas respostas</button>
-<textarea id="saida" readonly></textarea>
-<script>
-function montar() {{
-  const linhas = [];
-  document.querySelectorAll('.voto').forEach(s => {{
-    const i = s.dataset.q;
-    const m = document.querySelector('.motivo[data-q="' + i + '"]').value.trim();
-    linhas.push(i + ';' + (s.value || 'sem resposta') + ';' + m.replace(/;/g, ','));
-  }});
-  const t = document.getElementById('saida');
-  t.value = linhas.join('\\n');
-  t.style.display = 'block';
-  t.select();
-}}
-</script>
-</main></body></html>"""
 
 
 # ==== MAIN ====
@@ -252,8 +167,6 @@ async def main(n, modelo):
 
             arq = SAIDA / f"teste_{materia.lower()}.txt"
             arq.write_text(montar_texto(nome, itens), encoding="utf-8")
-            (SAIDA / f"teste_{materia.lower()}.html").write_text(
-                montar_html(f"Avaliação de questões — {nome}", itens), encoding="utf-8")
             gabarito["blocos"][materia] = [
                 {"n": i, "origem": q["origem"], "tema": q["tema"], "nivel": q["nivel"]}
                 for i, q in enumerate(itens, 1)]

@@ -1858,15 +1858,24 @@ let revisaoRespondidas = 0;
 // das META questões, a NOTA move o centro em ±1 (>=7 sobe, <=4 desce).
 let nivelDificuldade = 2;    // centro atual (1..5)
 let acertosNaRodada  = 0;    // acertos da rodada corrente -> define a troca de nível
+let validadasNaRodada = 0;   // dessas, quantas NÃO estavam em quarentena
 const NIVEL_MIN = 1, NIVEL_MAX = 5;
 
 // Fecha a rodada: a nota das META questões desloca o centro em ±1. Retorna se mudou.
 function fecharNivelDaRodada() {
     const antigo = nivelDificuldade;
-    if (acertosNaRodada >= 7 && nivelDificuldade < NIVEL_MAX) nivelDificuldade++;
-    else if (acertosNaRodada <= 4 && nivelDificuldade > NIVEL_MIN) nivelDificuldade--;
-    _dbg(`fim da rodada: ${acertosNaRodada}/${META_QUESTOES} acertos -> centro ${antigo}${nivelDificuldade !== antigo ? '→' + nivelDificuldade : ' (mantém)'}`);
+    // Com poucas verificadas a amostra não sustenta a decisão — mantém o nível.
+    const MIN_VALIDADAS = Math.ceil(META_QUESTOES * 0.6);
+    if (validadasNaRodada >= MIN_VALIDADAS) {
+        const nota = Math.round(acertosNaRodada / validadasNaRodada * META_QUESTOES);
+        if (nota >= 7 && nivelDificuldade < NIVEL_MAX) nivelDificuldade++;
+        else if (nota <= 4 && nivelDificuldade > NIVEL_MIN) nivelDificuldade--;
+        _dbg(`fim da rodada: ${acertosNaRodada}/${validadasNaRodada} verificadas -> nota ${nota} -> centro ${antigo}${nivelDificuldade !== antigo ? '→' + nivelDificuldade : ' (mantém)'}`);
+    } else {
+        _dbg(`fim da rodada: só ${validadasNaRodada} verificadas (< ${MIN_VALIDADAS}) -> mantém ${antigo}`);
+    }
     acertosNaRodada = 0;
+    validadasNaRodada = 0;
     atualizarNivel();
     return nivelDificuldade !== antigo;
 }
@@ -1905,6 +1914,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     emRevisao = false;
     nivelDificuldade = 2;
     acertosNaRodada = 0;
+    validadasNaRodada = 0;
     sortearHobbiesSessao();                     // 2 hobbies fixos p/ a sessão (variedade)
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
@@ -2126,7 +2136,13 @@ function checkAnswer(idx, btn) {
     if (acertou) acertosSessao++;
     else errosSessao.push({ ...currentQuestion, escolhaAluno: idx, pendenteRevisao: true });   // revisão (Parte 7): resposta do aluno (accordion) + ainda pendente de revisão (Fase 1.1)
     questoesNaRodada++;
-    if (acertou) acertosNaRodada++;   // nota da rodada -> troca de nível no fim (fecharNivelDaRodada)
+    // A nota da rodada decide subir/descer de nível. Questão em quarentena (ainda não
+    // verificada) fica FORA dessa conta: gabarito errado não pode rebaixar o aluno.
+    // Ela conta para o progresso da rodada — só não pesa na decisão.
+    if (!currentQuestion?.em_quarentena) {
+        validadasNaRodada++;
+        if (acertou) acertosNaRodada++;
+    }
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
     if (_trocaFeedbackPendente) { _trocaFeedbackPendente = false; _perguntarDepoisDaTroca(); }   // troca: feedback só depois de responder no tema novo
     if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // 1/rodada (3ª–7ª na 1ª, 5ª–9ª depois)

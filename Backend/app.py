@@ -709,6 +709,7 @@ _FORMATO_QUESTAO_HOBBIE = (
 def _row_para_questao(row):
     return {
         "questao_id": str(row["questao_id"]),
+        "veredito": row["veredito"] if "veredito" in row.keys() else None,
         "q": row["enunciado"],
         "opts": json.loads(row["alternativas"]),
         "ans": row["resposta_correta"],
@@ -722,6 +723,10 @@ def _frontend_q(q):
         # Sem o id, a resposta do aluno nao volta amarrada a QUAL questao — e sem isso
         # nao existe item analysis (ninguem consegue agrupar respostas por questao).
         "questao_id": q.get("questao_id"),
+        # Em quarentena = ainda nao verificada. O front nao a esconde (o aluno responde
+        # normalmente), mas ela NAO entra na nota que decide subir/descer de nivel: um
+        # gabarito errado nao pode rebaixar o aluno.
+        "em_quarentena": q.get("veredito") is None,
         "q": q.get("q", ""),
         "opts": q.get("opts", []),
         "ans": q.get("ans", 0),
@@ -750,12 +755,13 @@ def _exemplos_few_shot(materia):
 # instrui ~60% a usá-lo e a marcar "usa_hobbie" (Parte 5). `exemplos`: questões
 # reais injetadas como few-shot (estilo/dificuldade), quando houver.
 async def _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel, exemplos=None, evitar=None):
+    n_pedir = max(n, math.ceil(n * FATOR_SOBRA_GERACAO))   # sobra p/ cobrir os descartes
     dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
     if hobbie:
-        proporcao = max(1, round(n * 0.6))
+        proporcao = max(1, round(n_pedir * 0.6))
         formato = _FORMATO_QUESTAO_HOBBIE
         regra_hobbie = (
-            f'- Em aproximadamente {proporcao} das {n} questões, use o hobbie "{hobbie}" como '
+            f'- Em aproximadamente {proporcao} das {n_pedir} questões, use o hobbie "{hobbie}" como '
             f'CONTEXTO CENTRAL do enunciado — a situação/cenário gira em torno dele, não é só '
             f'uma menção de passagem; o conceito avaliado continua EXATAMENTE o mesmo. Nas '
             f'outras, enunciados genéricos (sem citar o hobbie).\n'
@@ -789,14 +795,14 @@ async def _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel, exemplos=None,
                 'mesmo foco; aborde aspectos/subtemas DIFERENTES:\n' + lista + '\n'
             )
     prompt = f"""
-Crie {n} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
+Crie {n_pedir} questões objetivas DIFERENTES de múltipla escolha sobre "{tema}" ({nome})
 para o ensino médio.
-Responda APENAS com um ARRAY JSON de {n} objetos, cada um no formato EXATO:
+Responda APENAS com um ARRAY JSON de {n_pedir} objetos, cada um no formato EXATO:
 {formato}
 Regras:
 - "ans" é o índice (0 a 4) da alternativa correta.
 - "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da correta use "".
-- As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
+- As {n_pedir} questões devem ser distintas entre si (enunciados e focos diferentes).
 - Alternativas (corretas E erradas) devem ser termos/conceitos REAIS e plausíveis; NUNCA invente palavras ou termos que não existam.
 - Enunciados em TEXTO CORRIDO — sem markdown (nada de ##, **, títulos ou listas).
 - O enunciado TEM de terminar em PERGUNTA ("?") ou em trecho que as alternativas completam
@@ -821,7 +827,7 @@ Regras:
         if len(boas) < len(prontas):
             print(f"[KaIA] descartadas {len(prontas) - len(boas)} questao(oes) malformada(s) "
                   f"p/ {materia}/{tema}")
-        return boas
+        return boas[:n]                                    # a sobra fica de fora
     except Exception as e:
         print("[KaIA] erro Gemini /gerar-questao:", e)
         return []
@@ -837,13 +843,14 @@ _FORMATO_POT = (
 
 
 async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=None, evitar=None):
+    n_pedir = max(n, math.ceil(n * FATOR_SOBRA_GERACAO))   # o PoT descarta bastante
     """PoT: a IA gera a questão de cálculo COM a fórmula; o backend EXECUTA a fórmula e
     usa a opção que bate como gabarito (a CONTA, não o 'achismo'), DESCARTANDO as que não
     fecham. Devolve no formato normal (q/opts/ans/porque_erradas)."""
     dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
     regra_hobbie = ""
     if hobbie:
-        regra_hobbie = (f'- Em ~{max(1, round(n * 0.6))} das {n}, use "{hobbie}" como contexto '
+        regra_hobbie = (f'- Em ~{max(1, round(n_pedir * 0.6))} das {n_pedir}, use "{hobbie}" como contexto '
                         f'central do enunciado (a conta continua a mesma).\n')
     bloco_ex = ""
     if exemplos:
@@ -857,8 +864,8 @@ async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=Non
         lst = "\n".join(f"- {e[:150]}" for e in evitar[:8] if e)
         if lst:
             bloco_evitar = "\nEstas JÁ EXISTEM — mude os números e o contexto:\n" + lst + "\n"
-    prompt = f"""Crie {n} questões objetivas de CÁLCULO sobre "{tema}" ({nome}) para o ensino médio.
-Responda APENAS com um ARRAY JSON de {n} objetos no formato EXATO:
+    prompt = f"""Crie {n_pedir} questões objetivas de CÁLCULO sobre "{tema}" ({nome}) para o ensino médio.
+Responda APENAS com um ARRAY JSON de {n_pedir} objetos no formato EXATO:
 {_FORMATO_POT}
 Regras:
 - A "formula" tem de resolver EXATAMENTE o que o enunciado pergunta: confira que os números
@@ -897,7 +904,7 @@ Regras:
         if _questao_utilizavel(pronta):
             saida.append(pronta)
     print(f"[KaIA] PoT: {len(saida)}/{len(itens or [])} de cálculo válidas p/ {materia}/{tema} (nível {nivel})")
-    return saida
+    return saida[:n]
 
 
 # ==== VERIFICACAO INDEPENDENTE (2a barreira) =================================
@@ -910,6 +917,11 @@ Regras:
 # Roda em BACKGROUND, nao na geracao: verificar na hora somaria ~5s de espera ao aluno.
 # Ate ser verificada, a questao fica em QUARENTENA — servida a poucos alunos, para que
 # um defeito atinja um punhado e nao a base inteira.
+# Pede mais questoes do que precisa e fica com as que passam nas barreiras — e o que o
+# Duolingo faz (gera variantes, seleciona). A saida e a parte cara, entao isto encarece
+# ~50% a geracao (fracao de centavo) e evita entregar lote curto quando alguma e
+# descartada. So a geracao aumenta: o que o aluno ve continua sendo n.
+FATOR_SOBRA_GERACAO = 1.5
 MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.6-flash")
 QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
 VERIFICA_POR_RODADA = 12          # quantas por ciclo do job (respeita o teto de req/min)
@@ -1011,7 +1023,8 @@ async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, exc
     params.append(limite)
     lim = len(params)
     rows = await conn.fetch(f"""
-        select c.questao_id, c.enunciado, c.alternativas, c.resposta_correta, c.explicacao, c.porque_erradas
+        select c.questao_id, c.enunciado, c.alternativas, c.resposta_correta,
+               c.explicacao, c.porque_erradas, c.veredito
         from questoes_cache c
         where c.materia = $1 and c.tema = $2 and c.nivel = $3 and {cond_hobbie}
           and not exists (select 1 from questoes_vistas v

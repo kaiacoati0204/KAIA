@@ -35,7 +35,7 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 | Frontend | HTML, CSS, JavaScript (sem framework) |
 | Backend | Python + **FastAPI** (uvicorn) |
 | Banco | **Supabase** (PostgreSQL), via `asyncpg` |
-| IA | Google Gemini (`gemini-2.5-flash`) |
+| IA | Google Gemini (`gemini-3.5-flash-lite`; configurável por `GEMINI_MODEL`) |
 | ML | scikit-learn (Random Forest v2 de atenção, 20 features) + pandas/numpy |
 | Agendamento | APScheduler (agregação + encerramento de sessões ociosas) |
 
@@ -81,6 +81,11 @@ CLAUDE.md               → convenções do projeto (cores, acessibilidade, segu
 > `Backend/.env`, **(3)** `Frontend/config.js` (passos 1 a 3 abaixo). **Não** precisa
 > recriar nem popular o banco; o passo 7 só serve para casos específicos.
 
+> [!TIP]
+> **Só vai testar (sem mexer em produção)?** Rode com `KAIA_DB_SCHEMA=teste` no `.env` — aponta o
+> backend para o schema isolado `teste` (mesmo projeto Supabase), sem tocar em produção nem nos
+> modelos. Peça ao Vitor o guia de teste passo a passo (contas de teste + barra de intervenções).
+
 ### 1. Pré-requisitos e dependências
 
 - **Python 3.11+** (backend FastAPI).
@@ -109,7 +114,20 @@ SUPABASE_URL=https://<PROJECT_ID>.supabase.co
 
 # Opcional — minutos até encerrar sessão ociosa (padrão: 15).
 STALE_SESSAO_MIN=15
+
+# Opcional — few-shot dinâmico (questões reais via pgvector) + Program-of-Thought
+# nas questões de cálculo. Ligue para testar a geração baseada em reais.
+KAIA_FEWSHOT_DINAMICO=1
+
+# Opcional — SANDBOX: aponta o backend para o schema isolado `teste` (mesmo projeto
+# Supabase), sem tocar em produção nem nos modelos. Deixe FORA em produção.
+# Para testar de forma isolada, veja o GUIA_TESTE.md.
+KAIA_DB_SCHEMA=teste
 ```
+
+> [!WARNING]
+> **`KAIA_DB_SCHEMA=teste` é só para máquina de teste local.** Em produção (Render) essa
+> variável NÃO pode estar definida — senão a produção rodaria no schema de teste.
 
 > O backend **não usa** chave de API do Supabase — só a `DATABASE_URL` (o único segredo) e a `SUPABASE_URL` (pública). **Nunca** coloque a chave secret (`sb_secret_`) aqui nem no frontend.
 

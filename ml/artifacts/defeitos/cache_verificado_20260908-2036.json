@@ -1,0 +1,9 @@
+{
+  "verificador": "gemini-3.6-flash",
+  "quando": "20260908-2036",
+  "verificadas": 10,
+  "ok": 10,
+  "suspeitas": 0,
+  "indisponivel": 10,
+  "achados": []
+}

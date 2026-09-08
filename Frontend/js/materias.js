@@ -2115,7 +2115,10 @@ function checkAnswer(idx, btn) {
             acertou,
             opcao_escolhida: idx,
             opcao_correta: currentQuestion.ans,
-            tipo_questao: 'objetiva'
+            tipo_questao: 'objetiva',
+            // Amarra a resposta a QUAL questao: e o que torna possivel o item analysis
+            // (p-value e correlacao ponto-bisserial detectam gabarito errado sozinhos).
+            questao_id: currentQuestion?.questao_id ?? null
         });
     }
     questoesRespondidas++;

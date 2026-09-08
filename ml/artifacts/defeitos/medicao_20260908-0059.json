@@ -1,0 +1,105 @@
+{
+  "resumo": {
+    "gerador": "gemini-3.5-flash-lite",
+    "verificador": "gemini-3.6-flash",
+    "quando": "20260908-0059",
+    "pedidas": 5,
+    "descartadas_pelo_pipeline": 0,
+    "entregues": 5,
+    "verificadas": 3,
+    "divergencias": 0,
+    "sem_alternativa_correta": 0
+  },
+  "itens": [
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Um ciclista está treinando e percorre 15 km no primeiro dia. Nos dias seguintes, ele aumenta a distância percorrida em 3 km a cada dia. Sabendo que em um determinado dia ele percorreu 45 km, o número de dias de treino até esse dia foi:",
+      "opts": [
+        "12 dias",
+        "10 dias",
+        "11 dias",
+        "13 dias",
+        "9 dias"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(falha do verificador: 'candidates')",
+      "concorda": false,
+      "formula": "(45 - 15) / 3 + 1"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Uma cultura de bactérias começa com 500 indivíduos e duplica a cada 3 horas. O número de bactérias após 12 horas será de:",
+      "opts": [
+        "32000",
+        "2000",
+        "16000",
+        "4000",
+        "8000"
+      ],
+      "gabarito": "E",
+      "verificador": "E",
+      "problema": "",
+      "concorda": true,
+      "formula": "500 * 2 ** (12 / 3)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Em uma progressão aritmética, o primeiro termo é 4 e a razão é 5. A soma dos 10 primeiros termos dessa progressão é:",
+      "opts": [
+        "305",
+        "285",
+        "295",
+        "275",
+        "265"
+      ],
+      "gabarito": "E",
+      "verificador": "E",
+      "problema": "",
+      "concorda": true,
+      "formula": "10 * (4 + (4 + (10 - 1) * 5)) / 2"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Uma dívida foi renegociada para ser paga em 5 parcelas mensais que formam uma progressão geométrica. Se a primeira parcela é de R$ 100,00 e a razão é 2, o valor total pago ao final das 5 parcelas é:",
+      "opts": [
+        "R$ 1550,00",
+        "R$ 3200,00",
+        "R$ 1500,00",
+        "R$ 6200,00",
+        "R$ 3100,00"
+      ],
+      "gabarito": "E",
+      "verificador": "E",
+      "problema": "",
+      "concorda": true,
+      "formula": "100 * (2 ** 5 - 1) / (2 - 1)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Um teatro tem 20 poltronas na primeira fileira, 24 na segunda, 28 na terceira, e assim sucessivamente, mantendo essa progressão até a última fileira. Se o teatro possui 15 fileiras, o número de poltronas na última fileira é:",
+      "opts": [
+        "88 poltronas",
+        "72 poltronas",
+        "76 poltronas",
+        "84 poltronas",
+        "80 poltronas"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(falha do verificador: 'candidates')",
+      "concorda": false,
+      "formula": "20 + (15 - 1) * 4"
+    }
+  ]
+}

@@ -189,6 +189,9 @@ async def lifespan(app: FastAPI):
         scheduler.add_job(job_agregacao, "interval", seconds=30, args=[app], id="agg_features")
         # Sweep de sessões ociosas: mais leve, a cada 5 min.
         scheduler.add_job(encerrar_sessoes_ociosas, "interval", minutes=5, args=[app], id="sweep_sessoes")
+        # Verificacao em background: tira a espera da frente do aluno e esvazia a
+        # quarentena aos poucos, no ritmo que o limite de req/min permite.
+        scheduler.add_job(job_verificar_cache, "interval", minutes=2, args=[app], id="verifica_cache")
         scheduler.start()
         print(f"[KaIA] Scheduler iniciado (agregação 30s · sweep de sessões ociosas 5min, "
               f"limiar {STALE_SESSAO_MIN}min).")
@@ -716,6 +719,9 @@ def _row_para_questao(row):
 # Só os campos que o frontend precisa (tira usa_hobbie e afins).
 def _frontend_q(q):
     return {
+        # Sem o id, a resposta do aluno nao volta amarrada a QUAL questao — e sem isso
+        # nao existe item analysis (ninguem consegue agrupar respostas por questao).
+        "questao_id": q.get("questao_id"),
         "q": q.get("q", ""),
         "opts": q.get("opts", []),
         "ans": q.get("ans", 0),
@@ -894,6 +900,91 @@ Regras:
     return saida
 
 
+# ==== VERIFICACAO INDEPENDENTE (2a barreira) =================================
+# O filtro estrutural pega enunciado malformado; o PoT pega a conta que nao fecha com
+# nenhuma alternativa. Nenhum dos dois pega GABARITO ERRADO, que foi o defeito mais
+# grave achado na avaliacao com professores. Aqui um modelo DIFERENTE do gerador
+# resolve a questao sem ver o gabarito. Diferente de proposito: verificador da mesma
+# familia compartilha os mesmos vieses e concorda com o proprio erro.
+#
+# Roda em BACKGROUND, nao na geracao: verificar na hora somaria ~5s de espera ao aluno.
+# Ate ser verificada, a questao fica em QUARENTENA — servida a poucos alunos, para que
+# um defeito atinja um punhado e nao a base inteira.
+MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.6-flash")
+QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
+VERIFICA_POR_RODADA = 12          # quantas por ciclo do job (respeita o teto de req/min)
+
+_PROMPT_VERIFICACAO = """Resolva esta questão de múltipla escolha do ensino médio brasileiro.
+
+{questao}
+
+Responda APENAS com um objeto JSON, sem mais nada:
+{{"resposta": "A"|"B"|"C"|"D"|"E"|"NENHUMA", "problema": ""}}
+
+- "resposta": a alternativa correta. Use "NENHUMA" se a resposta certa NÃO estiver entre
+  as alternativas, ou se o enunciado não permitir chegar a uma resposta.
+- "problema": vazio se está tudo bem; senão descreva o defeito em até 15 palavras.
+Confira a conta/o conteúdo antes de responder."""
+
+
+def verificar_questao(enunciado, opts):
+    """(indice_escolhido, nota). -1 = "nenhuma alternativa correta".
+    None = verificador indisponivel — a questao fica SEM veredito (nao vira suspeita:
+    falha de infra nao e defeito da questao)."""
+    texto = str(enunciado) + "\n\n" + "\n".join(
+        f"{chr(65 + i)}) {o}" for i, o in enumerate(opts))
+    url = ("https://generativelanguage.googleapis.com/v1beta/"
+           f"models/{MODELO_VERIFICADOR}:generateContent?key={API_KEY}")
+    body = {"contents": [{"parts": [{"text": _PROMPT_VERIFICACAO.format(questao=texto)}]}]}
+    try:
+        r = requests.post(url, json=body, timeout=90).json()
+        bruto = r["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception:
+        return None, ""                       # 503/timeout: tenta de novo no proximo ciclo
+    try:
+        if "```" in bruto:
+            bruto = bruto.split("```")[1].removeprefix("json").strip()
+        d = json.loads(bruto[bruto.index("{"):bruto.rindex("}") + 1])
+        letra = str(d.get("resposta", "")).strip().upper()
+        nota = str(d.get("problema", "")).strip()[:200]
+    except Exception:
+        return None, ""
+    if letra == "NENHUMA":
+        return -1, nota
+    if len(letra) == 1 and "A" <= letra <= "E":
+        return ord(letra) - 65, nota
+    return None, nota
+
+
+async def job_verificar_cache(app):
+    """Verifica questoes do cache ainda sem veredito, em lotes pequenos."""
+    if app.state.pool is None or not API_KEY:
+        return
+    async with app.state.pool.acquire() as conn:
+        try:
+            pend = await conn.fetch(
+                "select questao_id, enunciado, alternativas, resposta_correta "
+                "from questoes_cache where veredito is null "
+                "order by criada_em desc limit $1", VERIFICA_POR_RODADA)
+        except Exception as e:
+            print("[KaIA] verificacao indisponivel (banco atras do schema?):", e)
+            return
+        for q in pend:
+            alts = q["alternativas"]
+            opts = json.loads(alts) if isinstance(alts, str) else alts
+            idx, nota = await asyncio.to_thread(verificar_questao, q["enunciado"], opts)
+            if idx is None:
+                continue                       # sem veredito: volta no proximo ciclo
+            veredito = "ok" if idx == q["resposta_correta"] else "suspeita"
+            await conn.execute(
+                "update questoes_cache set veredito = $2, verificada_em = now(), "
+                "verificador_disse = $3, verificador_nota = $4 where questao_id = $1",
+                q["questao_id"], veredito, idx, nota or None)
+            if veredito == "suspeita":
+                motivo = "nenhuma alternativa correta" if idx == -1 else f"apontou {chr(65 + idx)}"
+                print(f"[KaIA] questao SUSPEITA ({motivo}) — {q['enunciado'][:60]}")
+
+
 # Busca no cache até `limite` questões (materia+tema+nivel+hobbie) NÃO vistas pelo
 # aluno. `excluir`: ids já coletados nesta mesma chamada (evita duplicar no lote).
 async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, excluir=None):
@@ -910,6 +1001,13 @@ async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, exc
     if excluir:
         params.append(list(excluir))
         excl_sql = f"and c.questao_id <> all(${len(params)}::uuid[])"
+    # 'suspeita' nunca e servida. Sem veredito ainda -> QUARENTENA: so enquanto poucos
+    # alunos a viram, para um defeito atingir um punhado e nao a base inteira. E o
+    # `order by veredito is null` poe as ja verificadas na frente.
+    params.append(QUARENTENA_MAX_ALUNOS)
+    gate_veredito = f"""and (c.veredito = 'ok' or (c.veredito is null and
+              (select count(*) from questoes_vistas q2 where q2.questao_id = c.questao_id)
+              < ${len(params)}))"""
     params.append(limite)
     lim = len(params)
     rows = await conn.fetch(f"""
@@ -918,8 +1016,9 @@ async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, exc
         where c.materia = $1 and c.tema = $2 and c.nivel = $3 and {cond_hobbie}
           and not exists (select 1 from questoes_vistas v
                           where v.aluno_id = ${uid}::uuid and v.questao_id = c.questao_id)
+          {gate_veredito}
           {excl_sql}
-        order by random() limit ${lim}
+        order by c.veredito is null, random() limit ${lim}
     """, *params)
     return [_row_para_questao(r) for r in rows]
 

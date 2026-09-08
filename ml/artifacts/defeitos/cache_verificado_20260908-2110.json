@@ -1,0 +1,129 @@
+{
+  "verificador": "gemini-3.1-flash-lite",
+  "quando": "20260908-2110",
+  "verificadas": 353,
+  "ok": 346,
+  "suspeitas": 7,
+  "indisponivel": 13,
+  "achados": [
+    {
+      "questao_id": "2d5e3806-b7df-49cf-b1db-e48c162bba55",
+      "materia": "PORT",
+      "tema": "Funções da Linguagem",
+      "nivel": 1,
+      "enunciado": "Antes de começar o ensaio com sua banda de rock, o baterista se senta em frente à bateria, pega as baquetas e diz animado para os amigos: Olhem este novo modelo de baqueta que comprei, ela é feita de madeira nobre e tem uma pegada super leve. Esse comentário voltado para explicar e detalhar as características das próprias baquetas exemplifica a função da linguagem focada em qual elemento da comunicação?",
+      "opts": [
+        "No remetente, destacando os sentimentos e opiniões pessoais do baterista.",
+        "No código, pois o foco está na explicação do significado das palavras utilizadas.",
+        "No canal de comunicação, testando se o som está chegando aos colegas.",
+        "No receptor, tentando convencer os outros músicos a comprarem o mesmo produto.",
+        "No próprio código da língua, analisando regras gramaticais da nossa gramática normativa."
+      ],
+      "gabarito": 1,
+      "verificador": -1,
+      "nota": "A questão descreve a função metalinguística ou referencial, não contemplada corretamente pelas alternativas."
+    },
+    {
+      "questao_id": "754ccd79-418f-4062-96ff-3af22d4cfa03",
+      "materia": "PORT",
+      "tema": "Funções da Linguagem",
+      "nivel": 3,
+      "enunciado": "Durante uma partida de um jogo de RPG de mesa, o mestre do jogo descreve detalhadamente o cenário sombrio da masmorra para os participantes e, logo em seguida, usa o dicionário para tirar uma dúvida sobre a grafia de uma palavra arcaica mencionada no enredo. Nas duas situações descritas, predominam, respectivamente, as funções",
+      "opts": [
+        "metalinguística e referencial.",
+        "poética e metalinguística.",
+        "fática e conativa.",
+        "emotiva e referencial.",
+        "poética e fática."
+      ],
+      "gabarito": 0,
+      "verificador": 1,
+      "nota": ""
+    },
+    {
+      "questao_id": "67ddd826-a3fc-4dd9-a00a-05b897b1a1e2",
+      "materia": "PORT",
+      "tema": "Funções da Linguagem",
+      "nivel": 2,
+      "enunciado": "Durante uma partida de um jogo de tabuleiro em grupo, um dos participantes lê em voz alta o manual de regras para tirar uma dúvida sobre como mover a peça: Para avançar três casas, o jogador precisa primeiro retirar uma carta de evento e cumprir o desafio proposto. O foco principal dessa fala informativa, que explica o funcionamento do próprio jogo, pertence à função da linguagem conhecida como",
+      "opts": [
+        "metalinguística",
+        "referencial",
+        "fática",
+        "apelativa",
+        "poética"
+      ],
+      "gabarito": 1,
+      "verificador": 0,
+      "nota": ""
+    },
+    {
+      "questao_id": "1080cd80-f5ed-4c3d-83b2-b73fbc2efdc5",
+      "materia": "FIS",
+      "tema": "Óptica Geométrica",
+      "nivel": 2,
+      "enunciado": "Imagine que você está observando um raio de luz passar de um ambiente com ar para um material translúcido, como um 'vidro' de origami cuidadosamente dobrado. O que acontece com a velocidade da luz ao mudar de meio?",
+      "opts": [
+        "A velocidade da luz permanece constante, apenas a direção muda.",
+        "A velocidade da luz sempre aumenta.",
+        "A velocidade da luz sempre diminui.",
+        "A velocidade da luz pode aumentar ou diminuir, dependendo dos índices de refração dos meios.",
+        "A velocidade da luz diminui se o ângulo de incidência for menor que o de refração."
+      ],
+      "gabarito": 3,
+      "verificador": 2,
+      "nota": ""
+    },
+    {
+      "questao_id": "22576913-b2cf-4c79-9141-1fa0481c779e",
+      "materia": "PORT",
+      "tema": "Interpretação e Compreensão Textual (tipos e gêneros textuais, coesão e coerência)",
+      "nivel": 3,
+      "enunciado": "Em uma roda de conversa sobre hobbies, uma participante relatou sua rotina: Dedico meus fins de semana a dobrar folhas de papel. Essa prática milenar japonesa me ensinou a ter paciência. O segredo está em vincular cada vinco à respiração. Quando a mente desacelera, a obra ganha forma com leveza. O pronome destacado em 'A prática milenar japonesa me ensinou' contribui para a coesão referencial do texto ao",
+      "opts": [
+        "antecipar o tema principal que será debatido nas frases seguintes",
+        "conectar duas orações independentes por meio de subordinação lógica",
+        "substituir um termo já citado anteriormente para evitar repetição",
+        "indicar uma posse compartilhada entre todos os ouvintes do relato",
+        "retomar anaforicamente o sujeito da enunciação que está implícito"
+      ],
+      "gabarito": 4,
+      "verificador": 2,
+      "nota": ""
+    },
+    {
+      "questao_id": "f22b0029-d1ba-4034-85a4-f18dfc0cf18e",
+      "materia": "PORT",
+      "tema": "Interpretação e Compreensão Textual (tipos e gêneros textuais, coesão e coerência)",
+      "nivel": 2,
+      "enunciado": "Maria cuidadosamente pegou o papel quadrado, liso e de cor vibrante. Com as pontas dos dedos, ela fez a primeira dobra, criando uma diagonal perfeita. Em seguida, dobrou o canto superior esquerdo para baixo, formando uma pequena aba. O papel, antes plano, começava a ganhar forma, transformando-se lentamente em um delicado cisne.",
+      "opts": [
+        "Narrativa, pois conta uma sequência de eventos e ações.",
+        "Descritiva, pois detalha as características e o processo de transformação do papel.",
+        "Expositiva, pois explica conceitos e informações sobre o origami.",
+        "Argumentativa, pois busca convencer o leitor sobre a beleza do cisne.",
+        "Injuntiva, pois oferece instruções para a criação do cisne de papel."
+      ],
+      "gabarito": 1,
+      "verificador": 0,
+      "nota": ""
+    },
+    {
+      "questao_id": "a034eadc-16a3-4b5e-9c29-28080fc3a0d5",
+      "materia": "PORT",
+      "tema": "Interpretação e Compreensão Textual (tipos e gêneros textuais, coesão e coerência)",
+      "nivel": 2,
+      "enunciado": "O trabalho em equipe é fundamental para o sucesso de muitos projetos. No entanto, nem sempre é fácil conciliar diferentes opiniões e estilos de trabalho. É preciso muita comunicação e empatia para que todos os membros se sintam valorizados e contribuam plenamente.",
+      "opts": [
+        "Adicionar uma nova ideia ao que foi dito anteriormente.",
+        "Introduzir uma explicação ou justificativa para a afirmação anterior.",
+        "Indicar uma consequência direta do que foi apresentado antes.",
+        "Apresentar um contraste ou uma ressalva em relação à ideia anterior.",
+        "Concluir o pensamento principal expresso na frase anterior."
+      ],
+      "gabarito": 3,
+      "verificador": -1,
+      "nota": "O enunciado não apresenta a pergunta ou o conectivo a ser analisado."
+    }
+  ]
+}

@@ -48,6 +48,15 @@ async function apiFetch(rota, options = {}) {
 }
 
 // POST em JSON, já com o token anexado. Quem chama decide se trata o erro.
+// Versão do front. SOBE a cada mudança que afete o comportamento medido — é o que
+// separa "antes" e "depois" nas análises do beta. Sem ela toda sessão ficava com o
+// mesmo rótulo e nenhuma correção era avaliável depois.
+const KAIA_VERSAO = 'beta-1.0.0';
+
+// Versão dos termos/privacidade em vigor. SOBE sempre que o texto mudar — é o que
+// diz, depois, a QUAL texto cada aluno consentiu.
+const KAIA_VERSAO_TERMOS = '2026-09-08';
+
 async function postJSON(rota, corpo, keepalive = false) {
     const r = await apiFetch(rota, {
         method: 'POST',

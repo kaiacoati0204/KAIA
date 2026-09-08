@@ -126,6 +126,7 @@ async function criarConta(event) {
 
     falhar('');
     if (!nome || !email || !senha) return falhar('Preencha nome, email e senha.');
+    if (!$('cad-termos')?.checked) return falhar('É preciso aceitar os termos para criar a conta.');
     if (senha.length < 6) return falhar('A senha precisa ter ao menos 6 caracteres.');
     if (!window.supabaseClient) return falhar('Cadastro indisponível (config.js sem Supabase).');
 
@@ -146,6 +147,15 @@ async function criarConta(event) {
             // Confirmação de email desligada → já entra. Sem "lembrar": o
             // cadastro não tem a caixa (fica no escopo do login, Fase 3).
             await finalizarLogin(data.user, falhar, false);
+            // Registra o aceite no perfil. Ate agora ele so existia como checkbox no
+            // navegador — nao havia como responder depois quem aceitou, quando e qual
+            // versao. Publico menor de idade e coleta de comportamento; nao se
+            // reconstroi retroativamente. O backend grava o PRIMEIRO e nao sobrescreve.
+            try {
+                await postJSON('/perfil', { user_id: data.user.id, versao_termos: KAIA_VERSAO_TERMOS });
+            } catch (e) {
+                console.warn('[KaIA] aceite dos termos não registrado:', e);
+            }
         } else if (okmsg) {
             // Confirmação ligada → precisa confirmar por email antes de logar.
             okmsg.textContent = 'Conta criada! Confirme pelo email e depois faça login.';

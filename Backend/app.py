@@ -917,6 +917,11 @@ Regras:
 # Roda em BACKGROUND, nao na geracao: verificar na hora somaria ~5s de espera ao aluno.
 # Ate ser verificada, a questao fica em QUARENTENA — servida a poucos alunos, para que
 # um defeito atinja um punhado e nao a base inteira.
+# Versao das REGRAS do prompt. Suba quando mudar qualquer regra de geracao: e o que
+# permite responder depois "a regra nova reduziu o erro?". Sem isso, questao velha e
+# questao nova ficam indistinguiveis no banco.
+VERSAO_PROMPT = "v3-2026-09"
+
 # Pede mais questoes do que precisa e fica com as que passam nas barreiras — e o que o
 # Duolingo faz (gera variantes, seleciona). A saida e a parte cara, entao isto encarece
 # ~50% a geracao (fracao de centavo) e evita entregar lote curto quando alguma e
@@ -1047,11 +1052,12 @@ async def _salvar_no_cache(conn, materia, tema, nivel, hobbie_sessao, questoes):
             qid = await conn.fetchval(
                 """insert into questoes_cache
                      (materia, tema, nivel, hobbie, enunciado, alternativas,
-                      resposta_correta, explicacao, porque_erradas)
-                   values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb)
+                      resposta_correta, explicacao, porque_erradas, modelo, versao_prompt)
+                   values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb, $10, $11)
                    returning questao_id""",
                 materia, tema, nivel, hob, item["q"], json.dumps(item["opts"]),
-                item["ans"], item["explicacao"], json.dumps(item["porque_erradas"]))
+                item["ans"], item["explicacao"], json.dumps(item["porque_erradas"]),
+                GEMINI_MODEL, VERSAO_PROMPT)
             item["questao_id"] = str(qid)
         except Exception as e:
             print("[KaIA] erro ao salvar no cache:", e)   # entrega mesmo assim
@@ -2024,7 +2030,9 @@ class SessionIn(BaseModel):
     session_id: Optional[str] = None
     user_id: Optional[str] = None
     platform: str = "web"
-    app_version: str = "mvp-0.1"
+    # Sem versao real, TODA sessao dizia "mvp-0.1" e nao dava para separar "antes" de
+    # "depois" de nenhuma correcao feita durante o beta.
+    app_version: str = "desconhecida"
 
 
 @app.post("/sessions")
@@ -2233,6 +2241,11 @@ async def perfil(request: Request, dados: dict = Body(default={}),
     ambiente = p.get("ambiente_dispositivo")
     seq = int(p.get("sequencia_dias_estudo") or 0)
     sess_dia = int(p.get("sessoes_no_dia") or 0)
+    # Aceite dos termos: ate agora existia so como checkbox no navegador, entao nao
+    # havia como responder depois QUEM aceitou, QUANDO e QUAL versao. Publico menor de
+    # idade e coleta de comportamento (mouse, ocioso, autorrelato) — nao da pra
+    # reconstruir isso retroativamente. Grava na PRIMEIRA vez e nao sobrescreve.
+    versao_termos = (p.get("versao_termos") or dados.get("versao_termos") or None)
 
     # ultima_sessao_ts vem como epoch em ms → timestamptz
     ult_ts = None
@@ -2251,8 +2264,10 @@ async def perfil(request: Request, dados: dict = Body(default={}),
             await conn.execute(
                 """
                 insert into perfis (user_id, email, hobbies, data_prova, ambiente_dispositivo,
-                    sequencia_dias_estudo, sessoes_no_dia, ultimo_dia_estudo, ultima_sessao_ts, updated_at)
-                values ($1::uuid, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, now())
+                    sequencia_dias_estudo, sessoes_no_dia, ultimo_dia_estudo, ultima_sessao_ts,
+                    versao_termos, aceite_termos_em, updated_at)
+                values ($1::uuid, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10,
+                        case when $10::text is not null then now() end, now())
                 on conflict (user_id) do update set
                     email                 = coalesce(excluded.email, perfis.email),
                     hobbies               = excluded.hobbies,
@@ -2262,11 +2277,15 @@ async def perfil(request: Request, dados: dict = Body(default={}),
                     sessoes_no_dia        = excluded.sessoes_no_dia,
                     ultimo_dia_estudo     = coalesce(excluded.ultimo_dia_estudo, perfis.ultimo_dia_estudo),
                     ultima_sessao_ts      = coalesce(excluded.ultima_sessao_ts, perfis.ultima_sessao_ts),
+                    -- aceite: grava o PRIMEIRO e nunca sobrescreve (a data original e a
+                    -- que vale; um novo aceite so entra se ainda nao houver nenhum)
+                    versao_termos         = coalesce(perfis.versao_termos, excluded.versao_termos),
+                    aceite_termos_em      = coalesce(perfis.aceite_termos_em, excluded.aceite_termos_em),
                     updated_at            = now()
                 """,
                 user_id, email, json.dumps(hobbies, ensure_ascii=False),
                 _to_date(p.get("data_prova")), ambiente, seq, sess_dia,
-                _to_date(p.get("ultimo_dia_estudo")), ult_ts,
+                _to_date(p.get("ultimo_dia_estudo")), ult_ts, versao_termos,
             )
     except Exception as e:
         print("[KaIA] Erro ao gravar perfil:", e)

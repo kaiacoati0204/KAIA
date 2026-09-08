@@ -64,7 +64,7 @@ let historicoQuestoes = [];   // questões já respondidas na sessão (fonte do 
 // Cria uma NOVA sessão (1 por missão): não envia session_id, o backend gera.
 async function criarSessao() {
     try {
-        const data = await postJSON('/sessions', { user_id: userId });
+        const data = await postJSON('/sessions', { user_id: userId, app_version: KAIA_VERSAO });
         sessionId = data.session_id;
         console.log('[KaIA] Nova sessão:', sessionId, '| user:', userId);
     } catch (e) {
@@ -2483,6 +2483,15 @@ function continuarRodada() {
 }
 
 // "Encerrar sessão": encerra de fato e vira a tela de resumo COMPLETO (com frase).
+// Uma escolha só, opcional, sem bloquear nada. Só aparece no encerramento (não em
+// "continuar estudando"): perguntar a cada rodada viraria incômodo.
+function registrarMotivoSaida(motivo) {
+    if (!motivo) return;
+    logEvent('motivo_saida', { motivo, questoes: questoesRespondidas, acertos: acertosSessao });
+    const el = $('resumo-saida');
+    if (el) el.hidden = true;       // respondeu, some — não insiste
+}
+
 function encerrarSessaoComResumo() {
     registrarQuestaoAbandonada();   // antes de baixar isMissionActive, senão não registra
     sessaoDeEstudoAberta = false;
@@ -2495,6 +2504,8 @@ function encerrarSessaoComResumo() {
     clearTimeout(_fbTardioTimer);   // nada de card de feedback caindo sobre o resumo
 
     preencherResumo();
+    const _saida = $('resumo-saida');
+    if (_saida) { _saida.hidden = false; const sel = $('saida-motivo'); if (sel) sel.value = ''; }
     $('resumo-titulo').textContent = 'Sessão concluída!';
     $('resumo-titulo').hidden = false;
     $('resumo-frase').textContent = FRASES_RESUMO[Math.floor(Math.random() * FRASES_RESUMO.length)];

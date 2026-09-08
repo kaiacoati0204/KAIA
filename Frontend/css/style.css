@@ -4287,3 +4287,12 @@ html:has(body.lp-page) {
 }
 .btn-reportar:hover:not(:disabled) { opacity: 1; border-color: var(--gravata-kinrou); }
 .btn-reportar:disabled { cursor: default; opacity: .45; }
+
+/* Motivo da saída — opcional e discreto: não bloqueia, não insiste, some ao responder. */
+.resumo-saida { margin: 14px 0 4px; font-size: .9rem; color: var(--tinta); }
+.resumo-saida label { display: block; margin-bottom: 6px; opacity: .8; }
+.resumo-saida small { opacity: .6; }
+.resumo-saida select {
+  font: inherit; padding: 6px 10px; border-radius: 6px;
+  border: 1px solid var(--marfim); background: var(--card); color: var(--tinta);
+}

@@ -161,6 +161,21 @@
                 <h3>Questões que você errou</h3>
                 <ul id="resumo-erros-lista"></ul>
             </div>
+            <!-- Por que parou: nenhuma métrica de comportamento responde isso, e a
+                 resposta não se reconstrói depois. Opcional e discreto de propósito. -->
+            <div id="resumo-saida" class="resumo-saida" hidden>
+                <label for="saida-motivo">O que te fez parar hoje? <small>(opcional)</small></label>
+                <select id="saida-motivo" onchange="registrarMotivoSaida(this.value)">
+                    <option value="">—</option>
+                    <option value="meta">Bati minha meta</option>
+                    <option value="cansaco">Cansei / perdi o foco</option>
+                    <option value="tempo">Acabou meu tempo</option>
+                    <option value="dificil">Estava difícil demais</option>
+                    <option value="facil">Estava fácil demais</option>
+                    <option value="problema">Algo não funcionou</option>
+                    <option value="outro">Outro motivo</option>
+                </select>
+            </div>
             <div class="resumo-acoes">
                 <button type="button" class="botao-proxima" id="btn-continuar" onclick="continuarRodada()">Continuar estudando</button>
                 <button type="button" class="botao-encerrar-modal" id="btn-encerrar" onclick="encerrarSessaoComResumo()">Encerrar sessão</button>

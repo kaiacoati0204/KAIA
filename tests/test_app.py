@@ -618,6 +618,28 @@ def test_embed_usa_cache(monkeypatch):
     app_mod._EMBED_CACHE.clear()
 
 
+def test_questao_utilizavel():
+    """Barreira estrutural: pega o que passou na avaliação com os professores."""
+    ok_completar = {"q": "O ritual representa, para seus adeptos, a",
+                    "opts": ["manutenção de memória.", "contestação étnica.", "imolação.",
+                             "legitimação.", "promissão."]}
+    ok_pergunta = {"q": "Qual é a quantidade mínima de água, em litro?",
+                   "opts": ["50", "60", "80", "140", "150"]}
+    # enunciado fecha em frase completa e as alternativas são fragmentos: ficou sem pergunta
+    sem_pergunta = {"q": "O DIP atuou na censura e na promoção da imagem do governo.",
+                    "opts": ["controle sindical.", "mercantilização.", "diversificação.",
+                             "privatização.", "cerceamento."]}
+    repetidas = {"q": "Pergunta?", "opts": ["a", "A", "b", "c", "d"]}
+    vazia = {"q": "Pergunta?", "opts": ["a", "", "b", "c", "d"]}
+    curta = {"q": "Pergunta?", "opts": ["a", "b", "c"]}
+    assert app_mod._questao_utilizavel(ok_completar) is True
+    assert app_mod._questao_utilizavel(ok_pergunta) is True
+    assert app_mod._questao_utilizavel(sem_pergunta) is False
+    assert app_mod._questao_utilizavel(repetidas) is False
+    assert app_mod._questao_utilizavel(vazia) is False
+    assert app_mod._questao_utilizavel(curta) is False
+
+
 def test_leitura_confiavel():
     feats = {n: 0.0 for n in app_mod.FEATURE_ORDER}
     assert app_mod.leitura_confiavel(feats) is False       # internas todas zeradas

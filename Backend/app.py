@@ -562,6 +562,34 @@ def _sem_markdown(t):
     return t.replace('**', '').replace('__', '').replace('`', '').strip()
 
 
+def _enunciado_incompleto(q, opts):
+    """True quando o enunciado fecha em frase completa mas as alternativas sao
+    FRAGMENTOS que precisariam completa-la — a questao acaba sem pergunta nenhuma.
+    Foi assim que passou uma do DIP: texto correto, alternativas soltas, nada ligando.
+    Medido contra as 715 reais do banco: marca 0,7% delas, e nao marca o estilo ENEM de
+    completar (que termina SEM ponto final)."""
+    e = (q or "").strip()
+    if not e or not e.endswith("."):
+        return False                       # pergunta direta ou trecho a completar: ok
+    ini = [str(o).strip()[:1] for o in opts if str(o).strip()]
+    if not ini:
+        return False
+    return sum(1 for c in ini if c.islower()) >= max(1, len(ini) - 1)
+
+
+def _questao_utilizavel(questao):
+    """Barreira antes de a questao chegar ao aluno. Pega defeito ESTRUTURAL — nao pega
+    erro de conteudo, que exige um verificador entendendo a materia."""
+    opts = [str(o).strip() for o in (questao.get("opts") or [])]
+    if len(opts) < 4 or any(not o for o in opts):
+        return False                                    # alternativa faltando ou vazia
+    if len({o.lower() for o in opts}) != len(opts):
+        return False                                    # alternativas repetidas
+    if not str(questao.get("q") or "").strip():
+        return False
+    return not _enunciado_incompleto(questao.get("q"), opts)
+
+
 def _normalizar_questao(questao):
     questao["q"] = _sem_markdown(questao.get("q", ""))
     opts = [_sem_markdown(o) for o in (questao.get("opts") or [])]
@@ -765,6 +793,9 @@ Regras:
 - As {n} questões devem ser distintas entre si (enunciados e focos diferentes).
 - Alternativas (corretas E erradas) devem ser termos/conceitos REAIS e plausíveis; NUNCA invente palavras ou termos que não existam.
 - Enunciados em TEXTO CORRIDO — sem markdown (nada de ##, **, títulos ou listas).
+- O enunciado TEM de terminar em PERGUNTA ("?") ou em trecho que as alternativas completam
+  (sem ponto final). NUNCA termine em frase fechada seguida de alternativas soltas.
+- As 5 alternativas devem ser DIFERENTES entre si (nem repetição, nem paráfrase da mesma coisa).
 - Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre a esse nível.
 {regra_hobbie}- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 {bloco_evitar}{bloco_exemplos}"""
@@ -778,7 +809,13 @@ Regras:
             itens = [dados_ia]                      # resposta de questão única
         else:
             itens = []
-        return [_normalizar_questao(q) for q in itens if isinstance(q, dict) and q.get("opts")]
+        prontas = [_normalizar_questao(q) for q in itens
+                   if isinstance(q, dict) and q.get("opts")]
+        boas = [q for q in prontas if _questao_utilizavel(q)]
+        if len(boas) < len(prontas):
+            print(f"[KaIA] descartadas {len(prontas) - len(boas)} questao(oes) malformada(s) "
+                  f"p/ {materia}/{tema}")
+        return boas
     except Exception as e:
         print("[KaIA] erro Gemini /gerar-questao:", e)
         return []
@@ -818,11 +855,15 @@ async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=Non
 Responda APENAS com um ARRAY JSON de {n} objetos no formato EXATO:
 {_FORMATO_POT}
 Regras:
+- A "formula" tem de resolver EXATAMENTE o que o enunciado pergunta: confira que os números
+  dela vêm do enunciado e que ela responde à pergunta feita, não a outra parecida.
+- Os dados do enunciado têm de ser CONSISTENTES entre si (se há duas condições, ambas
+  precisam valer para a mesma resposta) e levar a um resultado limpo.
 - A resposta CORRETA tem de ser EXATAMENTE o valor que a "formula" calcula, e estar entre as 5 "opts".
 - As outras 4 "opts" são distratores plausíveis (erros comuns), com a MESMA unidade/formato.
 - "opts" com número + unidade (ex.: "12 m/s"); use ponto decimal.
 - Dificuldade: nível {nivel}/5 ({dificuldade}). Termos/unidades REAIS, nunca invente.
-- Enunciado em texto corrido, sem markdown.
+- Enunciado em texto corrido, sem markdown, terminando em pergunta ou trecho a completar.
 {regra_hobbie}{bloco_evitar}{bloco_ex}"""
     try:
         dados = extrair_json(await asyncio.to_thread(chamar_gemini, prompt))
@@ -845,8 +886,10 @@ Regras:
             continue                                   # a conta não bate com opção -> furada, descarta
         q["opts"] = opts
         q["ans"] = idx                                 # gabarito = a CONTA (não o que a IA disse)
-        q.pop("formula", None)
-        saida.append(_normalizar_questao(q))
+        q["formula_pot"] = q.pop("formula", None)      # guardada: e o que permite auditar depois
+        pronta = _normalizar_questao(q)
+        if _questao_utilizavel(pronta):
+            saida.append(pronta)
     print(f"[KaIA] PoT: {len(saida)}/{len(itens or [])} de cálculo válidas p/ {materia}/{tema} (nível {nivel})")
     return saida
 
@@ -1940,6 +1983,46 @@ class EventIn(BaseModel):
     event_type: str
     payload: dict = {}
     ts: Optional[str] = None   # ISO 8601 vindo do frontend; default = now() no banco
+
+
+class ReporteIn(BaseModel):
+    session_id: Optional[str] = None
+    enunciado: str
+    motivo: Optional[str] = None
+
+
+@app.post("/questoes/reportar")
+async def reportar_questao(body: ReporteIn, request: Request,
+                           uid: str = Depends(usuario_autenticado)):
+    """O aluno marca a questão como errada. Tira do cache NA HORA (não volta para mais
+    ninguém) e registra o evento.
+
+    Existe porque nenhum filtro automático chega a zero: os estruturais pegam alternativa
+    repetida e enunciado sem pergunta, o PoT pega a conta que não fecha com a alternativa —
+    mas erro de CONTEÚDO passa por todos. Sem isto, uma questão errada fica no cache
+    servindo indefinidamente. Com isto, sai no primeiro aluno que a encontra, e a contagem
+    de reportes é a única medida real da taxa de defeito no volume real."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    enun = (body.enunciado or "").strip()
+    if len(enun) < 20:
+        return JSONResponse({"erro": "Enunciado inválido."}, status_code=400)
+    async with pool.acquire() as conn:
+        removidas = await conn.execute(
+            "delete from questoes_cache where enunciado = $1", enun)
+        try:
+            await conn.execute(
+                "insert into session_events (session_id, event_type, payload, ts) "
+                "values ($1::uuid, $2, $3::jsonb, now())",
+                body.session_id, "questao_reportada",
+                json.dumps({"enunciado": enun[:500], "motivo": (body.motivo or "")[:200],
+                            "removidas_do_cache": removidas}, ensure_ascii=False),
+            )
+        except Exception as e:
+            print("[KaIA] reporte sem sessão válida:", e)   # o reporte vale mesmo assim
+    print(f"[KaIA] questão reportada ({removidas}) — {enun[:70]}")
+    return {"ok": True}
 
 
 @app.post("/events")

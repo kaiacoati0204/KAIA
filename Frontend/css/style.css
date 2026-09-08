@@ -4269,3 +4269,21 @@ html:has(body.lp-page) {
   .lp-page .coati-container:hover,
   .lp-page .lp-passo:hover { transform: none; }
 }
+
+/* Reportar questão — discreto de propósito: é uma saída para quando a questão está
+   errada, não um convite a desistir. Só aparece depois de responder. */
+.btn-reportar {
+  display: block;
+  margin: 14px auto 0;
+  padding: 6px 12px;
+  font-size: .82rem;
+  color: var(--tinta);
+  background: transparent;
+  border: 1px solid var(--card);
+  border-radius: 6px;
+  opacity: .55;
+  cursor: pointer;
+  transition: opacity .2s ease, border-color .2s ease;
+}
+.btn-reportar:hover:not(:disabled) { opacity: 1; border-color: var(--gravata-kinrou); }
+.btn-reportar:disabled { cursor: default; opacity: .45; }

@@ -1970,6 +1970,8 @@ async function carregarQuestao(subject, tema) {
     tempoOciosoMs = 0;
     tempoDwellMs = 0;
     dwellEntrouEm = 0;
+    const _brOff = $('btn-reportar');
+    if (_brOff) _brOff.hidden = true;
     scrollEventos = 0;
     scrollAlcanceFrac = 0;
     scrollReversoes = 0;
@@ -2137,6 +2139,8 @@ function checkAnswer(idx, btn) {
     isMissionActive = false;
     clearInterval(idleInterval);
     setEstado('RESPONDIDA');   // também baixa o overlay de inatividade, se estava visível
+    const _br = $('btn-reportar');
+    if (_br) { _br.hidden = false; _br.disabled = false; _br.textContent = 'Reportar problema nesta questão'; }
 
     mostrarExplicacao(idx, acertou);
 }
@@ -2202,6 +2206,27 @@ function mostrarExplicacao(escolha, acertou) {
 function proximaQuestao() {
     esconderProbe();   // o probe é sobre a questão que acabou — não deixa vazar pra próxima
     carregarQuestao(currentSubject, currentTema);
+}
+
+// Tira a questão de circulação para TODOS e registra o motivo. Nenhum filtro automático
+// pega erro de conteúdo — este é o único caminho que fecha essa porta, e a contagem de
+// reportes é a medida real da taxa de defeito.
+async function reportarQuestao() {
+    const btn = $('btn-reportar');
+    if (!btn || btn.disabled) return;
+    const motivo = prompt('O que está errado nesta questão? (ex.: nenhuma alternativa é a certa, enunciado incompleto, conteúdo errado)');
+    if (motivo === null) return;                 // desistiu
+    btn.disabled = true;
+    btn.textContent = 'Obrigado — questão retirada';
+    try {
+        await postJSON('/questoes/reportar', {
+            session_id: sessionId,
+            enunciado: currentQuestion?.q || '',
+            motivo: (motivo || '').slice(0, 200),
+        });
+    } catch (e) {
+        console.warn('[KaIA] falha ao reportar:', e);
+    }
 }
 
 // ============================================================

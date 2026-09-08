@@ -1,0 +1,276 @@
+AVALIACAO DE QUESTOES — BIOLOGIA
+
+Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais de
+vestibular/ENEM, outras foram escritas por um sistema automatico. Nao dizemos
+quantas sao de cada.
+
+Para cada uma, responda duas coisas:
+  1. E de PROVA ou GERADA?
+  2. O que te fez decidir? (uma linha basta)
+
+Nao precisa resolver a questao — o que interessa e se ela parece questao de prova.
+
+--------------------------------------------------------------------------
+
+QUESTAO 1
+
+Ao analisar a fauna de uma ilha isolada no Oceano Pacífico, pesquisadores
+encontraram várias espécies de aves endêmicas que apresentam bicos com
+formatos e tamanhos muito variados, adaptados a diferentes tipos de
+alimentação, mas que compartilham grande semelhança genética entre si e com
+uma única espécie ancestral encontrada no continente próximo. Como a teoria
+sintética da evolução explica a origem dessa grande variedade de bicos a
+partir de um ancestral comum?
+
+A) Mutação direcionada pelo esforço das aves para alcançar novos tipos de
+   alimentos disponíveis na ilha.
+B) Uso e desuso contínuo dos órgãos ao longo das gerações, transmitindo as
+   características adquiridas aos descendentes.
+C) Convergência evolutiva de espécies distantes que migraram para a ilha e
+   ocuparam o mesmo nicho ecológico.
+D) Irradiação adaptativa decorrente da seleção natural atuando sobre a
+   variabilidade genética em diferentes nichos ecológicos.
+E) Adaptação fisiológica imediata dos organismos induzida diretamente pelas
+   condições climáticas do novo ambiente insular.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 2
+
+On the Gravitational Field of a Mass Point According to Einstein’s Theory
+Um
+Buraco Negro é um corpo celeste que possui uma grande quantidade de matéria
+concentrada em uma pequena região do espaço, de modo que sua força
+gravitacional é tão grande que qualquer partícula fica aprisionada em sua
+superfície, inclusive a luz. O raio dessa região caracteriza uma superfície-
+limite, chamada de horizonte de eventos, da qual nada consegue escapar.
+Considere que o Sol foi instantaneamente substituído por um Buraco Negro com a
+mesma massa solar, de modo que o seu horizonte de eventos seja de
+aproximadamente 3,0 quilômetros.
+Após a substituição descrita, o que
+aconteceria aos planetas do Sistema Solar?
+
+A) Eles se moveriam em órbitas espirais, aproximando-se sucessivamente do
+   Buraco Negro.
+B) Eles oscilariam aleatoriamente em torno de suas órbitas elípticas
+   originais.
+C) Eles se moveriam em direção ao centro do Buraco Negro.
+D) Eles passariam a precessionar mais rapidamente.
+E) Eles manteriam suas órbitas inalteradas.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 3
+
+O antibiótico estreptomicina é conhecido por se ligar especificamente à
+subunidade menor dos ribossomos de células bacterianas, impedindo o início da
+síntese proteica e provocando a morte do patógeno. Sabendo que as células
+eucarióticas possuem ribossomos estruturalmente diferentes, a toxicidade
+direta desse medicamento sobre organelas presentes nas células humanas é
+evitada principalmente pela ausência de semelhanças com quais estruturas
+celulares?
+
+A) Centríolos
+B) Retículo endoplasmático liso
+C) Complexo golgiense
+D) Peroxissomos
+E) Mitocôndrias
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 4
+
+Durante uma atividade física intensa de curta duração e alta intensidade, como
+uma corrida de cem metros rasos, os músculos esqueléticos humanos recorrem
+primariamente a vias anaeróbicas para a obtenção de energia rápida. Nesse
+contexto, o acúmulo de uma substância específica nas fibras musculares é o
+principal responsável pela sensação de fadiga e queimação aguda sentida pelos
+atletas. Qual é essa substância e a via metabólica associada?
+
+A) Ácido lático, produzido pela fermentação lática realizada no citoplasma das
+   células musculares devido à escassez momentânea de oxigênio.
+B) Glicose livre, acumulada pelo excesso de quebra do glicogênio armazenado no
+   tecido adiposo adjacente.
+C) Ácido pirúvico, que se acumula no interior da matriz mitocondrial por causa
+   da paralisação imediata do ciclo de Krebs.
+D) Etanol, gerado pela fermentação alcoólica nas mitocôndrias para compensar a
+   falta de respiração aeróbica.
+E) Dióxido de carbono, retido nos tecidos musculares por causa da incapacidade
+   do sistema circulatório de transportá-lo aos pulmões.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 5
+
+O uso intensivo de fertilizantes nitrogenados na agricultura pode provocar o
+escoamento desses nutrientes para os corpos d'água próximos durante as chuvas.
+Esse excesso de nutrientes nos rios e lagos estimula o crescimento
+descontrolado de fitoplâncton, resultando em um processo conhecido como
+eutrofização. Qual é a principal consequência direta desse fenômeno para a
+fauna aquática?
+
+A) O aumento imediato da biodiversidade local, pois a maior oferta de
+   nutrientes amplia as cadeias tróficas disponíveis.
+B) O encarecimento e a simplificação dos processos de purificação da água
+   potável sem alterar o equilíbrio biológico do ecossistema.
+C) A proliferação de plantas aquáticas submersas que passam a competir
+   diretamente por luz com os peixes herbívoros.
+D) A morte de peixes e outros organismos aeróbicos devido à diminuição
+   drástica do oxigênio dissolvido causada pela decomposição da matéria
+   orgânica.
+E) A elevação da temperatura da água decorrente da intensa atividade
+   fotossintética realizada pelas bactérias.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 6
+
+Muitas plantas adaptadas a ambientes terrestres secos e com alta intensidade
+luminosa apresentam folhas
+
+A) pequenas com estômatos concentrados na parte inferior, muitos tricomas
+   claros, cutícula impermeável e parênquima aquífero.
+B) grandes com estômatos concentrados na parte inferior, poucos tricomas
+   claros, cutícula impermeável e parênquima aerífero.
+C) pequenas com estômatos concentrados na parte superior, ausência de
+   tricomas, cera sobre a epiderme foliar e parênquima aquífero.
+D) grandes com estômatos igualmente distribuídos em ambas as partes, ausência
+   de tricomas, ausência de cera sobre a epiderme foliar e parênquima
+   aerífero.
+E) pequenas com estômatos concentrados na parte superior, muitos tricomas
+   claros, cera sobre a epiderme foliar e parênquima aerífero.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 7
+
+Uma variedade de milho (Milho Bt) foi modificada com a inserção de genes da
+bactéria Bacillus thuringiensis, que produzem proteínas Cry , tóxicas para
+insetos como as lagartas que atacam suas lavouras. Essas proteínas bloqueiam o
+trato digestório dos insetos, levando-os à morte. Em aves e mamíferos que
+também se alimentam de milho, as proteínas Cry são inativadas durante a
+digestão ácida, perdendo sua ação sobre esses animais. A alternativa que
+indica corretamente um aspecto positivo e um negativo dos efeitos desta
+modificação genética do milho para o ser humano é:
+
+A) Aspecto positivo: Aumento do valor nutricional do milho. Aspecto negativo:
+   Possibilidade de desenvolvimento de alergia à proteína Cry em pessoas
+   vulneráveis.
+B) Aspecto positivo: Menor tempo de maturação dos grãos. Aspecto negativo:
+   Possibilidade de invasão da vegetação nativa pela planta transgênica.
+C) Aspecto positivo: Facilitação da polinização das plantas. Aspecto negativo:
+   Risco de extinção local de das aves e mamíferos insetívoros.
+D) Aspecto positivo: Economia de água pela redução da irrigação. Aspecto
+   negativo: Maior exposição dos agricultores a agrotóxicos.
+E) Aspecto positivo: Maior produtividade das lavouras de milho. Aspecto
+   negativo: Possibilidade de surgimento de lagartas resistentes à proteína
+   Cry.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 8
+
+Considerando os experimentos clássicos de Gregor Mendel com ervilhas, a lei da
+segregação independente estabelece que os alelos de genes diferentes se
+distribuem para os gametas de maneira autônoma durante a meiose. Essa
+distribuição ocorre porque os genes em questão estão localizados em
+
+A) moléculas proteicas associadas ao fuso mitótico.
+B) cromossomos homólogos diferentes.
+C) moléculas de RNA mensageiro distintas.
+D) organelas citoplasmáticas como as mitocôndrias.
+E) regiões diferentes de uma mesma molécula de DNA.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 9
+
+Estudo confirma eficácia do Método Wolbachia para dengue
+Os resultados de um
+ensaio clínico randomizado na Indonésia apontaram uma redução de 77 por cento
+dos casos de dengue nas áreas que receberam o mosquito Aedes aegypti infectado
+com a bactéria Wolbachia. Trata-se da mesma técnica utilizada no Brasil pelo
+Método Wolbachia, iniciativa conduzida pela Fundação Oswaldo Cruz — Fiocruz.
+Essa bactéria induz a redução da carga viral no mosquito e, consequentemente,
+o número de casos de dengue na área, sendo repassada por meio do cruzamento
+entre os insetos. Como essa bactéria é um organismo intracelular e o vírus
+também precisa entrar nas células para se reproduzir, ambos necessitarão de
+recursos comuns.
+Essa tecnologia utilizada no combate à dengue consiste na
+
+A) predação do vírus pela bactéria.
+B) esterilização de mosquitos infectados.
+C) alteração no genótipo do mosquito pela bactéria.
+D) competição do vírus e da bactéria no hospedeiro.
+E) inserção de material genético do vírus na bactéria.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+QUESTAO 10
+
+Efficacy of Selective Serotonin-Reuptake Inhibitors in Premenstrual Syndrome
+Muitas mulheres sofrem com desconfortos nos dias que antecedem a menstruação,
+a chamada tensão pré-menstrual. Entre outros sintomas, podem ocorrer
+alterações de humor. Atualmente, acredita-se que os sintomas são resultado da
+queda na concentração do neurotransmissor serotonina, que, por sua vez, está
+relacionado com a diminuição na produção dos hormônios ovarianos estrógeno e
+progesterona, observada nessa fase do ciclo feminino.
+A redução da produção
+desses hormônios nessa fase está relacionada com o(a)
+
+A) regressão do corpo lúteo ovariano.
+B) diminuição na produção de ocitocina.
+C) liberação do gameta feminino na ovulação.
+D) aumento nos níveis dos hormônios LH e FSH.
+E) elevação nos níveis sorológicos de adrenalina.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+--------------------------------------------------------------------------
+
+==============================================================================
+CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
+==============================================================================
+
+modelo: gemini-3.5-flash-lite   gerado em: 20260907-2319
+
+   1. GERADA   (Evolução, nivel 2)
+   2. REAL     (nivel 3)
+   3. GERADA   (Citologia, nivel 4)
+   4. GERADA   (Corpo humano, nivel 3)
+   5. GERADA   (Ecologia, nivel 3)
+   6. REAL     (nivel 3)
+   7. REAL     (nivel 3)
+   8. GERADA   (Genética, nivel 2)
+   9. REAL     (nivel 3)
+  10. REAL     (nivel 3)
+
+  total: 5 geradas, 5 reais

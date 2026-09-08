@@ -18,7 +18,8 @@ Gera SEM explicação e SEM gabarito: a questão real do banco não tem esses ca
 mostrá-los só nas geradas entregaria o jogo.
 
 Uso (na raiz do projeto):
-    python ml/teste_impostor.py                 # 5 por bloco (MAT, BIO, HIS)
+    python ml/teste_impostor.py                 # todos os blocos
+    python ml/teste_impostor.py --materias MAT,PORT
     python ml/teste_impostor.py --n 8
     python ml/teste_impostor.py --modelo gemini-3.1-flash-lite
 
@@ -49,15 +50,28 @@ SAIDA = BASE / "artifacts" / "impostor"
 # Concentrado numa matéria só (e não espalhado pela área) para que UM professor
 # avalie um conjunto coerente da própria disciplina.
 BLOCOS = [
-    ("MAT",      "MAT", "Matemática"),
-    ("NATUREZA", "BIO", "Biologia"),
-    ("HUMANAS",  "HIS", "História"),
+    ("MAT",      "MAT",  "Matemática"),
+    ("NATUREZA", "BIO",  "Biologia"),
+    ("NATUREZA", "FIS",  "Física"),
+    ("HUMANAS",  "HIS",  "História"),
+    ("HUMANAS",  "GEO",  "Geografia"),
+    ("PORT",     "PORT", "Português"),
 ]
 
+# Matemática pede mais itens: o comportamento do gerador muda MUITO entre tópicos
+# (probabilidade não se parece com geometria), e 5 questões não cobrem essa variação.
+N_POR_MATERIA = {"MAT": 10}
+
 TEMAS = {
-    "MAT": ["Progressões", "Funções do 1º grau", "Geometria plana", "Porcentagem", "Estatística"],
+    "MAT": ["Progressões", "Funções do 1º grau", "Geometria plana", "Geometria espacial",
+            "Probabilidade", "Análise combinatória", "Porcentagem e juros", "Estatística",
+            "Trigonometria", "Razão e proporção"],
     "BIO": ["Genética", "Ecologia", "Citologia", "Evolução", "Corpo humano"],
+    "FIS": ["Cinemática", "Leis de Newton", "Trabalho e energia", "Eletricidade", "Termologia"],
     "HIS": ["Era Vargas", "Revolução Industrial", "Brasil Colônia", "Guerra Fria", "República Velha"],
+    "GEO": ["Urbanização", "Climatologia", "Geopolítica", "Recursos hídricos", "Agricultura"],
+    "PORT": ["Interpretação de texto", "Figuras de linguagem", "Variação linguística",
+             "Funções da linguagem", "Gêneros textuais"],
 }
 
 
@@ -151,7 +165,7 @@ def montar_texto(nome, itens, modelo, ts):
 
 
 # ==== MAIN ====
-async def main(n, modelo):
+async def main(n_padrao, modelo, materias):
     url = os.getenv("DATABASE_URL")
     if not url:
         print("DATABASE_URL não definida no Backend/.env — abortando.")
@@ -168,6 +182,9 @@ async def main(n, modelo):
     conn = await asyncpg.connect(url, statement_cache_size=0)
     try:
         for area, materia, nome in BLOCOS:
+            if materias and materia not in materias:
+                continue
+            n = N_POR_MATERIA.get(materia, n_padrao)
             print(f"[{nome}]")
             g = await gerar(conn, materia, nome, n, app)
             r = await reais(conn, materia, area, n)
@@ -188,5 +205,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=5, help="geradas por bloco (e o mesmo tanto de reais)")
     ap.add_argument("--modelo", default=None, help="sobrescreve GEMINI_MODEL só nesta execução")
+    ap.add_argument("--materias", default=None,
+                    help="só estas (ex.: MAT,PORT). Sem isso, refaz todos os blocos — "
+                         "cuidado se já distribuiu algum.")
     a = ap.parse_args()
-    asyncio.run(main(a.n, a.modelo))
+    alvo = {m.strip().upper() for m in a.materias.split(",")} if a.materias else None
+    asyncio.run(main(a.n, a.modelo, alvo))

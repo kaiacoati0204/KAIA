@@ -1,0 +1,420 @@
+AVALIACAO DE QUESTOES — MATEMÁTICA
+
+Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais
+de vestibular/ENEM, outras foram escritas por um sistema automatico. Nao
+dizemos quantas sao de cada.
+
+Para cada uma, responda duas coisas:
+  1. E de PROVA ou GERADA?
+  2. O que te fez decidir? (uma linha basta)
+
+Nao precisa resolver a questao — o que interessa e se ela parece questao de
+prova.
+
+------------------------------------------------------------------------------
+
+QUESTAO 1
+
+Os conceitos de moda, mediana, média e amplitude definem medidas utilizadas
+para estudar um conjunto de informações numéricas. Por exemplo, na lista de 5
+números (2, 2, 4, 8, 14), temos que a moda é igual a 2, a mediana é igual a 4,
+a média é igual 6 e a amplitude é igual a 12. Assinale a alternativa que
+representa a quantidade de listas de 5 números inteiros positivos que cumprem
+a condição: moda = mediana = média = amplitude = 23.
+
+A) 8
+B) 9
+C) 11
+D) 22
+E) 44
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 2
+
+A água utilizada pelos 75 moradores de um vilarejo provém de um reservatório
+de formato cilíndrico circular reto cujo raio da base mede 5 metros, sempre
+abastecido no primeiro dia de cada mês por caminhões-pipa. Cada morador desse
+vilarejo consome, em média, 200 litros de água por dia. No mês de junho de um
+determinado ano, o vilarejo festejou o dia do seu padroeiro e houve um gasto
+extra de água nos primeiros 20 dias. Passado esse período, as pessoas
+verificaram a quantidade de água presente no reservatório e constataram que o
+nível da coluna de água estava em 1,5 metro. Decidiram, então, fazer um
+racionamento de água durante os 10 dias seguintes. Considere 3 como
+aproximação para pi. Qual é a quantidade mínima de água, em litro, que cada
+morador, em média, deverá economizar por dia, de modo que o reservatório não
+fique sem água nos próximos 10 dias?
+
+A) 50
+B) 60
+C) 80
+D) 140
+E) 150
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 3
+
+Para a composição da diretoria de uma empresa, deve-se escolher entre os
+funcionários um presidente, um vice-presidente e um diretor financeiro. Sabe-
+se que há 10 candidatos aptos para qualquer um dos cargos e que uma mesma
+pessoa não pode acumular cargos. O número de maneiras possíveis para preencher
+essa diretoria é:
+
+A) 240
+B) 504
+C) 1000
+D) 720
+E) 120
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 4
+
+Em uma urna, há bolas amarelas, brancas e vermelhas. Sabe- se que: I. A
+probabilidade de retirar uma bola vermelha dessa urna é o dobro da
+probabilidade de retirar uma bola amarela. II. Se forem retiradas 4 bolas
+amarelas dessa urna, a probabilidade de retirar uma bola vermelha passa a ser
+1/2. III. Se forem retiradas 12 bolas vermelhas dessa urna, a probabilidade de
+retirar uma bola branca passa a ser 1/2. A quantidade de bolas brancas na urna
+é
+
+A) 8.
+B) 10.
+C) 12.
+D) 14.
+E) 16.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 5
+
+Um capital de 1 200 reais foi aplicado a juros simples a uma taxa de 2% ao mês
+durante 5 meses. O montante total obtido ao final desse período, em reais, é
+igual a
+
+A) 1 620 reais
+B) 1 500 reais
+C) 1 320 reais
+D) 1 440 reais
+E) 1 248 reais
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 6
+
+O estádio do Maracanã passou por algumas modificações estruturais para a
+realização da Copa do Mundo de 2014, como, por exemplo, as dimensões do campo
+retangular. Para se adaptar aos padrões da Fifa, as dimensões do campo foram
+reduzidas de 110 metros por 75 metros para 105 metros por 68 metros. Em
+quantos metros quadrados a área do campo do Maracanã foi reduzida?
+
+A) 24
+B) 35
+C) 555
+D) 1110
+E) 1145
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 7
+
+Uma piscina tem capacidade de 2500000 litros. Seu sistema de abastecimento foi
+regulado para ter uma vazão constante de 6000 litros de água por minuto. O
+mesmo sistema foi instalado em uma segunda piscina, com capacidade de 2750000
+litros, e regulado para ter uma vazão, também constante, capaz de enchê-la em
+um tempo 20 por cento maior que o gasto para encher a primeira piscina. A
+vazão do sistema de abastecimento da segunda piscina, em litro por minuto, é
+
+A) 8250
+B) 7920.
+C) 6545.
+D) 5500.
+E) 5280.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 8
+
+As notas de um estudante em quatro das cinco avaliações de uma disciplina
+foram 6,0; 7,0; 8,0 e 5,0. Para ser aprovado por média, a média aritmética
+simples das cinco notas deve ser igual ou superior a 7,0. Qual é a nota mínima
+que o estudante precisa obter na quinta avaliação para alcançar a aprovação?
+
+A) 10,0
+B) 8,0
+C) 7,0
+D) 9,5
+E) 9,0
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 9
+
+Note e adote: Em poliedros convexos, vale a relação de Euler 𝐹−𝐴+𝑉 = 2, em que
+𝐹 é o número de faces, 𝐴 é o número de arestas e 𝑉 é o número de vértices do
+poliedro. Um deltaedro é um poliedro cujas faces são todas triângulos
+equiláteros. Se um deltaedro convexo possui 8 vértices, então o número de
+faces desse deltaedro é:
+
+A) 4
+B) 6
+C) 8
+D) 10
+E) 12
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 10
+
+Em uma família, o número de irmãs de cada filha é igual à metade do número de
+irmãos. Cada filho tem o mesmo número de irmãos e irmãs. O número total de
+filhos e filhas da família é
+
+A) 4
+B) 5
+C) 7
+D) 10
+E) 15
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 11
+
+Uma empresa farmacêutica produz certo medicamento, o qual é formado por quatro
+componentes, conforme indicado na tabela I. O custo do grama de cada um dos
+componentes desse medicamento também é apresentado nessa tabela. Tabela I
+Composição do medicamento | Quantidade (em mg) | Custo (em R$/g) Componente A
+| 200 | 700 Componente B | 70 | 500 Componente C | 130 | 300 Componente D |
+100 | 120 Para a produção do próximo lote do medicamento, a empresa terá um
+gasto diferente para fabricá-lo, pois os custos de alguns componentes sofreram
+alterações, conforme mostra a tabela II. Tabela II Composição do medicamento |
+Variação no custo (em %) Componente A | +7 Componente B | -5 Componente C | 0
+Componente D | +10 Note e adote: Considere que os outros custos de produção
+permaneceram inalterados. Qual é o aumento, em reais, no custo do medicamento?
+
+A) 9,25
+B) 12,00
+C) 12,75
+D) 36,00
+E) 86,00
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 12
+
+Um motorista de aplicativo cobra uma taxa fixa de R$ 5,00 por corrida, mais R$
+1,50 por quilômetro rodado. Em uma determinada corrida, o valor total pago
+pelo passageiro foi de R$ 35,00. Quantos quilômetros teve essa corrida?
+
+A) 22 km
+B) 18 km
+C) 20 km
+D) 25 km
+E) 15 km
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 13
+
+Um borrifador de atuação automática libera, a cada acionamento, uma mesma
+quantidade de inseticida. O recipiente desse produto, quando cheio, contém 360
+mililitros de inseticida, que duram 60 dias se o borrifador permanecer ligado
+ininterruptamente e for acionado a cada 48 minutos. A quantidade de inseticida
+que é liberada a cada acionamento do borrifador, em mililitro, é
+
+A) 0,125.
+B) 0,200.
+C) 4,800.
+D) 6,000.
+E) 12,000.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 14
+
+Um terreno retangular possui inicialmente uma área de 300 metros quadrados. Se
+aumentarmos o comprimento desse terreno em 5 metros e a largura em 4 metros,
+sua área passa a ser de 540 metros quadrados. O perímetro original desse
+terreno, em metros, é igual a
+
+A) 70 m.
+B) 80 m.
+C) 90 m.
+D) 60 m.
+E) 100 m.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 15
+
+Visando atrair mais clientes, o gerente de uma loja anunciou uma promoção em
+que cada cliente que realizar uma compra pode ganhar um voucher para ser usado
+em sua próxima compra. Para ganhar seu voucher, o cliente precisa retirar, ao
+acaso, uma bolinha de dentro de cada uma das duas urnas A e B disponibilizadas
+pelo gerente, nas quais há apenas bolinhas pretas e brancas. Atualmente, a
+probabilidade de se escolher, ao acaso, uma bolinha preta na urna A é igual a
+20 por cento e a probabilidade de se escolher uma bolinha preta na urna B é 25
+por cento. Ganha o voucher o cliente que retirar duas bolinhas pretas, uma de
+cada urna. Com o passar dos dias, o gerente percebeu que, para a promoção ser
+viável aos negócios, era preciso alterar a probabilidade de acerto do cliente
+sem alterar a regra da promoção. Para isso, resolveu alterar a quantidade de
+bolinhas brancas na urna B de forma que a probabilidade de um cliente ganhar o
+voucher passasse a ser menor ou igual a 1 por cento. Sabe-se que a urna B tem
+4 bolinhas pretas e que, em ambas as urnas, todas as bolinhas têm a mesma
+probabilidade de serem retiradas. Qual é o número mínimo de bolinhas brancas
+que o gerente deve adicionar à urna B?
+
+A) 20
+B) 60
+C) 64
+D) 68
+E) 80
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 16
+
+Um observador avista o topo de uma torre de transmissão sob um ângulo de 30
+graus. Afastando-se 40 metros em linha reta na direção oposta à torre, ele
+passa a avistar o topo sob um ângulo de 15 graus. Desconsiderando a altura do
+observador, a altura da torre, em metros, é igual a
+
+A) 20,0 m
+B) 50,0 m
+C) 40,0 m
+D) 60,0 m
+E) 30,0 m
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 17
+
+Para confeccionar bandeirinhas para a festa junina, uma escola utilizou um
+rolo de fita vermelha de 45 metros de comprimento, que foi dividido em pedaços
+proporcionalmente ao número de alunos de duas turmas. A turma A, com 30
+alunos, recebeu uma quantidade de fita, e a turma B, com 60 alunos, recebeu o
+restante. Quantos metros de fita a turma B recebeu?
+
+A) 60 metros
+B) 15 metros
+C) 30 metros
+D) 45 metros
+E) 20 metros
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 18
+
+Um biólogo estuda uma cultura de bactérias cuja população dobra a cada 3
+horas. Se a cultura inicial possui 50 bactérias, o número de bactérias após 15
+horas será:
+
+A) 1600
+B) 800
+C) 12800
+D) 3200
+E) 6400
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 19
+
+Um tanque subterrâneo em formato de cilindro circular reto possui raio da base
+igual a 2 metros e altura igual a 3 metros. Considerando o valor de pi igual a
+3, a capacidade total máxima de armazenamento desse tanque, em metros cúbicos,
+é de
+
+A) 54 m³.
+B) 18 m³.
+C) 36 m³.
+D) 24 m³.
+E) 72 m³.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+
+==============================================================================
+CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
+==============================================================================
+
+modelo: gemini-3.5-flash-lite   gerado em: 20260907-2359
+
+   1. REAL     (nivel 5)
+   2. REAL     (nivel 4)
+   3. GERADA   (Análise combinatória, nivel 4)
+   4. REAL     (nivel 4)
+   5. GERADA   (Porcentagem e juros, nivel 2)
+   6. REAL     (nivel 2)
+   7. REAL     (nivel 3)
+   8. GERADA   (Estatística, nivel 3)
+   9. REAL     (nivel 3)
+  10. REAL     (nivel 4)
+  11. REAL     (nivel 2)
+  12. GERADA   (Funções do 1º grau, nivel 3)
+  13. REAL     (nivel 3)
+  14. GERADA   (Geometria plana, nivel 4)
+  15. REAL     (nivel 4)
+  16. GERADA   (Trigonometria, nivel 4)
+  17. GERADA   (Razão e proporção, nivel 2)
+  18. GERADA   (Progressões, nivel 2)
+  19. GERADA   (Geometria espacial, nivel 2)
+
+  total: 9 geradas, 10 reais

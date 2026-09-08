@@ -1,0 +1,226 @@
+AVALIACAO DE QUESTOES — FÍSICA
+
+Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais
+de vestibular/ENEM, outras foram escritas por um sistema automatico. Nao
+dizemos quantas sao de cada.
+
+Para cada uma, responda duas coisas:
+  1. E de PROVA ou GERADA?
+  2. O que te fez decidir? (uma linha basta)
+
+Nao precisa resolver a questao — o que interessa e se ela parece questao de
+prova.
+
+------------------------------------------------------------------------------
+
+QUESTAO 1
+
+Note e adote: Aceleração da gravidade: 10 m/s^2. Desconsidere as forças
+dissipativas e as dimensões do objeto. Um bloco de massa 2,0 kg é abandonado a
+partir do repouso do topo de um plano inclinado de 5,0 m de altura. Ao atingir
+a base do plano, ele continua a se movimentar sobre uma superfície horizontal
+áspera, onde atua uma força de atrito constante de 20 N. Qual é a distância
+total que o bloco percorre sobre a superfície horizontal até parar
+completamente?
+
+A) 0,5 metro.
+B) 2,5 metros.
+C) 1,0 metro.
+D) 5,0 metros.
+E) 10,0 metros.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 2
+
+Note e adote: Aceleração da gravidade: 10 m/s^2. Desconsidere a resistência do
+ar. Um elevador de massa 500 kg sobe com uma aceleração constante de 2 m/s^2
+tracionado por um cabo de aço. Sabendo que o elevador parte do repouso, qual é
+a força de tração exercida pelo cabo de aço sobre o elevador durante esse
+movimento?
+
+A) 5000 newtons
+B) 4000 newtons
+C) 7000 newtons
+D) 6000 newtons
+E) 10000 newtons
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 3
+
+Um motorista viaja em uma rodovia retilínea com velocidade constante de 80
+km/h durante as primeiras 2 horas de percurso. Em seguida, devido a obras na
+pista, ele reduz sua velocidade para 60 km/h e viaja por mais 1 hora.
+Considerando todo o trajeto realizado, qual foi a velocidade média
+desenvolvida pelo veículo?
+
+A) 75,0 km/h
+B) 70,0 km/h
+C) 80,0 km/h
+D) 73,3 km/h
+E) 63,3 km/h
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 4
+
+O número de abelhas encontra-se em declínio em várias regiões do mundo,
+inclusive no Brasil, sendo que vários fatores contribuem para o colapso de
+suas colmeias. Nos Estados Unidos, bombas de sementes de espécies vegetais
+nativas têm sido utilizadas para combater o desaparecimento desses insetos.
+Elas são pequenas bolinhas recheadas com sementes, adubo e argila. Quando são
+arremessadas e ficam expostas ao sol e à chuva, germinam até mesmo em solo
+pouco fértil. Esse método contribui para a preservação das abelhas porque
+
+A) reduz sua predação.
+B) reduz o uso de pesticidas.
+C) reduz a competição por abrigo.
+D) aumenta a oferta de alimento.
+E) aumenta os locais de reprodução.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 5
+
+As aves apresentam dois tipos de músculos em seus corpos: vermelhos e brancos.
+Aves migratórias como garças, gansos e patos selvagens têm os músculos
+vermelhos bem desenvolvidos, com ampla rede de vasos sanguíneos. Nas viagens
+por grandes distâncias, tais músculos são fundamentais, pois favorecem o(a)
+
+A) execução de manobras.
+B) metabolismo corpóreo elevado.
+C) manutenção da aerodinâmica.
+D) deslocamento a grandes velocidades.
+E) capacidade de voo em grandes altitudes.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 6
+
+Mudanças climáticas e ilhas de calor urbanas A variação da incidência de
+radiação solar sobre a superfície da Terra resulta em uma variação de
+temperatura ao longo de um dia denominada amplitude térmica. Edificações e
+pavimentações realizadas nas áreas urbanas contribuem para alterar as
+amplitudes térmicas dessas regiões, em comparação com regiões que mantêm suas
+características naturais, com presença de vegetação e água, já que o calor
+específico do concreto é inferior ao da água. Assim, parte da avaliação do
+impacto ambiental que a presença de concreto proporciona às áreas urbanas
+consiste em considerar a substituição da área concretada por um mesmo volume
+de água e comparar as variações de temperatura devido à absorção da radiação
+solar nas duas situações (concretada e alagada). Desprezando os efeitos da
+evaporação e considerando que toda a radiação é absorvida, essa avaliação pode
+ser realizada com os seguintes dados:  | Unnamed: 0   | Densidade (kg/m3)   |
+Calor específico (J/g°C)    | |:-------------|:--------------------------|:---
+----------------------------------| | Água         | 1 000
+| 4,2                                  | | Concreto     | 2 500
+| 0,8                                  |  A razão entre as variações de
+temperatura nas áreas concretada e alagada é mais próxima de
+
+A) 1,0.
+B) 2,1.
+C) 2,5.
+D) 5,3.
+E) 13,1.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 7
+
+Na fertilização in vitro, espermatozoides são adicionados aos gametas
+femininos retirados de uma mulher. Após o período de incubação, a fecundação é
+favorecida pela ação de enzimas. Em um procedimento realizado, observou-se que
+nenhum dos gametas femininos foi fertilizado e, posteriormente, verificou-se
+que havia sido adicionado, equivocadamente, um coquetel de inibidores das
+enzimas do acrossomo, no lugar de um dos nutrientes constituintes do meio de
+cultura. O coquetel de inibidores impediu o(a)
+
+A) formação do pronúcleo masculino.
+B) início da divisão mitótica do zigoto.
+C) término da segunda divisão meiótica do ovócito.
+D) passagem do espermatozoide pela corona radiata e zona pelúcida.
+E) fusão das membranas plasmáticas do ovócito e do espermatozoide.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 8
+
+Um recipiente térmico de capacidade térmica desprezível contém 200 g de água a
+uma temperatura inicial de 20 °C. No interior desse recipiente, mergulha-se um
+bloco metálico de massa 100 g, inicialmente a uma temperatura de 100 °C.
+Sabendo que o calor específico da água é 1,0 cal/(g.°C) e que a temperatura de
+equilíbrio térmico do sistema é 25 °C, qual é o calor específico do metal, em
+cal/(g.°C)?
+
+A) 0,11 cal/(g.°C)
+B) 0,22 cal/(g.°C)
+C) 0,45 cal/(g.°C)
+D) 1,00 cal/(g.°C)
+E) 0,80 cal/(g.°C)
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 9
+
+A Agência Nacional de Vigilância Sanitária (Anvisa) aprovou um produto de
+terapia gênica no país, indicado para o tratamento da distrofia hereditária da
+retina. O procedimento é recomendado para crianças acima de 12 meses e adultos
+com perda de visão causada pela mutação do gene humano RPE65. O produto,
+elaborado por engenharia genética, é composto por um vírus, no qual foi
+inserida uma cópia do gene normal humano RPE65 para corrigir o funcionamento
+das células da retina. O sucesso dessa terapia advém do fato de que o produto
+favorecerá a
+
+A) correção do código genético para a tradução da proteína.
+B) alteração do RNA ribossômico ligado à síntese da proteína.
+C) produção de mutações benéficas para a correção do problema.
+D) liberação imediata da proteína normal na região ocular humana.
+E) expressão do gene responsável pela produção da enzima normal.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+
+==============================================================================
+CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
+==============================================================================
+
+modelo: gemini-3.5-flash-lite   gerado em: 20260907-2359
+
+   1. GERADA   (Trabalho e energia, nivel 4)
+   2. GERADA   (Leis de Newton, nivel 3)
+   3. GERADA   (Cinemática, nivel 2)
+   4. REAL     (nivel 3)
+   5. REAL     (nivel 3)
+   6. REAL     (nivel 4)
+   7. REAL     (nivel 4)
+   8. GERADA   (Termologia, nivel 3)
+   9. REAL     (nivel 4)
+
+  total: 4 geradas, 5 reais

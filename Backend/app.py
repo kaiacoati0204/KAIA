@@ -927,50 +927,81 @@ VERSAO_PROMPT = "v3-2026-09"
 # ~50% a geracao (fracao de centavo) e evita entregar lote curto quando alguma e
 # descartada. So a geracao aumenta: o que o aluno ve continua sendo n.
 FATOR_SOBRA_GERACAO = 1.5
-MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.6-flash")
+# Familia Flash (nao Flash-Lite, que e a do gerador): a independencia vem justamente
+# de nao compartilhar treinamento. O 3.6 tem cota diaria pequena demais no tier
+# gratuito (~20 chamadas); o 3.8 e mais novo e tem cota.
+MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.8-flash")
+VERIF_LOTE = int(os.getenv("KAIA_VERIF_LOTE", "5"))   # questoes por chamada de verificacao
 QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
-VERIFICA_POR_RODADA = 12          # quantas por ciclo do job (respeita o teto de req/min)
+VERIFICA_POR_RODADA = 20          # quantas por ciclo do job (em lotes de VERIF_LOTE)
 
-_PROMPT_VERIFICACAO = """Resolva esta questão de múltipla escolha do ensino médio brasileiro.
+# Verifica em LOTE: uma chamada para VERIF_LOTE questoes, nao uma por questao. Foi o
+# que destravou o volume — a cota do tier gratuito nao aguenta uma chamada por questao.
+# Pede o raciocinio de cada uma antes da resposta para o modelo nao ficar preguicoso
+# despachando o lote inteiro sem conferir.
+_PROMPT_VERIFICACAO = """Resolva cada questão de múltipla escolha do ensino médio brasileiro
+abaixo. Trate cada uma de forma independente e confira a conta/o conteúdo antes de responder.
 
-{questao}
+{questoes}
 
-Responda APENAS com um objeto JSON, sem mais nada:
-{{"resposta": "A"|"B"|"C"|"D"|"E"|"NENHUMA", "problema": ""}}
+Responda APENAS com um ARRAY JSON, um objeto por questão, na mesma ordem:
+[{{"n": 1, "raciocinio": "como chegou à resposta, 1 frase", "resposta": "A"|"B"|"C"|"D"|"E"|"NENHUMA", "problema": ""}}]
 
 - "resposta": a alternativa correta. Use "NENHUMA" se a resposta certa NÃO estiver entre
   as alternativas, ou se o enunciado não permitir chegar a uma resposta.
-- "problema": vazio se está tudo bem; senão descreva o defeito em até 15 palavras.
-Confira a conta/o conteúdo antes de responder."""
+- "problema": vazio se está tudo bem; senão descreva o defeito em até 15 palavras."""
 
 
-def verificar_questao(enunciado, opts):
-    """(indice_escolhido, nota). -1 = "nenhuma alternativa correta".
-    None = verificador indisponivel — a questao fica SEM veredito (nao vira suspeita:
-    falha de infra nao e defeito da questao)."""
-    texto = str(enunciado) + "\n\n" + "\n".join(
-        f"{chr(65 + i)}) {o}" for i, o in enumerate(opts))
+def _letra_para_indice(letra):
+    letra = str(letra).strip().upper()
+    if letra == "NENHUMA":
+        return -1
+    return ord(letra) - 65 if len(letra) == 1 and "A" <= letra <= "E" else None
+
+
+def verificar_lote(questoes):
+    """[(indice, nota)] para uma lista de (enunciado, opts), UMA chamada só.
+    -1 = "nenhuma alternativa correta"; None = sem resposta do verificador para aquela
+    questao (fica SEM veredito: falha de infra nao e defeito da questao)."""
+    if not questoes:
+        return []
+    blocos = []
+    for i, (enun, opts) in enumerate(questoes, 1):
+        alts = "\n".join(f"{chr(65 + j)}) {o}" for j, o in enumerate(opts))
+        blocos.append(f"### Questão {i}\n{enun}\n{alts}")
     url = ("https://generativelanguage.googleapis.com/v1beta/"
            f"models/{MODELO_VERIFICADOR}:generateContent?key={API_KEY}")
-    body = {"contents": [{"parts": [{"text": _PROMPT_VERIFICACAO.format(questao=texto)}]}]}
+    body = {"contents": [{"parts": [{"text": _PROMPT_VERIFICACAO.format(
+        questoes=("\n\n").join(blocos))}]}]}
+    vazio = [(None, "")] * len(questoes)
     try:
-        r = requests.post(url, json=body, timeout=90).json()
+        r = requests.post(url, json=body, timeout=180).json()
         bruto = r["candidates"][0]["content"]["parts"][0]["text"].strip()
     except Exception:
-        return None, ""                       # 503/timeout: tenta de novo no proximo ciclo
+        return vazio
     try:
         if "```" in bruto:
             bruto = bruto.split("```")[1].removeprefix("json").strip()
-        d = json.loads(bruto[bruto.index("{"):bruto.rindex("}") + 1])
-        letra = str(d.get("resposta", "")).strip().upper()
-        nota = str(d.get("problema", "")).strip()[:200]
+        dados = json.loads(bruto[bruto.index("["):bruto.rindex("]") + 1])
     except Exception:
-        return None, ""
-    if letra == "NENHUMA":
-        return -1, nota
-    if len(letra) == 1 and "A" <= letra <= "E":
-        return ord(letra) - 65, nota
-    return None, nota
+        return vazio
+    saida = list(vazio)
+    for d in dados if isinstance(dados, list) else []:
+        if not isinstance(d, dict):
+            continue
+        try:
+            pos = int(d.get("n", 0)) - 1
+        except (TypeError, ValueError):
+            continue
+        if 0 <= pos < len(saida):
+            saida[pos] = (_letra_para_indice(d.get("resposta", "")),
+                          str(d.get("problema", "")).strip()[:200])
+    return saida
+
+
+def verificar_questao(enunciado, opts):
+    """Uma questao só — atalho sobre verificar_lote (usado por scripts offline)."""
+    return verificar_lote([(enunciado, opts)])[0]
 
 
 async def job_verificar_cache(app):
@@ -986,20 +1017,26 @@ async def job_verificar_cache(app):
         except Exception as e:
             print("[KaIA] verificacao indisponivel (banco atras do schema?):", e)
             return
-        for q in pend:
-            alts = q["alternativas"]
-            opts = json.loads(alts) if isinstance(alts, str) else alts
-            idx, nota = await asyncio.to_thread(verificar_questao, q["enunciado"], opts)
-            if idx is None:
-                continue                       # sem veredito: volta no proximo ciclo
-            veredito = "ok" if idx == q["resposta_correta"] else "suspeita"
-            await conn.execute(
-                "update questoes_cache set veredito = $2, verificada_em = now(), "
-                "verificador_disse = $3, verificador_nota = $4 where questao_id = $1",
-                q["questao_id"], veredito, idx, nota or None)
-            if veredito == "suspeita":
-                motivo = "nenhuma alternativa correta" if idx == -1 else f"apontou {chr(65 + idx)}"
-                print(f"[KaIA] questao SUSPEITA ({motivo}) — {q['enunciado'][:60]}")
+        for ini in range(0, len(pend), VERIF_LOTE):
+            bloco = list(pend[ini:ini + VERIF_LOTE])
+            entradas = []
+            for q in bloco:
+                alts = q["alternativas"]
+                entradas.append((q["enunciado"],
+                                 json.loads(alts) if isinstance(alts, str) else alts))
+            resultados = await asyncio.to_thread(verificar_lote, entradas)
+            for q, (idx, nota) in zip(bloco, resultados):
+                if idx is None:
+                    continue                   # sem veredito: volta no proximo ciclo
+                veredito = "ok" if idx == q["resposta_correta"] else "suspeita"
+                await conn.execute(
+                    "update questoes_cache set veredito = $2, verificada_em = now(), "
+                    "verificador_disse = $3, verificador_nota = $4 where questao_id = $1",
+                    q["questao_id"], veredito, idx, nota or None)
+                if veredito == "suspeita":
+                    motivo = ("nenhuma alternativa correta" if idx == -1
+                              else f"apontou {chr(65 + idx)}")
+                    print(f"[KaIA] questao SUSPEITA ({motivo}) — {q['enunciado'][:60]}")
 
 
 # Busca no cache até `limite` questões (materia+tema+nivel+hobbie) NÃO vistas pelo

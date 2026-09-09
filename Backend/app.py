@@ -853,11 +853,17 @@ Regras:
         return []
 
 
+# "explicacao" faltava aqui e o campo nasceu vazio em TODA questao de calculo — o
+# aluno via "Por que esta e a resposta:" seguido de nada. Achado no primeiro teste
+# real. O formato de humanas sempre pediu; este nao.
 _FORMATO_POT = (
     '{"q": "enunciado", "opts": ["v1","v2","v3","v4","v5"], '
     '"formula": "expressão aritmética SÓ com números e + - * / ** e funções '
     'sqrt/sin/cos/log/pi, com os valores JÁ substituídos (sem variáveis, sem unidades, '
     'sem =), que calcula a resposta correta", '
+    '"explicacao": "o caminho até a resposta em 1 a 2 frases: que raciocínio usar e '
+    'que conta fazer, com os números do enunciado. Escreva para quem errou entender, '
+    'não repita só o resultado", '
     '"porque_erradas": ["por que v1 erra", "...", "...", "...", "..."]}'
 )
 
@@ -940,7 +946,7 @@ Regras:
 # Versao das REGRAS do prompt. Suba quando mudar qualquer regra de geracao: e o que
 # permite responder depois "a regra nova reduziu o erro?". Sem isso, questao velha e
 # questao nova ficam indistinguiveis no banco.
-VERSAO_PROMPT = "v3-2026-09"
+VERSAO_PROMPT = "v4-2026-09"
 
 # Pede mais questoes do que precisa e fica com as que passam nas barreiras — e o que o
 # Duolingo faz (gera variantes, seleciona). A saida e a parte cara, entao isto encarece

@@ -979,6 +979,12 @@ MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.8-flash")
 VERIF_LOTE = int(os.getenv("KAIA_VERIF_LOTE", "5"))   # questoes por chamada de verificacao
 QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
 VERIFICA_POR_RODADA = 20          # quantas por ciclo do job (em lotes de VERIF_LOTE)
+# O verificador tem cota DIARIA (GenerateRequestsPerDayPerProjectPerModel-FreeTier):
+# medido em 20 chamadas/dia. Com VERIF_LOTE=5 isso cobre 100 questoes por dia — e o
+# cache tem quase mil. Verificar a rodada INTEIRA numa chamada so muda a ordem de
+# grandeza, e ainda gasta a cota no que importa: o que o aluno vai ver AGORA, em vez
+# do que o job pegar por ordem de criacao.
+VERIF_LOTE_RODADA = int(os.getenv("KAIA_VERIF_LOTE_RODADA", "12"))
 
 # Verifica em LOTE: uma chamada para VERIF_LOTE questoes, nao uma por questao. Foi o
 # que destravou o volume — a cota do tier gratuito nao aguenta uma chamada por questao.
@@ -1047,6 +1053,42 @@ def verificar_lote(questoes):
 def verificar_questao(enunciado, opts):
     """Uma questao só — atalho sobre verificar_lote (usado por scripts offline)."""
     return verificar_lote([(enunciado, opts)])[0]
+
+
+# Tarefas em voo: sem guardar a referencia o asyncio pode coletar a task no meio.
+_TAREFAS_VERIF = set()
+
+
+async def _verificar_entregues(pool, entregues):
+    """Verifica em UMA chamada as questoes recem-entregues que ainda nao tem veredito.
+
+    Roda em background (nao segura a resposta do aluno — verificar na hora somaria
+    ~5s de espera). O ganho nao e so gastar menos: prioriza a cota diaria nas questoes
+    que estao indo para a tela agora, em vez de deixar o job escolher por data."""
+    if pool is None or not API_KEY:
+        return
+    alvos = [q for q in entregues
+             if q.get("questao_id") and q.get("em_quarentena")][:VERIF_LOTE_RODADA]
+    if not alvos:
+        return
+    try:
+        res = await asyncio.to_thread(
+            verificar_lote, [(q["q"], q["opts"]) for q in alvos])
+        async with pool.acquire() as conn:
+            for q, (idx, nota) in zip(alvos, res):
+                if idx is None:
+                    continue                   # verificador fora do ar: fica p/ o job
+                veredito = "ok" if idx == q["ans"] else "suspeita"
+                await conn.execute(
+                    "update questoes_cache set veredito = $2, verificada_em = now(), "
+                    "verificador_disse = $3, verificador_nota = $4 where questao_id = $1",
+                    uuid.UUID(q["questao_id"]), veredito, idx, nota or None)
+                if veredito == "suspeita":
+                    motivo = ("nenhuma correta" if idx == -1 else f"apontou {chr(65 + idx)}")
+                    print(f"[KaIA] SUSPEITA na rodada ({motivo}) — {q['q'][:60]}")
+        print(f"[KaIA] rodada verificada: {len(alvos)} questoes em 1 chamada.")
+    except Exception as e:
+        print("[KaIA] falha ao verificar a rodada (o job pega depois):", e)
 
 
 async def job_verificar_cache(app):
@@ -1358,6 +1400,12 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
     if not entregues:
         _registrar_falha_geracao("gerar-questao")
         return JSONResponse({"erro": "Não foi possível gerar a questão."}, status_code=502)
+    # Verifica o buffer inteiro numa chamada so, em background: o aluno recebe as
+    # questoes agora e a quarentena delas se resolve enquanto ele responde a primeira.
+    if pool is not None:
+        _t = asyncio.create_task(_verificar_entregues(pool, list(entregues)))
+        _TAREFAS_VERIF.add(_t)
+        _t.add_done_callback(_TAREFAS_VERIF.discard)
     return {"questoes": entregues} if (lote or distribuicao) else entregues[0]
 
 

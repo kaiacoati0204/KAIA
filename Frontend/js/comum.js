@@ -6,6 +6,26 @@
 const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 
 // ============================================================
+//   WARM-UP DO BACKEND
+// ============================================================
+// O front é estático (CDN) e responde na hora; o backend é um processo que, no
+// plano grátis do Render, hiberna após 15 min sem requisição e leva ~50s para
+// voltar. Carregar a página NÃO o acorda — só uma chamada a alguma rota dele.
+//
+// Sem isto, a espera cai no pior lugar possível: o aluno abre o login (instantâneo),
+// digita e-mail e senha, clica em Entrar, e SÓ ENTÃO o /perfil encontra o servidor
+// dormindo. Disparando aqui, ele acorda enquanto a pessoa digita.
+//
+// Dispara e esquece: sem await, sem tratar resposta, erro engolido. Se o backend
+// já estiver de pé é um GET de alguns bytes; se estiver fora, a página segue igual.
+function acordarBackend() {
+    try {
+        fetch(`${API_URL}/`, { method: 'GET', cache: 'no-store' }).catch(() => {});
+    } catch (_) { /* nunca deve atrapalhar o carregamento da página */ }
+}
+acordarBackend();
+
+// ============================================================
 //   BETA: gestão desligada (Dashboard)
 // ============================================================
 // Durante o beta o painel de admin (dashboard.html) fica SEM entrada na rail e

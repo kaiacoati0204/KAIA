@@ -16,9 +16,31 @@ let isMissionActive = false;
 let sessaoDeEstudoAberta = false;
 let idleInterval    = null;
 
+// ==== LIMIAR DE OCIOSIDADE (overlay "ainda esta conosco?") ====
+// Era o tempo de LEITURA: ceil(palavras/3.3)+5, ~23s numa questao curta. So que ler
+// nao e responder — nos dados da primeira sessao real as respostas levaram 50s, 57s e
+// 99s, e o overlay subiu 11 vezes em 6 minutos. Aluno lendo o enunciado e fazendo a
+// conta (na cabeca ou no papel) fica parado, e isso e trabalho, nao desatencao.
+//
+// O overlay existe para pegar quem SAIU, nao quem esta pensando. Quem saiu fica fora
+// por minutos. Dai o piso alto e o fator sobre a leitura.
+//
+// Publico TEA/TDAH: escurecer a tela a cada 30s e exatamente o estimulo desnecessario
+// que o CLAUDE.md proibe — e interrompe o raciocinio de quem mais precisa mante-lo.
+const PISO_OCIOSO_S        = 60;    // nunca abaixo disto, por mais curta que seja
+const PISO_OCIOSO_CALCULO_S = 90;   // MAT/FIS/QUI: tem conta pra fazer
+const FATOR_OCIOSO         = 3;     // sobre a estimativa de leitura
+const MATERIAS_CALCULO     = ['MAT', 'FIS', 'QUI'];   // codigos, e o que 'subject' carrega
+
+function limiarOcioso(segundosLeitura, materia) {
+    const piso = MATERIAS_CALCULO.includes(materia) ? PISO_OCIOSO_CALCULO_S : PISO_OCIOSO_S;
+    return Math.max(piso, Math.round(segundosLeitura * FATOR_OCIOSO));
+}
+
 // --- Estado dos sensores ----------------------------------------------------
 let idleTime        = 0;
-let dynamicLimit    = 10;
+let dynamicLimit    = 10;    // estimativa de LEITURA (vira a feature limiteLeituraMs)
+let limiteOciosoS   = PISO_OCIOSO_S;   // quando o overlay sobe — NAO e a mesma coisa
 let focusLostAt     = null;
 let mudancasAba     = 0;
 let questionShownAt = 0;
@@ -1453,7 +1475,7 @@ function iniciarIdleMonitor() {
         // "Ainda está Conosco?" por cima de uma intervenção é dizer duas coisas
         // ao mesmo tempo para quem já está com a atenção comprometida: a
         // intervenção JÁ é o chamado de volta.
-        if (idleTime >= dynamicLimit && !_intervencaoNaTela()) setEstado('FALTA DE INTERAÇÃO', true);
+        if (idleTime >= limiteOciosoS && !_intervencaoNaTela()) setEstado('FALTA DE INTERAÇÃO', true);
     }, 1000);
 }
 
@@ -1970,6 +1992,7 @@ async function carregarQuestao(subject, tema) {
 
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
     limiteLeituraMs = dynamicLimit;      // ja era calculado e descartado: sem ele, "demorou
+    limiteOciosoS = limiarOcioso(dynamicLimit, subject);   // overlay: bem mais folgado
     questaoIniciadaEm = new Date().toISOString();   // 90s" nao da pra interpretar
     $('question-display').innerText = currentQuestion.q;
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));

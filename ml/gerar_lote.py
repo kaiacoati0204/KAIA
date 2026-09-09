@@ -45,7 +45,27 @@ REPOR_CALCULO = {
     "FIS": ["Óptica Geométrica", "Cinemática", "Leis de Newton", "Trabalho e energia"],
     "QUI": ["Soluções", "Estequiometria", "Termoquímica"],
 }
-NIVEIS_PADRAO = [1, 2, 3]
+# A rodada serve niveis 1..5 (centro do aluno +/-2, ver sortearDistribuicao no front).
+# Gerar so 1..3 deixava metade da regua sem cache: o aluno que sobe de nivel cai
+# direto em geracao ao vivo.
+NIVEIS_PADRAO = [1, 2, 3, 4, 5]
+
+# Todos os temas por materia — permite `--materia BIO` sem listar tema a tema.
+TEMAS = {
+    "MAT": ["Progressões", "Funções do 1º grau", "Geometria plana", "Geometria espacial",
+            "Probabilidade", "Análise combinatória", "Porcentagem e juros", "Estatística",
+            "Trigonometria", "Razão e proporção"],
+    "FIS": ["Cinemática", "Leis de Newton", "Trabalho e energia", "Eletricidade",
+            "Termologia", "Ondulatória", "Hidrostática", "Óptica"],
+    "QUI": ["Estequiometria", "Soluções", "Termoquímica", "Eletroquímica", "Cinética química"],
+    "BIO": ["Genética", "Ecologia", "Citologia", "Evolução", "Corpo humano", "Botânica"],
+    "HIS": ["Era Vargas", "Revolução Industrial", "Brasil Colônia", "Guerra Fria",
+            "República Velha", "Idade Média"],
+    "GEO": ["Urbanização", "Climatologia", "Geopolítica", "Recursos hídricos",
+            "Agricultura", "Globalização"],
+    "PORT": ["Interpretação de texto", "Figuras de linguagem", "Variação linguística",
+             "Funções da linguagem", "Gêneros textuais"],
+}
 
 
 async def gerar_um(app, conn, materia, nome, tema, nivel, n):
@@ -116,7 +136,7 @@ async def verificar(conn, app, gravadas):
     return ok, susp, sem
 
 
-async def main(alvos, n, verificar_depois):
+async def main(alvos, n, verificar_depois, pular_prontas=False):
     url = os.getenv("DATABASE_URL")
     if not url:
         print("DATABASE_URL não definida no Backend/.env — abortando.")
@@ -133,6 +153,16 @@ async def main(alvos, n, verificar_depois):
             print(f"[{nome}]")
             for tema in temas:
                 for nivel in NIVEIS_PADRAO:
+                    if pular_prontas:
+                        # Retomada: uma execucao interrompida (cota, rede) nao deve
+                        # regerar o que ja entrou. Conta pela versao do prompt em uso.
+                        ja = await conn.fetchval(
+                            "select count(*) from questoes_cache where materia = $1 "
+                            "and tema = $2 and nivel = $3 and versao_prompt = $4",
+                            materia, tema, nivel, app.VERSAO_PROMPT)
+                        if ja >= n:
+                            print(f"  {tema[:22]:<22} nível {nivel}: já tem {ja} — pulando")
+                            continue
                     qs = await gerar_um(app, conn, materia, nome, tema, nivel, n)
                     if not qs:
                         print(f"  {tema[:22]:<22} nível {nivel}: nenhuma")
@@ -169,16 +199,26 @@ if __name__ == "__main__":
     ap.add_argument("--n", type=int, default=5, help="questões por tema/nível")
     ap.add_argument("--sem-verificar", action="store_true",
                     help="não verifica agora (o job do backend verifica depois)")
+    ap.add_argument("--niveis", default=None,
+                    help="níveis a gerar (ex.: '1,2,3'). Padrão: 1..5")
+    ap.add_argument("--pular-prontas", action="store_true",
+                    help="pula tema/nível que já tem n questões na versão de prompt atual")
     a = ap.parse_args()
 
     if a.repor_calculo:
         alvos = REPOR_CALCULO
     elif a.materia:
-        if not a.temas:
-            print("--materia exige --temas")
+        m = a.materia.upper()
+        if a.temas:
+            alvos = {m: [t.strip() for t in a.temas.split(",") if t.strip()]}
+        elif m in TEMAS:
+            alvos = {m: TEMAS[m]}                     # sem --temas: cobre a matéria inteira
+        else:
+            print(f"--materia {m} desconhecida; use --temas")
             sys.exit(1)
-        alvos = {a.materia.upper(): [t.strip() for t in a.temas.split(",") if t.strip()]}
     else:
         print("use --repor-calculo ou --materia X --temas 'a,b'")
         sys.exit(1)
-    asyncio.run(main(alvos, a.n, not a.sem_verificar))
+    if a.niveis:
+        NIVEIS_PADRAO = [int(x) for x in a.niveis.split(",") if x.strip()]
+    asyncio.run(main(alvos, a.n, not a.sem_verificar, a.pular_prontas))

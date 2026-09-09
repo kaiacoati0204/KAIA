@@ -2020,8 +2020,14 @@ class FeedbackIn(BaseModel):
 @app.get("/intervencao/pendente")
 async def intervencao_pendente(request: Request, session_id: str,
                                uid: str = Depends(usuario_autenticado)):
-    """Frontend consulta a intervenção recém-disparada (sem reward ainda) nos
-    últimos 5 min. É a 'flag' que substitui o WebSocket: o front faz polling."""
+    """Frontend consulta a intervenção recém-disparada nos últimos 5 min. É a
+    'flag' que substitui o WebSocket: o front faz polling.
+
+    ENTREGA UMA VEZ SÓ. Antes o critério era `reward is null`, e como só o polegar
+    (ou o reward automático, 3 min depois) preenchia isso, fechar o card sem
+    responder trazia a MESMA intervenção de volta a cada ciclo de 15s. O update com
+    RETURNING marca e devolve no mesmo comando: sem janela para duas entregas, mesmo
+    com dois polls simultâneos."""
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
@@ -2032,12 +2038,17 @@ async def intervencao_pendente(request: Request, session_id: str,
         try:
             row = await conn.fetchrow(
                 """
-                select intervention_id, intervention_type, triggered_at
-                from interventions
-                where session_id = $1::uuid and reward is null
-                  and intervention_type <> 'controle_ab'   -- grupo controle do A/B não vê card
-                  and triggered_at >= now() - interval '5 minutes'
-                order by triggered_at desc limit 1
+                update interventions set mostrada_em = now()
+                 where intervention_id = (
+                    select intervention_id from interventions
+                     where session_id = $1::uuid and reward is null
+                       and mostrada_em is null                  -- ainda não entregue
+                       and intervention_type <> 'controle_ab'   -- controle do A/B não vê card
+                       and triggered_at >= now() - interval '5 minutes'
+                     order by triggered_at desc limit 1
+                     for update skip locked
+                 )
+                returning intervention_id, intervention_type, triggered_at
                 """,
                 session_id,
             )

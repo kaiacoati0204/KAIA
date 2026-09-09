@@ -1,0 +1,19 @@
+# Desenvolvimento e teste. NÃO instalar no Render — jupyter sozinho arrasta
+# dezenas de pacotes e o build gratuito é limitado.
+#   pip install -r Backend/requirements-dev.txt
+
+-r requirements.txt
+
+# Testes
+pytest
+pytest-asyncio
+pytest-cov
+httpx
+
+# Notebooks e planilhas (pré-processamento das questões reais)
+jupyter
+openpyxl
+
+# Seed da base sintética dos painéis (Backend/seed_sintetico.py)
+faker
+psycopg2-binary

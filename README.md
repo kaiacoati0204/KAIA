@@ -236,6 +236,47 @@ e `python Backend/limpar_contas_teste.py --commit`.
 
 ---
 
+## 🚀 Deploy (Render)
+
+São **dois** serviços — o `render.yaml` na raiz descreve os dois. O site é estático e
+não hiberna; a API no plano grátis dorme após 15 min parada e a primeira chamada
+depois disso leva ~50s.
+
+| Serviço | Tipo | Pasta | Build | Start |
+|---|---|---|---|---|
+| `kaia-api` | Web Service | `Backend/` | `pip install -r Backend/requirements.txt && python ml/gerar_base_v2.py` | `uvicorn app:app --app-dir Backend --host 0.0.0.0 --port $PORT` |
+| `kaia` | Static Site | `Frontend/` | `node Frontend/gerar-config.js` | — |
+
+Dois detalhes que quebram o deploy se passarem despercebidos:
+
+- **O modelo não vai para o git.** O `.pkl` está no `.gitignore`, então o build
+  precisa rodar `ml/gerar_base_v2.py` (~3s, seed fixa). Sem isso o `/diagnose`
+  responde 503.
+- **O `config.js` também não.** O `Frontend/gerar-config.js` o escreve a partir das
+  variáveis do Render. Sem esse passo o front sobe sem configuração: a API cai no
+  fallback `127.0.0.1:5000` e o `supabaseClient` fica `null` — login morto.
+
+### Variáveis no painel
+
+**API** — `DATABASE_URL`, `API_KEY`, `SUPABASE_URL`, `KAIA_CORS_ORIGINS` (a URL do
+site), `KAIA_DB_SCHEMA=public`. **Deixe `KAIA_SEED_ATIVO` de fora.**
+
+**Site** — `KAIA_API_URL` (a URL da API), `KAIA_SUPABASE_URL`,
+`KAIA_SUPABASE_ANON_KEY` (a anon `eyJ...`, nunca a `service_role`).
+
+As duas URLs cruzadas só existem depois do primeiro deploy: suba, copie e volte
+para preencher.
+
+### Antes de mandar o link
+
+- [ ] Rodar a migration `20260909100000_rls_tabelas_expostas.sql` — sem ela a chave
+      anon lê `questoes_cache` inteira, **gabarito junto**.
+- [ ] Desligar a confirmação de e-mail no Supabase (Auth → Providers → Email). Ligada,
+      o limite grátis é de **3 e-mails por hora** e o quarto cadastro trava.
+- [ ] Conferir que `KAIA_CORS_ORIGINS` tem a URL do site, sem barra no fim.
+
+---
+
 ## 📖 Convenções
 
 > [!NOTE]

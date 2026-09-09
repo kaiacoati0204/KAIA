@@ -3230,4 +3230,7 @@ def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=5000)
+    # Local: 127.0.0.1:5000. No Render o host TEM de ser 0.0.0.0 (senao a porta nao
+    # e alcancavel de fora do container) e a porta vem na env PORT, sorteada por eles.
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"),
+                port=int(os.getenv("PORT", "5000")))

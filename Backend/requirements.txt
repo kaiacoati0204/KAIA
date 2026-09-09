@@ -1,3 +1,6 @@
+# Dependências de PRODUÇÃO — é o que o Render instala.
+# Ferramenta de desenvolvimento e teste fica em requirements-dev.txt.
+
 requests
 python-dotenv
 fastapi
@@ -6,22 +9,13 @@ asyncpg
 pydantic
 apscheduler
 
-# ML / notebooks (pré-processamento e Random Forest)
-pandas
-numpy
-scikit-learn
-openpyxl
-jupyter
-
-# Seed da base sintética de visualização dos painéis (Backend/seed_sintetico.py)
-faker
-psycopg2-binary
-
 # Auth — validação do JWT do Supabase (ES256 via JWKS)
 pyjwt[crypto]
 
-# Testes (Sprint 4 — unitários + integração)
-pytest
-pytest-asyncio
-pytest-cov
-httpx
+# ML — o backend faz pickle.load do RandomForest e do StandardScaler, então
+# scikit-learn precisa existir em RUNTIME, não só no treino. Versões fixas de
+# propósito: o modelo é regerado no build (ml/gerar_base_v2.py) e um upgrade
+# silencioso de major quebraria o unpickle ou o próprio gerador.
+numpy==2.2.6
+pandas==3.0.3
+scikit-learn==1.7.1

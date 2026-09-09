@@ -1,0 +1,56 @@
+# ============================================================
+#  KaIA no Render — API (Web Service) + site (Static Site)
+# ============================================================
+# São DOIS serviços. O site não hiberna; a API grátis dorme após 15 min parada e
+# a primeira chamada depois disso leva ~50s.
+#
+# O que NÃO está aqui, de propósito: os segredos. Todo `sync: false` precisa ser
+# preenchido à mão no painel (Environment) — assim nada sensível entra no git.
+#
+# Depois do primeiro deploy, volte e ajuste as duas URLs cruzadas:
+#   API   -> KAIA_CORS_ORIGINS = https://<site>.onrender.com
+#   site  -> KAIA_API_URL      = https://<api>.onrender.com
+
+services:
+  # ---------- API ----------
+  - type: web
+    name: kaia-api
+    runtime: python
+    plan: free
+    region: oregon
+    # gerar_base_v2.py refaz o modelo (~3s, seed fixa): o .pkl não vai para o git,
+    # e sem ele o /diagnose responde 503.
+    buildCommand: pip install -r Backend/requirements.txt && python ml/gerar_base_v2.py
+    startCommand: uvicorn app:app --app-dir Backend --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # produção escreve no schema public; 'teste' é o sandbox local
+      - key: KAIA_DB_SCHEMA
+        value: public
+      - key: DATABASE_URL          # Supabase -> Transaction Pooler (porta 6543)
+        sync: false
+      - key: API_KEY               # chave do Gemini
+        sync: false
+      - key: SUPABASE_URL          # opcional: se faltar, é derivada do DATABASE_URL
+        sync: false
+      - key: KAIA_CORS_ORIGINS     # a URL do site; sem isso o front leva CORS error
+        sync: false
+      # KAIA_SEED_ATIVO fica FORA de propósito: em produção a rota de seed não existe.
+
+  # ---------- Site ----------
+  - type: web
+    name: kaia
+    runtime: static
+    # config.js está no .gitignore — sem este passo o front sobe sem configuração
+    # e o login morre em todas as páginas.
+    buildCommand: node Frontend/gerar-config.js
+    staticPublishPath: ./Frontend
+    envVars:
+      - key: KAIA_API_URL
+        sync: false
+      - key: KAIA_SUPABASE_URL
+        sync: false
+      - key: KAIA_SUPABASE_ANON_KEY   # a anon (eyJ...), nunca a service_role
+        sync: false

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA</title>
+    <!-- As páginas ficam em pages/. Sem este arquivo, a raiz do site hospedado
+         responde 404 e o link que se manda para o aluno não abre nada. -->
+    <meta http-equiv="refresh" content="0; url=pages/index.html">
+    <link rel="canonical" href="pages/index.html">
+    <style>
+        html, body { margin: 0; height: 100%; }
+        body {
+            background: #f4ecdd; color: #1a2b4c;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            display: flex; align-items: center; justify-content: center;
+        }
+        a { color: #1a2b4c; }
+    </style>
+</head>
+<body>
+    <p>Abrindo a KaIA… <a href="pages/index.html">Entrar agora</a></p>
+    <script>window.location.replace('pages/index.html');</script>
+</body>
+</html>

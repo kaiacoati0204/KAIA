@@ -57,3 +57,35 @@ def test_persistencia(tmp_path):
 def test_muito_distraido(tmp_path):
     assert set(_ts(tmp_path).elegiveis("muito_distraido", 120)) == {
         "troca_atividade", "pausa_ativa", "alerta_fadiga"}
+
+
+def test_reconstruir_equivale_a_replay_dos_updates(tmp_path):
+    """Reconstruir do banco tem de dar o MESMO estado que aplicar os updates um a um.
+
+    É o que garante que o disco pode sumir (Render grátis não tem disco persistente)
+    sem o bandit perder o que aprendeu."""
+    passo_a_passo = _ts(tmp_path)
+    for r in (1.0, 1.0, 0.0, 0.5):
+        passo_a_passo.update("checkpoint", r)
+
+    do_banco = ThompsonSampling(params_path=tmp_path / "outro.json", seed=42)
+    do_banco.reconstruir({"checkpoint": (2.5, 4)})       # soma dos rewards, quantidade
+
+    assert do_banco.params["checkpoint"] == passo_a_passo.params["checkpoint"]
+    assert do_banco.params["checkpoint"]["alpha"] == 3.5   # 1 + 2.5
+    assert do_banco.params["checkpoint"]["beta"] == 2.5    # 1 + (4 - 2.5)
+
+
+def test_reconstruir_ignora_braco_aposentado(tmp_path):
+    ts = _ts(tmp_path)
+    ts.reconstruir({"nudge_refoco": (9.0, 9), "pausa_ativa": (1.0, 2)})
+    assert "nudge_refoco" not in ts.params                # tipo antigo não ressuscita
+    assert ts.params["pausa_ativa"]["alpha"] == 2.0
+
+
+def test_reconstruir_nao_grava_em_disco(tmp_path):
+    """O banco é a fonte da verdade; o arquivo é cache. Reconstruir não pode escrever."""
+    alvo = tmp_path / "p.json"
+    ts = ThompsonSampling(params_path=alvo, seed=42)
+    ts.reconstruir({"checkpoint": (3.0, 4)})
+    assert not alvo.exists()

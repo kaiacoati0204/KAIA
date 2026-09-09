@@ -176,6 +176,25 @@ async def lifespan(app: FastAPI):
         _tp = (PARAMS_PATH if DB_SCHEMA == "public"
                else PARAMS_PATH.with_name(f"thompson_params_{DB_SCHEMA}.json"))
         app.state.thompson = ThompsonSampling(params_path=_tp)
+        # O arquivo e so cache do processo. A verdade esta em `interventions`, e no
+        # plano gratuito do Render o disco some a cada hibernacao — sem isto o bandit
+        # voltaria a Beta(1,1) (escolha uniforme) varias vezes por dia.
+        if app.state.pool is not None:
+            try:
+                async with app.state.pool.acquire() as _c:
+                    _linhas = await _c.fetch(
+                        "select intervention_type t, coalesce(sum(reward), 0) soma, "
+                        "count(reward) n from interventions where reward is not null "
+                        "group by intervention_type")
+                somas = {r["t"]: (float(r["soma"]), int(r["n"])) for r in _linhas}
+                if somas:
+                    app.state.thompson.reconstruir(somas)
+                    print(f"[KaIA] bandit reconstruido do banco: "
+                          f"{sum(n for _, n in somas.values())} rewards em {len(somas)} braços.")
+                else:
+                    print("[KaIA] bandit sem rewards no banco ainda (Beta(1,1) em todos).")
+            except Exception as e:
+                print("[KaIA] AVISO: não deu para reconstruir o bandit do banco:", e)
         print(f"[KaIA] Thompson Sampling carregado (bandit={_tp.name}).")
     except Exception as e:
         app.state.thompson = None

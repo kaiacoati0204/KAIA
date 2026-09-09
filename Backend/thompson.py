@@ -103,6 +103,31 @@ class ThompsonSampling:
                 melhor, melhor_amostra = t, amostra
         return melhor
 
+    # ------------------------------------------------------------- reconstrucao
+    def reconstruir(self, somas):
+        """Recalcula alpha/beta a partir dos rewards ja gravados no banco.
+
+        O JSON em disco nunca foi o dado original — cada reward esta em
+        `interventions`. Isso importa porque o disco do plano gratuito do Render e
+        efemero: some a cada hibernacao, e um bandit zerado e Beta(1,1), que e a
+        distribuicao UNIFORME — ou seja, escolhe a intervencao no sorteio, jogando
+        fora tudo que ja tinha aprendido.
+
+        `somas` = {tipo: (soma_dos_rewards, quantos_rewards)}. Beta-Bernoulli com
+        prior Beta(1,1): alpha = 1 + sucessos, beta = 1 + fracassos. Reward fracionario
+        (0.5) entra como sucesso parcial, que e como o update() ja o trata.
+
+        NAO persiste: o banco e a fonte da verdade, o arquivo e so cache do processo.
+        """
+        for tipo, (soma, n) in (somas or {}).items():
+            if tipo not in self.params:
+                continue                       # tipo aposentado -> ignora
+            soma = max(0.0, float(soma))
+            n = max(0, int(n))
+            self.params[tipo]["alpha"] = 1.0 + soma
+            self.params[tipo]["beta"] = 1.0 + max(0.0, n - soma)
+        return self.params
+
     # -------------------------------------------------------------------- update
     def update(self, tipo_intervencao, reward):
         """Atualiza o braço: alpha += reward, beta += (1 - reward). Persiste."""

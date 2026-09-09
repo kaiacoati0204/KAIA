@@ -627,6 +627,24 @@ def test_pot_acha_opcao_pega_a_mais_proxima():
     assert app_mod._pot_acha_opcao(7.77, ["10", "20", "30"]) is None
 
 
+def test_pot_descarta_quando_o_resultado_nao_e_alternativa():
+    """Perto nao basta: media ponderada 7,3 com 7,2 e 7,4 na lista nao tem gabarito.
+
+    Achado a mao no teste do impostor — com a tolerancia de 3% de antes, as duas
+    ficavam dentro e uma delas virava resposta certa."""
+    assert app_mod._pot_acha_opcao(7.3, ["7.6", "7.0", "7.2", "7.4", "7.8"]) is None
+    # combustao do metanol: a conta da -647,5 e a mais proxima e -638
+    assert app_mod._pot_acha_opcao(
+        -647.5, ["-915", "-726", "-638", "-1020", "-805"]) is None
+    # arredondamento de exibicao continua passando
+    assert app_mod._pot_acha_opcao(22 / 3, ["7.33", "8.00", "6.50"]) == 0
+
+
+def test_pot_descarta_alternativa_ambigua():
+    """Duas opcoes praticamente iguais ao resultado: o numero nao escolhe uma."""
+    assert app_mod._pot_acha_opcao(10.0, ["10.0", "10.02", "30"]) is None
+
+
 def test_questao_utilizavel():
     """Barreira estrutural: pega o que passou na avaliação com os professores."""
     ok_completar = {"q": "O ritual representa, para seus adeptos, a",

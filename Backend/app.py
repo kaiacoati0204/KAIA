@@ -672,24 +672,33 @@ def _pot_num(s):
         return None
 
 
-def _pot_acha_opcao(calc, opts, tol=0.03):
-    """Índice da opção MAIS PRÓXIMA do valor calculado, dentro da tolerância.
+def _pot_acha_opcao(calc, opts, tol=0.005, folga=2.0):
+    """Índice da opção que É o valor calculado. None = descarta a questão.
 
-    Era a PRIMEIRA dentro da tolerância, e isso escolhia errado quando duas opções
-    ficam perto: numa questão de 25,51%, as alternativas 25,0 e 25,5 estavam ambas
-    dentro dos 3%, e a primeira (25,0) virava gabarito — com a certa logo abaixo.
-    Distrator plausível fica perto de propósito, então "a primeira que serve" nunca
-    foi o critério certo."""
-    melhor, dist_melhor = None, None
-    limite = tol * max(1.0, abs(calc))
+    Duas regras, as duas vindas de defeito achado à mão:
+
+    tol — a opção tem de SER o resultado, não ficar perto dele. Com os 3% de antes,
+    uma média ponderada que dá 7,3 casava com 7,2 e com 7,4 (ambas a 1,4%) e virava
+    gabarito, sem que 7,3 estivesse entre as alternativas. Meio por cento cobre
+    arredondamento de exibição (7,333 escrito "7,33") e não cobre distrator.
+
+    folga — se a segunda mais próxima também está perto, o número não identifica
+    uma opção só. Aí a questão é ambígua e não se serve, mesmo com uma vencedora."""
+    limite = max(tol * abs(calc), 1e-6)
+    dists = []
     for i, o in enumerate(opts):
         v = _pot_num(o)
-        if v is None:
-            continue
-        d = abs(v - calc)
-        if d <= limite and (dist_melhor is None or d < dist_melhor):
-            melhor, dist_melhor = i, d
-    return melhor
+        if v is not None:
+            dists.append((abs(v - calc), i))
+    if not dists:
+        return None
+    dists.sort()
+    d1, i1 = dists[0]
+    if d1 > limite:
+        return None
+    if len(dists) > 1 and dists[1][0] < folga * max(d1, limite):
+        return None                                    # duas opções servem -> ambígua
+    return i1
 
 
 # Formato EXATO de cada questão (string literal — as chaves NÃO são interpoladas).

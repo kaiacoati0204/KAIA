@@ -2299,44 +2299,28 @@ async function reportarQuestao() {
 // "sem certo nem errado" e o "sem julgamento" em algumas frases.
 const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 
-// PENDENTE (Bia + Vitor) — decisão de CONTEÚDO, não de código:
-//   - Quais destas oito ficam. As sete últimas são proposta; a 1ª é a original.
-//   - Variar a frase resolve o clique automático, mas introduz variância de
-//     medida: formulações diferentes deslocam um pouco a distribuição das
-//     respostas. É para isso que o `pergunta_id` vai no evento — dá para checar
-//     depois se alguma frase puxa demais para um lado e aposentá-la.
+// UMA pergunta só, fixa. Foram oito, sorteadas — e trocar a frase a cada disparo
+// custava dos dois lados:
+//
+//   MEDIDA  — formulações diferentes deslocam a distribuição das respostas. Como
+//             isto aqui é o rótulo que treina o modelo, variar a frase injeta ruído
+//             exatamente na variável que se quer limpa. Um instrumento, uma régua.
+//   ALUNO   — pergunta sempre igual vira uma coisa reconhecível ("é a checagem da
+//             KaIA"), lida em um segundo. Frase nova toda vez exige releitura, e com
+//             público TEA/TDAH esse custo não é pequeno.
+//
+// O risco conhecido é o oposto: pergunta fixa convida ao clique automático. Se isso
+// aparecer no dado (uma opção dominando muito além do plausível), a saída NÃO é
+// voltar a sortear frases — é mudar QUANDO se pergunta, não O QUE se pergunta.
+//
+// Para trocar a frase depois: mude o texto E o `id`. O id viaja no evento e é o que
+// permite separar o que foi colhido com qual régua; reaproveitá-lo mistura as duas.
 const PERGUNTAS_PROBE = [
-    { id: 'mente-na-questao',
-      pergunta: 'Rapidinho: sua mente estava na questão agora?',
-      opcoes: ['Sim, estava focado', 'Minha mente estava viajando', 'Fui ver outra coisa'] },
-
-    { id: 'onde-estava-cabeca',
-      pergunta: 'Só pra saber: onde estava sua cabeça nos últimos segundos?',
-      opcoes: ['Na questão', 'Vagando por aí', 'Em outra coisa, fora daqui'] },
-
-    { id: 'como-estava-atencao',
-      pergunta: 'Sem certo nem errado: como estava sua atenção agora?',
-      opcoes: ['Inteira na questão', 'Meio dispersa', 'Longe daqui'] },
-
-    { id: 'lendo-ou-passando-olho',
-      pergunta: 'Você estava lendo de verdade ou passando o olho?',
-      opcoes: ['Lendo de verdade', 'Passando o olho, pensando noutra coisa', 'Nem estava aqui'] },
-
-    { id: 'percebeu-mente-sair',
-      pergunta: 'Um segundo: você percebeu sua mente sair da questão?',
-      opcoes: ['Não, fiquei nela', 'Saiu e voltou', 'Saiu de vez'] },
-
-    { id: 'questao-teve-atencao',
-      pergunta: 'E aí, essa questão teve sua atenção?',
-      opcoes: ['Teve', 'Mais ou menos, a cabeça fugiu', 'Não, fui fazer outra coisa'] },
-
-    { id: 'o-que-rolava',
-      pergunta: 'Checagem rápida: o que rolava na sua cabeça?',
-      opcoes: ['Estava resolvendo', 'Estava pensando noutra coisa', 'Estava em outra tela'] },
-
-    { id: 'estava-aqui',
-      pergunta: 'Sem julgamento: você estava aqui agora?',
-      opcoes: ['Estava', 'Meio aqui, meio não', 'Não, estava fora'] },
+    { id: 'onde-estava-atencao',
+      pergunta: 'Onde estava sua atenção agora?',
+      opcoes: ['Na questão',
+               'Vagando — continuei aqui, mas a cabeça foi longe',
+               'Fora daqui — fui ver outra coisa'] },
 ];
 
 // ---- JANELAS DE TAMANHOS VARIADOS ---------------------------------------

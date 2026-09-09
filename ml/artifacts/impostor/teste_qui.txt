@@ -1,0 +1,255 @@
+AVALIACAO DE QUESTOES — QUÍMICA
+
+Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais
+de vestibular/ENEM, outras foram escritas por um sistema automatico. Nao
+dizemos quantas sao de cada.
+
+Para cada uma, responda duas coisas:
+  1. E de PROVA ou GERADA?
+  2. O que te fez decidir? (uma linha basta)
+
+Nao precisa resolver a questao — o que interessa e se ela parece questao de
+prova.
+
+------------------------------------------------------------------------------
+
+QUESTAO 1
+
+Uma das apostas para a produção de energia limpa, sem emissão de gases de
+efeito estufa e sem geração de resíduos radioativos, é a fusão nuclear, como a
+que ocorre nas estrelas. Em laboratório, são utilizados os isótopos de
+hidrogênio deutério (21H) e trítio (31H), que, dentro de um intenso campo
+magnético, são aquecidos a 150 milhões de graus Celsius. Nessas condições, 21H
+e 31H fundem-se formando 42He e um outro subproduto, além de liberar uma
+grande quantidade de energia. Com base nessas informações, assinale a
+alternativa que traz as informações corretas sobre qual é o subproduto formado
+e sobre a variação de entalpia desse processo.
+
+A) Próton; ΔH<0
+B) Próton; ΔH>0
+C) Nêutron; ΔH<0
+D) Nêutron; ΔH>0
+E) Elétron; ΔH<0
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 2
+
+Uma célula galvânica padrão é construída utilizando eletrodos de zinco e de
+cobre. Sabendo que o potencial padrão de redução do cobre é igual a +0.34 V e
+que o potencial padrão de redução do zinco é igual a -0.76 V, qual é o valor
+da força eletromotriz padrão, em volts, dessa pilha?
+
+A) 1.44 V
+B) 1.10 V
+C) 0.76 V
+D) 0.34 V
+E) 0.42 V
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 3
+
+O metanol (CH3OH) é um importante combustivel industrial e sua combustão
+completa produz dióxido de carbono e água líquida. Considere as seguintes
+energias de ligação (em kJ/mol): C-H = 413, C-O = 358, O-H = 463, O=O = 495,
+C=O (no CO2) = 799 e H-O (na água) = 463. Qual é a variação de entalpia (ΔH)
+aproximada, em kJ/mol, para a combustão de 1 mol de metanol gasoso, sabendo
+que a equação balanceada é CH3OH + 1.5 O2 -> CO2 + 2 H2O?
+
+A) -915 kJ/mol
+B) -726 kJ/mol
+C) -638 kJ/mol
+D) -1020 kJ/mol
+E) -805 kJ/mol
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 4
+
+As aves apresentam dois tipos de músculos em seus corpos: vermelhos e brancos.
+Aves migratórias como garças, gansos e patos selvagens têm os músculos
+vermelhos bem desenvolvidos, com ampla rede de vasos sanguíneos. Nas viagens
+por grandes distâncias, tais músculos são fundamentais, pois favorecem o(a)
+
+A) execução de manobras.
+B) metabolismo corpóreo elevado.
+C) manutenção da aerodinâmica.
+D) deslocamento a grandes velocidades.
+E) capacidade de voo em grandes altitudes.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 5
+
+Um professor lança uma esfera verticalmente para cima, a qual retorna, depois
+de alguns segundos, ao ponto de lançamento. Em seguida, lista em um quadro
+todas as possibilidades para as grandezas cinemáticas.  | Grandeza cinemática
+| Módulo    | Sentido     |
+|:-----------------------|:----------|:------------| | Velocidade
+| v≠ 0      | Para cima   | | Velocidade             | v≠ 0       | Para baixo
+| | Velocidade             | v= 0      | Indefinido* | | Aceleração
+| a≠ 0      | Para cima   | | Aceleração             | a≠ 0       | Para baixo
+| | Aceleração             | a= 0      | Indefinido* | *Grandezas com módulo
+nulo não têm sentido definido. Ele solicita aos alunos que analisem as
+grandezas cinemáticas no instante em que a esfera atinge a altura máxima,
+escolhendo uma combinação para os módulos e sentidos da velocidade e da
+aceleração. A escolha que corresponde à combinação correta é
+
+A) v = zero e a ≠ zero para cima.
+B) v ≠ 0 para cima e a = zero.
+C) v = zero e a ≠ zero para baixo.
+D) v ≠ zero para cima e a ≠ zero para cima.
+E) v ≠ zero para baixo e a ≠ zero para baixo.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 6
+
+Os riscos apresentados pelos produtos dependem de suas propriedades e da
+reatividade quando em contato com outras substâncias. Para prevenir os riscos
+devido à natureza química dos produtos, devemos conhecer a lista de
+substâncias incompatíveis e de uso cotidiano em fábricas, hospitais e
+laboratórios, a fim de observar cuidados na estocagem, manipulação e descarte.
+O quadro elenca algumas dessas incompatibilidades, que podem levar à
+ocorrência de acidentes.    | Substância                          |
+Incompatibilidade                          | Riscos associados    | |:--------
+----------------------------|:-------------------------------------------|:---
+------------------| | Ácidos minerais fortes concentrados | Bases fortes,
+Cianetos, Hipoclorito de sódio | Reação   enérgica, explosão,     produção de
+oxidante forte e produto tóxico                      | | Ácido nítrico
+concentrado           | Matéria orgânica                           | Reação
+enérgica, explosão e produto tóxico                      |  Considere que
+houve o descarte indevido de dois conjuntos de substâncias: (1) ácido
+clorídrico concentrado com cianeto de potássio; (2) ácido nítrico concentrado
+com sacarose. O descarte dos conjuntos (1) e (2) resultará, respectivamente,
+em
+
+A) liberação de gás tóxico e reação oxidativa forte.
+B) reação oxidativa forte e liberação de gás tóxico.
+C) formação de sais tóxicos e reação oxidativa forte.
+D) liberação de gás tóxico e liberação de gás oxidante.
+E) formação de sais tóxicos e liberação de gás oxidante.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 7
+
+Atualização da recomendação da Sociedade Portuguesa de Neonatologia O vidro
+contendo alumínio em sua composição é um excelente material para acondicionar
+medicamentos e suplementos, porque pode ser esterilizado por aquecimento. No
+entanto, quando o medicamento ou suplemento contém substâncias que se ligam
+fortemente ao íon desse metal, a dissolução do alumínio é promovida em função
+do deslocamento do equilíbrio químico estabelecido entre a espécie imobilizada
+no vidro e a espécie em solução. Por essa razão, recomenda-se que suplementos
+de nutrição de recém-nascidos contendo gluconato de cálcio sejam
+acondicionados em embalagens plásticas, e não nesse tipo de vidro. Caso esse
+suplemento seja acondicionado em embalagem desse tipo de vidro, o risco de
+contaminação por alumínio será maior se o(a)
+
+A) vidro do frasco for translúcido.
+B) concentração de gluconato de cálcio for alta.
+C) frasco de vidro apresentar uma maior espessura.
+D) vidro for previamente esterilizado em altas temperaturas.
+E) reação do alumínio com gluconato de cálcio for endotérmica.
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 8
+
+A oxidação do monóxido de carbono por dióxido de nitrogênio ocorre de acordo
+com a equação química CO(g) + NO2(g) -> CO2(g) + NO(g). Em um experimento
+realizado a uma dada temperatura, mediu-se a velocidade média de consumo de
+NO2 em diferentes intervalos de tempo. Sabendo que em um intervalo de 10
+segundos a concentração de NO2 diminuiu de 0,60 mol/L para 0,20 mol/L, qual é
+a velocidade média dessa reação em mol/(L.s)?
+
+A) 4,00 mol/(L.s)
+B) 0,40 mol/(L.s)
+C) 0,06 mol/(L.s)
+D) 0,04 mol/(L.s)
+E) 0,02 mol/(L.s)
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 9
+
+O carbonato de cálcio, CaCO3, sofre decomposição térmica quando aquecido,
+produzindo óxido de cálcio e gás carbônico, conforme a equação balanceada
+CaCO3 -> CaO + CO2. Sabendo que a massa molar do CaCO3 é 100 g/mol e a do CaO
+é 56 g/mol, qual é a massa de óxido de cálcio obtida a partir da decomposição
+completa de 50 gramas de carbonato de cálcio?
+
+A) 22 g
+B) 56 g
+C) 44 g
+D) 35 g
+E) 28 g
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 10
+
+O soro fisiológico é uma solução aquosa de cloreto de sódio a 0,9% em massa
+por volume, o que significa que há 0,9 gramas de soluto em cada 100 mililitros
+de solução. Para realizar um procedimento médico, um hospital precisa preparar
+2 litros desse soro. Qual é a massa total de cloreto de sódio, em gramas,
+necessária para o preparo desse volume de soro fisiológico?
+
+A) 9,0 gramas
+B) 18,0 gramas
+C) 180,0 gramas
+D) 90,0 gramas
+E) 900,0 gramas
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+
+==============================================================================
+CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
+==============================================================================
+
+modelo: gemini-3.5-flash-lite   gerado em: 20260909-0105
+
+   1. REAL     (nivel 4)
+   2. GERADA   (Eletroquímica, nivel 2)
+   3. GERADA   (Termoquímica, nivel 4)
+   4. REAL     (nivel 3)
+   5. REAL     (nivel 3)
+   6. REAL     (nivel 3)
+   7. REAL     (nivel 4)
+   8. GERADA   (Cinética química, nivel 3)
+   9. GERADA   (Estequiometria, nivel 2)
+  10. GERADA   (Soluções, nivel 3)
+
+  total: 5 geradas, 5 reais

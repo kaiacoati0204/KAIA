@@ -1,276 +1,254 @@
 AVALIACAO DE QUESTOES — BIOLOGIA
 
-Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais de
-vestibular/ENEM, outras foram escritas por um sistema automatico. Nao dizemos
-quantas sao de cada.
+Abaixo ha questoes de duas origens misturadas: algumas vieram de provas reais
+de vestibular/ENEM, outras foram escritas por um sistema automatico. Nao
+dizemos quantas sao de cada.
 
 Para cada uma, responda duas coisas:
   1. E de PROVA ou GERADA?
   2. O que te fez decidir? (uma linha basta)
 
-Nao precisa resolver a questao — o que interessa e se ela parece questao de prova.
+Nao precisa resolver a questao — o que interessa e se ela parece questao de
+prova.
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 1
 
-Ao analisar a fauna de uma ilha isolada no Oceano Pacífico, pesquisadores
-encontraram várias espécies de aves endêmicas que apresentam bicos com
-formatos e tamanhos muito variados, adaptados a diferentes tipos de
-alimentação, mas que compartilham grande semelhança genética entre si e com
-uma única espécie ancestral encontrada no continente próximo. Como a teoria
-sintética da evolução explica a origem dessa grande variedade de bicos a
-partir de um ancestral comum?
+Vida: a ciência da biologia As fibras musculares esqueléticas não são todas
+iguais. As fibras lentas, também conhecidas como fibras vermelhas, apresentam
+muitas mitocôndrias e são bem supridas por vasos sanguíneos. Já as fibras
+rápidas, ou fibras brancas, apresentam poucas mitocôndrias e recebem menor
+suprimento sanguíneo. Dessa forma, a distribuição das fibras nos músculos
+esqueléticos do corpo auxilia de forma diferenciada no desempenho físico de um
+atleta. Um atleta que sonha em disputar os Jogos Olímpicos e tem uma maior
+proporção de fibras brancas que fibras vermelhas teria mais vantagens na
+realização da prova de:
 
-A) Mutação direcionada pelo esforço das aves para alcançar novos tipos de
-   alimentos disponíveis na ilha.
-B) Uso e desuso contínuo dos órgãos ao longo das gerações, transmitindo as
-   características adquiridas aos descendentes.
-C) Convergência evolutiva de espécies distantes que migraram para a ilha e
-   ocuparam o mesmo nicho ecológico.
-D) Irradiação adaptativa decorrente da seleção natural atuando sobre a
-   variabilidade genética em diferentes nichos ecológicos.
-E) Adaptação fisiológica imediata dos organismos induzida diretamente pelas
-   condições climáticas do novo ambiente insular.
+A) Triatlo.
+B) Salto em altura.
+C) Marcha atlética.
+D) Maratona aquática.
+E) Ciclismo em estrada.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 2
 
-On the Gravitational Field of a Mass Point According to Einstein’s Theory
-Um
-Buraco Negro é um corpo celeste que possui uma grande quantidade de matéria
-concentrada em uma pequena região do espaço, de modo que sua força
-gravitacional é tão grande que qualquer partícula fica aprisionada em sua
-superfície, inclusive a luz. O raio dessa região caracteriza uma superfície-
-limite, chamada de horizonte de eventos, da qual nada consegue escapar.
-Considere que o Sol foi instantaneamente substituído por um Buraco Negro com a
-mesma massa solar, de modo que o seu horizonte de eventos seja de
-aproximadamente 3,0 quilômetros.
-Após a substituição descrita, o que
-aconteceria aos planetas do Sistema Solar?
+Canto V Estância 81 E foi que, de doença crua e feia, A mais que eu nunca vi,
+desampararam Muitos a vida, e em terra estranha e alheia Os ossos para sempre
+sepultaram. Quem haverá que, sem ver, o creia? Que tão disformemente ali lhe
+incharam As gengivas na boca, que crescia A carne e juntamente apodrecia? Luís
+Vaz de Camões, Os Lusíadas É correto afirmar que Camões, neste trecho,
+descreveu sintomas de
 
-A) Eles se moveriam em órbitas espirais, aproximando-se sucessivamente do
-   Buraco Negro.
-B) Eles oscilariam aleatoriamente em torno de suas órbitas elípticas
-   originais.
-C) Eles se moveriam em direção ao centro do Buraco Negro.
-D) Eles passariam a precessionar mais rapidamente.
-E) Eles manteriam suas órbitas inalteradas.
+A) peste bubônica, zoonose transmitida por ratos que assolou populações
+   europeias e asiáticas no século XIV, propagada pelas viagens comerciais.
+B) escorbuto, deficiência em vitamina C, doença comum nas viagens ultra
+   marinas europeias dos séculos XV e XVI, como a de Vasco da Gama em busca
+   das Índias.
+C) malária, doença de ampla ocorrência nas viagens de exploradores para a
+   África e Américas nos séculos XV e XVI.
+D) varíola, doença viral disseminada no Velho Mundo e trazida pelos navegantes
+   dos séculos XV e XVI às colônias, onde dizimou populações nativas.
+E) leishmaniose, parasitose transmitida por mosquitos e contraída pelos
+   primeiros exploradores da Amazônia e dos Andes durante o século XVI.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 3
 
-O antibiótico estreptomicina é conhecido por se ligar especificamente à
-subunidade menor dos ribossomos de células bacterianas, impedindo o início da
-síntese proteica e provocando a morte do patógeno. Sabendo que as células
-eucarióticas possuem ribossomos estruturalmente diferentes, a toxicidade
-direta desse medicamento sobre organelas presentes nas células humanas é
-evitada principalmente pela ausência de semelhanças com quais estruturas
-celulares?
+Fundamentos da Genética e Hereditariedade Durante a análise hereditária de uma
+característica controlada por um par de alelos em uma espécie de planta, um
+pesquisador cruzou duas linhagens puras, uma com flores vermelhas e outra com
+flores brancas. Todas as sementes geradas na primeira geração originaram
+plantas com flores cor-de-rosa. Esse resultado demonstra que o padrão de
+herança em questão é caracterizado por
 
-A) Centríolos
-B) Retículo endoplasmático liso
-C) Complexo golgiense
-D) Peroxissomos
-E) Mitocôndrias
+A) ausência de dominância
+B) dominância completa
+C) pleiotropia
+D) epistasia
+E) codominância
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 4
 
-Durante uma atividade física intensa de curta duração e alta intensidade, como
-uma corrida de cem metros rasos, os músculos esqueléticos humanos recorrem
-primariamente a vias anaeróbicas para a obtenção de energia rápida. Nesse
-contexto, o acúmulo de uma substância específica nas fibras musculares é o
-principal responsável pela sensação de fadiga e queimação aguda sentida pelos
-atletas. Qual é essa substância e a via metabólica associada?
+O antibiótico estreptomicina é conhecido por se ligar especificamente à
+subunidade menor dos ribossomos bacterianos, impedindo a iniciação da síntese
+proteica. Sabendo que as mitocôndrias possuem ribossomos próprios com
+características semelhantes aos das bactérias, o uso prolongado desse
+medicamento pode afetar diretamente a produção celular de
 
-A) Ácido lático, produzido pela fermentação lática realizada no citoplasma das
-   células musculares devido à escassez momentânea de oxigênio.
-B) Glicose livre, acumulada pelo excesso de quebra do glicogênio armazenado no
-   tecido adiposo adjacente.
-C) Ácido pirúvico, que se acumula no interior da matriz mitocondrial por causa
-   da paralisação imediata do ciclo de Krebs.
-D) Etanol, gerado pela fermentação alcoólica nas mitocôndrias para compensar a
-   falta de respiração aeróbica.
-E) Dióxido de carbono, retido nos tecidos musculares por causa da incapacidade
-   do sistema circulatório de transportá-lo aos pulmões.
+A) lipídeos de membrana.
+B) enzimas lisossômicas.
+C) mensageiros de RNA.
+D) trifosfato de adenosina.
+E) ácido desoxirribonucleico.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 5
 
-O uso intensivo de fertilizantes nitrogenados na agricultura pode provocar o
-escoamento desses nutrientes para os corpos d'água próximos durante as chuvas.
-Esse excesso de nutrientes nos rios e lagos estimula o crescimento
-descontrolado de fitoplâncton, resultando em um processo conhecido como
-eutrofização. Qual é a principal consequência direta desse fenômeno para a
-fauna aquática?
+Durante uma atividade física intensa de curta duração e alta intensidade, como
+uma corrida de cem metros rasos, os músculos esqueléticos utilizam
+predominantemente vias metabólicas anaeróbias para a rápida obtenção de ATP.
+Nesse contexto, o acúmulo de ácido lático nas fibras musculares está
+diretamente relacionado com a
 
-A) O aumento imediato da biodiversidade local, pois a maior oferta de
-   nutrientes amplia as cadeias tróficas disponíveis.
-B) O encarecimento e a simplificação dos processos de purificação da água
-   potável sem alterar o equilíbrio biológico do ecossistema.
-C) A proliferação de plantas aquáticas submersas que passam a competir
-   diretamente por luz com os peixes herbívoros.
-D) A morte de peixes e outros organismos aeróbicos devido à diminuição
-   drástica do oxigênio dissolvido causada pela decomposição da matéria
-   orgânica.
-E) A elevação da temperatura da água decorrente da intensa atividade
-   fotossintética realizada pelas bactérias.
+A) oxidação completa da glicose na matriz mitocondrial na presença de
+   oxigênio.
+B) respiração celular aeróbia acelerada que esgota rapidamente os estoques de
+   glicogênio hepático.
+C) fermentação lática realizada pelas células musculares devido à
+   insuficiência temporária de oxigênio na cadeia transportadora de elétrons.
+D) produção excessiva de ATP pela fosforilação oxidativa nas cristas
+   mitocondriais.
+E) quebra de ácidos graxos no citoplasma para a liberação imediata de energia
+   livre.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 6
 
-Muitas plantas adaptadas a ambientes terrestres secos e com alta intensidade
-luminosa apresentam folhas
+O vírus linfotrópico de células T humanas tipo 1 (HTLV-1): quando suspeitar da
+infecção? O vírus linfotrópico de células T humanas tipo 1 (HTLV-1) é um
+retrovírus do mesmo grupo do vírus da imunodeficiência humana (HIV). Ambos são
+transmitidos da mesma forma e infectam as mesmas células de defesa do
+organismo, os linfócitos T. A diferença entre eles é que o HTLV-1 estimula o
+aumento da produção desses linfócitos, enquanto o HIV causa destruição dessas
+células. Uma possível consequência da infecção por HTLV-1 é o desenvolvimento
+de
 
-A) pequenas com estômatos concentrados na parte inferior, muitos tricomas
-   claros, cutícula impermeável e parênquima aquífero.
-B) grandes com estômatos concentrados na parte inferior, poucos tricomas
-   claros, cutícula impermeável e parênquima aerífero.
-C) pequenas com estômatos concentrados na parte superior, ausência de
-   tricomas, cera sobre a epiderme foliar e parênquima aquífero.
-D) grandes com estômatos igualmente distribuídos em ambas as partes, ausência
-   de tricomas, ausência de cera sobre a epiderme foliar e parênquima
-   aerífero.
-E) pequenas com estômatos concentrados na parte superior, muitos tricomas
-   claros, cera sobre a epiderme foliar e parênquima aerífero.
+A) aids.
+B) câncer.
+C) diabetes.
+D) hepatite B.
+E) hemorragia.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 7
 
-Uma variedade de milho (Milho Bt) foi modificada com a inserção de genes da
-bactéria Bacillus thuringiensis, que produzem proteínas Cry , tóxicas para
-insetos como as lagartas que atacam suas lavouras. Essas proteínas bloqueiam o
-trato digestório dos insetos, levando-os à morte. Em aves e mamíferos que
-também se alimentam de milho, as proteínas Cry são inativadas durante a
-digestão ácida, perdendo sua ação sobre esses animais. A alternativa que
-indica corretamente um aspecto positivo e um negativo dos efeitos desta
-modificação genética do milho para o ser humano é:
+Um estudo sobre o fluxo de energia em um ecossistema terrestre demonstrou que
+a quantidade de energia disponível diminui drasticamente à medida que se
+avança dos produtores para os consumidores primários e secundários. Esse
+padrão ocorre porque parte da energia armazenada em cada nível trófico é
 
-A) Aspecto positivo: Aumento do valor nutricional do milho. Aspecto negativo:
-   Possibilidade de desenvolvimento de alergia à proteína Cry em pessoas
-   vulneráveis.
-B) Aspecto positivo: Menor tempo de maturação dos grãos. Aspecto negativo:
-   Possibilidade de invasão da vegetação nativa pela planta transgênica.
-C) Aspecto positivo: Facilitação da polinização das plantas. Aspecto negativo:
-   Risco de extinção local de das aves e mamíferos insetívoros.
-D) Aspecto positivo: Economia de água pela redução da irrigação. Aspecto
-   negativo: Maior exposição dos agricultores a agrotóxicos.
-E) Aspecto positivo: Maior produtividade das lavouras de milho. Aspecto
-   negativo: Possibilidade de surgimento de lagartas resistentes à proteína
-   Cry.
+A) armazenada na atmosfera na forma de biomassa gasosa.
+B) totalmente transferida e acumulada nos tecidos dos predadores de topo.
+C) dissipada na forma de calor durante os processos metabólicos e a
+   respiração.
+D) reutilizada ciclicamente pelos organismos fotossintetizantes.
+E) convertida em matéria orgânica indestrutível pelos decompositores.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 8
 
-Considerando os experimentos clássicos de Gregor Mendel com ervilhas, a lei da
-segregação independente estabelece que os alelos de genes diferentes se
-distribuem para os gametas de maneira autônoma durante a meiose. Essa
-distribuição ocorre porque os genes em questão estão localizados em
+Um garoto comprou vários abacates na feira, mas descobriu que eles não estavam
+maduros o suficiente para serem consumidos. Sua mãe recomendou que ele
+colocasse os abacates em um recipiente fechado, pois isso aceleraria seu
+amadurecimento. Com certa dúvida, o garoto realizou esta experiência: colocou
+alguns abacates no recipiente e deixou os demais em uma fruteira aberta.
+Surpreendendo-se, ele percebeu que os frutos que estavam no recipiente fechado
+amadureceram mais rapidamente. A aceleração desse processo é causada por
 
-A) moléculas proteicas associadas ao fuso mitótico.
-B) cromossomos homólogos diferentes.
-C) moléculas de RNA mensageiro distintas.
-D) organelas citoplasmáticas como as mitocôndrias.
-E) regiões diferentes de uma mesma molécula de DNA.
+A) acúmulo de gás etileno.
+B) redução da umidade do ar.
+C) aumento da concentração de CO2.
+D) diminuição da intensidade luminosa.
+E) isolamento do contato com O2 atmosférico.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 9
 
-Estudo confirma eficácia do Método Wolbachia para dengue
-Os resultados de um
-ensaio clínico randomizado na Indonésia apontaram uma redução de 77 por cento
-dos casos de dengue nas áreas que receberam o mosquito Aedes aegypti infectado
-com a bactéria Wolbachia. Trata-se da mesma técnica utilizada no Brasil pelo
-Método Wolbachia, iniciativa conduzida pela Fundação Oswaldo Cruz — Fiocruz.
-Essa bactéria induz a redução da carga viral no mosquito e, consequentemente,
-o número de casos de dengue na área, sendo repassada por meio do cruzamento
-entre os insetos. Como essa bactéria é um organismo intracelular e o vírus
-também precisa entrar nas células para se reproduzir, ambos necessitarão de
-recursos comuns.
-Essa tecnologia utilizada no combate à dengue consiste na
+O uso contínuo de antibióticos em plantações e ambientes hospitalares tem
+gerado preocupação mundial devido ao surgimento de bactérias resistentes. De
+acordo com a teoria sintética da evolução, o aparecimento dessas bactérias
+resistentes ocorre porque o antibiótico
 
-A) predação do vírus pela bactéria.
-B) esterilização de mosquitos infectados.
-C) alteração no genótipo do mosquito pela bactéria.
-D) competição do vírus e da bactéria no hospedeiro.
-E) inserção de material genético do vírus na bactéria.
+A) provoca a adaptação imediata do metabolismo bacteriano para neutralizar o
+   remédio.
+B) elimina todas as bactérias fracas, fazendo com que o organismo hospedeiro
+   crie anticorpos.
+C) induz mutações específicas no DNA bacteriano para torná-las imunes ao
+   fármaco.
+D) promove a seleção natural de bactérias que já possuíam variabilidade
+   genética para resistência.
+E) estimula o desenvolvimento de estruturas de defesa durante a vida da
+   bactéria.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
 
 QUESTAO 10
 
-Efficacy of Selective Serotonin-Reuptake Inhibitors in Premenstrual Syndrome
-Muitas mulheres sofrem com desconfortos nos dias que antecedem a menstruação,
-a chamada tensão pré-menstrual. Entre outros sintomas, podem ocorrer
-alterações de humor. Atualmente, acredita-se que os sintomas são resultado da
-queda na concentração do neurotransmissor serotonina, que, por sua vez, está
-relacionado com a diminuição na produção dos hormônios ovarianos estrógeno e
-progesterona, observada nessa fase do ciclo feminino.
-A redução da produção
-desses hormônios nessa fase está relacionada com o(a)
+No que diz respeito a infecções sexualmente transmissíveis (ISTs), identifique
+a relação correta entre grupo causador, um dos seus sintomas e se possui ou
+não vacina preventiva.
 
-A) regressão do corpo lúteo ovariano.
-B) diminuição na produção de ocitocina.
-C) liberação do gameta feminino na ovulação.
-D) aumento nos níveis dos hormônios LH e FSH.
-E) elevação nos níveis sorológicos de adrenalina.
+A) IST: Gonorreia; Causador: Neisseria gonorrhoeae (bactéria); Um dos
+   possíveis sintomas: Ardor na uretra e secreção purulenta; Possui vacina?
+   Sim
+B) IST: Hepatite C; Causador: HCV (bactéria); Um dos possíveis sintomas:
+   Comprometimento da função do fígado; Possui vacina? Não
+C) IST: AIDS; Causador: HIV (vírus); Um dos possíveis sintomas: Erupção
+   cutânea; Possui vacina? Sim
+D) IST: Sifilis; Causador: Treponema pallidum (verme); Um dos possíveis
+   sintomas: Ferida na genitália externa (cancro); Possui vacina? Não
+E) IST: Condiloma acuminado (crista de galo); Causador: HPV (vírus); Um dos
+   possíveis sintomas: Verrugas na região genital; Possui vacina? Sim
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
 
---------------------------------------------------------------------------
+------------------------------------------------------------------------------
+
 
 ==============================================================================
 CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
 ==============================================================================
 
-modelo: gemini-3.5-flash-lite   gerado em: 20260907-2319
+modelo: gemini-3.5-flash-lite   gerado em: 20260909-0057
 
-   1. GERADA   (Evolução, nivel 2)
+   1. REAL     (nivel 4)
    2. REAL     (nivel 3)
-   3. GERADA   (Citologia, nivel 4)
-   4. GERADA   (Corpo humano, nivel 3)
-   5. GERADA   (Ecologia, nivel 3)
+   3. GERADA   (Genética, nivel 2)
+   4. GERADA   (Citologia, nivel 4)
+   5. GERADA   (Corpo humano, nivel 3)
    6. REAL     (nivel 3)
-   7. REAL     (nivel 3)
-   8. GERADA   (Genética, nivel 2)
-   9. REAL     (nivel 3)
+   7. GERADA   (Ecologia, nivel 3)
+   8. REAL     (nivel 3)
+   9. GERADA   (Evolução, nivel 2)
   10. REAL     (nivel 3)
 
   total: 5 geradas, 5 reais

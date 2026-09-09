@@ -15,18 +15,23 @@ prova.
 
 QUESTAO 1
 
-Os conceitos de moda, mediana, média e amplitude definem medidas utilizadas
-para estudar um conjunto de informações numéricas. Por exemplo, na lista de 5
-números (2, 2, 4, 8, 14), temos que a moda é igual a 2, a mediana é igual a 4,
-a média é igual 6 e a amplitude é igual a 12. Assinale a alternativa que
-representa a quantidade de listas de 5 números inteiros positivos que cumprem
-a condição: moda = mediana = média = amplitude = 23.
+Um casal está reformando a cozinha de casa e decidiu comprar um refrigerador
+novo. Observando a planta da nova cozinha, desenhada na escala de 1 para 50,
+notaram que o espaço destinado ao refrigerador tinha 3,8 centímetros de altura
+e 1,6 centímetro de largura. Eles sabem que os fabricantes de refrigeradores
+indicam que, para um bom funcionamento e fácil manejo na limpeza, esses
+eletrodomésticos devem ser colocados em espaços que permitam uma distância de,
+pelo menos, 10 centímetros de outros móveis ou paredes, tanto na parte
+superior quanto nas laterais. O casal comprou um refrigerador que caberia no
+local a ele destinado na nova cozinha, seguindo as instruções do fabricante.
+Esse refrigerador tem altura e largura máximas, em metro, respectivamente,
+iguais a
 
-A) 8
-B) 9
-C) 11
-D) 22
-E) 44
+A) 1,80 e 0,60.
+B) 1,80 e 0,70.
+C) 1,90 e 0,80.
+D) 2,00 e 0,90.
+E) 2,00 e 1,00.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -35,24 +40,25 @@ E) 44
 
 QUESTAO 2
 
-A água utilizada pelos 75 moradores de um vilarejo provém de um reservatório
-de formato cilíndrico circular reto cujo raio da base mede 5 metros, sempre
-abastecido no primeiro dia de cada mês por caminhões-pipa. Cada morador desse
-vilarejo consome, em média, 200 litros de água por dia. No mês de junho de um
-determinado ano, o vilarejo festejou o dia do seu padroeiro e houve um gasto
-extra de água nos primeiros 20 dias. Passado esse período, as pessoas
-verificaram a quantidade de água presente no reservatório e constataram que o
-nível da coluna de água estava em 1,5 metro. Decidiram, então, fazer um
-racionamento de água durante os 10 dias seguintes. Considere 3 como
-aproximação para pi. Qual é a quantidade mínima de água, em litro, que cada
-morador, em média, deverá economizar por dia, de modo que o reservatório não
-fique sem água nos próximos 10 dias?
+Uma casa de shows terá um evento cujo custo total de produção é de 34 350
+reais, sendo que comporta 500 pessoas. O preço do ingresso será de 130 reais
+e, normalmente, 60 por cento das pessoas adquirem meia-entrada, pagando 65
+reais pelo ingresso. Além do faturamento proveniente da venda de ingressos, a
+casa de shows vende, com 60 por cento de lucro, bebidas e petiscos ao público
+no dia do evento. Após ter vendido todos os 500 ingressos, constatou-se que a
+quantidade de meias-entradas vendidas superou em 50 por cento o que estava
+previsto, impactando o faturamento estimado com a venda de ingressos. No dia
+do evento, decidiu-se manter o percentual de 60 por cento de lucro sobre as
+bebidas e petiscos, pois todo o público que comprou ingresso compareceu ao
+show. Com isso, espera-se ter lucro de 17000 reais nesse evento. Para que se
+alcance o lucro esperado, o gasto médio por pessoa com bebidas e petiscos, em
+real, deverá ser de
 
-A) 50
-B) 60
-C) 80
-D) 140
-E) 150
+A) 19,50.
+B) 28,80.
+C) 34,00.
+D) 52,00.
+E) 68,70.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -61,16 +67,16 @@ E) 150
 
 QUESTAO 3
 
-Para a composição da diretoria de uma empresa, deve-se escolher entre os
-funcionários um presidente, um vice-presidente e um diretor financeiro. Sabe-
-se que há 10 candidatos aptos para qualquer um dos cargos e que uma mesma
-pessoa não pode acumular cargos. O número de maneiras possíveis para preencher
-essa diretoria é:
+Um professor de matemática precisa montar uma prova com 10 questões
+disponíveis em um banco de dados, sendo 4 questões de álgebra e 6 de
+geometria. A prova deve conter exatamente 5 questões, das quais pelo menos 2
+devem ser de álgebra e pelo menos 2 de geometria. Quantas provas diferentes o
+professor pode montar?
 
-A) 240
-B) 504
-C) 1000
-D) 720
+A) 150
+B) 200
+C) 180
+D) 240
 E) 120
 
    ( ) de PROVA      ( ) GERADA
@@ -80,19 +86,24 @@ E) 120
 
 QUESTAO 4
 
-Em uma urna, há bolas amarelas, brancas e vermelhas. Sabe- se que: I. A
-probabilidade de retirar uma bola vermelha dessa urna é o dobro da
-probabilidade de retirar uma bola amarela. II. Se forem retiradas 4 bolas
-amarelas dessa urna, a probabilidade de retirar uma bola vermelha passa a ser
-1/2. III. Se forem retiradas 12 bolas vermelhas dessa urna, a probabilidade de
-retirar uma bola branca passa a ser 1/2. A quantidade de bolas brancas na urna
-é
+Uma criança, utilizando um aplicativo, escreveu uma mensagem para enviar a um
+amigo. Essa mensagem foi escrita seguindo estas etapas:      | Etapas
+|   Visor de escrita  | |:----------------------------------------------------
+-----------------------------------------------|--------------------:| | 1ª
+etapa: inseriu três figuras do tipo 🙂 no visor de escrita da mensagem;
+|               🙂🙂🙂 | | 2ª etapa: copiou o que havia inserido anteriormente e
+colou (inseriu o que havia copiado) ao lado; |            🙂🙂🙂🙂🙂🙂 | | 3ª etapa:
+copiou o que tinha no visor na 2ª etapa e colou ao lado.
+|      🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂 |  A criança seguiu copiando e colando, em cada etapa, o
+que tinha no visor na etapa imediatamente anterior, até concluir a vigésima
+etapa. Em seguida, enviou a mensagem. Qual foi o total de figuras contidas na
+mensagem enviada?
 
-A) 8.
-B) 10.
-C) 12.
-D) 14.
-E) 16.
+A) 3 × 2^19
+B) 3 × 2^20
+C) 3 × 2^21
+D) 3(2^20) - 1
+E) 3(2^20) - 3
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -101,15 +112,15 @@ E) 16.
 
 QUESTAO 5
 
-Um capital de 1 200 reais foi aplicado a juros simples a uma taxa de 2% ao mês
-durante 5 meses. O montante total obtido ao final desse período, em reais, é
-igual a
+Um capital de 5000 reais foi aplicado a juros simples a uma taxa de 2% ao mês
+durante um período de 5 meses. Ao final desse período, o montante total gerado
+por essa aplicação foi de
 
-A) 1 620 reais
-B) 1 500 reais
-C) 1 320 reais
-D) 1 440 reais
-E) 1 248 reais
+A) 5500 reais
+B) 5100 reais
+C) 6000 reais
+D) 5250 reais
+E) 5050 reais
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -118,17 +129,15 @@ E) 1 248 reais
 
 QUESTAO 6
 
-O estádio do Maracanã passou por algumas modificações estruturais para a
-realização da Copa do Mundo de 2014, como, por exemplo, as dimensões do campo
-retangular. Para se adaptar aos padrões da Fifa, as dimensões do campo foram
-reduzidas de 110 metros por 75 metros para 105 metros por 68 metros. Em
-quantos metros quadrados a área do campo do Maracanã foi reduzida?
+Um vídeo tem três minutos de duração. Se o vídeo for reproduzido, desde o seu
+início, com velocidade de 1,5 vezes a velocidade original, o tempo de
+reprodução do vídeo inteiro será de
 
-A) 24
-B) 35
-C) 555
-D) 1110
-E) 1145
+A) 1min30s.
+B) 1min50s.
+C) 2min00s.
+D) 2min30s.
+E) 2min50s.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -137,18 +146,20 @@ E) 1145
 
 QUESTAO 7
 
-Uma piscina tem capacidade de 2500000 litros. Seu sistema de abastecimento foi
-regulado para ter uma vazão constante de 6000 litros de água por minuto. O
-mesmo sistema foi instalado em uma segunda piscina, com capacidade de 2750000
-litros, e regulado para ter uma vazão, também constante, capaz de enchê-la em
-um tempo 20 por cento maior que o gasto para encher a primeira piscina. A
-vazão do sistema de abastecimento da segunda piscina, em litro por minuto, é
+Uma loja vende seus produtos de duas formas: à vista ou financiado em três
+parcelas mensais iguais. Para definir o valor dessas parcelas nas vendas
+financiadas, a loja aumenta em 20 por cento o valor do produto à vista e
+divide esse novo valor por 3. A primeira parcela deve ser paga no ato da
+compra, e as duas últimas, em 30 e 60 dias após a compra. Um cliente da loja
+decidiu comprar, de forma financiada, um produto cujo valor à vista é 1 500
+reais. Utilize 5,29 como aproximação para raiz quadrada de 28. A taxa mensal
+de juros compostos praticada nesse financiamento é de
 
-A) 8250
-B) 7920.
-C) 6545.
-D) 5500.
-E) 5280.
+A) 6,7%
+B) 10%
+C) 20%
+D) 21,5%
+E) 23,3%
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -157,16 +168,16 @@ E) 5280.
 
 QUESTAO 8
 
-As notas de um estudante em quatro das cinco avaliações de uma disciplina
-foram 6,0; 7,0; 8,0 e 5,0. Para ser aprovado por média, a média aritmética
-simples das cinco notas deve ser igual ou superior a 7,0. Qual é a nota mínima
-que o estudante precisa obter na quinta avaliação para alcançar a aprovação?
+As notas de um aluno em cinco avaliações bimestrais de Matemática foram 5.0,
+6.0, 7.0, 8.0 e 9.0. Para ser aprovado com média ponderada, os pesos
+atribuídos a essas avaliações são, respectivamente, 1, 2, 2, 3 e 2. Qual é a
+média ponderada final obtida por esse aluno?
 
-A) 10,0
-B) 8,0
-C) 7,0
-D) 9,5
-E) 9,0
+A) 7.6
+B) 7.0
+C) 7.2
+D) 7.4
+E) 7.8
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -175,17 +186,14 @@ E) 9,0
 
 QUESTAO 9
 
-Note e adote: Em poliedros convexos, vale a relação de Euler 𝐹−𝐴+𝑉 = 2, em que
-𝐹 é o número de faces, 𝐴 é o número de arestas e 𝑉 é o número de vértices do
-poliedro. Um deltaedro é um poliedro cujas faces são todas triângulos
-equiláteros. Se um deltaedro convexo possui 8 vértices, então o número de
-faces desse deltaedro é:
+Se 3x^2 - 9x + 7 = (x-a)^3 - (x-b)^3, para todo número real x, o valor de a+b
+é
 
-A) 4
-B) 6
-C) 8
-D) 10
-E) 12
+A) 3.
+B) 5.
+C) 6.
+D) 9.
+E) 12.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -194,15 +202,27 @@ E) 12
 
 QUESTAO 10
 
-Em uma família, o número de irmãs de cada filha é igual à metade do número de
-irmãos. Cada filho tem o mesmo número de irmãos e irmãs. O número total de
-filhos e filhas da família é
+Contratos de vários serviços disponíveis na internet apresentam uma quantidade
+excessiva de informações. Isso faz com que o tempo necessário para a leitura
+desses contratos possa ser longo. O quadro apresenta uma amostra do tempo
+considerado necessário para a leitura completa do contrato de alguns serviços
+digitais.         | Tipo de serviço    |   Tempo necessário para a leitura
+completa do contrato (em minuto)  | |:-------------------|--------------------
+------------------------------------------------:| | A                  |
+36  | | B                  |
+17  | | C                  |
+27  | | D                  |
+13  | | E                  |
+13  | | F                  |
+13  |  O tempo médio, em minuto, necessário para a leitura completa de um
+contrato de serviço dentre os listados no quadro é, com uma casa decimal,
+aproximadamente,
 
-A) 4
-B) 5
-C) 7
-D) 10
-E) 15
+A) 13,0.
+B) 15,0.
+C) 19,8.
+D) 20,0.
+E) 23,3.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -211,23 +231,18 @@ E) 15
 
 QUESTAO 11
 
-Uma empresa farmacêutica produz certo medicamento, o qual é formado por quatro
-componentes, conforme indicado na tabela I. O custo do grama de cada um dos
-componentes desse medicamento também é apresentado nessa tabela. Tabela I
-Composição do medicamento | Quantidade (em mg) | Custo (em R$/g) Componente A
-| 200 | 700 Componente B | 70 | 500 Componente C | 130 | 300 Componente D |
-100 | 120 Para a produção do próximo lote do medicamento, a empresa terá um
-gasto diferente para fabricá-lo, pois os custos de alguns componentes sofreram
-alterações, conforme mostra a tabela II. Tabela II Composição do medicamento |
-Variação no custo (em %) Componente A | +7 Componente B | -5 Componente C | 0
-Componente D | +10 Note e adote: Considere que os outros custos de produção
-permaneceram inalterados. Qual é o aumento, em reais, no custo do medicamento?
+Quarenta mudas de flores devem ser plantadas no contorno de um canteiro
+circular de 2,2 metros de diâmetro, com um espaçamento padrão de 12
+centímetros entre mudas. Fazendo-se os cálculos, chegou-se à conclusão de que
+não havia mudas suficientes e optou-se, então, por alterar o espaçamento
+padrão. Use 3 como aproximação para pi. Em quantos centímetros deve ser
+aumentado o espaçamento padrão entre as mudas?
 
-A) 9,25
-B) 12,00
-C) 12,75
-D) 36,00
-E) 86,00
+A) 4,50
+B) 6,15
+C) 9,07
+D) 21,00
+E) 24,30
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -237,14 +252,14 @@ E) 86,00
 QUESTAO 12
 
 Um motorista de aplicativo cobra uma taxa fixa de R$ 5,00 por corrida, mais R$
-1,50 por quilômetro rodado. Em uma determinada corrida, o valor total pago
-pelo passageiro foi de R$ 35,00. Quantos quilômetros teve essa corrida?
+1,50 por quilômetro rodado. Se uma determinada corrida teve um custo total de
+R$ 35,00, qual foi a distância percorrida em quilômetros?
 
-A) 22 km
-B) 18 km
-C) 20 km
-D) 25 km
-E) 15 km
+A) 18 km
+B) 25 km
+C) 15 km
+D) 20 km
+E) 22 km
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -253,17 +268,19 @@ E) 15 km
 
 QUESTAO 13
 
-Um borrifador de atuação automática libera, a cada acionamento, uma mesma
-quantidade de inseticida. O recipiente desse produto, quando cheio, contém 360
-mililitros de inseticida, que duram 60 dias se o borrifador permanecer ligado
-ininterruptamente e for acionado a cada 48 minutos. A quantidade de inseticida
-que é liberada a cada acionamento do borrifador, em mililitro, é
+Em janeiro de 2013, foram declaradas 1 794 272 admissões e 1 765 372
+desligamentos no Brasil, ou seja, foram criadas 28 900 vagas de emprego,
+segundo dados do Cadastro Geral de Empregados e Desempregados (Caged),
+divulgados pelo Ministério do Trabalho e Emprego (MTE). Segundo o Caged, o
+número de vagas criadas em janeiro de 2013 sofreu uma queda de 75 por cento,
+quando comparado com o mesmo período de 2012. De acordo com as informações
+dadas, o número de vagas criadas em janeiro de 2012 foi
 
-A) 0,125.
-B) 0,200.
-C) 4,800.
-D) 6,000.
-E) 12,000.
+A) 16 514.
+B) 86 700.
+C) 115 600.
+D) 441 343.
+E) 448 568.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -272,16 +289,17 @@ E) 12,000.
 
 QUESTAO 14
 
-Um terreno retangular possui inicialmente uma área de 300 metros quadrados. Se
-aumentarmos o comprimento desse terreno em 5 metros e a largura em 4 metros,
-sua área passa a ser de 540 metros quadrados. O perímetro original desse
-terreno, em metros, é igual a
+Um fazendeiro possui uma cerca de 100 metros de comprimento e deseja utilizá-
+la para cercar um galinheiro retangular aproveitando um muro reto já existente
+como um dos lados. Sabendo que o muro será usado para o maior lado do
+retângulo, qual é a área máxima, em metros quadrados, que o galinheiro pode
+ter?
 
-A) 70 m.
-B) 80 m.
-C) 90 m.
-D) 60 m.
-E) 100 m.
+A) 500 m²
+B) 2500 m²
+C) 1250 m²
+D) 1000 m²
+E) 625 m²
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -290,28 +308,15 @@ E) 100 m.
 
 QUESTAO 15
 
-Visando atrair mais clientes, o gerente de uma loja anunciou uma promoção em
-que cada cliente que realizar uma compra pode ganhar um voucher para ser usado
-em sua próxima compra. Para ganhar seu voucher, o cliente precisa retirar, ao
-acaso, uma bolinha de dentro de cada uma das duas urnas A e B disponibilizadas
-pelo gerente, nas quais há apenas bolinhas pretas e brancas. Atualmente, a
-probabilidade de se escolher, ao acaso, uma bolinha preta na urna A é igual a
-20 por cento e a probabilidade de se escolher uma bolinha preta na urna B é 25
-por cento. Ganha o voucher o cliente que retirar duas bolinhas pretas, uma de
-cada urna. Com o passar dos dias, o gerente percebeu que, para a promoção ser
-viável aos negócios, era preciso alterar a probabilidade de acerto do cliente
-sem alterar a regra da promoção. Para isso, resolveu alterar a quantidade de
-bolinhas brancas na urna B de forma que a probabilidade de um cliente ganhar o
-voucher passasse a ser menor ou igual a 1 por cento. Sabe-se que a urna B tem
-4 bolinhas pretas e que, em ambas as urnas, todas as bolinhas têm a mesma
-probabilidade de serem retiradas. Qual é o número mínimo de bolinhas brancas
-que o gerente deve adicionar à urna B?
+Dado um número natural n ≥ 2, o primorial de n, denotado por n#, é o produto
+de todos os números primos menores que ou iguais a n. Por exemplo, 6# = 2 ⋅ 3
+⋅ 5 = 30. O menor número da forma n# que é maior que 2000 é:
 
-A) 20
-B) 60
-C) 64
-D) 68
-E) 80
+A) 2300
+B) 2305
+C) 2310
+D) 2312
+E) 2322
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -320,16 +325,16 @@ E) 80
 
 QUESTAO 16
 
-Um observador avista o topo de uma torre de transmissão sob um ângulo de 30
-graus. Afastando-se 40 metros em linha reta na direção oposta à torre, ele
-passa a avistar o topo sob um ângulo de 15 graus. Desconsiderando a altura do
-observador, a altura da torre, em metros, é igual a
+Um observador em um ponto A vê o topo de uma torre sob um ângulo de 30 graus.
+Afastando-se 40 metros em linha reta em direção oposta à torre, ele chega a um
+ponto B de onde passa a ver o topo da mesma torre sob um ângulo de 15 graus.
+Desprezando a altura do observador, a altura da torre, em metros, é igual a
 
-A) 20,0 m
-B) 50,0 m
+A) 30,0 m
+B) 20,0 m
 C) 40,0 m
-D) 60,0 m
-E) 30,0 m
+D) 25,0 m
+E) 35,0 m
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -338,17 +343,16 @@ E) 30,0 m
 
 QUESTAO 17
 
-Para confeccionar bandeirinhas para a festa junina, uma escola utilizou um
-rolo de fita vermelha de 45 metros de comprimento, que foi dividido em pedaços
-proporcionalmente ao número de alunos de duas turmas. A turma A, com 30
-alunos, recebeu uma quantidade de fita, e a turma B, com 60 alunos, recebeu o
-restante. Quantos metros de fita a turma B recebeu?
+Um mapa foi desenhado na escala de 1 para 400 000, o que significa que cada 1
+centímetro no mapa corresponde a 4 quilômetros na realidade. Se a distância
+entre duas cidades em linha reta nesse mapa é de 12,5 centímetros, qual é a
+distância real entre essas cidades, em quilômetros?
 
-A) 60 metros
-B) 15 metros
-C) 30 metros
-D) 45 metros
-E) 20 metros
+A) 32 km
+B) 40 km
+C) 50 km
+D) 64 km
+E) 80 km
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -357,15 +361,18 @@ E) 20 metros
 
 QUESTAO 18
 
-Um biólogo estuda uma cultura de bactérias cuja população dobra a cada 3
-horas. Se a cultura inicial possui 50 bactérias, o número de bactérias após 15
-horas será:
+Um estádio de futebol foi construído de forma que a primeira fileira de
+arquibancada possui 40 assentos, a segunda fileira possui 46 assentos, a
+terceira possui 52 assentos, e assim por diante, mantendo essa mesma
+progressão aritmética em todas as fileiras. Se o estádio foi projetado para
+ter um total de 20 fileiras de assentos, o número total de assentos na última
+fileira é:
 
-A) 1600
-B) 800
-C) 12800
-D) 3200
-E) 6400
+A) 160
+B) 184
+C) 142
+D) 172
+E) 154
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -374,16 +381,16 @@ E) 6400
 
 QUESTAO 19
 
-Um tanque subterrâneo em formato de cilindro circular reto possui raio da base
-igual a 2 metros e altura igual a 3 metros. Considerando o valor de pi igual a
-3, a capacidade total máxima de armazenamento desse tanque, em metros cúbicos,
-é de
+Um tanque subterrâneo em formato de cilindro circular reto tem raio da base
+igual a 2 metros e altura igual a 5 metros. Utilizando 3 como aproximação para
+pi, qual é a capacidade total de armazenamento desse tanque em litros, sabendo
+que 1 metro cúbico equivale a 1 000 litros?
 
-A) 54 m³.
-B) 18 m³.
-C) 36 m³.
-D) 24 m³.
-E) 72 m³.
+A) 180 000 litros
+B) 30 000 litros
+C) 120 000 litros
+D) 300 000 litros
+E) 60 000 litros
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -395,23 +402,23 @@ E) 72 m³.
 CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
 ==============================================================================
 
-modelo: gemini-3.5-flash-lite   gerado em: 20260907-2359
+modelo: gemini-3.5-flash-lite   gerado em: 20260909-0057
 
-   1. REAL     (nivel 5)
+   1. REAL     (nivel 3)
    2. REAL     (nivel 4)
    3. GERADA   (Análise combinatória, nivel 4)
    4. REAL     (nivel 4)
    5. GERADA   (Porcentagem e juros, nivel 2)
    6. REAL     (nivel 2)
-   7. REAL     (nivel 3)
+   7. REAL     (nivel 4)
    8. GERADA   (Estatística, nivel 3)
-   9. REAL     (nivel 3)
-  10. REAL     (nivel 4)
-  11. REAL     (nivel 2)
+   9. REAL     (nivel 4)
+  10. REAL     (nivel 3)
+  11. REAL     (nivel 4)
   12. GERADA   (Funções do 1º grau, nivel 3)
   13. REAL     (nivel 3)
   14. GERADA   (Geometria plana, nivel 4)
-  15. REAL     (nivel 4)
+  15. REAL     (nivel 3)
   16. GERADA   (Trigonometria, nivel 4)
   17. GERADA   (Razão e proporção, nivel 2)
   18. GERADA   (Progressões, nivel 2)

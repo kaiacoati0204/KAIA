@@ -15,19 +15,27 @@ prova.
 
 QUESTAO 1
 
-Note e adote: Aceleração da gravidade: 10 m/s^2. Desconsidere as forças
-dissipativas e as dimensões do objeto. Um bloco de massa 2,0 kg é abandonado a
-partir do repouso do topo de um plano inclinado de 5,0 m de altura. Ao atingir
-a base do plano, ele continua a se movimentar sobre uma superfície horizontal
-áspera, onde atua uma força de atrito constante de 20 N. Qual é a distância
-total que o bloco percorre sobre a superfície horizontal até parar
-completamente?
+"Os experimentos de difração e interferência da luz realizados no período de
+1800 a 1803, em analogia com os processos de interferência das ondas
+acústicas, corroboraram a natureza ondulatória da luz. Por outro lado,
+Einstein introduziu, em 1905, o conceito de fóton, em que cada componente
+monocromática de frequência 𝑓 da radiação seria equivalente a um sistema de
+partículas idênticas sem massa, cada qual com energia ℎ𝑓, sendo
+ℎ≃6,626×10^(−34) J.s a constante de Planck.A hipótese da existência de fótons
+só teve ampla aceitação após os experimentos de Compton, em 1922, sobre o
+espalhamento da radiação eletromagnética na faixa dos raios X por alvos de
+elementos leves, como o grafite." Adaptado de F. Caruso e V. Oguri, Sobre a
+necessidade do conceito de fóton, RBEF 43, e20210011 (2021). De acordo com o
+texto e seus conhecimentos, é correto afirmar:
 
-A) 0,5 metro.
-B) 2,5 metros.
-C) 1,0 metro.
-D) 5,0 metros.
-E) 10,0 metros.
+A) A radiação eletromagnética apresenta somente comportamento ondulatório.
+B) Os experimentos de Compton mostraram que feixes de raios X exibem
+   comportamento corpuscular.
+C) A energia de um fóton independe de seu comprimento de onda.
+D) A hipótese da natureza corpuscular da radiação está em desacordo com os
+   resultados experimentais.
+E) Einstein demonstrou que os experimentos de difração e interferência da luz
+   deveriam estar incorretos.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -36,17 +44,19 @@ E) 10,0 metros.
 
 QUESTAO 2
 
-Note e adote: Aceleração da gravidade: 10 m/s^2. Desconsidere a resistência do
-ar. Um elevador de massa 500 kg sobe com uma aceleração constante de 2 m/s^2
-tracionado por um cabo de aço. Sabendo que o elevador parte do repouso, qual é
-a força de tração exercida pelo cabo de aço sobre o elevador durante esse
-movimento?
+Há muito tempo são conhecidas espécies de lesmas-do-mar com uma capacidade
+ímpar: guardar parte da maquinaria das células das algas que consomem — os
+cloroplastos — e mantê-los funcionais dentro das suas próprias células,
+obtendo assim parte do seu alimento. Investigadores portugueses descobriram
+que essas lesmas-do-mar podem ser mais eficientes nesse processo do que as
+próprias algas que consomem. Essa adaptação confere a esse organismo a
+capacidade de obter primariamente
 
-A) 5000 newtons
-B) 4000 newtons
-C) 7000 newtons
-D) 6000 newtons
-E) 10000 newtons
+A) ácidos nucleicos.
+B) carboidratos.
+C) proteínas.
+D) vitaminas.
+E) lipídios.
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -55,17 +65,16 @@ E) 10000 newtons
 
 QUESTAO 3
 
-Um motorista viaja em uma rodovia retilínea com velocidade constante de 80
-km/h durante as primeiras 2 horas de percurso. Em seguida, devido a obras na
-pista, ele reduz sua velocidade para 60 km/h e viaja por mais 1 hora.
-Considerando todo o trajeto realizado, qual foi a velocidade média
-desenvolvida pelo veículo?
+Um chuveiro elétrico opera sob uma d.d.p. de 220 V e é percorrido por uma
+corrente elétrica de 10 A. Sabendo que o calor específico da água é de 4,2
+J/(g.°C) e que toda a energia elétrica é convertida em calor, a quantidade de
+calor gerada por esse chuveiro em 1 minuto, em quilojoules, é
 
-A) 75,0 km/h
-B) 70,0 km/h
-C) 80,0 km/h
-D) 73,3 km/h
-E) 63,3 km/h
+A) 2640,0 kJ
+B) 66,0 kJ
+C) 1320,0 kJ
+D) 220,0 kJ
+E) 132,0 kJ
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -74,19 +83,17 @@ E) 63,3 km/h
 
 QUESTAO 4
 
-O número de abelhas encontra-se em declínio em várias regiões do mundo,
-inclusive no Brasil, sendo que vários fatores contribuem para o colapso de
-suas colmeias. Nos Estados Unidos, bombas de sementes de espécies vegetais
-nativas têm sido utilizadas para combater o desaparecimento desses insetos.
-Elas são pequenas bolinhas recheadas com sementes, adubo e argila. Quando são
-arremessadas e ficam expostas ao sol e à chuva, germinam até mesmo em solo
-pouco fértil. Esse método contribui para a preservação das abelhas porque
+Note e adote: Aceleração da gravidade: 10 m/s2. Ignore a resistência do ar. Um
+motociclista acrobático salta horizontalmente de uma rampa situada a uma
+altura de 20 m em relação ao solo plano e horizontal. Considerando que ele
+abandona a rampa com velocidade horizontal de 15 m/s, o tempo que o
+motociclista leva para atingir o solo é de
 
-A) reduz sua predação.
-B) reduz o uso de pesticidas.
-C) reduz a competição por abrigo.
-D) aumenta a oferta de alimento.
-E) aumenta os locais de reprodução.
+A) 2,0 s
+B) 3,0 s
+C) 1,0 s
+D) 1,5 s
+E) 2,5 s
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -95,16 +102,17 @@ E) aumenta os locais de reprodução.
 
 QUESTAO 5
 
-As aves apresentam dois tipos de músculos em seus corpos: vermelhos e brancos.
-Aves migratórias como garças, gansos e patos selvagens têm os músculos
-vermelhos bem desenvolvidos, com ampla rede de vasos sanguíneos. Nas viagens
-por grandes distâncias, tais músculos são fundamentais, pois favorecem o(a)
+Note e adote: Aceleração da gravidade: 10 m/s^2. Um bloco de massa 2 kg é
+lançado horizontalmente sobre uma superfície plana com uma velocidade inicial
+de 10 m/s. Devido ao atrito com a superfície, o bloco percorre uma distância
+de 20 metros até parar completamente. Qual foi o trabalho realizado pela força
+de atrito durante esse deslocamento?
 
-A) execução de manobras.
-B) metabolismo corpóreo elevado.
-C) manutenção da aerodinâmica.
-D) deslocamento a grandes velocidades.
-E) capacidade de voo em grandes altitudes.
+A) 0 J
+B) -100 J
+C) -200 J
+D) -50 J
+E) -400 J
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -113,30 +121,28 @@ E) capacidade de voo em grandes altitudes.
 
 QUESTAO 6
 
-Mudanças climáticas e ilhas de calor urbanas A variação da incidência de
-radiação solar sobre a superfície da Terra resulta em uma variação de
-temperatura ao longo de um dia denominada amplitude térmica. Edificações e
-pavimentações realizadas nas áreas urbanas contribuem para alterar as
-amplitudes térmicas dessas regiões, em comparação com regiões que mantêm suas
-características naturais, com presença de vegetação e água, já que o calor
-específico do concreto é inferior ao da água. Assim, parte da avaliação do
-impacto ambiental que a presença de concreto proporciona às áreas urbanas
-consiste em considerar a substituição da área concretada por um mesmo volume
-de água e comparar as variações de temperatura devido à absorção da radiação
-solar nas duas situações (concretada e alagada). Desprezando os efeitos da
-evaporação e considerando que toda a radiação é absorvida, essa avaliação pode
-ser realizada com os seguintes dados:  | Unnamed: 0   | Densidade (kg/m3)   |
-Calor específico (J/g°C)    | |:-------------|:--------------------------|:---
-----------------------------------| | Água         | 1 000
-| 4,2                                  | | Concreto     | 2 500
-| 0,8                                  |  A razão entre as variações de
-temperatura nas áreas concretada e alagada é mais próxima de
+Em fevereiro de 2021, um grupo de físicos da Universidade Federal de Minas
+Gerais (UFMG) publicou um artigo que foi capa da importante revista Nature. O
+texto a seguir foi retirado de uma reportagem do site da UFMG sobre o artigo:
+O nanoscópio, prossegue Ado Jorio (professor da UFMG), ilumina a amostra com
+um microscópio óptico usual. O foco da luz tem o tamanho de um círculo de 1
+micrômetro de diâmetro. "O que o nanoscópio faz é inserir uma nanoantena, que
+tem uma ponta com diâmetro de 10 nanômetros, dentro desse foco de 1 micrômetro
+e escanear essa ponta. A imagem com resolução nanométrica é formada por esse
+processo de escaneamento da nanoantena, que localiza o campo eletromagnético
+da luz em seu ápice", afirma o professor. Itamar Rigueira Jr. "Nanoscópio da
+UFMG possibilita compreender estrutura que torna grafeno supercondutor".
+Adaptado. Disponível em https://ufmg.br/comunicacao/noticias/. Gadelha A C et
+al. (2021), Nature, 590, 405-409, doi: 10.1038/s41586-021-03252-5. Com base
+nos dados mencionados no texto, a razão entre o diâmetro do foco da luz de um
+microscópio óptico usual e o diâmetro da ponta da nanoantena utilizada no
+nanoscópio é da ordem de:
 
-A) 1,0.
-B) 2,1.
-C) 2,5.
-D) 5,3.
-E) 13,1.
+A) 0,0001
+B) 0,01
+C) 1
+D) 100
+E) 10000
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -145,19 +151,18 @@ E) 13,1.
 
 QUESTAO 7
 
-Na fertilização in vitro, espermatozoides são adicionados aos gametas
-femininos retirados de uma mulher. Após o período de incubação, a fecundação é
-favorecida pela ação de enzimas. Em um procedimento realizado, observou-se que
-nenhum dos gametas femininos foi fertilizado e, posteriormente, verificou-se
-que havia sido adicionado, equivocadamente, um coquetel de inibidores das
-enzimas do acrossomo, no lugar de um dos nutrientes constituintes do meio de
-cultura. O coquetel de inibidores impediu o(a)
+Note e adote: Aceleração da gravidade g = 10 m/s^2. Desconsidere o atrito. Um
+bloco de massa igual a 5 kg é puxado sobre uma superfície horizontal
+perfeitamente lisa por uma força constante de 20 N que forma um ângulo de 60
+graus com a horizontal. Sabendo que o seno de 60 graus é aproximadamente 0,87
+e o cosseno de 60 graus é 0,5, qual é o valor da aceleração adquirida pelo
+bloco?
 
-A) formação do pronúcleo masculino.
-B) início da divisão mitótica do zigoto.
-C) término da segunda divisão meiótica do ovócito.
-D) passagem do espermatozoide pela corona radiata e zona pelúcida.
-E) fusão das membranas plasmáticas do ovócito e do espermatozoide.
+A) 5,0 m/s^2
+B) 1,0 m/s^2
+C) 4,0 m/s^2
+D) 2,0 m/s^2
+E) 3,5 m/s^2
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -166,18 +171,18 @@ E) fusão das membranas plasmáticas do ovócito e do espermatozoide.
 
 QUESTAO 8
 
-Um recipiente térmico de capacidade térmica desprezível contém 200 g de água a
-uma temperatura inicial de 20 °C. No interior desse recipiente, mergulha-se um
-bloco metálico de massa 100 g, inicialmente a uma temperatura de 100 °C.
-Sabendo que o calor específico da água é 1,0 cal/(g.°C) e que a temperatura de
-equilíbrio térmico do sistema é 25 °C, qual é o calor específico do metal, em
-cal/(g.°C)?
+Um chuveiro elétrico operando a uma tensão de 220 V é utilizado para aquecer
+um fluxo contínuo de água. Na posição verão, a resistência elétrica do
+chuveiro é de 22 ohms, provocando um aumento de temperatura de 5,0 °C na água.
+Mantendo-se o mesmo fluxo de água e alterando-se a chave para a posição
+inverno, a resistência elétrica passa a ser de 11 ohms. Qual será a nova
+variação de temperatura da água, em °C?
 
-A) 0,11 cal/(g.°C)
-B) 0,22 cal/(g.°C)
-C) 0,45 cal/(g.°C)
-D) 1,00 cal/(g.°C)
-E) 0,80 cal/(g.°C)
+A) 15,0 °C
+B) 20,0 °C
+C) 2,5 °C
+D) 5,0 °C
+E) 10,0 °C
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -186,20 +191,41 @@ E) 0,80 cal/(g.°C)
 
 QUESTAO 9
 
-A Agência Nacional de Vigilância Sanitária (Anvisa) aprovou um produto de
-terapia gênica no país, indicado para o tratamento da distrofia hereditária da
-retina. O procedimento é recomendado para crianças acima de 12 meses e adultos
-com perda de visão causada pela mutação do gene humano RPE65. O produto,
-elaborado por engenharia genética, é composto por um vírus, no qual foi
-inserida uma cópia do gene normal humano RPE65 para corrigir o funcionamento
-das células da retina. O sucesso dessa terapia advém do fato de que o produto
-favorecerá a
+Parque Solar Lapa entra em operação Em 2017, foi inaugurado, no estado da
+Bahia, o Parque Solar Lapa, composto por duas usinas (Bom Jesus da Lapa e
+Lapa) e capaz de gerar cerca de 300 gigawatts-hora de energia por ano.
+Considere que cada usina apresente potência igual a 75 megawatts, com o parque
+totalizando uma potência instalada de 150 megawatts. Considere ainda que a
+irradiância solar média é de 1 500 watts por metro quadrado e que a eficiência
+dos painéis é de 20 por cento. Nessas condições, a área total dos painéis
+solares que compõem o Parque Solar Lapa é mais próxima de:
 
-A) correção do código genético para a tradução da proteína.
-B) alteração do RNA ribossômico ligado à síntese da proteína.
-C) produção de mutações benéficas para a correção do problema.
-D) liberação imediata da proteína normal na região ocular humana.
-E) expressão do gene responsável pela produção da enzima normal.
+A) 1 000 000 de metros quadrados
+B) 500 000 metros quadrados
+C) 250 000 metros quadrados
+D) 100 000 metros quadrados
+E) 20 000 metros quadrados
+
+   ( ) de PROVA      ( ) GERADA
+   Por que: _______________________________________________
+
+------------------------------------------------------------------------------
+
+QUESTAO 10
+
+Note e adote: Despreze a massa do elástico, as forças dissipativas e as
+dimensões da pessoa; Aceleração da gravidade = 10 m/s^2. Um equipamento de
+bungee jumping está sendo projetado para ser utilizado em um viaduto de 30 m
+de altura. O elástico utilizado tem comprimento relaxado de 10 m. Qual deve
+ser o mínimo valor da constante elástica desse elástico para que ele possa ser
+utilizado com segurança no salto por uma pessoa cuja massa, somada à do
+equipamento de proteção a ela conectado, seja de 120 kg?
+
+A) 30 N/m
+B) 80 N/m
+C) 90 N/m
+D) 160 N/m
+E) 180 N/m
 
    ( ) de PROVA      ( ) GERADA
    Por que: _______________________________________________
@@ -211,16 +237,17 @@ E) expressão do gene responsável pela produção da enzima normal.
 CORTE AQUI ANTES DE ENVIAR — daqui pra baixo e o gabarito
 ==============================================================================
 
-modelo: gemini-3.5-flash-lite   gerado em: 20260907-2359
+modelo: gemini-3.5-flash-lite   gerado em: 20260909-0057
 
-   1. GERADA   (Trabalho e energia, nivel 4)
-   2. GERADA   (Leis de Newton, nivel 3)
-   3. GERADA   (Cinemática, nivel 2)
-   4. REAL     (nivel 3)
-   5. REAL     (nivel 3)
-   6. REAL     (nivel 4)
-   7. REAL     (nivel 4)
+   1. REAL     (nivel 3)
+   2. REAL     (nivel 3)
+   3. GERADA   (Eletricidade, nivel 2)
+   4. GERADA   (Cinemática, nivel 2)
+   5. GERADA   (Trabalho e energia, nivel 4)
+   6. REAL     (nivel 3)
+   7. GERADA   (Leis de Newton, nivel 3)
    8. GERADA   (Termologia, nivel 3)
    9. REAL     (nivel 4)
+  10. REAL     (nivel 4)
 
-  total: 4 geradas, 5 reais
+  total: 5 geradas, 5 reais

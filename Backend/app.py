@@ -673,12 +673,23 @@ def _pot_num(s):
 
 
 def _pot_acha_opcao(calc, opts, tol=0.03):
-    """Índice da opção cujo valor bate com o calculado (tolerância p/ arredondamento)."""
+    """Índice da opção MAIS PRÓXIMA do valor calculado, dentro da tolerância.
+
+    Era a PRIMEIRA dentro da tolerância, e isso escolhia errado quando duas opções
+    ficam perto: numa questão de 25,51%, as alternativas 25,0 e 25,5 estavam ambas
+    dentro dos 3%, e a primeira (25,0) virava gabarito — com a certa logo abaixo.
+    Distrator plausível fica perto de propósito, então "a primeira que serve" nunca
+    foi o critério certo."""
+    melhor, dist_melhor = None, None
+    limite = tol * max(1.0, abs(calc))
     for i, o in enumerate(opts):
         v = _pot_num(o)
-        if v is not None and abs(v - calc) <= tol * max(1.0, abs(calc)):
-            return i
-    return None
+        if v is None:
+            continue
+        d = abs(v - calc)
+        if d <= limite and (dist_melhor is None or d < dist_melhor):
+            melhor, dist_melhor = i, d
+    return melhor
 
 
 # Formato EXATO de cada questão (string literal — as chaves NÃO são interpoladas).

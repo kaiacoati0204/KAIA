@@ -618,6 +618,15 @@ def test_embed_usa_cache(monkeypatch):
     app_mod._EMBED_CACHE.clear()
 
 
+def test_pot_acha_opcao_pega_a_mais_proxima():
+    """Distrator plausível fica PERTO de propósito — "a primeira dentro da tolerância"
+    escolhia o distrator quando a certa vinha depois. Caso real: 50/196 = 25,51%."""
+    opts = ["25,0%", "20,4%", "33,3%", "75,0%", "25,5%"]
+    assert app_mod._pot_acha_opcao(50 / 196 * 100, opts) == 4     # 25,5 e não 25,0
+    assert app_mod._pot_acha_opcao(20.0, ["10", "20", "30"]) == 1
+    assert app_mod._pot_acha_opcao(7.77, ["10", "20", "30"]) is None
+
+
 def test_questao_utilizavel():
     """Barreira estrutural: pega o que passou na avaliação com os professores."""
     ok_completar = {"q": "O ritual representa, para seus adeptos, a",

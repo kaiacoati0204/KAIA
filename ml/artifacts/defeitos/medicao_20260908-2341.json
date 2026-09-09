@@ -1,0 +1,1293 @@
+{
+  "resumo": {
+    "gerador": "gemini-3.5-flash-lite",
+    "verificador": "gemini-3.6-flash",
+    "quando": "20260908-2341",
+    "pedidas": 72,
+    "descartadas_pelo_pipeline": 1,
+    "entregues": 71,
+    "verificadas": 2,
+    "divergencias": 0,
+    "sem_alternativa_correta": 0
+  },
+  "itens": [
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Um ciclista está treinando para uma competição e decide aumentar a distância percorrida a cada dia de forma constante. No primeiro dia, ele pedalou 12 km, e no segundo dia, 15 km. Mantendo essa progressão aritmética diária, a distância total percorrida pelo ciclista ao final de 10 dias de treino foi de",
+      "opts": [
+        "285 km",
+        "255 km",
+        "275 km",
+        "295 km",
+        "265 km"
+      ],
+      "gabarito": "B",
+      "verificador": "B",
+      "problema": "",
+      "concorda": true,
+      "formula": "(10 / 2) * (2 * 12 + (10 - 1) * 3)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Uma fábrica de autopeças produziu 200 unidades de um componente em janeiro. Devido à otimização da linha de montagem, a produção mensal aumentou em uma progressão aritmética, crescendo 50 unidades a cada mês. O total de componentes produzidos no primeiro semestre do ano (6 meses) foi de",
+      "opts": [
+        "2400",
+        "1800",
+        "1950",
+        "2250",
+        "2100"
+      ],
+      "gabarito": "C",
+      "verificador": "C",
+      "problema": "",
+      "concorda": true,
+      "formula": "(6 / 2) * (2 * 200 + (6 - 1) * 50)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Um biólogo estuda uma colônia de bactérias cuja população dobra a cada 3 horas. Sabendo que inicialmente a colônia contava com 50 bactérias, o número de bactérias presentes na colônia após 15 horas será",
+      "opts": [
+        "1600",
+        "800",
+        "6400",
+        "12800",
+        "3200"
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "50 * (2 ** (15 / 3))"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Uma dívida foi renegociada para ser paga em 5 parcelas mensais que formam uma progressão geométrica. Sabendo que a primeira parcela é de R$ 100,00 e a razão da progressão é 2, o valor total pago ao quitar todas as parcelas é",
+      "opts": [
+        "R$ 6200,00",
+        "R$ 1500,00",
+        "R$ 3200,00",
+        "R$ 1550,00",
+        "R$ 3100,00"
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "100 * ((2 ** 5) - 1) / (2 - 1)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Progressões",
+      "nivel": 2,
+      "enunciado": "Um veículo desvaloriza a cada ano de uso. Se o seu preço atual é de R$ 50.000,00 e sua taxa de desvalorização anual é constante de modo que passa a valer 80% do valor do ano anterior, o preço do veículo daqui a 3 anos será",
+      "opts": [
+        "R$ 32000,00",
+        "R$ 25600,00",
+        "R$ 40000,00",
+        "R$ 20480,00",
+        "R$ 30000,00"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "50000 * (0.8 ** 3)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Funções do 1º grau",
+      "nivel": 3,
+      "enunciado": "Um motorista de aplicativo cobra uma taxa fixa de R$ 5,00 mais R$ 1,50 por quilômetro rodado. Se uma corrida teve um custo total de R$ 35,00, quantos quilômetros teve essa corrida?",
+      "opts": [
+        "15 km",
+        "22 km",
+        "20 km",
+        "18 km",
+        "25 km"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "(35 - 5) / 1.5"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Funções do 1º grau",
+      "nivel": 3,
+      "enunciado": "Uma fábrica de sorvetes possui um custo fixo mensal de R$ 3000,00 e um custo variável de R$ 2,00 por pote de sorvete produzido. Cada pote é vendido por R$ 7,00. Para que a fábrica obtenha um lucro mensal de R$ 5000,00, quantos potes devem ser produzidos e vendidos?",
+      "opts": [
+        "1200 potes",
+        "1600 potes",
+        "1400 potes",
+        "1000 potes",
+        "1800 potes"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "(5000 + 3000) / (7 - 2)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Funções do 1º grau",
+      "nivel": 3,
+      "enunciado": "A temperatura em uma cidade, medida em graus Celsius, varia ao longo de uma manhã de forma linear em função do tempo x, em horas, decorridas a partir das 6 horas da manhã. Sabe-se que às 6 horas a temperatura era de 15°C e às 9 horas era de 24°C. Qual era a temperatura nessa cidade às 11 horas?",
+      "opts": [
+        "28°C",
+        "32°C",
+        "30°C",
+        "31°C",
+        "29°C"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "15 + ((24 - 15) / (9 - 6)) * (11 - 6)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Funções do 1º grau",
+      "nivel": 3,
+      "enunciado": "Um tanque de água continha inicialmente 500 litros e começou a ser esvaziado a uma vazão constante de 20 litros por minuto. Após quantos minutos o tanque estará com exatamente 120 litros?",
+      "opts": [
+        "21 min",
+        "19 min",
+        "25 min",
+        "31 min",
+        "15 min"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "(500 - 120) / 20"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Funções do 1º grau",
+      "nivel": 3,
+      "enunciado": "O saldo S de uma conta bancária ao longo dos dias do mês é dado por uma função afim do tipo S(t) = at + b. Sabe-se que no dia 5 o saldo era de R$ 1200,00 e no dia 15 o saldo era de R$ 2200,00. Qual era o saldo dessa conta no dia 0 (início do mês)?",
+      "opts": [
+        "R$ 600,00",
+        "R$ 1000,00",
+        "R$ 900,00",
+        "R$ 800,00",
+        "R$ 700,00"
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "1200 - ((2200 - 1200) / (15 - 5)) * 5"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Geometria plana",
+      "nivel": 4,
+      "enunciado": "Um fazendeiro possui um terreno retangular com 80 metros de comprimento e 50 metros de largura. Ele decide construir uma cerca interna paralela à largura, dividindo o terreno em dois lotes, e em seguida constrói uma diagonal unindo os vértices opostos de todo o terreno original para servir de caminho. O comprimento total da cerca interna somado ao comprimento do caminho diagonal, em metros, é aproximadamente",
+      "opts": [
+        "144,31 m.",
+        "154,20 m.",
+        "170,00 m.",
+        "147,15 m.",
+        "162,50 m."
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "50 + sqrt(80**2 + 50**2)"
+    },
+    {
+      "materia": "MAT",
+      "tema": "Geometria plana",
+      "nivel": 4,
+      "enunciado": "Uma praça pública tem o formato de um setor circular com raio de 12 metros e ângulo central de 60 graus. Deseja-se construir um canteiro gramado exatamente no interior desse setor, de modo que ele seja o maior círculo possível inscrito nesse setor circular. O raio desse canteiro circular máximo, em metros, é igual a",
+      "opts": [
+        "3,00 m.",
+        "4,00 m.",
+        "6,00 m.",
+        "4,50 m.",
+        "8,00 m."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "12 * sin(pi / 6) / (1 + sin(pi / 6))"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Cinemática",
+      "nivel": 2,
+      "enunciado": "Um ciclista pedala em uma pista retilínea com velocidade escalar constante de 12 m/s. Mantendo esse ritmo, qual é a distância, em metros, percorrida pelo ciclista após um intervalo de tempo de 15 segundos?",
+      "opts": [
+        "240 m",
+        "210 m",
+        "150 m",
+        "180 m",
+        "120 m"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "12 * 15"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Cinemática",
+      "nivel": 2,
+      "enunciado": "Um veículo parte do repouso em uma rodovia retilínea com aceleração escalar constante de 3 m/s2. Considerando que ele mantém essa aceleração por 8 segundos, qual é a velocidade escalar atingida pelo veículo ao final desse intervalo de tempo?",
+      "opts": [
+        "48 m/s",
+        "18 m/s",
+        "12 m/s",
+        "30 m/s",
+        "24 m/s"
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "3 * 8"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Cinemática",
+      "nivel": 2,
+      "enunciado": "Um automóvel trafega inicialmente a uma velocidade escalar de 20 m/s quando o motorista aciona os freios, imprimindo uma desaceleração constante de 4 m/s2 até o veículo parar completamente. Qual é o tempo decorrido, em segundos, desde o acionamento dos freios até a parada total?",
+      "opts": [
+        "8 s",
+        "4 s",
+        "3 s",
+        "5 s",
+        "6 s"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "20 / 4"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Cinemática",
+      "nivel": 2,
+      "enunciado": "Note e adote: Aceleração da gravidade: 10 m/s2. Um objeto é abandonado do alto de uma torre e cai livremente a partir do repouso, atingindo o solo após 3 segundos. Desprezando a resistência do ar, qual é a altura da torre em metros?",
+      "opts": [
+        "45 m",
+        "30 m",
+        "90 m",
+        "150 m",
+        "60 m"
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "10 * (3 ** 2) / 2"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Cinemática",
+      "nivel": 2,
+      "enunciado": "Um trem de 100 metros de comprimento viaja com velocidade escalar constante de 15 m/s e atravessa um túnel retilíneo. Sabendo que o trem gasta exatamente 20 segundos desde a entrada da locomotiva até a saída do último vagão, qual é o comprimento do túnel em metros?",
+      "opts": [
+        "400 m",
+        "200 m",
+        "150 m",
+        "300 m",
+        "100 m"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "15 * 20 - 100"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Leis de Newton",
+      "nivel": 3,
+      "enunciado": "Note e adote: Aceleração da gravidade: 10 m/s^2. Um elevador de massa total igual a 500 kg sobe verticalmente com uma aceleração constante de 2 m/s^2. Qual é a tração, em newtons, exercida pelo cabo de sustentação que ergue o elevador?",
+      "opts": [
+        "5000 newtons",
+        "4000 newtons",
+        "6000 newtons",
+        "10000 newtons",
+        "7000 newtons"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "500 * (10 + 2)"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Leis de Newton",
+      "nivel": 3,
+      "enunciado": "Note e adote: Aceleração da gravidade: 10 m/s^2. Um bloco de massa 2 kg repousa sobre um plano inclinado que forma um ângulo de 30 graus com a horizontal. Sabendo que o seno de 30 graus é 0,5 e que o plano é perfeitamente liso, qual é o valor da força resultante, em newtons, que puxa o bloco para baixo ao longo do plano?",
+      "opts": [
+        "5 newtons",
+        "20 newtons",
+        "15 newtons",
+        "10 newtons",
+        "17,3 newtons"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "2 * 10 * 0.5"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Leis de Newton",
+      "nivel": 3,
+      "enunciado": "Note e adote: Aceleração da gravidade: 10 m/s^2. Um bloco de 10 kg é puxado sobre uma superfície horizontal por uma força horizontal de 50 N. Sabendo que o coeficiente de atrito dinâmico entre o bloco e a superfície é 0,3, qual é o módulo da aceleração, em metros por segundo ao quadrado, adquirida pelo bloco?",
+      "opts": [
+        "8,0 m/s^2",
+        "5,0 m/s^2",
+        "3,0 m/s^2",
+        "2,0 m/s^2",
+        "1,0 m/s^2"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "(50 - (0.3 * 10 * 10)) / 10"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Leis de Newton",
+      "nivel": 3,
+      "enunciado": "Note e adote: Aceleração da gravidade: 10 m/s^2. Dois blocos, A e B, de massas 2 kg e 3 kg respectivamente, estão apoiados sobre uma superfície horizontal perfeitamente lisa e emparelhados. Uma força horizontal de 20 N é aplicada ao bloco A, que empurra o bloco B. Qual é a intensidade da força de contato, em newtons, que o bloco A exerce sobre o bloco B?",
+      "opts": [
+        "20 newtons",
+        "8 newtons",
+        "4 newtons",
+        "12 newtons",
+        "10 newtons"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "20 * (3 / (2 + 3))"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Leis de Newton",
+      "nivel": 3,
+      "enunciado": "Note e adote: Aceleração da gravidade: 10 m/s^2. Um corpo de massa 5 kg é lançado verticalmente para cima com velocidade inicial de 20 m/s. Desprezando a resistência do ar, qual é o módulo da força resultante, em newtons, que age sobre o corpo durante o seu movimento de subida?",
+      "opts": [
+        "0 newtons",
+        "50 newtons",
+        "10 newtons",
+        "25 newtons",
+        "100 newtons"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "5 * 10"
+    },
+    {
+      "materia": "FIS",
+      "tema": "Trabalho e energia",
+      "nivel": 4,
+      "enunciado": "Note e adote: Aceleração da gravidade g = 10 m/s^2. Uma mola ideal de constante elástica k = 500 N/m está fixada horizontalmente em uma parede. Um bloco de massa 4 kg comprime a mola em 0,5 metros a partir de sua posição de equilíbrio e é solto do repouso em uma superfície horizontal perfeitamente lisa. O bloco deixa a mola e atinge um trecho inclinado sem atrito que se eleva até parar. Qual é a altura máxima que o bloco atinge no plano inclinado?",
+      "opts": [
+        "2,5 m",
+        "1,6 m",
+        "3,2 m",
+        "1,0 m",
+        "5,0 m"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "(0.5 * 500 * 0.5**2) / (4 * 10)"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Estequiometria",
+      "nivel": 2,
+      "enunciado": "Considerando a reação de combustão completa do gás metano representada pela equação CH4 + 2O2 -> CO2 + 2H2O, qual é a massa de dióxido de carbono produzida, em gramas, a partir da combustão completa de 16 gramas de metano? Dadas as massas molares em g/mol: H = 1, C = 12, O = 16.",
+      "opts": [
+        "88 g",
+        "44 g",
+        "32 g",
+        "16 g",
+        "22 g"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "16 * 44 / 16"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Estequiometria",
+      "nivel": 2,
+      "enunciado": "Na reação de obtenção da amônia através do processo Haber-Bosch, representada por N2 + 3H2 -> 2NH3, qual é a quantidade de mols de amônia produzida quando reagem completamente 6 mols de gás hidrogênio com excesso de gás nitrogênio?",
+      "opts": [
+        "6 mols",
+        "8 mols",
+        "2 mols",
+        "3 mols",
+        "4 mols"
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "6 * 2 / 3"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Estequiometria",
+      "nivel": 2,
+      "enunciado": "Dada a equação balanceada da neutralização do hidróxido de sódio pelo ácido clorídrico: NaOH + HCl -> NaCl + H2O, qual é a massa de cloreto de sódio formada, em gramas, quando 80 gramas de hidróxido de sódio reagirem totalmente com excesso de ácido clorídrico? Dadas as massas molares em g/mol: Na = 23, O = 16, H = 1, Cl = 35.5.",
+      "opts": [
+        "29.25 g",
+        "234 g",
+        "117 g",
+        "58.5 g",
+        "40 g"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "80 * 58.5 / 40"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Estequiometria",
+      "nivel": 2,
+      "enunciado": "A decomposição térmica do carbonato de cálcio produz óxido de cálcio e dióxido de carbono, segundo a equação CaCO3 -> CaO + CO2. Qual é a massa de óxido de cálcio obtida, em gramas, a partir da decomposição de 200 gramas de carbonato de cálcio puro? Dadas as massas molares em g/mol: Ca = 40, C = 12, O = 16.",
+      "opts": [
+        "112 g",
+        "28 g",
+        "224 g",
+        "56 g",
+        "100 g"
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "200 * 56 / 100"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Estequiometria",
+      "nivel": 2,
+      "enunciado": "Na reação de síntese da água expressa por 2H2 + O2 -> 2H2O, qual é a massa de água produzida, em gramas, quando se consome exatamente 32 gramas de gás oxigênio com excesso de hidrogênio? Dadas as massas molares em g/mol: H = 1, O = 16.",
+      "opts": [
+        "72 g",
+        "18 g",
+        "36 g",
+        "16 g",
+        "9 g"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "32 * 36 / 32"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Soluções",
+      "nivel": 3,
+      "enunciado": "O soro fisiológico é uma solução aquosa de cloreto de sódio a 0,9% em massa, o que significa que há 0,9 grama de NaCl em cada 100 gramas de solução. Considerando a densidade da solução igual a 1,0 g/mL, qual é a concentração molar dessa solução, sabendo que as massas molares do sódio e do cloro são, respectivamente, 23 g/mol e 35,5 g/mol?",
+      "opts": [
+        "0,90 mol/L",
+        "1,54 mol/L",
+        "0,09 mol/L",
+        "0,15 mol/L",
+        "9,00 mol/L"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "0.9 * 10 / (23 + 35.5)"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Soluções",
+      "nivel": 3,
+      "enunciado": "Para neutralizar o excesso de acidez estomacal, muitas pessoas utilizam leite de magnésia, que consiste em uma suspensão de hidróxido de magnésio, Mg(OH)2, em água. Sabendo que a concentração de Mg(OH)2 no leite de magnésia é de aproximadamente 0,085 mol/L, qual é a massa dessa base, em gramas, presente em 500 mL desse medicamento? Dados: massas molares H = 1 g/mol, O = 16 g/mol, Mg = 24 g/mol.",
+      "opts": [
+        "49,40 g",
+        "2,48 g",
+        "9,88 g",
+        "1,24 g",
+        "4,94 g"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "0.085 * 0.5 * (24 + 2 * (16 + 1))"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Soluções",
+      "nivel": 3,
+      "enunciado": "O etanol comercial hidratado é uma solução aquosa que contém álcool etílico e água. Em um laboratório, um estudante misturou 50 mL de etanol puro com 150 mL de água destilada, obtendo uma solução homogênea de volume igual a 196 mL devido à contração de volume. Qual é a porcentagem em volume (% v/v) de etanol nessa solução?",
+      "opts": [
+        "25,0%",
+        "20,4%",
+        "33,3%",
+        "75,0%",
+        "25,5%"
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "50 / 196 * 100"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Soluções",
+      "nivel": 3,
+      "enunciado": "Uma solução aquosa de glicose, C6H12O6, foi preparada dissolvendo-se 18 gramas do soluto em água suficiente para completar 400 mL de solução. Qual é a concentração molar (molaridade) dessa solução? Dados das massas molares: H = 1 g/mol, C = 12 g/mol, O = 16 g/mol.",
+      "opts": [
+        "0,250 mol/L",
+        "0,125 mol/L",
+        "0,045 mol/L",
+        "0,450 mol/L",
+        "2,500 mol/L"
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "18 / (6 * 12 + 12 * 1 + 6 * 16) / 0.4"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Soluções",
+      "nivel": 3,
+      "enunciado": "Ao realizar uma titulação de neutralização, um estudante utilizou 25 mL de uma solução de ácido clorídrico (HCl) de concentração desconhecida. Para neutralizar totalmente esse ácido, foram necessários exatos 20 mL de uma solução de hidróxido de sódio (NaOH) com concentração de 0,15 mol/L. Qual é a concentração molar da solução de HCl?",
+      "opts": [
+        "0,19 mol/L",
+        "0,75 mol/L",
+        "0,12 mol/L",
+        "0,15 mol/L",
+        "0,06 mol/L"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "0.15 * 0.02 / 0.025"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Termoquímica",
+      "nivel": 4,
+      "enunciado": "O gás metano é um importante combustível fóssil e sua queima completa libera grande quantidade de energia térmica. Considere a reação de combustão do metano representada pela equação CH4(g) + 2O2(g) → CO2(g) + 2H2O(l). Sabendo que as entalpias de formação padrão são de -75 kJ/mol para o CH4(g), -393 kJ/mol para o CO2(g) e -286 kJ/mol para o H2O(l), qual é a variação de entalpia, em kJ/mol, para essa reação de combustão?",
+      "opts": [
+        "-604 kJ/mol",
+        "+740 kJ/mol",
+        "-890 kJ/mol",
+        "+890 kJ/mol",
+        "-740 kJ/mol"
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "-393 + 2 * (-286) - (-75)"
+    },
+    {
+      "materia": "QUI",
+      "tema": "Termoquímica",
+      "nivel": 4,
+      "enunciado": "A produção industrial de amônia ocorre pelo processo de Haber-Bosch, representado pela equação N2(g) + 3H2(g) → 2NH3(g). Com base nas energias de ligação médias fornecidas (N≡N = 945 kJ/mol, H-H = 436 kJ/mol e N-H = 391 kJ/mol), qual é a variação de entalpia aproximada, em kJ/mol, para a síntese de um mol de amônia?",
+      "opts": [
+        "+92 kJ/mol",
+        "+46 kJ/mol",
+        "-92 kJ/mol",
+        "-184 kJ/mol",
+        "-46 kJ/mol"
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": "(945 + 3 * 436 - 6 * 391) / 2"
+    },
+    {
+      "materia": "BIO",
+      "tema": "Genética",
+      "nivel": 2,
+      "enunciado": "Considerando os experimentos clássicos de Gregor Mendel com ervilhas, ao cruzar plantas homozigotas para sementes amarelas com plantas homozigotas para sementes verdes, ele obteve em primeira geração apenas sementes amarelas. Se cruzarmos duas plantas dessa primeira geração entre si, qual será a proporção fenotípica esperada para a cor das sementes na segunda geração",
+      "opts": [
+        "duas amarelas para duas verdes.",
+        "três verdes para uma amarela.",
+        "três amarelas para uma verde.",
+        "todas amarelas.",
+        "uma amarela para duas verdes para uma verde pura."
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Genética",
+      "nivel": 2,
+      "enunciado": "Na espécie humana, a distrofia muscular de Duchenne é uma doença recessiva ligada ao cromossomo X. Um homem afetado por essa condição se casou com uma mulher portadora do alelo mutante, mas que não manifesta a doença. Qual é a probabilidade de que eles tenham uma filha que apresente a distrofia muscular de Duchenne",
+      "opts": [
+        "50 por cento.",
+        "25 por cento.",
+        "100 por cento.",
+        "75 por cento.",
+        "zero por cento."
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Genética",
+      "nivel": 2,
+      "enunciado": "Biologia molecular e a expressão gênica\nA sequência de nucleotídeos em uma molécula de RNA mensageiro é lida pelos ribossomos em grupos de três bases nitrogenadas, conhecidas como códons. Cada códon corresponde a um aminoácido específico na cadeia polipeptídica em formação. Se uma mutação por substituição de um único nucleotídeo alterar um códon sem, contudo, modificar o aminoácido inserido na proteína, qual é o nome dado a esse tipo de mutação",
+      "opts": [
+        "mutação de sentido trocado.",
+        "mutação por deslocamento de leitura.",
+        "mutação sem sentido.",
+        "mutação silenciosa.",
+        "mutação reversa."
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Genética",
+      "nivel": 2,
+      "enunciado": "A eritroblastose fetal, ou doença hemolítica do recém-nascido, ocorre quando há incompatibilidade sanguínea entre a mãe e o feto em relação ao fator Rh. Para que essa condição ocorra, qual deve ser obrigatoriamente o tipo sanguíneo da mãe e o do feto",
+      "opts": [
+        "mãe Rh negativo e feto Rh positivo.",
+        "mãe Rh negativo e feto Rh negativo.",
+        "mãe Rh positivo e feto Rh negativo.",
+        "mãe AB e feto O.",
+        "mãe Rh positivo e feto Rh positivo."
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Genética",
+      "nivel": 2,
+      "enunciado": "O daltonismo é uma condição de herança recessiva ligada ao cromossomo X. Uma mulher com visão normal, cujo pai era daltônico, casa-se com um homem com visão normal. Qual é a porcentagem esperada de filhos do sexo masculino daltônicos que esse casal poderá ter",
+      "opts": [
+        "vinte e cinco por cento.",
+        "cinquenta por cento.",
+        "zero por cento.",
+        "cem por cento.",
+        "setenta e cinco por cento."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Ecologia",
+      "nivel": 3,
+      "enunciado": "O uso intensivo de fertilizantes nitrogenados na agricultura pode provocar o escoamento desses nutrientes para lagos e rios próximos, causando um desequilíbrio conhecido como eutrofização. Qual é a principal consequência imediata desse processo para os organismos aquáticos",
+      "opts": [
+        "Aumento drástico da diversidade de espécies de peixes devido ao enriquecimento de nutrientes na água.",
+        "Eliminação total de microrganismos decompositores em função do excesso de compostos nitrogenados dissolvidos.",
+        "Redução imediata da temperatura da água decorrente do bloqueio dos raios solares pelas camadas superficiais de nutrientes.",
+        "Aceleração do metabolismo de todos os animais aquáticos pelo aumento na concentração de gás oxigênio livre.",
+        "Proliferação exagerada de algas e cianobactérias, reduzindo a penetração de luz e provocando a morte de peixes por falta de oxigênio."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Ecologia",
+      "nivel": 3,
+      "enunciado": "A sucessão ecológica primária difere da secundária por iniciar em locais onde nunca houve vida anterior ou onde o solo foi completamente destruído. Considerando esse conceito, qual ambiente apresenta condições típicas para o início de uma sucessão primária",
+      "opts": [
+        "O leito de um rio que secou temporariamente durante uma estação de seca severa.",
+        "Uma floresta recém-atingida por um incêndio florestal de grande proporção.",
+        "Um terreno baldio urbano onde houve remoção parcial da vegetação rasteira.",
+        "Uma área de pastagem abandonada após anos de uso agrícola intensivo.",
+        "Uma rocha nua resultante de uma erupção vulcânica recente."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Ecologia",
+      "nivel": 3,
+      "enunciado": "Em uma reserva ambiental, pesquisadores observaram que a população de onças-pintadas sofreu uma drástica redução devido a ações antrópicas ilegais. Como consequência indireta dessa alteração, verificou-se o aumento populacional de roedores e a diminuição drástica da cobertura vegetal rasteira. Esse fenômeno é um exemplo clássico de",
+      "opts": [
+        "sucessão ecológica secundária provocada por perturbações climáticas locais.",
+        "exclusão competitiva entre espécies de roedores na disputa por habitat.",
+        "ampliação da capacidade suporte do ambiente para as espécies de produtores.",
+        "competição interespecífica por recursos alimentares entre herbívoros e carnívoros.",
+        "efeito cascata trófica decorrente da remoção de um predador de topo."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Ecologia",
+      "nivel": 3,
+      "enunciado": "A introdução de espécies exóticas em novos ecossistemas pode gerar graves desequilíbrios ecológicos quando essas espécies se tornam invasoras. O principal fator que contribui para o sucesso desproporcionado dessas espécies no novo ambiente é a",
+      "opts": [
+        "baixa taxa de natalidade compensada por uma longevidade extremamente alta dos indivíduos adultos.",
+        "ausência de predadores naturais e competidores específicos capazes de controlar seu crescimento populacional.",
+        "dependência estrita de recursos alimentares que só existem em seu habitat de origem.",
+        "incapacidade de tolerar variações climáticas comuns na nova região colonizada.",
+        "necessidade de adaptação fisiológica lenta que restringe sua reprodução aos primeiros anos."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Ecologia",
+      "nivel": 3,
+      "enunciado": "O fluxo de energia em um ecossistema é unidirecional e decrescente à medida que se avança nos níveis tróficos. Esse padrão ocorre fundamentalmente porque",
+      "opts": [
+        "os organismos produtores absorvem toda a energia solar incidente sem refletir ou dissipar calor.",
+        "a maior parte da energia assimilada em cada nível trófico é dissipada na forma de calor durante os processos metabólicos e de respiração.",
+        "os decompositores transferem integralmente a energia acumulada de volta para os produtores primários.",
+        "os consumidores de ordem superior reciclam os nutrientes minerais transformando-os em nova energia utilizável.",
+        "a biomassa dos herbívoros é sempre superior à biomassa total acumulada pelos produtores vegetais."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Citologia",
+      "nivel": 4,
+      "enunciado": "O antibiótico estreptomicina atua ligando-se especificamente à subunidade menor dos ribossomos de células procarióticas, impedindo a síntese proteica nesses organismos. Sabendo que mitocôndrias e cloroplastos possuem seus próprios ribossomos e mecanismos de tradução semelhantes aos de bactérias, o uso prolongado desse medicamento pode afetar diretamente qual processo metabólico eucariótico",
+      "opts": [
+        "A replicação do material genético no núcleo.",
+        "A formação de vesículas no complexo golgiense.",
+        "A síntese de proteínas dependentes das organelas semirreplicativas.",
+        "A transcrição do DNA nuclear.",
+        "A glicólise realizada no citosol."
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "BIO",
+      "tema": "Citologia",
+      "nivel": 4,
+      "enunciado": "Durante a resposta inflamatória aguda, macrófagos englobam patógenos por meio de pseudópodes em um processo dependente de microfilamentos de actina. Após a internalização, o fagoossomo funde-se a organelas ricas em enzimas hidrolíticas ativadas em pH ácido para promover a digestão intracelular. Qual estrutura celular é a principal responsável por manter o interior dessas vesículas digestivas em pH ácido",
+      "opts": [
+        "Bombas de prótons transmembrana acopladas à hidrólise de ATP.",
+        "Enzimas do retículo endoplasmático liso.",
+        "Complexos proteicos da cadeia respiratória mitocondrial.",
+        "Canais passivos de íons sódio e potássio na membrana plasmática.",
+        "Poros nucleares presentes na carioteca."
+      ],
+      "gabarito": "A",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Era Vargas",
+      "nivel": 2,
+      "enunciado": "A Revolução de 1930 marcou o fim da chamada República Oligárquica e a chegada de Getúlio Vargas ao poder. Qual foi um dos fatores políticos centrais que motivou esse movimento?",
+      "opts": [
+        "A pressão dos cafeicultores paulistas para acabar com a intervenção do Estado na economia.",
+        "O plano de Vargas para devolver o controle do café exclusivamente aos barões nordestinos.",
+        "A quebra da aliança entre as oligarquias de São Paulo e Minas Gerais com a indicação de Júlio Prestes.",
+        "A exigência popular pela imediata instauração de um regime socialista nos moldes soviéticos.",
+        "O acordo secreto entre o exército e os líderes tenentistas para restaurar a monarquia parlamentar."
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Era Vargas",
+      "nivel": 2,
+      "enunciado": "O período conhecido como Estado Novo, instaurado por Getúlio Vargas em 1937, caracterizou-se institucionalmente por qual medida?",
+      "opts": [
+        "A ampliação irrestrita das liberdades partidárias e o fortalecimento do Congresso Nacional.",
+        "A abolição de todas as leis trabalhistas existentes em favor de um livre mercado sem regras.",
+        "A descentralização total do poder, dando autonomia financeira e política para os estados.",
+        "A convocação de uma Assembleia Constituinte eleita de forma democrática e plural pela população.",
+        "A outorga de uma nova Constituição, conhecida como Polaca, que centralizava os poderes no Executivo."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Era Vargas",
+      "nivel": 2,
+      "enunciado": "Durante a Era Vargas, a criação da Justiça do Trabalho e a posterior Consolidação das Leis do Trabalho (CLT) em 1943 representaram uma estratégia governamental que combinava",
+      "opts": [
+        "a obrigação de os trabalhadores se filiarem a partidos comunistas clandestinos.",
+        "o fim do direito de greve e a total autonomia dos sindicatos em relação ao Estado.",
+        "a proibição de qualquer forma de intervenção do governo nas relações entre patrões e empregados.",
+        "a concessão de direitos sociais fundamentais e o controle político do movimento operário.",
+        "o pagamento exclusivo de salários em mercadorias nas fazendas produtoras de café."
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Era Vargas",
+      "nivel": 2,
+      "enunciado": "A política externa brasileira durante a Segunda Guerra Mundial passou por uma reviravolta estratégica, culminando na",
+      "opts": [
+        "neutralidade absoluta do país em todo o conflito, recusando qualquer tipo de acordo comercial.",
+        "aliança militar incondicional com as potências do Eixo para garantir suprimentos industriais.",
+        "participação militar ao lado dos Aliados, com o envio da Força Expedicionária Brasileira para a Europa.",
+        "formação de um bloco militar sul-americano para invadir os países europeus neutros.",
+        "invasão militar dos Estados Unidos ao território nordestino para confiscar as reservas de petróleo."
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Era Vargas",
+      "nivel": 2,
+      "enunciado": "A economia brasileira na Era Vargas deu passos decisivos rumo à industrialização de base. Qual empresa criada nesse período simboliza esse esforço?",
+      "opts": [
+        "A Companhia de Arrendamento Mercantil.",
+        "O Banco Nacional de Habitação.",
+        "A Bolsa de Valores do Rio de Janeiro.",
+        "A Companhia Siderúrgica Nacional.",
+        "A Empresa Brasileira de Correios e Telégrafos."
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Revolução Industrial",
+      "nivel": 3,
+      "enunciado": "Sob qualquer aspecto, este foi provavelmente o mais importante acontecimento na história do mundo, pelo menos desde a invenção da agricultura e das cidades. E foi iniciado pela Grã Bretanha. É evidente que isto não foi acidental. Eric Hobsbawm, A Era das Revoluções. A Revolução Industrial, ocorrida na Inglaterra nos decênios de transição entre os séculos XVIII e XIX,",
+      "opts": [
+        "vinculouse à derrocada imediata da aristocracia e à ascensão da burguesia, orientada exclusivamente pela política mercantilista e sintetizada na filosofia de Adam Smith.",
+        "deveuse ao pioneirismo científico e tecnológico dos britânicos, aliado a uma grande oferta de mão de obra especializada e a uma política estatal pacifista.",
+        "decorreu da ampla difusão de um ideário estritamente Iluminista, o qual teria promovido aquilo que o sociólogo alemão Max Weber descreve como o espírito do corporativismo.",
+        "originouse das profundas transformações agrárias expressas pela concentração fundiária, perda da posse da terra pelo campesinato e formação de uma mão de obra assalariada.",
+        "resultou da supressão imediata de todas as leis protecionistas e do combate rigoroso ao tráfico negreiro, com vistas exclusivas à conquista de mercados internos."
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Revolução Industrial",
+      "nivel": 3,
+      "enunciado": "Ao opor operários sob vigilância e operários a domicílio, a fábrica reduziu os seus custos sem se ver necessariamente obrigada a adotar uma tecnologia mais eficaz. O argumento da superioridade tecnológica não é, portanto, nem necessário nem suficiente para explicar o advento e o êxito da fábrica. Stephen Marglin, Origens e funções do parcelamento das tarefas. Para o autor, o sucesso do sistema fabril inicial ocorreu",
+      "opts": [
+        "por meio do maciço investimento na tecnologia das grandes máquinas a vapor, diminuindo imediatamente os custos da produção manual.",
+        "pela capacidade de controlar, disciplinar e padronizar as diferentes etapas do processo produtivo por meio da vigilância direta.",
+        "por meio de estratégias de gestão humanizada que incidiam na divisão igualitária do trabalho e na introdução de bônus por assiduidade.",
+        "através da substituição completa das formas artesanais das oficinas domésticas pela estrutura cooperativa das guildas medievais.",
+        "pelo processo de concentração de operários nas áreas centrais, que estimulou a disputa pacífica por vagas e a elevação dos salários."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Revolução Industrial",
+      "nivel": 3,
+      "enunciado": "A introdução da máquina a vapor de James Watt nas unidades fabris inglesas representou uma ruptura profunda com as formas tradicionais de produção baseadas na energia humana, animal ou hidráulica. Com essa inovação técnica, as indústrias puderam se localizar",
+      "opts": [
+        "exclusivamente nas margens de grandes rios de corredeiras fortes, garantindo o funcionamento contínuo das caldeiras.",
+        "próximas aos centros urbanos densamente povoados e às bacias carboníferas, facilitando o escoamento e a obtenção de combustível.",
+        "nos portos marítimos do sul do país, aproveitando a abundante importação de energia elétrica gerada em colônias ultramarinas.",
+        "nas zonas rurais isoladas, onde havia maior disponibilidade de espaço físico para a instalação das fornalhas a carvão vegetal.",
+        "perto das regiões montanhosas geladas, aproveitando o resfriamento natural necessário para o funcionamento das engrenagens de ferro."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Revolução Industrial",
+      "nivel": 3,
+      "enunciado": "O ludismo, movimento social surgido na Inglaterra no início do século XIX, ficou conhecido popularmente como a revolta dos quebradores de máquinas. Contudo, reduzir esse movimento a uma mera rejeição irracional ao progresso técnico é um equívoco histórico, visto que os ludistas protestavam contra",
+      "opts": [
+        "o fim do sistema de corporações de ofício que protegia os mestres artesãos da concorrência estrangeira.",
+        "a substituição da monarquia parlamentar por um regime republicano radical liderado pelos sindicatos operários.",
+        "a proibição da prática do livre comércio e o fechamento dos portos britânicos para as nações do continente europeu.",
+        "as péssimas condições de trabalho, os baixos salários e o desemprego gerados pela mecanização intensiva.",
+        "a obrigatoriedade de frequentar escolas técnicas financiadas pelos empresários donos das indústrias têxteis."
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Revolução Industrial",
+      "nivel": 3,
+      "enunciado": "A expansão da industrialização ao longo do século XIX alterou profundamente a paisagem urbana das grandes metrópoles europeias. A divisão social do espaço tornou-se evidente na medida em que",
+      "opts": [
+        "as classes trabalhadoras passaram a ocupar os bairros centrais modernizados com saneamento básico, enquanto a burguesia habitava a periferia.",
+        "o planejamento urbano igualitário garantiu que todas as classes tivessem acesso equitativo aos parques e serviços de transporte público.",
+        "os centros urbanos concentraram as fábricas e as habitações insalubres dos operários, enquanto os bairros burgueses se distancieram rumo a áreas mais limpas e arborizadas.",
+        "os governos locais promoveram a integração habitacional, construindo residências de alto padrão ao lado das moradias operárias.",
+        "as antigas muralhas medievais foram mantidas intactas para separar rigorosamente os imigrantes camponeses da população urbana nativa."
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Brasil Colônia",
+      "nivel": 4,
+      "enunciado": "Se o açúcar deu ao Brasil Colônia sua primeira grande engrenagem econômica e social baseada no latifúndio e na escravidão, a expansão territorial para o interior durante os séculos XVII e XVIII foi impulsionada por dinâmicas muito específicas. Considerando a articulação entre as atividades econômicas e a ocupação do espaço, pode-se afirmar corretamente que",
+      "opts": [
+        "o sistema de plantation, baseado na policultura voltada para o consumo interno, garantiu a autossuficiência alimentar de todas as capitanias desde o início do século XVI.",
+        "a descoberta do ouro em Minas Gerais no século XVII provocou o esvaziamento imediato das lavouras açucareiras no Nordeste, que perderam totalmente sua importância econômica.",
+        "o Tratado de Tordesilhas permaneceu como um limite rígido e respeitado pela Coroa portuguesa até a chegada da Família Real em 1808, impedindo qualquer expansão para oeste.",
+        "as missões jesuíticas espanholas e portuguesas no sul da colônia tinham como objetivo exclusivo a extração de minérios preciosos para envio imediato à Europa.",
+        "a pecuária no sertão nordestino e a coleta de drogas do sertão na Amazônia foram fundamentais para a interiorização da colônia, articulando-se com as demandas do mercado interno e do extrativismo."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "HIS",
+      "tema": "Brasil Colônia",
+      "nivel": 4,
+      "enunciado": "A administração colonial portuguesa na América passou por diversas transformações para garantir o controle fiscal, político e territorial sobre suas posses. Entre as medidas adotadas pela Coroa ao longo desse período, destaca-se que",
+      "opts": [
+        "o Pacto Colonial permitia que os colonos comercializassem livremente seus produtos com potências estrangeiras rivais de Portugal, como a Inglaterra e a França.",
+        "o Tribunal do Santo Ofício foi instalado de maneira permanente em solo brasileiro para julgar crimes de heresia exclusivamente entre os povos indígenas.",
+        "as capitanias hereditárias revelaram-se um fracasso absoluto em todos os pontos da costa, sendo imediatamente extintas logo após a viagem de descobrimento de Pedro Álvares Cabral.",
+        "a criação do Governo-Geral em 1549 teve como principal objetivo centralizar a administração e auxiliar as capitanias hereditárias que enfrentavam dificuldades financeiras ou de resistência indígena.",
+        "as Câmaras Municipais eram órgãos controlados diretamente pelo rei de Portugal, sendo proibida a participação dos chamados homens buenos locais."
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Urbanização",
+      "nivel": 2,
+      "enunciado": "O processo de fusão física entre duas ou mais cidades, resultante do crescimento urbano acelerado a ponto de unificar suas malhas urbanas, é denominado",
+      "opts": [
+        "Êxodo rural",
+        "Macrocefalia urbana",
+        "Segregação socioespacial",
+        "Conurbação",
+        "Metropolização"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Urbanização",
+      "nivel": 2,
+      "enunciado": "Quando a população de uma grande cidade se desloca diariamente para outra cidade vizinha a fim de trabalhar ou estudar, retornando ao seu lar no final do dia, ocorre um fenômeno conhecido como",
+      "opts": [
+        "Nomadismo urbano",
+        "Migração sazonal",
+        "Transumância",
+        "Migração pendular",
+        "Êxodo rural"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Urbanização",
+      "nivel": 2,
+      "enunciado": "O fenômeno socioespacial em que bairros centrais ou tradicionais de uma cidade sofrem uma valorização imobiliária intensa, resultando na substituição de moradores de baixa renda por classes de maior poder aquisitivo, chama-se",
+      "opts": [
+        "Descentralização industrial",
+        "Macrocefalia",
+        "Segregação residencial",
+        "Verticalização",
+        "Gentrificação"
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Urbanização",
+      "nivel": 2,
+      "enunciado": "O intenso processo de impermeabilização do solo nas grandes cidades, somado à canalização inadequada de rios e ao descarte impróprio de lixo, contribui de forma direta para o agravamento de qual problema ambiental urbano",
+      "opts": [
+        "Inversão térmica",
+        "Enchentes e alagamentos",
+        "Chuva ácida",
+        "Redução da camada de ozônio",
+        "Ilhas de calor"
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Urbanização",
+      "nivel": 2,
+      "enunciado": "O fenômeno climático urbano caracterizado pelas altas temperaturas registradas nos centros das grandes cidades em comparação com as áreas rurais ou periféricas ao redor é conhecido como",
+      "opts": [
+        "Amplitude térmica diária",
+        "Inversão térmica",
+        "Efeito estufa global",
+        "Ilhas de calor",
+        "Brisa marítima"
+      ],
+      "gabarito": "D",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Climatologia",
+      "nivel": 3,
+      "enunciado": "O fenômeno da inversão térmica ocorre com maior frequência nas grandes cidades durante os meses de inverno, quando o ar frio, mais denso, fica retido nas camadas mais baixas da atmosfera, sob uma camada de ar quente. Esse fenômeno meteorológico acentua problemas ambientais urbanos porque",
+      "opts": [
+        "provoca o derretimento precoce das calotas polares devido ao aumento repentino da temperatura urbana.",
+        "bloqueia a dispersão de poluentes atmosféricos, concentrando gases nocivos junto à superfície.",
+        "reduz drasticamente a umidade relativa do ar, impedindo a formação de qualquer tipo de nebulosidade.",
+        "acelera a velocidade dos ventos alísios na região central, destruindo a infraestrutura das metrópoles.",
+        "intensifica o volume de chuvas ácidas pela evaporação imediata dos resíduos industriais acumulados."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Climatologia",
+      "nivel": 3,
+      "enunciado": "Ao analisarmos o clima de uma região montanhosa, percebemos que a temperatura do ar diminui à medida que ganhamos altitude. Esse comportamento térmico da atmosfera, que reflete a menor capacidade do ar rarefeito em reter calor irradiado pela superfície terrestre, está associado ao conceito de",
+      "opts": [
+        "frente fria estacionária.",
+        "gradiente adiabático seco.",
+        "inversão térmica de superfície.",
+        "amplitude térmica diária.",
+        "corrente de jato polar."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Climatologia",
+      "nivel": 3,
+      "enunciado": "As massas de ar são grandes porções da atmosfera que adquirem as características de temperatura e umidade das regiões onde se formam, chamadas de regiões de origem. No território brasileiro, a massa de ar que se forma na região amazônica, caracterizando-se por ser quente e úmida, exerce forte influência sobre o regime de chuvas do país e é denominada",
+      "opts": [
+        "Massa Tropical Continental.",
+        "Massa Equatorial Continental.",
+        "Massa Tropical Atlântica.",
+        "Massa Equatorial Atlântica.",
+        "Massa Polar Atlântica."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Climatologia",
+      "nivel": 3,
+      "enunciado": "O fenômeno climático global conhecido como El Niño afeta o regime de chuvas e as temperaturas em várias partes do planeta. Ele se caracteriza principalmente",
+      "opts": [
+        "pela intensificação dos ventos alísios que sopram em direção aos polos terrestres.",
+        "pelo derretimento acelerado das geleiras localizadas nas cordilheiras de altitude.",
+        "pelo resfriamento intenso das correntes marítimas no oceano Atlântico Norte.",
+        "pela expansão da camada de ozônio sobre a região central do continente antártico.",
+        "pelo aquecimento anômalo das águas superficiais do oceano Pacífico equatorial."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Climatologia",
+      "nivel": 3,
+      "enunciado": "A umidade relativa do ar é um indicador importante das condições meteorológicas e do conforto térmico humano. Quando dizemos que a umidade relativa do ar está em 30 por cento, estamos afirmando que",
+      "opts": [
+        "choveu 30 por cento do volume esperado para o dia em decorrência da baixa pressão atmosférica.",
+        "30 por cento da massa total da atmosfera é composta por gotículas de água em estado líquido.",
+        "o ar contém apenas 30 por cento da quantidade máxima de vapor de água que ele pode reter naquela temperatura.",
+        "o solo absorveu 30 por cento da umidade disponível antes de iniciar o processo de evaporação.",
+        "a temperatura do ponto de orvalho foi ultrapassada em 30 por cento pelos ventos locais."
+      ],
+      "gabarito": "C",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Geopolítica",
+      "nivel": 4,
+      "enunciado": "O avanço da exploração de recursos naturais e de rotas comerciais no Oceano Ártico tem redefinido as tensões estratégicas entre países litorâneos como Rússia, Canadá, Estados Unidos, Noruega e Dinamarca. Com o derretimento gradual das calotas polares devido às mudanças climáticas, novas passagens marítimas começam a viabilizar o transporte global de mercadorias em menor tempo, ao mesmo tempo em que revelam vastas reservas de petróleo e gás natural até então inacessíveis. Diante dessa nova corrida geopolítica polar, qual é o principal fator que intensifica os litígios territoriais na região?",
+      "opts": [
+        "O esgotamento absoluto das reservas energéticas em terra firme no hemisfério norte, o que obriga as potências globais a disputarem o fundo oceânico polar.",
+        "A indefinição das fronteiras marítimas estabelecida pela Convenção das Nações Unidas sobre o Direito do Mar em relação à extensão das plataformas continentais estendidas.",
+        "A exigência de desmilitarização total do Ártico imposta pelo Conselho do Ártico, que proíbe qualquer tipo de patrulhamento naval ou instalação de bases militares.",
+        "O controle absoluto exercido pela Organização do Tratado do Atlântico Norte sobre todas as rotas de navegação do norte global, excluindo potências asiáticas.",
+        "A criação de um governo supranacional único para administrar os recursos naturais árticos, desrespeitando a soberania histórica dos povos originários da região."
+      ],
+      "gabarito": "B",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    },
+    {
+      "materia": "GEO",
+      "tema": "Geopolítica",
+      "nivel": 4,
+      "enunciado": "A relocalização de complexos industriais estratégicos e a busca por cadeias de suprimentos mais seguras têm levado governos de grandes economias ocidentais a adotarem estratégias de repatriação ou realocação produtiva para países aliados, movimento frequentemente associado ao conceito de segurança econômica nacional. Essa tendência geopolítica contemporânea contrapõe-se diretamente à lógica da globalização neoliberal clássica ao buscar",
+      "opts": [
+        "privilegiar o livre mercado desregulado onde as forças da oferta e da procura determinam os fluxos globais sem qualquer intervenção estatal.",
+        "substituir o transporte marítimo internacional por redes de trens de alta velocidade controladas por organismos multilaterais.",
+        "transferir a totalidade da produção industrial pesada para o hemisfério sul em uma tentativa de promover o desenvolvimento igualitário global.",
+        "eliminar inteiramente as barreiras tarifárias e alfandegárias entre os blocos econômicos para unificar o mercado global de tecnologia sob uma única moeda.",
+        "reduzir a dependência de centros produtivos concentrados em nações consideradas rivais ou politicamente instáveis, priorizando a resiliência sobre o menor custo."
+      ],
+      "gabarito": "E",
+      "verificador": null,
+      "problema": "(verificador indisponivel apos 4 tentativas)",
+      "concorda": false,
+      "formula": null
+    }
+  ]
+}

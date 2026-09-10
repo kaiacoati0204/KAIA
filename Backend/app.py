@@ -1647,11 +1647,43 @@ async def job_agregacao(app):
 CORROB_MIN_RESPOSTAS = 4     # abaixo disso nao ha base de comparacao dentro da sessao
 CORROB_RECENTES = 3          # tamanho da janela recente
 CORROB_ACERTO_MAX = 0.34     # no maximo 1 de 3 certas
-CORROB_RT_SIGMAS = 2.0       # log(RT) acima de mu + 2 sigma das anteriores
+# 3 sigma, nao 2. O artigo do DTS deriva o custo da escolha (Chen et al., 2021, p.6):
+# "the probability that a student is falsely tested to be disengaged is only
+#  P(|z| > 3) = 0.03% ... Theoretically, the probability of false positives would be 5%
+#  if z* = 2. The choice of z* should be guided by users' tolerance of false positives."
+# Estava em 2 por escolha minha, sem eu saber que o custo era esse: ~150x mais alarme
+# falso. E alarme falso aqui interrompe quem estava concentrado — caro em qualquer
+# publico, mais ainda em TEA/TDAH.
+CORROB_RT_SIGMAS = 3.0
+# Piso no desvio, em unidades de log. Base de poucas respostas parecidas produz sd ~ 0,
+# e ai QUALQUER diferenca vira dezenas de sigmas — foi pego por teste: respostas todas em
+# 20s davam sd=0 e uma de 20,5s aparecia como desengajamento. Mesmo defeito que ja tinha
+# sido corrigido no baseline do cold-start, aqui num calculo separado.
+# 0.14 em log ~ 15% de coeficiente de variacao, o piso tipico de tempo de resposta.
+CORROB_SD_PISO = 0.14
+# Desempenho GLOBAL minimo para a queda local significar alguma coisa (DTS: bu = 0.5).
+# Separa esforco de habilidade: aluno disperso ESTAVA BEM E CAIU; aluno com dificuldade
+# SEMPRE ESTEVE assim. Os dois produzem o mesmo sinal local — lento e errando — e so o
+# historico distingue. Sem isso, interrompe-se quem esta penando numa questao dificil,
+# que e o falso positivo mais caro no nosso publico.
+#
+# O custo, assumido tambem pelos autores: o aluno persistentemente disperso passa batido
+# (o acerto global dele e baixo, entao nunca marca). "Our predictive algorithm is
+# conservative rather than been generous at detecting disengagement." Troca deteccao
+# perdida por alarme falso — de proposito.
+CORROB_ACERTO_GLOBAL_MIN = 0.5
 
 
 async def _corroboracao_objetiva(conn, session_id):
     """(bool, motivo) — o comportamento recente confirma a queda de foco?
+
+    TRES condicoes, como no DTS original (Chen et al., 2021):
+      1. vai bem na sessao inteira (senao e dificuldade, nao dispersao)
+      2. mas o acerto caiu nas ultimas
+      3. e o tempo saiu do proprio ritmo (rapido OU lento demais)
+
+    As tres juntas. Uma sozinha nao basta: questao dificil derruba o acerto, uma pausa
+    para pensar estica o tempo, e aluno com dificuldade tem os dois o tempo todo.
 
     log do tempo de resposta, nao o tempo cru: a distribuicao e muito assimetrica a
     direita e sem o log o sigma fica refem da cauda (uma questao lenta estraga a regua).
@@ -1669,18 +1701,37 @@ async def _corroboracao_objetiva(conn, session_id):
         regs.append((bool(p.get("acertou")), float(rt) if rt else None))
 
     recentes, base = regs[-CORROB_RECENTES:], regs[:-CORROB_RECENTES]
-    acerto = sum(1 for ok, _ in recentes if ok) / len(recentes)
-    if acerto <= CORROB_ACERTO_MAX:
-        return True, f"acerto recente {acerto:.0%}"
 
+    # CONDICAO 1 — ele vai bem na SESSAO INTEIRA?
+    # Se nao vai, a queda local nao e queda: e o patamar dele. Esta penando com a
+    # materia, e interromper isso quebra justamente o esforco que se quer proteger.
+    global_ok = sum(1 for ok, _ in regs if ok) / len(regs)
+    if global_ok < CORROB_ACERTO_GLOBAL_MIN:
+        return False, f"desempenho geral baixo ({global_ok:.0%}) — dificuldade, nao dispersao"
+
+    # CONDICAO 2 — o acerto caiu agora?
+    acerto = sum(1 for ok, _ in recentes if ok) / len(recentes)
+    if acerto > CORROB_ACERTO_MAX:
+        return False, "acerto recente nao caiu"
+
+    # CONDICAO 3 — o tempo saiu do proprio ritmo? (para os DOIS lados)
+    # |z|, nao z: tempo curto demais e chute/afobamento, tempo longo demais e ausencia
+    # ou travamento. O artigo trata os dois — "fast-disengage" e "slow-disengage" — e a
+    # base sintetica ja modela o chute; so o serving nao olhava.
     rts_base = [math.log(rt) for _, rt in base if rt and rt > 0]
     ult = recentes[-1][1]
-    if len(rts_base) >= 2 and ult and ult > 0:
-        mu = mean(rts_base)
-        sd = pstdev(rts_base) or 1e-9
-        if (math.log(ult) - mu) / sd > CORROB_RT_SIGMAS:
-            return True, "tempo de resposta muito acima do proprio ritmo"
-    return False, "comportamento nao confirma"
+    if len(rts_base) < 2 or not ult or ult <= 0:
+        return False, "sem base de tempo para comparar"
+    mu = mean(rts_base)
+    sd = max(pstdev(rts_base), CORROB_SD_PISO)
+    z = (math.log(ult) - mu) / sd
+    if abs(z) <= CORROB_RT_SIGMAS:
+        return False, "tempo dentro do proprio ritmo"
+
+    # As DUAS juntas, como no original. Antes era OU — mais sensivel, e muito mais
+    # alarme falso: bastava uma questao dificil (acerto cai) ou uma pausa (tempo sobe).
+    lado = "rapido demais" if z < 0 else "lento demais"
+    return True, f"acerto recente {acerto:.0%} e tempo {lado} ({z:+.1f} sigma)"
 
 
 async def rodar_intervencao(app, session_id):

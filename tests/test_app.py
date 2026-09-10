@@ -709,8 +709,8 @@ def _respostas(regs):
     return [{"payload": {"acertou": ok, "tempo_resposta_ms": rt}} for ok, rt in regs]
 
 
-# Aluno errando as ultimas: o comportamento CONFIRMA a leitura de distracao.
-_CORROBORA = _respostas([(True, 20000)] * 5 + [(False, 21000), (False, 20000), (False, 22000)])
+# Errando as ultimas E fora do proprio ritmo: as DUAS evidencias que a regra exige.
+_CORROBORA = _respostas([(True, 20000)] * 5 + [(False, 21000), (False, 22000), (False, 400000)])
 # Aluno acertando no proprio ritmo: comportamento NAO confirma.
 _NAO_CORROBORA = _respostas([(True, 20000), (True, 21000), (True, 19500),
                              (True, 20500), (True, 20000), (True, 21000)])
@@ -1051,18 +1051,33 @@ async def test_corroboracao_exige_minimo_de_respostas():
     assert ok is False
 
 
-async def test_corroboracao_por_queda_de_acerto():
+async def test_corroboracao_exige_as_duas_evidencias():
+    """Acerto caiu E tempo fora do ritmo. Uma sozinha não basta — era OU antes."""
+    regs = [(True, 20000)] * 5 + [(False, 21000), (False, 22000), (False, 400000)]
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True and "acerto" in motivo and "tempo" in motivo
+
+
+async def test_acerto_caiu_mas_no_ritmo_nao_corrobora():
+    """Errar três seguidas no próprio ritmo é questão difícil, não desengajamento."""
     regs = [(True, 20000)] * 5 + [(False, 21000), (False, 22000), (False, 20500)]
-    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
-    assert ok is True and "acerto" in motivo
+    ok, _ = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False
 
 
-async def test_corroboracao_por_tempo_fora_do_proprio_ritmo():
-    # acertando, mas a ultima levou ordens de grandeza mais que o ritmo do aluno
-    regs = [(True, 20000), (True, 21000), (True, 19500), (True, 20500), (True, 20000)]
-    regs += [(True, 21000), (True, 20000), (True, 400000)]
+async def test_lento_mas_acertando_nao_corrobora():
+    """Demorar e acertar é pensar, não dispersar. Era o caso que o OU deixava passar."""
+    regs = [(True, 20000)] * 6 + [(True, 21000), (True, 400000)]
+    ok, _ = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False
+
+
+async def test_corroboracao_pega_chute_rapido():
+    """Rápido demais também é desengajamento (fast-disengage no DTS): o aluno nem leu.
+    A base sintética já modela isso no bloco `chute`; o serving não olhava."""
+    regs = [(True, 20000)] * 5 + [(False, 21000), (False, 22000), (False, 300)]
     ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
-    assert ok is True and "tempo" in motivo
+    assert ok is True and "rapido" in motivo
 
 
 async def test_corroboracao_nega_quando_aluno_vai_bem():
@@ -1108,3 +1123,28 @@ async def test_gatilho_medicao_para_muito_distraido(monkeypatch):
     await app_mod.rodar_intervencao(fake_app, "sid")
     inserts = [(q, a) for q, a in conn.executed if "insert into interventions" in q]
     assert inserts and "medicao" in inserts[0][1]
+
+
+async def test_corroboracao_nao_explode_com_base_uniforme():
+    """Respostas quase idênticas dão desvio ~0, e sem piso qualquer diferença vira
+    dezenas de sigmas. Foi assim que o +182σ apareceu no baseline do cold-start."""
+    regs = [(True, 20000)] * 5 + [(False, 20100), (False, 20200), (False, 20500)]
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False and "ritmo" in motivo
+
+
+async def test_aluno_penando_na_materia_nao_e_interrompido():
+    """O falso positivo mais caro: erra e demora porque NÃO SABE, não porque dispersou.
+    Aluno disperso ESTAVA BEM E CAIU; aluno com dificuldade SEMPRE ESTEVE assim — os dois
+    dão o mesmo sinal local, e só o desempenho global distingue."""
+    regs = ([(False, 60000)] * 4 + [(True, 20000)] * 2
+            + [(False, 21000), (False, 22000), (False, 400000)])
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False and "geral" in motivo
+
+
+async def test_aluno_que_ia_bem_e_caiu_e_interrompido():
+    """Mesmo sinal local do teste acima, histórico oposto — aqui a queda É a anomalia."""
+    regs = ([(True, 20000)] * 7 + [(False, 21000), (False, 22000), (False, 400000)])
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True and "acerto" in motivo and "tempo" in motivo

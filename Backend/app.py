@@ -1595,14 +1595,29 @@ CORROB_RT_SIGMAS = 3.0
 # sido corrigido no baseline do cold-start, aqui num calculo separado.
 # 0.14 em log ~ 15% de coeficiente de variacao, o piso tipico de tempo de resposta.
 CORROB_SD_PISO = 0.14
+# Desempenho GLOBAL minimo para a queda local significar alguma coisa (DTS: bu = 0.5).
+# Separa esforco de habilidade: aluno disperso ESTAVA BEM E CAIU; aluno com dificuldade
+# SEMPRE ESTEVE assim. Os dois produzem o mesmo sinal local — lento e errando — e so o
+# historico distingue. Sem isso, interrompe-se quem esta penando numa questao dificil,
+# que e o falso positivo mais caro no nosso publico.
+#
+# O custo, assumido tambem pelos autores: o aluno persistentemente disperso passa batido
+# (o acerto global dele e baixo, entao nunca marca). "Our predictive algorithm is
+# conservative rather than been generous at detecting disengagement." Troca deteccao
+# perdida por alarme falso — de proposito.
+CORROB_ACERTO_GLOBAL_MIN = 0.5
 
 
 async def _corroboracao_objetiva(conn, session_id):
     """(bool, motivo) — o comportamento recente confirma a queda de foco?
 
-    Exige as DUAS evidencias juntas (acerto caiu E tempo fora do ritmo), como no DTS
-    original. Uma sozinha nao basta: questao dificil derruba o acerto, e uma pausa para
-    pensar estica o tempo — nenhum dos dois e desengajamento.
+    TRES condicoes, como no DTS original (Chen et al., 2021):
+      1. vai bem na sessao inteira (senao e dificuldade, nao dispersao)
+      2. mas o acerto caiu nas ultimas
+      3. e o tempo saiu do proprio ritmo (rapido OU lento demais)
+
+    As tres juntas. Uma sozinha nao basta: questao dificil derruba o acerto, uma pausa
+    para pensar estica o tempo, e aluno com dificuldade tem os dois o tempo todo.
 
     log do tempo de resposta, nao o tempo cru: a distribuicao e muito assimetrica a
     direita e sem o log o sigma fica refem da cauda (uma questao lenta estraga a regua).
@@ -1621,12 +1636,19 @@ async def _corroboracao_objetiva(conn, session_id):
 
     recentes, base = regs[-CORROB_RECENTES:], regs[:-CORROB_RECENTES]
 
-    # CONDICAO 1 — o acerto caiu agora?
+    # CONDICAO 1 — ele vai bem na SESSAO INTEIRA?
+    # Se nao vai, a queda local nao e queda: e o patamar dele. Esta penando com a
+    # materia, e interromper isso quebra justamente o esforco que se quer proteger.
+    global_ok = sum(1 for ok, _ in regs if ok) / len(regs)
+    if global_ok < CORROB_ACERTO_GLOBAL_MIN:
+        return False, f"desempenho geral baixo ({global_ok:.0%}) — dificuldade, nao dispersao"
+
+    # CONDICAO 2 — o acerto caiu agora?
     acerto = sum(1 for ok, _ in recentes if ok) / len(recentes)
     if acerto > CORROB_ACERTO_MAX:
         return False, "acerto recente nao caiu"
 
-    # CONDICAO 2 — o tempo saiu do proprio ritmo? (para os DOIS lados)
+    # CONDICAO 3 — o tempo saiu do proprio ritmo? (para os DOIS lados)
     # |z|, nao z: tempo curto demais e chute/afobamento, tempo longo demais e ausencia
     # ou travamento. O artigo trata os dois — "fast-disengage" e "slow-disengage" — e a
     # base sintetica ja modela o chute; so o serving nao olhava.

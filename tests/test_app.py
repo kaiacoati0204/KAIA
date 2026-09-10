@@ -1104,3 +1104,20 @@ async def test_corroboracao_nao_explode_com_base_uniforme():
     regs = [(True, 20000)] * 5 + [(False, 20100), (False, 20200), (False, 20500)]
     ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
     assert ok is False and "ritmo" in motivo
+
+
+async def test_aluno_penando_na_materia_nao_e_interrompido():
+    """O falso positivo mais caro: erra e demora porque NÃO SABE, não porque dispersou.
+    Aluno disperso ESTAVA BEM E CAIU; aluno com dificuldade SEMPRE ESTEVE assim — os dois
+    dão o mesmo sinal local, e só o desempenho global distingue."""
+    regs = ([(False, 60000)] * 4 + [(True, 20000)] * 2
+            + [(False, 21000), (False, 22000), (False, 400000)])
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False and "geral" in motivo
+
+
+async def test_aluno_que_ia_bem_e_caiu_e_interrompido():
+    """Mesmo sinal local do teste acima, histórico oposto — aqui a queda É a anomalia."""
+    regs = ([(True, 20000)] * 7 + [(False, 21000), (False, 22000), (False, 400000)])
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True and "acerto" in motivo and "tempo" in motivo

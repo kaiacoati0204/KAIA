@@ -510,16 +510,19 @@ async def test_intervencao_feedback_tipo_invalido():
 
 
 async def test_intervencao_feedback_ok():
-    conn = FakeConn(fetchrow={"update interventions": {"intervention_id": "iv1"}},
+    # estado_antes vem da linha: os parâmetros do bandit são por (estado, braço), então
+    # sem contexto não há como atribuir o reward.
+    conn = FakeConn(fetchrow={"update interventions": {"intervention_id": "iv1",
+                                                      "estado_antes": "distraido"}},
                     fetchval={"user_id from sessions": "test-user"})   # sessão do usuário do token
     up = []
-    thompson = SimpleNamespace(update=lambda t, r: up.append((t, r)))
+    thompson = SimpleNamespace(update=lambda e, t, r: up.append((e, t, r)))
     _set_state(pool=FakePool(conn), thompson=thompson)
     async with _client() as c:
         r = await c.post("/intervencao/feedback",
                          json={"session_id": "s", "intervention_type": "checkpoint", "reward": 1.0})
     assert r.status_code == 200 and r.json()["reward"] == 1.0
-    assert up == [("checkpoint", 1.0)]   # bandit atualizado
+    assert up == [("distraido", "checkpoint", 1.0)]   # bandit atualizado no contexto certo
 
 
 # ============================================================ agregação/intervenção (direto)
@@ -743,7 +746,8 @@ async def test_distraido_nao_interrompe_aluno_que_vai_bem(monkeypatch):
 async def test_muito_distraido_nao_exige_corroboracao(monkeypatch):
     """Sair da aba e MEDICAO, nao inferencia — dispara sozinho."""
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "muito_distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+        return {"estado": "muito_distraido", "score": 0.9,
+                "feats": dict(_feats_ok(), tempo_fora_foco_s=90.0), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "muito_distraido", "n": 1}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
@@ -837,7 +841,9 @@ async def test_rodar_intervencao_warmup_cedo(monkeypatch):
 ])
 async def test_reward_objetivo(respostas, esperado):
     linhas = [{"payload": {"acertou": a}} for a in respostas]
-    conn = FakeConn(fetch={"select payload": linhas})
+    # sessao ainda ABERTA: janela vazia significa "nao retomou", nao "acabou"
+    conn = FakeConn(fetch={"select payload": linhas},
+                    fetchval={"session_end_ts": None})
     r = await app_mod.reward_objetivo(conn, "sid", "ini", "fim")
     assert r == esperado
 
@@ -850,15 +856,16 @@ async def test_reward_objetivo_aceita_payload_em_texto():
 
 async def test_resolver_rewards_usa_desfecho_objetivo():
     up = []
-    thompson = SimpleNamespace(update=lambda t, r: up.append((t, r)))
+    thompson = SimpleNamespace(update=lambda e, t, r: up.append((e, t, r)))
     pend = [{"intervention_id": "iid", "intervention_type": "checkpoint",
+             "estado_antes": "distraido",
              "triggered_at": datetime(2026, 9, 9, 20, 0, tzinfo=timezone.utc)}]
     conn = FakeConn(fetch={
         "select intervention_id": pend,
         "select payload": [{"payload": {"acertou": True}}, {"payload": {"acertou": True}}],
     })
     await app_mod.resolver_rewards(conn, thompson, "sid")
-    assert up == [("checkpoint", 1.0)]
+    assert up == [("distraido", "checkpoint", 1.0)]
     assert any("update interventions" in q for q, _ in conn.executed)
     # a origem gravada diz de onde veio o numero — auditavel depois
     assert any("desfecho_objetivo" in q for q, _ in conn.executed)
@@ -866,6 +873,7 @@ async def test_resolver_rewards_usa_desfecho_objetivo():
 
 async def test_resolver_rewards_sem_thompson():
     pend = [{"intervention_id": "iid", "intervention_type": "checkpoint",
+             "estado_antes": "distraido",
              "triggered_at": datetime(2026, 9, 9, 20, 0, tzinfo=timezone.utc)}]
     conn = FakeConn(fetch={"select intervention_id": pend})
     await app_mod.resolver_rewards(conn, None, "sid")                # sem bandit: nao faz nada
@@ -1060,7 +1068,8 @@ async def test_regra_dispara_sem_o_modelo_de_atencao(monkeypatch):
 
 async def test_gatilho_medicao_para_muito_distraido(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "muito_distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+        return {"estado": "muito_distraido", "score": 0.9,
+                "feats": dict(_feats_ok(), tempo_fora_foco_s=90.0), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "muito_distraido", "n": 1}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},

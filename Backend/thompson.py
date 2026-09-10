@@ -53,8 +53,13 @@ class ThompsonSampling:
     def __init__(self, params_path=PARAMS_PATH, seed=RANDOM_STATE):
         self.params_path = Path(params_path)
         self.rng = np.random.default_rng(seed)  # random_state=42 (reprodutível)
-        # params[tipo] = {"alpha": float, "beta": float}, ambos iniciados em 1.0
-        self.params = {t: {"alpha": 1.0, "beta": 1.0} for t in INTERVENCOES}
+        # params[(estado, tipo)] — NAO params[tipo]. `alerta_fadiga` e elegivel nos dois
+        # estados, e as taxas-base de reward sao muito diferentes entre eles: quem saiu da
+        # aba responde menos nos 3 min seguintes por definicao. Com posterior unico, o
+        # braco carregava evidencia de um contexto para o outro e apareceria pior do que e
+        # ao competir no grupo do `distraido`. Um posterior por contexto resolve.
+        self.params = {(e, t): {"alpha": 1.0, "beta": 1.0}
+                       for e, ts in ELEGIVEIS_POR_ESTADO.items() for t in ts}
         self.carregar()
 
     # ------------------------------------------------------------------ persist
@@ -64,10 +69,11 @@ class ThompsonSampling:
         if self.params_path.exists():
             try:
                 dados = json.loads(self.params_path.read_text(encoding="utf-8"))
-                for t in INTERVENCOES:
-                    if t in dados:
-                        self.params[t]["alpha"] = float(dados[t].get("alpha", 1.0))
-                        self.params[t]["beta"] = float(dados[t].get("beta", 1.0))
+                for chave in self.params:                    # "estado|tipo" no JSON
+                    d = dados.get(f"{chave[0]}|{chave[1]}")
+                    if d:
+                        self.params[chave]["alpha"] = float(d.get("alpha", 1.0))
+                        self.params[chave]["beta"] = float(d.get("beta", 1.0))
             except Exception:
                 pass
         return self
@@ -75,7 +81,8 @@ class ThompsonSampling:
     def salvar(self):
         self.params_path.parent.mkdir(parents=True, exist_ok=True)
         self.params_path.write_text(
-            json.dumps(self.params, indent=2, ensure_ascii=False), encoding="utf-8"
+            json.dumps({f"{e}|{t}": v for (e, t), v in self.params.items()},
+                       indent=2, ensure_ascii=False), encoding="utf-8"
         )
 
     # ------------------------------------------------------------------- seleção
@@ -96,7 +103,8 @@ class ThompsonSampling:
             return None
         melhor, melhor_amostra = None, -1.0
         for t in elig:
-            amostra = float(self.rng.beta(self.params[t]["alpha"], self.params[t]["beta"]))
+            p = self.params[(estado, t)]
+            amostra = float(self.rng.beta(p["alpha"], p["beta"]))
             if t in evitar:
                 amostra *= PENALIDADE_RECENCIA
             if amostra > melhor_amostra:
@@ -113,28 +121,29 @@ class ThompsonSampling:
         distribuicao UNIFORME — ou seja, escolhe a intervencao no sorteio, jogando
         fora tudo que ja tinha aprendido.
 
-        `somas` = {tipo: (soma_dos_rewards, quantos_rewards)}. Beta-Bernoulli com
+        `somas` = {(estado, tipo): (soma_dos_rewards, quantos_rewards)}. Beta-Bernoulli com
         prior Beta(1,1): alpha = 1 + sucessos, beta = 1 + fracassos. Reward fracionario
         (0.5) entra como sucesso parcial, que e como o update() ja o trata.
 
         NAO persiste: o banco e a fonte da verdade, o arquivo e so cache do processo.
         """
-        for tipo, (soma, n) in (somas or {}).items():
-            if tipo not in self.params:
-                continue                       # tipo aposentado -> ignora
+        for chave, (soma, n) in (somas or {}).items():
+            if chave not in self.params:
+                continue                       # braco aposentado ou contexto invalido
             soma = max(0.0, float(soma))
             n = max(0, int(n))
-            self.params[tipo]["alpha"] = 1.0 + soma
-            self.params[tipo]["beta"] = 1.0 + max(0.0, n - soma)
+            self.params[chave]["alpha"] = 1.0 + soma
+            self.params[chave]["beta"] = 1.0 + max(0.0, n - soma)
         return self.params
 
     # -------------------------------------------------------------------- update
-    def update(self, tipo_intervencao, reward):
-        """Atualiza o braço: alpha += reward, beta += (1 - reward). Persiste."""
-        if tipo_intervencao not in self.params:
-            raise ValueError(f"Intervenção desconhecida: {tipo_intervencao}")
+    def update(self, estado, tipo_intervencao, reward):
+        """Atualiza o braço NAQUELE estado: alpha += reward, beta += (1 - reward)."""
+        chave = (estado, tipo_intervencao)
+        if chave not in self.params:
+            raise ValueError(f"Braço desconhecido: {estado}/{tipo_intervencao}")
         reward = min(max(float(reward), 0.0), 1.0)  # clamp defensivo
-        self.params[tipo_intervencao]["alpha"] += reward
-        self.params[tipo_intervencao]["beta"] += (1.0 - reward)
+        self.params[chave]["alpha"] += reward
+        self.params[chave]["beta"] += (1.0 - reward)
         self.salvar()
-        return self.params[tipo_intervencao]
+        return self.params[chave]

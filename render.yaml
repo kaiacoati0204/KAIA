@@ -37,6 +37,11 @@ services:
         sync: false
       - key: KAIA_CORS_ORIGINS     # a URL do site; sem isso o front leva CORS error
         sync: false
+      # Liga o teste A/B (metade dos MOMENTOS DE DECISÃO viram controle). Estava só no
+      # .env local, então o experimento nascia DESLIGADO em produção — que é onde os
+      # alunos geram dado. Sem ele o beta não responde "a intervenção muda algo?".
+      - key: KAIA_AB_TESTE
+        value: "1"
       # KAIA_SEED_ATIVO fica FORA de propósito: em produção a rota de seed não existe.
 
   # ---------- Site ----------

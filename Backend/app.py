@@ -183,10 +183,11 @@ async def lifespan(app: FastAPI):
             try:
                 async with app.state.pool.acquire() as _c:
                     _linhas = await _c.fetch(
-                        "select intervention_type t, coalesce(sum(reward), 0) soma, "
-                        "count(reward) n from interventions where reward is not null "
-                        "group by intervention_type")
-                somas = {r["t"]: (float(r["soma"]), int(r["n"])) for r in _linhas}
+                        "select estado_antes e, intervention_type t, "
+                        "coalesce(sum(reward), 0) soma, count(reward) n from interventions "
+                        "where reward is not null and estado_antes is not null "
+                        "group by estado_antes, intervention_type")
+                somas = {(r["e"], r["t"]): (float(r["soma"]), int(r["n"])) for r in _linhas}
                 if somas:
                     app.state.thompson.reconstruir(somas)
                     print(f"[KaIA] bandit reconstruido do banco: "
@@ -1638,11 +1639,13 @@ async def rodar_intervencao(app, session_id):
         # nunca era fechado — ficava órfão para sempre.
         await resolver_rewards(conn, thompson, session_id)
 
-        # Sem baseline não há leitura de atenção: não dá para DECIDIR intervir. Zera a
-        # streak: o que veio antes não se compara com o que vier depois.
+        # A leitura de atencao pode nao ser confiavel (cold-start, internas mudas). Isso
+        # SO invalida o que depende do modelo — a medicao do navegador e a regra
+        # comportamental continuam valendo. Antes este return vinha aqui e matava os dois
+        # junto: nas primeiras sessoes de cada aluno NADA disparava, que e justamente o
+        # periodo em que o beta coleta dado.
         if not res["confiavel"]:
             _ESTADO_STREAK.pop(str(session_id), None)
-            return
 
         # Freio 1 (debounce): conta janelas consecutivas no mesmo estado. Atualiza
         # SEMPRE (inclusive engajado) pra resetar quando o aluno reancora.
@@ -1655,28 +1658,33 @@ async def rodar_intervencao(app, session_id):
         janelas = _ESTADO_STREAK[sid]["n"]
 
         # ==== QUEM PODE DISPARAR ====
-        # Tres caminhos, e o ponto e que o do MEIO nao passa pelo modelo de atencao.
-        # Sem ele, o RF seria porta obrigatoria: se estivesse quebrado, ou nada
-        # dispararia, ou dispararia na hora errada — ele voltaria a ser ponto unico de
-        # falha, so mais discreto. Com ele, o RF passa a ser ADITIVO: acrescenta o caso
-        # que regra nenhuma pega (o aluno cuja mente vagou mas segue acertando no ritmo,
-        # que e exatamente a hipotese diferenciadora do projeto).
+        # DOIS caminhos, e NENHUM depende do modelo de atencao. Antes eram descritos como
+        # tres, e o comentario mentia em duas frentes: o caminho "medicao" lia
+        # res["estado"], que e modelo.predict(), e o "terceiro caminho" era ramo morto
+        # (fazia o mesmo que o else). Na pratica o RF era porta obrigatoria de tudo.
+        #
+        #   medicao — tempo_fora_foco_s e o que o NAVEGADOR reportou. Dado bruto, nao
+        #             inferencia. Sozinho, um corte nessa feature separa off-task em
+        #             ~93% na base — o modelo nunca foi necessario aqui.
+        #   regra   — queda de acerto ou tempo fora do proprio ritmo (criterio do DTS).
+        #
+        # O modelo NAO dispara sozinho, de proposito: ele nao esta validado com dado real,
+        # e falso positivo aqui interrompe quem estava concentrado — caro em qualquer
+        # publico, mais ainda em TEA/TDAH. O papel dele e escolher QUAL intervencao
+        # (estado_alvo), nao SE intervem. A coluna `gatilho` e o que vai permitir decidir
+        # depois, com dado, se vale abrir um caminho para ele.
+        fora_s = float(res["feats"].get("tempo_fora_foco_s") or 0)
         corrob, motivo = await _corroboracao_objetiva(conn, session_id)
-        if res["estado"] == "muito_distraido":
-            gatilho = "medicao"          # saiu da aba: o navegador avisou, nao e inferencia
+        if fora_s >= AUSENCIA_MEDIDA_S:
+            gatilho, estado_alvo = "medicao", "muito_distraido"
         elif corrob:
-            gatilho = "regra"            # comportamento acusa queda — independe do RF
-        elif res["estado"] == "distraido" and res["score"] >= INTERV_SCORE_MIN:
-            gatilho = None               # o RF suspeita, mas nada objetivo confirma
+            # A regra sabe dizer QUE caiu, nao qual estado. Usa a leitura do modelo se ela
+            # for confiavel; senao trata como `distraido`, o conjunto mais leve dos dois.
+            gatilho = "regra"
+            estado_alvo = (res["estado"] if res["confiavel"]
+                           and res["estado"] in ESTADOS_QUE_INTERVEM else "distraido")
         else:
-            gatilho = None
-        if gatilho is None:
             return
-        if gatilho == "medicao" and res["score"] < INTERV_SCORE_MIN:
-            return                       # freio 3: confiança mínima do modelo
-        # A regra so sabe dizer QUE caiu, nao qual dos dois estados. Sem leitura util do
-        # RF, trata como `distraido`: e o conjunto de intervencoes mais leve dos dois.
-        estado_alvo = res["estado"] if res["estado"] in ESTADOS_QUE_INTERVEM else "distraido"
         if janelas < INTERV_MIN_JANELAS:             # freio 1: estado sustentado (~60s)
             return
 
@@ -1735,10 +1743,14 @@ async def rodar_intervencao(app, session_id):
                 (session_id, intervention_type, triggered_at, estado_antes, gatilho)
             values ($1::uuid, $2, now(), $3, $4)
             """,
-            session_id, tipo, res["estado"], gatilho,
+            # estado_alvo, nao res["estado"]: e o contexto que o bandit usou para escolher
+            # o braco, e o reward tem que voltar para o MESMO contexto. Quando a leitura
+            # nao e confiavel os dois divergem, e gravar o do modelo mandaria o reward
+            # para um braco que nao existe em params.
+            session_id, tipo, estado_alvo, gatilho,
         )
         if tipo != "controle_ab":
-            print(f"[KaIA Intervenção] {session_id} estado={res['estado']} "
+            print(f"[KaIA Intervenção] {session_id} estado={estado_alvo} "
                   f"gatilho={gatilho} -> {tipo}"
                   + (f" ({motivo})" if gatilho == "regra" else ""))
 
@@ -1769,7 +1781,15 @@ async def reward_objetivo(conn, session_id, desde, ate):
         session_id, desde, ate,
     )
     if not linhas:
-        return 0.0                                  # janela vazia = não voltou a responder
+        # Janela vazia é ambígua: pode ser "não retomou" (fracasso) ou "a sessão acabou"
+        # (não dá para avaliar). Tratar tudo como 0.0 penalizava justamente os braços
+        # cujo sucesso PODE ser o aluno parar — alerta_fadiga e pausa_ativa sugerem
+        # descanso, e quem obedece fecha o navegador.
+        fim = await conn.fetchval(
+            "select session_end_ts from sessions where session_id = $1::uuid", session_id)
+        if fim is not None and fim <= ate:
+            return None                             # sessão encerrada na janela: não avalia
+        return 0.0                                  # continuou aberta e não respondeu nada
     acertos = 0
     for r in linhas:
         p = r["payload"]
@@ -1790,7 +1810,7 @@ async def resolver_rewards(conn, thompson, session_id):
     try:
         pendentes = await conn.fetch(
             """
-            select intervention_id, intervention_type, triggered_at
+            select intervention_id, intervention_type, triggered_at, estado_antes
               from interventions
              where session_id = $1::uuid
                and reward is null
@@ -1811,7 +1831,7 @@ async def resolver_rewards(conn, thompson, session_id):
             continue
         try:
             if p["intervention_type"] in INTERVENCOES:   # 'controle_ab' mede mas NÃO treina
-                thompson.update(p["intervention_type"], reward)
+                thompson.update(p["estado_antes"], p["intervention_type"], reward)
             await conn.execute(
                 """
                 update interventions
@@ -1873,6 +1893,11 @@ ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
 INTERV_MIN_JANELAS = 2         # freio: estado sustentado por N janelas (~60s) antes de intervir
 INTERV_SCORE_MIN = 0.6         # freio: só intervir com confiança do modelo >= isto
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
+# Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos.
+# 30s e deliberadamente mais conservador que o corte que melhor classifica (~10s): aqui
+# o objetivo nao e classificar, e decidir interromper alguem — e troca de aba curta
+# acontece por motivo banal. 30s esta acima do p90 das outras duas classes.
+AUSENCIA_MEDIDA_S = 30.0
 _ESTADO_STREAK = {}            # session_id -> {"estado", "n"}: janelas consecutivas no mesmo estado
 # A/B: grupo CONTROLE (detecta e mede, mas NÃO intervém) para provar que a leitura
 # serve — sem depender de autorrelato. Ligar com KAIA_AB_TESTE=1 desde o 1º teste
@@ -2336,6 +2361,7 @@ async def intervencao_feedback(body: FeedbackIn, request: Request,
     reward = min(max(float(body.reward), 0.0), 1.0)
 
     intervention_id = None
+    estado_antes = None
     async with pool.acquire() as conn:
         dono = await _dono_sessao(conn, body.session_id)
         if dono is not None and str(dono) != str(uid):
@@ -2353,22 +2379,25 @@ async def intervencao_feedback(body: FeedbackIn, request: Request,
                         where session_id = $1::uuid and intervention_type = $2 and reward is null
                         order by triggered_at desc limit 1
                  )
-                returning intervention_id
+                returning intervention_id, estado_antes
                 """,
                 body.session_id, body.intervention_type, reward,
                 body.tempo_ate_aceitar_s, body.feedback_usuario,
             )
             if row is not None:
                 intervention_id = str(row["intervention_id"])
+                estado_antes = row["estado_antes"]
         except Exception as e:
             return JSONResponse(
                 {"erro": f"tabela interventions indisponível: {e}"}, status_code=503
             )
 
-    # Atualiza o bandit mesmo que não haja linha correspondente (feedback direto).
+    # O bandit so aprende se soubermos em QUE contexto a intervencao foi mostrada — os
+    # parametros sao por (estado, braco). Sem a linha correspondente, nao ha contexto e
+    # o feedback fica sem efeito no bandit (a linha ja guardou o reward).
     thompson = request.app.state.thompson
-    if thompson is not None:
-        thompson.update(body.intervention_type, reward)
+    if thompson is not None and estado_antes:
+        thompson.update(estado_antes, body.intervention_type, reward)
 
     return {
         "status": "ok",
@@ -3521,7 +3550,23 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
 # ================== HEALTHCHECK =============================================
 @app.get("/")
 def health():
-    return {"status": "KaIA backend no ar"}
+    """Healthcheck do Render + o estado das flags que mudam o EXPERIMENTO.
+
+    Existe porque a flag do A/B ficou desligada em produção sem ninguém notar: ela estava
+    só no .env local. Descobrir isso depois do beta significaria dado coletado sem grupo
+    controle — e nenhuma resposta para "a intervenção muda alguma coisa?".
+    Não expõe segredo nenhum: só liga/desliga e nomes de modelo, tudo público."""
+    return {
+        "status": "KaIA backend no ar",
+        "schema": DB_SCHEMA,
+        "ab_teste": AB_TESTE_ATIVO,
+        "few_shot_dinamico": FEWSHOT_DINAMICO,
+        "modelo_carregado": getattr(app.state, "modelo", None) is not None,
+        "bandit_carregado": getattr(app.state, "thompson", None) is not None,
+        "gerador": GEMINI_MODEL,
+        "verificador": MODELO_VERIFICADOR,
+        "versao_prompt": VERSAO_PROMPT,
+    }
 
 
 if __name__ == "__main__":

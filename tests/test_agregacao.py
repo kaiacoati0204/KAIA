@@ -234,3 +234,51 @@ async def test_janela_limitada_pelo_inicio_da_sessao():
                     {"abandonadas": 0, "total": 1})
     f = await app_mod.montar_features_sessao(conn, "sid")
     assert 1.5 <= f["duracao_janela_min"] <= 2.5
+
+
+# ============================================ baseline dentro da sessão
+def _resp(acertou, rt):
+    return {"acertou": acertou, "tempo_resposta_ms": rt, "tempo_iniciacao_resposta_ms": 400,
+            "tempo_ocioso_s": 4, "tempo_dwell_sem_responder_s": 2, "nivel_dificuldade": 3,
+            "mouse_track": [[0, 0, 0], [9, 4, 700], [20, 11, 1500]]}
+
+
+def test_baseline_na_sessao_precisa_de_acertos():
+    """Errar não serve de régua de 'engajado' — pode ser justamente a dispersão."""
+    evs = [("question_answer", _resp(False, 20000)) for _ in range(6)]
+    assert app_mod._baseline_na_sessao(evs) is None
+
+
+def test_baseline_na_sessao_forma_a_regua():
+    evs = [("question_answer", _resp(True, rt)) for rt in (18000, 20000, 22000, 21000, 19000)]
+    base = app_mod._baseline_na_sessao(evs)
+    assert base is not None
+    mu, sd = base["tempo_resposta_ms"]
+    assert 18000 < mu < 22000 and sd > 0
+
+
+def test_baseline_na_sessao_descarta_extremos():
+    """Uma questão muito lenta no começo não pode virar a régua do aluno."""
+    normais = [_resp(True, rt) for rt in (20000, 21000, 19000)]
+    com_outlier = [("question_answer", p) for p in
+                   ([_resp(True, 400000)] + normais + [_resp(True, 1000)])]
+    base = app_mod._baseline_na_sessao(com_outlier)
+    mu, _ = base["tempo_resposta_ms"]
+    assert 18000 < mu < 23000        # os extremos (400s e 1s) ficaram de fora
+
+
+# ================================================ travas do sigma
+def test_sigma_tem_piso_no_desvio():
+    """Régua feita de poucas respostas parecidas tem desvio quase zero. Sem piso,
+    qualquer diferença vira sigma absurdo — foi visto em teste real: +182 sigma."""
+    assert app_mod._sigma(95000, 20000, 400) <= app_mod.SIGMA_TETO
+
+
+def test_sigma_respeita_o_teto_nos_dois_lados():
+    assert app_mod._sigma(10 ** 9, 20000, 5000) == app_mod.SIGMA_TETO
+    assert app_mod._sigma(-10 ** 9, 20000, 5000) == -app_mod.SIGMA_TETO
+
+
+def test_sigma_normal_passa_intacto():
+    """O caso comum não pode ser distorcido pelas travas."""
+    assert abs(app_mod._sigma(25000, 20000, 5000) - 1.0) < 1e-6

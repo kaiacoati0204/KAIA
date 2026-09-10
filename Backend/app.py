@@ -1904,17 +1904,24 @@ INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a muda
 # reward_objetivo.
 
 
-async def _carregar_eventos(conn, session_id, desde=None):
+async def _carregar_eventos(conn, session_id, desde=None, ate=None):
     """Eventos de UMA sessão como (event_type, payload_dict), em ordem de tempo.
-    `desde` recorta a janela; None = a sessão inteira (usado no baseline)."""
-    if desde is None:
-        eventos = await conn.fetch(
-            "select event_type, payload from session_events where session_id = $1::uuid "
-            "order by ts", session_id)
-    else:
+
+    `desde` recorta a janela de leitura; `ate` pega o que veio ANTES dela (usado pelo
+    baseline da própria sessão, que não pode ser calculado sobre a janela que avalia).
+    Sem nenhum dos dois: a sessão inteira (usado pelo baseline entre-sessões)."""
+    if desde is not None:
         eventos = await conn.fetch(
             "select event_type, payload from session_events where session_id = $1::uuid "
             "and ts >= $2 order by ts", session_id, desde)
+    elif ate is not None:
+        eventos = await conn.fetch(
+            "select event_type, payload from session_events where session_id = $1::uuid "
+            "and ts < $2 order by ts", session_id, ate)
+    else:
+        eventos = await conn.fetch(
+            "select event_type, payload from session_events where session_id = $1::uuid "
+            "order by ts", session_id)
     return [(r["event_type"], json.loads(r["payload"])) for r in eventos]
 
 
@@ -2033,6 +2040,65 @@ async def _baseline_aluno(conn, user_id, session_id):
     return base
 
 
+# ==== BASELINE DENTRO DA SESSAO (fallback do cold-start) =====================
+# O baseline entre-sessoes exige MIN_SESSOES_BASELINE sessoes encerradas. Ate la, TODAS
+# as internas viravam 0.0 — e 0.0 nao quer dizer "desconhecido", quer dizer "exatamente
+# na media do aluno". Duas consequencias ruins:
+#
+#   1. O aluno novo ficava sem leitura interna por 3 sessoes. Como o beta tem poucas
+#      pessoas usando poucas vezes, isso e quase todo mundo, quase sempre.
+#   2. Vetor com as 10 internas zeradas NAO EXISTE na base de treino — o gerador nunca
+#      produz isso. Ou seja, o cold-start ja era um descasamento treino/serving: o
+#      modelo recebia um ponto fora da distribuicao que ele conhece.
+#
+# O DTS (Frontiers, 2020) resolve assim: usa as primeiras questoes CORRETAS da propria
+# sessao como referencia de "engajado". A suposicao — o aluno comeca engajado — e mais
+# fraca que a do baseline historico, e por isso este e fallback, nao substituto. Mas
+# qualquer estimativa e melhor que um zero que mente.
+#
+# So questoes CORRETAS: acertar e evidencia de que estava tentando de verdade. E os
+# extremos saem, para uma unica questao lenta nao virar a regua.
+BASE_SESSAO_MIN = 3          # minimo de acertos para formar a regua
+BASE_SESSAO_OLHA = 5         # olha as N primeiras corretas e descarta os extremos
+
+# Duas travas contra regua degenerada. Poucas amostras muito parecidas produzem desvio
+# quase zero, e ai qualquer diferenca vira um sigma absurdo: no primeiro teste com dado
+# real, tres respostas de ~20s deram desvio de ~400ms, e uma questao de 95s virou
+# +182 sigma. O modelo so viu ate ~+3,5 no treino — um valor desses e ponto fora da
+# distribuicao, e a previsao em cima dele nao significa nada.
+SIGMA_PISO_REL = 0.15        # desvio minimo = 15% da media (coef. de variacao tipico de RT)
+SIGMA_TETO = 4.0             # corta no limite do que o treino conhece
+
+
+def _sigma(bruto, mu, sd):
+    """Desvio em sigma, com piso no desvio e teto no resultado."""
+    sd = max(abs(sd), SIGMA_PISO_REL * abs(mu), 1e-9)
+    return round(max(-SIGMA_TETO, min(SIGMA_TETO, (bruto - mu) / sd)), 3)
+
+
+def _baseline_na_sessao(evs_antes):
+    """(média, desvio) das internas a partir do INICIO da propria sessao, ou None.
+
+    `evs_antes` sao os eventos ANTERIORES a janela de leitura — a regua nao pode ser
+    calculada sobre a mesma janela que ela vai avaliar."""
+    corretas = [p for et, p in evs_antes
+                if et == "question_answer" and p.get("acertou")][:BASE_SESSAO_OLHA]
+    if len(corretas) < BASE_SESSAO_MIN:
+        return None
+    if len(corretas) > BASE_SESSAO_MIN:                  # tira o mais lento e o mais rapido
+        por_rt = sorted(corretas, key=lambda p: float(p.get("tempo_resposta_ms") or 0))
+        corretas = por_rt[1:-1]
+    amostras = [_internos_brutos([("question_answer", p)]) for p in corretas]
+    amostras = [a for a in amostras if a]
+    if len(amostras) < 2:
+        return None
+    base = {k: (mean([a[k] for a in amostras]), pstdev([a[k] for a in amostras]) or 1.0)
+            for k in INTERNAS_RELATIVAS}
+    rts = [rt for a in amostras for rt in a["_rts"]]
+    base["_rt"] = (mean(rts), pstdev(rts) or 1.0) if len(rts) > 1 else None
+    return base
+
+
 async def montar_features_sessao(conn, session_id):
     """Monta o dict das features v2 sobre uma JANELA recente (ver _inicio_janela).
     Internas relativizadas pelo baseline do aluno (desvio em sigma); externas/contexto
@@ -2055,6 +2121,8 @@ async def montar_features_sessao(conn, session_id):
     cliques = [p for et, p in evs if et == "click_outside"]
     brutos = _internos_brutos(evs)
     base = await _baseline_aluno(conn, sess["user_id"], session_id)
+    if base is None:                                  # cold-start: tenta a propria sessao
+        base = _baseline_na_sessao(await _carregar_eventos(conn, session_id, ate=inicio))
 
     f = {}
     # internas relativas (desvio em sigma; cold-start ou sessão sem resposta -> 0)
@@ -2063,7 +2131,7 @@ async def montar_features_sessao(conn, session_id):
             f[k] = 0.0
         else:
             mu, sd = base[k]
-            f[k] = round((brutos[k] - mu) / sd, 3)
+            f[k] = _sigma(brutos[k], mu, sd)
     # contagens brutas (não relativizadas, como no gerador v2)
     if brutos and base and base.get("_rt"):
         limite = base["_rt"][0] + 2 * base["_rt"][1]         # RT típico do aluno + 2σ = lapso

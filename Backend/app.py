@@ -1566,6 +1566,56 @@ async def job_agregacao(app):
         print(f"[KaIA] Agregação rodou para {len(ativas)} sessão(ões) ativa(s).")
 
 
+# ==== CORROBORACAO OBJETIVA (2a evidencia antes de interromper) ==============
+# `muito_distraido` e MEDICAO: o navegador avisa que a aba saiu. Pode disparar sozinho.
+# `distraido` (mente vagando com o aluno sentado ali) e INFERENCIA — a parte que a
+# literatura coloca em 60-75% so com log de interacao, e que a nossa base sintetica
+# nunca viu acontecer no meio de uma sessao. Errar aqui interrompe quem estava indo
+# bem, e com publico TEA/TDAH retomar o fio e caro: o falso positivo nao e neutro.
+#
+# Entao esse estado passa a exigir uma segunda evidencia, vinda do COMPORTAMENTO e nao
+# do modelo — o criterio do DTS (Frontiers, 2020), que valida desengajamento por tempo
+# de resposta anomalo E queda de acerto. Sem corroboracao, a leitura ainda vale para
+# adaptar em silencio; so nao vira interrupcao.
+CORROB_MIN_RESPOSTAS = 4     # abaixo disso nao ha base de comparacao dentro da sessao
+CORROB_RECENTES = 3          # tamanho da janela recente
+CORROB_ACERTO_MAX = 0.34     # no maximo 1 de 3 certas
+CORROB_RT_SIGMAS = 2.0       # log(RT) acima de mu + 2 sigma das anteriores
+
+
+async def _corroboracao_objetiva(conn, session_id):
+    """(bool, motivo) — o comportamento recente confirma a queda de foco?
+
+    log do tempo de resposta, nao o tempo cru: a distribuicao e muito assimetrica a
+    direita e sem o log o sigma fica refem da cauda (uma questao lenta estraga a regua).
+    """
+    linhas = await conn.fetch(
+        "select payload from session_events where session_id = $1::uuid "
+        "and event_type = 'question_answer' order by ts", session_id)
+    if len(linhas) < CORROB_MIN_RESPOSTAS:
+        return False, "poucas respostas para comparar"
+    regs = []
+    for r in linhas:
+        p = r["payload"]
+        p = json.loads(p) if isinstance(p, str) else p
+        rt = p.get("tempo_resposta_ms")
+        regs.append((bool(p.get("acertou")), float(rt) if rt else None))
+
+    recentes, base = regs[-CORROB_RECENTES:], regs[:-CORROB_RECENTES]
+    acerto = sum(1 for ok, _ in recentes if ok) / len(recentes)
+    if acerto <= CORROB_ACERTO_MAX:
+        return True, f"acerto recente {acerto:.0%}"
+
+    rts_base = [math.log(rt) for _, rt in base if rt and rt > 0]
+    ult = recentes[-1][1]
+    if len(rts_base) >= 2 and ult and ult > 0:
+        mu = mean(rts_base)
+        sd = pstdev(rts_base) or 1e-9
+        if (math.log(ult) - mu) / sd > CORROB_RT_SIGMAS:
+            return True, "tempo de resposta muito acima do proprio ritmo"
+    return False, "comportamento nao confirma"
+
+
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
     Freios (evitam excesso): só distraido/muito_distraido; estado SUSTENTADO por
@@ -1582,16 +1632,17 @@ async def rodar_intervencao(app, session_id):
         res = await predizer_estado(modelo, scaler, conn, session_id)
         if res is None:
             return
-        # Sem baseline não há leitura: nem intervir, nem fechar reward (o bandit
-        # aprenderia com uma transição inventada). Zera a streak: o que veio antes
-        # não se compara com o que vier depois.
+        # Fecha intervenções cuja janela já expirou. Vem ANTES do gate de confiabilidade
+        # de propósito: o desfecho é objetivo (o que o aluno respondeu), então não depende
+        # da leitura estar boa. Antes ficava depois, e reward de aluno em cold-start
+        # nunca era fechado — ficava órfão para sempre.
+        await resolver_rewards(conn, thompson, session_id)
+
+        # Sem baseline não há leitura de atenção: não dá para DECIDIR intervir. Zera a
+        # streak: o que veio antes não se compara com o que vier depois.
         if not res["confiavel"]:
             _ESTADO_STREAK.pop(str(session_id), None)
             return
-        # Reward implícito: fecha intervenções passadas cuja janela já expirou,
-        # comparando o estado de então com o atual. Roda mesmo se agora está engajado
-        # (o sucesso é justamente ter virado engajado).
-        await resolver_rewards(conn, thompson, session_id, res["estado"])
 
         # Freio 1 (debounce): conta janelas consecutivas no mesmo estado. Atualiza
         # SEMPRE (inclusive engajado) pra resetar quando o aluno reancora.
@@ -1607,6 +1658,11 @@ async def rodar_intervencao(app, session_id):
             return
         if res["score"] < INTERV_SCORE_MIN:          # freio 3: confiança mínima
             return
+        # Freio 5: `distraido` so interrompe com 2a evidencia objetiva (ver acima).
+        if res["estado"] == "distraido":
+            ok, motivo = await _corroboracao_objetiva(conn, session_id)
+            if not ok:
+                return
         if janelas < INTERV_MIN_JANELAS:             # freio 1: estado sustentado (~60s)
             return
 
@@ -1648,14 +1704,12 @@ async def rodar_intervencao(app, session_id):
         if not tipo:
             return
 
-        # A/B test (DESLIGADO por padrão): metade dos alunos é grupo CONTROLE — NÃO recebe
-        # intervenção; loga 'controle_ab' pra medir a recuperação SEM ajuda e comparar com
-        # o bandit. Ligar AB_TESTE_ATIVO por um tempo, coletar a prova, e desligar.
-        if AB_TESTE_ATIVO:
-            uid = await conn.fetchval(
-                "select user_id from sessions where session_id = $1::uuid", session_id)
-            if _grupo_ab(str(uid)) == "controle":
-                tipo = "controle_ab"
+        # A/B (DESLIGADO por padrão): em metade dos MOMENTOS DE DECISÃO não se intervém —
+        # loga 'controle_ab' pra medir a recuperação SEM ajuda e comparar com o bandit.
+        # O sorteio é por decisão, não por aluno: é o que torna o teste analisável com
+        # poucos participantes (ver _sorteio_micro_randomizado).
+        if AB_TESTE_ATIVO and _sorteio_micro_randomizado() == "controle":
+            tipo = "controle_ab"
 
         await conn.execute(
             """
@@ -1668,21 +1722,57 @@ async def rodar_intervencao(app, session_id):
             print(f"[KaIA Intervenção] {session_id} estado={res['estado']} -> {tipo}")
 
 
-async def resolver_rewards(conn, thompson, session_id, estado_atual):
-    """Fecha intervenções cuja janela de medição já passou e que ainda não têm
-    reward (o polegar tem prioridade: se o aluno já respondeu, reward != null e a
-    linha é ignorada). Calcula o reward pela transição estado_antes -> estado_atual
-    e atualiza o bandit. Silencioso se as colunas novas ainda não existirem."""
+async def reward_objetivo(conn, session_id, desde, ate):
+    """Reward (0..1) do que o aluno FEZ depois da intervenção — não do que o modelo achou.
+
+    Era calculado pela transição estado_antes -> estado_depois, e os dois estados vinham
+    do Random Forest. Ou seja: o bandit aprendia a partir da saída do modelo de atenção.
+    Se a leitura estivesse errada, ele treinava em cima de um sinal inventado e não tinha
+    como perceber — os três componentes ficavam em série, e uma falha no primeiro
+    contaminava todo o resto.
+
+    Aqui o desfecho é comportamento observado:
+        nenhuma questão respondida na janela -> 0.0   (não retomou)
+        retomou                              -> 0.5 + 0.5 * proporção de acertos
+
+    Retomar já vale metade: voltar a responder é o efeito imediato que se espera de uma
+    intervenção de refoco. A outra metade mede se voltou rendendo.
+
+    Devolve None se não houver como avaliar (sem evento na janela por falha de coleta)."""
+    linhas = await conn.fetch(
+        """
+        select payload from session_events
+         where session_id = $1::uuid and event_type = 'question_answer'
+           and ts > $2 and ts <= $3
+        """,
+        session_id, desde, ate,
+    )
+    if not linhas:
+        return 0.0                                  # janela vazia = não voltou a responder
+    acertos = 0
+    for r in linhas:
+        p = r["payload"]
+        p = json.loads(p) if isinstance(p, str) else p
+        if p.get("acertou"):
+            acertos += 1
+    return round(0.5 + 0.5 * (acertos / len(linhas)), 3)
+
+
+async def resolver_rewards(conn, thompson, session_id):
+    """Fecha intervenções cuja janela de medição já passou e ainda não têm reward.
+
+    NÃO depende do modelo de atenção: pode rodar mesmo quando a leitura não é confiável
+    (cold-start), porque o desfecho é objetivo. Era o contrário antes — sem leitura
+    confiável o reward ficava órfão para sempre."""
     if thompson is None:
         return
     try:
         pendentes = await conn.fetch(
             """
-            select intervention_id, intervention_type, estado_antes
+            select intervention_id, intervention_type, triggered_at
               from interventions
              where session_id = $1::uuid
                and reward is null
-               and estado_antes is not null
                and triggered_at <= now() - make_interval(mins => $2::int)
             """,
             session_id, INTERV_JANELA_REWARD_MIN,
@@ -1693,33 +1783,27 @@ async def resolver_rewards(conn, thompson, session_id, estado_atual):
         return
 
     for p in pendentes:
-        reward = reward_por_transicao(p["estado_antes"], estado_atual)
+        ini = p["triggered_at"]
+        fim = ini + timedelta(minutes=INTERV_JANELA_REWARD_MIN)
+        reward = await reward_objetivo(conn, session_id, ini, fim)
         if reward is None:
             continue
         try:
-            if p["intervention_type"] in INTERVENCOES:   # 'controle_ab' mede o reward mas NÃO treina o bandit
+            if p["intervention_type"] in INTERVENCOES:   # 'controle_ab' mede mas NÃO treina
                 thompson.update(p["intervention_type"], reward)
             await conn.execute(
                 """
                 update interventions
-                   set reward = $2, estado_depois = $3, reward_origem = 'auto_estado'
+                   set reward = $2, reward_origem = 'desfecho_objetivo'
                  where intervention_id = $1
                 """,
-                p["intervention_id"], reward, estado_atual,
+                p["intervention_id"], reward,
             )
-            print(f"[KaIA Reward auto] {p['intervention_type']} {p['estado_antes']}->{estado_atual} r={reward}")
+            print(f"[KaIA Reward] {p['intervention_type']} r={reward} (desfecho objetivo)")
         except Exception as e:
             print("[KaIA] erro ao resolver reward", p["intervention_id"], ":", e)
 
 
-# ============ FEATURES PARA O MODELO (vetor cumulativo por sessão) ==========
-# O modelo RandomForest (ml/artifacts) foi treinado com 1 linha por SESSÃO
-# INTEIRA. Logo, o vetor enviado ao modelo é calculado sobre a sessão toda
-# (cumulativo), NÃO sobre a janela de 30s de session_features (que continua
-# existindo apenas para o painel do responsável).
-
-# Ordem EXATA esperada pelo modelo/scaler v2 (scaler_v2.feature_names_in_). NÃO altere.
-# Mesma ordem do gerar_base_v2.py (ml/): internas relativas, externas e contexto absolutas.
 FEATURE_ORDER = [
     # internas (relativas ao baseline do aluno, em sigma)
     "variabilidade_tempo_resposta", "contagem_lapsos_rt", "tempo_resposta_ms",
@@ -1769,30 +1853,28 @@ _ESTADO_STREAK = {}            # session_id -> {"estado", "n"}: janelas consecut
 AB_TESTE_ATIVO = os.getenv("KAIA_AB_TESTE") == "1"
 
 
-def _grupo_ab(user_id):
-    """Grupo A/B determinístico e estável por aluno (50/50): controle vs bandit."""
-    try:
-        h = int(str(user_id).replace("-", "")[:8], 16)
-    except (ValueError, TypeError):
-        h = 0
-    return "controle" if h % 2 == 0 else "bandit"
+def _sorteio_micro_randomizado():
+    """Sorteia CONTROLE ou BANDIT a cada momento de decisão (micro-randomized trial).
+
+    Era por ALUNO, fixo pra vida da conta. Com um beta de 5 pessoas isso da n=5 — dois
+    de um lado, tres do outro — e nenhum resultado sai dali, por mais que se colete.
+
+    Randomizar a cada decisao e o desenho padrao da literatura de JITAI, e resolve os
+    dois problemas de uma vez:
+      PODER — cada aluno contribui com dezenas de decisoes em vez de uma designacao;
+              5 pessoas x ~20 decisoes = ~100 unidades randomizadas.
+      VIES  — cada aluno e o proprio controle, entao diferenca entre pessoas (nivel,
+              rotina, dispositivo) para de contaminar a comparacao.
+
+    Sem seed: aleatoriedade real e o que sustenta a inferencia causal."""
+    return "controle" if random.random() < 0.5 else "bandit"
+
 INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a mudança de estado
 
 
-def reward_por_transicao(estado_antes, estado_depois):
-    """Reward implícito (0..1) pela transição de foco após a intervenção.
-    engajado é o melhor; muito_distraido o pior (ordem em ESTADOS).
-    Retorna None se algum estado for desconhecido (não resolve)."""
-    if estado_antes not in ESTADOS or estado_depois not in ESTADOS:
-        return None
-    if estado_depois == "engajado":
-        return 1.0                                     # re-focou de vez
-    melhora = ESTADOS.index(estado_depois) - ESTADOS.index(estado_antes)
-    if melhora < 0:
-        return 0.5                                     # melhorou, mas não até engajado
-    if melhora == 0:
-        return 0.2                                     # ficou igual
-    return 0.0                                         # piorou
+# reward_por_transicao foi removida: media o efeito pela mudanca de estado prevista
+# pelo PROPRIO modelo de atencao, o que fazia o bandit aprender da saida dele. Ver
+# reward_objetivo.
 
 
 async def _carregar_eventos(conn, session_id):

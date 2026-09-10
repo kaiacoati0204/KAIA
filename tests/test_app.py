@@ -697,14 +697,59 @@ def _feats_ok():                                        # passa o warm-up (sess�
     return {"duracao_sessao_min": 10.0}
 
 
+def _respostas(regs):
+    return [{"payload": {"acertou": ok, "tempo_resposta_ms": rt}} for ok, rt in regs]
+
+
+# Aluno errando as ultimas: o comportamento CONFIRMA a leitura de distracao.
+_CORROBORA = _respostas([(True, 20000)] * 5 + [(False, 21000), (False, 20000), (False, 22000)])
+# Aluno acertando no proprio ritmo: comportamento NAO confirma.
+_NAO_CORROBORA = _respostas([(True, 20000), (True, 21000), (True, 19500),
+                             (True, 20500), (True, 20000), (True, 21000)])
+
+
 async def test_rodar_intervencao_dispara(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}   # esta janela vira a 2ª (passa o debounce)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
-                    fetchval={"question_answer": 5})                  # já respondeu questões (warm-up ok)
+                    fetchval={"question_answer": 5},                  # já respondeu questões (warm-up ok)
+                    fetch={"select payload": _CORROBORA})
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert any("insert into interventions" in q for q, _ in conn.executed)
+
+
+async def test_distraido_nao_interrompe_aluno_que_vai_bem(monkeypatch):
+    """O falso positivo caro: o modelo diz `distraido`, mas o aluno esta acertando no
+    proprio ritmo. Sem 2a evidencia, nao interrompe."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.95, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 6},
+                    fetch={"select payload": _NAO_CORROBORA})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert not any("insert into interventions" in q for q, _ in conn.executed)
+
+
+async def test_muito_distraido_nao_exige_corroboracao(monkeypatch):
+    """Sair da aba e MEDICAO, nao inferencia — dispara sozinho."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "muito_distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "muito_distraido", "n": 1}
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5},
+                    fetch={"select payload": _NAO_CORROBORA})   # nao corrobora, e nao importa
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
@@ -781,34 +826,59 @@ async def test_rodar_intervencao_warmup_cedo(monkeypatch):
     assert conn.executed == []                          # timer segura mesmo com questão respondida
 
 
-@pytest.mark.parametrize("antes,depois,esperado", [
-    ("distraido", "engajado", 1.0),          # re-focou de vez
-    ("muito_distraido", "engajado", 1.0),
-    ("muito_distraido", "distraido", 0.5),   # melhorou parcial
-    ("distraido", "distraido", 0.2),         # ficou igual
-    ("distraido", "muito_distraido", 0.0),   # piorou
-    ("engajado", "distraido", 0.0),
-    ("distraido", "desconhecido", None),     # estado inválido -> não resolve
+# O reward deixou de vir da transicao de estado (que era prevista pelo PROPRIO modelo
+# de atencao, fazendo o bandit aprender da saida dele) e passou a vir do que o aluno FEZ.
+@pytest.mark.parametrize("respostas,esperado", [
+    ([], 0.0),                                   # nao voltou a responder
+    ([True, True], 1.0),                         # voltou e acertou tudo
+    ([False, False], 0.5),                       # voltou, errou tudo: retomar ja vale metade
+    ([True, False], 0.75),                       # voltou, metade
+    ([True, False, False, False], 0.625),
 ])
-def test_reward_por_transicao(antes, depois, esperado):
-    assert app_mod.reward_por_transicao(antes, depois) == esperado
+async def test_reward_objetivo(respostas, esperado):
+    linhas = [{"payload": {"acertou": a}} for a in respostas]
+    conn = FakeConn(fetch={"select payload": linhas})
+    r = await app_mod.reward_objetivo(conn, "sid", "ini", "fim")
+    assert r == esperado
 
 
-async def test_resolver_rewards_estado_melhorou():
+async def test_reward_objetivo_aceita_payload_em_texto():
+    """asyncpg devolve jsonb como str dependendo do driver — nao pode quebrar."""
+    conn = FakeConn(fetch={"select payload": [{"payload": '{"acertou": true}'}]})
+    assert await app_mod.reward_objetivo(conn, "sid", "ini", "fim") == 1.0
+
+
+async def test_resolver_rewards_usa_desfecho_objetivo():
     up = []
     thompson = SimpleNamespace(update=lambda t, r: up.append((t, r)))
-    pend = [{"intervention_id": "iid", "intervention_type": "checkpoint", "estado_antes": "distraido"}]
-    conn = FakeConn(fetch={"select intervention_id": pend})
-    await app_mod.resolver_rewards(conn, thompson, "sid", "engajado")
-    assert up == [("checkpoint", 1.0)]                              # bandit atualizado com o reward certo
-    assert any("update interventions" in q for q, _ in conn.executed) # linha marcada como resolvida
+    pend = [{"intervention_id": "iid", "intervention_type": "checkpoint",
+             "triggered_at": datetime(2026, 9, 9, 20, 0, tzinfo=timezone.utc)}]
+    conn = FakeConn(fetch={
+        "select intervention_id": pend,
+        "select payload": [{"payload": {"acertou": True}}, {"payload": {"acertou": True}}],
+    })
+    await app_mod.resolver_rewards(conn, thompson, "sid")
+    assert up == [("checkpoint", 1.0)]
+    assert any("update interventions" in q for q, _ in conn.executed)
+    # a origem gravada diz de onde veio o numero — auditavel depois
+    assert any("desfecho_objetivo" in q for q, _ in conn.executed)
 
 
 async def test_resolver_rewards_sem_thompson():
-    pend = [{"intervention_id": "iid", "intervention_type": "checkpoint", "estado_antes": "distraido"}]
+    pend = [{"intervention_id": "iid", "intervention_type": "checkpoint",
+             "triggered_at": datetime(2026, 9, 9, 20, 0, tzinfo=timezone.utc)}]
     conn = FakeConn(fetch={"select intervention_id": pend})
-    await app_mod.resolver_rewards(conn, None, "sid", "engajado")     # sem bandit: não faz nada
+    await app_mod.resolver_rewards(conn, None, "sid")                # sem bandit: nao faz nada
     assert conn.executed == []
+
+
+def test_micro_randomizacao_e_por_decisao_nao_por_aluno():
+    """Sorteio fixo por aluno dava n=5 num beta de 5 pessoas. Por decisao, cada aluno
+    contribui com dezenas de unidades randomizadas."""
+    sorteios = [app_mod._sorteio_micro_randomizado() for _ in range(400)]
+    assert set(sorteios) == {"controle", "bandit"}
+    prop = sorteios.count("controle") / len(sorteios)
+    assert 0.4 < prop < 0.6                          # 50/50, com folga de amostragem
 
 
 # ============================================================ /temas (lista fixa)
@@ -931,3 +1001,39 @@ async def test_seed_desativado_por_padrao(monkeypatch):
     async with _client() as c:
         r = await c.post("/seed/aluno-teste")
     assert r.status_code == 403
+
+
+# ==================================================== corroboracao objetiva
+def _fc(regs):
+    """FakeConn com N eventos question_answer (acertou, tempo_resposta_ms)."""
+    return FakeConn(fetch={"select payload": [
+        {"payload": {"acertou": ok, "tempo_resposta_ms": rt}} for ok, rt in regs]})
+
+
+async def test_corroboracao_exige_minimo_de_respostas():
+    """Sem base de comparacao dentro da sessao, nao corrobora — e nao interrompe."""
+    ok, _ = await app_mod._corroboracao_objetiva(_fc([(True, 20000)] * 3), "sid")
+    assert ok is False
+
+
+async def test_corroboracao_por_queda_de_acerto():
+    regs = [(True, 20000)] * 5 + [(False, 21000), (False, 22000), (False, 20500)]
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True and "acerto" in motivo
+
+
+async def test_corroboracao_por_tempo_fora_do_proprio_ritmo():
+    # acertando, mas a ultima levou ordens de grandeza mais que o ritmo do aluno
+    regs = [(True, 20000), (True, 21000), (True, 19500), (True, 20500), (True, 20000)]
+    regs += [(True, 21000), (True, 20000), (True, 400000)]
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True and "tempo" in motivo
+
+
+async def test_corroboracao_nega_quando_aluno_vai_bem():
+    """O caso que mais importa: aluno acertando no proprio ritmo NAO pode ser
+    interrompido por causa de uma leitura de atencao incerta."""
+    regs = [(True, 20000), (True, 21000), (True, 19500), (True, 20500),
+            (True, 20000), (True, 21000)]
+    ok, _ = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False

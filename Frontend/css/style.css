@@ -2200,6 +2200,18 @@ body.textura-papel .conteudo {
   font-weight: 400;
   color: color-mix(in srgb, var(--tinta) 55%, transparent);
 }
+/* Hobbies no topo do perfil: as etiquetas são as .perfil-tag que já existiam,
+   então aqui só o contêiner que as alinha e deixa quebrar linha em coluna
+   estreita. Some sozinho quando não há hobbies — o :empty evita a margem de um
+   bloco vazio. */
+.perfil-hobbies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.perfil-hobbies:empty { display: none; }
+
 .secao-vazia {
   color: color-mix(in srgb, var(--tinta) 65%, transparent);
   font-size: 0.9rem;

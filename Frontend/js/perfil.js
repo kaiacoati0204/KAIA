@@ -20,43 +20,95 @@ async function carregarPerfil() {
     // lerUsuario() preserva essa regra: a sessionStorage continua tendo
     // prioridade, e a cópia do "lembre de mim" só entra quando a aba não tem
     // identidade nenhuma (aí ela é a única resposta possível, melhor que "—").
-    let alunoId = usuario?.user_id || null;
-    if (usuario?.email) {
-        try {
-            const r = await apiFetch(`/perfil?email=${encodeURIComponent(usuario.email)}`);
-            if (r.ok) {
-                const u = await r.json();
-                $('nomeUsuario').textContent  = u.nome  || SEM_DADO;
-                $('emailUsuario').textContent = u.email || SEM_DADO;
-                if (u.user_id) alunoId = u.user_id;
-            }
-        } catch (e) { console.warn('[KaIA] identidade do perfil:', e); }
-    }
+    // O ?email= saiu: o backend NUNCA leu esse parâmetro. O GET /perfil tira a
+    // identidade do TOKEN (sub, com o e-mail como fallback) justamente para que
+    // ninguém leia o perfil alheio trocando a query string. Mandá-lo sugeria o
+    // contrário de como a rota funciona.
+    try {
+        const r = await apiFetch('/perfil');
+        if (r.ok) {
+            const u = await r.json();
+            $('nomeUsuario').textContent  = u.nome  || SEM_DADO;
+            $('emailUsuario').textContent = u.email || SEM_DADO;
+            mostrarHobbies(u.hobbies);
+        }
+    } catch (e) { console.warn('[KaIA] identidade do perfil:', e); }
 
-    // 2) Estatísticas (Etapa 4.1 C híbrida) do perfil EXIBIDO.
-    await carregarEstatisticasPerfil(alunoId);
+    // 2) Estatísticas (Etapa 4.1 C híbrida).
+    await carregarEstatisticasPerfil();
 }
+
+// Hobbies do aluno — o dado sempre veio no /perfil e era descartado aqui.
+// Sem hobbies (conta nova que pulou o onboarding) o bloco simplesmente não
+// aparece: um "—" ali não informaria nada.
+function mostrarHobbies(hobbies) {
+    const caixa = $('hobbiesUsuario');
+    if (!caixa) return;
+    caixa.replaceChildren();
+    (hobbies || []).forEach(h => {
+        const tag = document.createElement('span');
+        tag.className = 'perfil-tag';
+        tag.textContent = h;
+        caixa.appendChild(tag);
+    });
+}
+
+// "1 semanas · 1 matérias" era o texto de quem acabou de começar — ou seja, de
+// todo aluno no primeiro dia de beta. Concorda o número com a palavra.
+const pluralizar = (n, singular, plural) => `${n} ${n === 1 ? singular : plural}`;
 
 // Preenche "Seu desempenho" (base semanal), "Sua última sessão" (complemento ao
 // vivo, com estado vazio) e a "Análise da KaIA" (frases reais vindas do backend).
-async function carregarEstatisticasPerfil(alunoId) {
-    if (!$('atencaoSemanal')) return;   // no-op fora do perfil
-    if (!alunoId) return;               // sem identidade do perfil exibido, não busca
+async function carregarEstatisticasPerfil() {
+    const SEM_DADO = '—';
+    if (!$('minutosTotais')) return;   // no-op fora do perfil
 
-    let D = null;
+    // Sem o ?aluno_id= e sem a guarda que existia aqui. Os dois eram o mesmo
+    // engano: o backend identifica o aluno pelo TOKEN, então o parâmetro nunca
+    // foi lido — e a guarda `if (!alunoId) return` chegava a CANCELAR a busca
+    // quando o /perfil falhava, mesmo com um token perfeitamente válido que
+    // teria trazido as estatísticas. Falhar numa rota derrubava a outra, sem
+    // nada na tela explicando.
+    let D = null, falhou = false;
     try {
-        const r = await apiFetch(`/perfil/estatisticas?aluno_id=${encodeURIComponent(alunoId)}`);
+        const r = await apiFetch('/perfil/estatisticas');
         if (r.ok) D = await r.json();
-    } catch (e) { console.warn('[KaIA] estatísticas do perfil:', e); }
+        else falhou = true;
+    } catch (e) {
+        falhou = true;
+        console.warn('[KaIA] estatísticas do perfil:', e);
+    }
 
-    // --- BASE semanal (sempre visível) ---
+    // --- BASE semanal ---
     const d = D?.desempenho;
+    const sub   = $('desempenhoSub');
+    const cards = $('desempenhoCards');
+    const vazio = $('desempenhoVazio');
     if (d) {
-        $('atencaoSemanal').textContent = `${d.atencao}%`;
-        $('acertoSemanal').textContent  = `${d.acerto}%`;
-        $('minSemana').textContent      = `${d.min_semana} min`;
-        const sub = $('desempenhoSub');
-        if (sub) sub.textContent = `Média de ${d.semanas} semanas · ${d.materias} matérias`;
+        $('minutosTotais').textContent = `${d.minutos} min`;
+        // acerto vem NULO quando o aluno abriu sessões mas ainda não respondeu
+        // nada. Interpolar direto escreveria "null%" na cara dele; 0% seria pior
+        // ainda, porque afirmaria que ele errou tudo.
+        $('acertoSemanal').textContent = (d.acerto === null || d.acerto === undefined)
+            ? SEM_DADO : `${d.acerto}%`;
+        $('minSemana').textContent     = `${d.min_semana} min`;
+        if (sub)   sub.textContent = `Média de ${pluralizar(d.semanas, 'semana', 'semanas')}`
+                                   + ` · ${pluralizar(d.materias, 'matéria', 'matérias')}`;
+        if (cards) cards.style.display = '';
+        if (vazio) vazio.style.display = 'none';
+    } else {
+        // Antes ficava a fileira de "—" com o subtítulo "Média das últimas
+        // semanas" — prometendo uma média que não existia. Agora a seção diz o
+        // que está acontecendo, e distingue os DOIS casos: o backend respondeu
+        // que ainda não há histórico, ou nem deu para perguntar.
+        if (sub)   sub.textContent = '';
+        if (cards) cards.style.display = 'none';
+        if (vazio) {
+            vazio.style.display = '';
+            vazio.textContent = falhou
+                ? 'Não foi possível carregar seu desempenho agora. Recarregue a página em alguns instantes.'
+                : 'Ainda não há histórico semanal para mostrar aqui.';
+        }
     }
 
     // --- COMPLEMENTO: última sessão ou mensagem (nunca fileira de "—") ---
@@ -75,7 +127,14 @@ async function carregarEstatisticasPerfil(alunoId) {
     } else {
         $('ultimaQuando').textContent = '';
         if (lista) lista.style.display = 'none';
-        if (vazia) vazia.style.display = '';
+        if (vazia) {
+            vazia.style.display = '';
+            // Quando a chamada FALHA, "nenhuma sessão registrada" é uma afirmação
+            // falsa: o aluno pode ter estudado ontem e a página não faz ideia.
+            vazia.textContent = falhou
+                ? 'Não foi possível carregar sua última sessão agora. Recarregue a página em alguns instantes.'
+                : 'Nenhuma sessão registrada ainda. Comece uma missão em Matérias para ver seus sinais.';
+        }
     }
 
     // --- ANÁLISE (frases reais por regras; sem placeholder) ---
@@ -93,7 +152,11 @@ async function carregarEstatisticasPerfil(alunoId) {
             box.appendChild(ul);
         } else {
             const p = document.createElement('p');
-            p.textContent = 'Ainda não há dados suficientes para uma análise.';
+            // Mesma distinção das outras duas seções: "não há o que analisar" e
+            // "não deu para perguntar" são coisas diferentes para quem lê.
+            p.textContent = falhou
+                ? 'Não foi possível carregar sua análise agora.'
+                : 'Ainda não há dados suficientes para uma análise.';
             box.appendChild(p);
         }
     }

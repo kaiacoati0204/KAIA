@@ -33,6 +33,11 @@
                     <h1 id="nomeUsuario">Carregando...</h1>
                     <p id="emailUsuario">mail@exemplo.com</p>
                     <span class="perfil-tag" id="perfilUsuario">Perfil de Aprendizagem</span>
+                    <!-- Hobbies do aluno. O /perfil JÁ devolvia este dado desde
+                         sempre — o perfil.js lia a resposta e jogava fora. Agora
+                         aparece; reaproveita a etiqueta .perfil-tag, sem CSS novo
+                         além do contêiner. -->
+                    <div class="perfil-hobbies" id="hobbiesUsuario"></div>
                 </div>
             </div>
 
@@ -41,10 +46,16 @@
             <div class="secao-perfil">
                 <h2>Seu desempenho</h2>
                 <p class="secao-sub" id="desempenhoSub">Média das últimas semanas</p>
-                <div class="cards-perfil">
+                <div class="cards-perfil" id="desempenhoCards">
+                    <!-- Card 1 era "Atenção média". A atenção do modelo é uma
+                         leitura da janela corrente (/diagnose) e NUNCA é gravada:
+                         não existe média histórica dela para mostrar aqui. O que
+                         estava no lugar vinha da base sintética da pesquisa, que
+                         foi removida. Trocado pelo número que o beta realmente
+                         acumula — e que cresce a cada sessão. -->
                     <div class="card-perfil">
-                        <h2 id="atencaoSemanal">—</h2>
-                        <p>Atenção média</p>
+                        <h2 id="minutosTotais">—</h2>
+                        <p>Minutos estudados</p>
                     </div>
                     <div class="card-perfil">
                         <h2 id="acertoSemanal">—</h2>
@@ -55,6 +66,11 @@
                         <p>Minutos por semana</p>
                     </div>
                 </div>
+                <!-- Mesmo tratamento que "sua última sessão" já dava: sem dado,
+                     uma frase que EXPLICA — nunca três traços mudos, que leem
+                     como tela quebrada. O texto é trocado pelo perfil.js, que
+                     distingue "ainda não há histórico" de "falhou ao carregar". -->
+                <p class="secao-vazia" id="desempenhoVazio" style="display:none"></p>
             </div>
 
             <!-- COMPLEMENTO ao vivo: só aparece quando há session_features.

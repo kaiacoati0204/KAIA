@@ -450,19 +450,33 @@ async def salvar_anotacoes(body: AnotacoesIn, request: Request,
 
 
 # ================== API: ESTATÍSTICAS DO PERFIL (Etapa 4.1 Parte 2) ==========
-# Modelo C (híbrido): BASE semanal (desempenho_semanal — cobertura ampla, 224/224)
-# + COMPLEMENTO ao vivo (session_features, só quando há sessão) + análise curta
-# baseada em REGRAS sobre os dados semanais (sem IA, sem placeholder).
+# BASE calculada NA HORA, a partir do que o produto REALMENTE grava: sessions
+# (minutos e semanas) + session_events (acerto e matéria).
+#
+# desempenho_semanal saiu desta rota. Ela era a base sintética da pesquisa (224
+# alunos) e NINGUÉM no repositório escreve nela — nenhum insert, em nenhum .py,
+# .sql ou .js. Para um aluno real ela é e continuará vazia, então metade do
+# perfil nascia muda. A tabela fica INTOCADA: o painel do responsável ainda a lê.
+#
+# COMPLEMENTO ao vivo (session_features, só quando há sessão) e a análise por
+# REGRAS seguem como estavam.
 def _analise_regras(base, por_materia):
-    """Frases curtas e HONESTAS derivadas de desempenho_semanal (sem IA)."""
+    """Frases curtas e HONESTAS derivadas do que foi medido (sem IA).
+
+    A frase de ATENÇÃO saiu junto com o campo. A atenção do modelo é uma leitura
+    da JANELA CORRENTE (/diagnose, montar_features_sessao) e nunca é persistida —
+    não existe "atenção média histórica" para prometer aqui. O que sobrou é o que
+    de fato se mede depois que a sessão acabou: acerto e matéria.
+    """
     frases = []
-    at = base["atencao"]
-    if at >= 70:
-        frases.append(f"Sua atenção média está ótima: {at}%. Continue assim.")
-    elif at >= 50:
-        frases.append(f"Sua atenção média é {at}% — dá para melhorar com sessões mais curtas e focadas.")
-    else:
-        frases.append(f"Sua atenção média está baixa ({at}%). Tente blocos curtos com pausas guiadas.")
+    ac = base["acerto"]
+    if ac is not None:
+        if ac >= 70:
+            frases.append(f"Seu acerto médio está ótimo: {ac}%. Continue assim.")
+        elif ac >= 50:
+            frases.append(f"Seu acerto médio é {ac}% — dá para melhorar revisando os erros com calma.")
+        else:
+            frases.append(f"Seu acerto médio está em {ac}%. Tente blocos curtos, com menos questões por vez.")
 
     if por_materia:
         melhor, pior = por_materia[0], por_materia[-1]
@@ -472,10 +486,34 @@ def _analise_regras(base, por_materia):
     return frases
 
 
+# As sessões do aluno, com a duração e a MATÉRIA de cada uma. A matéria não é
+# coluna de sessions nem de session_features: ela vive no payload do evento
+# `session_start` ({"materia": "MAT", "tema": ...}) — medido, cobre 100% das
+# sessões. Reaproveitada pelas duas consultas abaixo, daí a constante.
+#
+# Note o `payload::jsonb ->> 'campo'` em vez de trazer o payload inteiro: a
+# extração acontece no servidor e só o texto do campo volta pela rede. O payload
+# de question_answer carrega o mouse_track (centenas de pontos por questão), e
+# trazê-lo para o Python só para descartar seria o custo real desta rota.
+_SQL_SESSOES_DO_ALUNO = """
+    with sess as (
+        select s.session_id,
+               s.session_start_ts,
+               extract(epoch from (coalesce(s.session_end_ts, now()) - s.session_start_ts)) / 60.0 as minutos,
+               (select ev.payload::jsonb ->> 'materia'
+                  from session_events ev
+                 where ev.session_id = s.session_id and ev.event_type = 'session_start'
+                 order by ev.ts limit 1) as materia
+          from sessions s
+         where s.user_id = $1::uuid
+    )
+"""
+
+
 @app.get("/perfil/estatisticas")
 async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_identidade)):
     # Auto-consulta: o aluno só vê as PRÓPRIAS estatísticas. aluno_id vem do token
-    # (sub), nunca de query param — desempenho_semanal e sessions são chaveados por
+    # (sub), nunca de query param — sessions e session_events são chaveados por
     # user_id == sub.
     pool = request.app.state.pool
     if pool is None:
@@ -486,26 +524,47 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
 
     try:
         async with pool.acquire() as conn:
-            # BASE: agregado semanal (média de atenção/acerto, média de minutos/semana)
+            # BASE: minutos e semanas de `sessions`; acerto de `session_events`.
+            # A CTE resp conta as respostas SÓ das sessões deste aluno — o join com
+            # sess é o que amarra a identidade, já que session_events não tem user_id.
             base = await conn.fetchrow(
-                """
-                select round(avg(media_atencao) * 100)::int atencao,
-                       round(avg(taxa_acerto)  * 100)::int acerto,
-                       -- minutos POR SEMANA: soma de todas as matérias ÷ nº de semanas
-                       round(sum(minutos_estudados)::numeric
-                             / nullif(count(distinct semana), 0))::int min_semana,
-                       count(distinct semana)  semanas,
-                       count(distinct materia) materias,
-                       count(*) linhas
-                from desempenho_semanal where aluno_id = $1::uuid
+                _SQL_SESSOES_DO_ALUNO + """
+                , resp as (
+                    select count(*) as respostas,
+                           count(*) filter (where (ev.payload::jsonb ->> 'acertou')::boolean) as acertos
+                      from session_events ev
+                      join sess on sess.session_id = ev.session_id
+                     where ev.event_type = 'question_answer'
+                )
+                select coalesce(round(sum(sess.minutos))::int, 0)           as minutos,
+                       count(*)                                             as sessoes,
+                       count(distinct sess.materia)                         as materias,
+                       -- semanas DISTINTAS pelos timestamps: é o denominador de
+                       -- "minutos por semana" e o que o subtítulo do perfil promete.
+                       -- greatest(...,1) porque quem tem sessão tem ao menos uma
+                       -- semana, e um 0 aqui viraria divisão por zero no Python.
+                       greatest(count(distinct date_trunc('week', sess.session_start_ts)), 1) as semanas,
+                       (select respostas from resp)                         as respostas,
+                       (select acertos   from resp)                         as acertos
+                  from sess
                 """,
                 aluno_id,
             )
+            # Acerto por MATÉRIA DA SESSÃO, não da questão. O join questão->matéria
+            # (questoes_cache.questao_id) cobre só 1/3 das respostas: o resto vem de
+            # questoes_reais, cujo id é bigint enquanto o payload manda uuid. Pela
+            # sessão a cobertura é total, e uma sessão é de uma matéria só — é a
+            # mesma resposta, medida onde o dado existe inteiro.
             por_materia = await conn.fetch(
-                """
-                select materia, round(avg(taxa_acerto) * 100)::int acerto
-                from desempenho_semanal where aluno_id = $1::uuid
-                group by materia order by acerto desc
+                _SQL_SESSOES_DO_ALUNO + """
+                select sess.materia,
+                       round(100.0 * count(*) filter (where (ev.payload::jsonb ->> 'acertou')::boolean)
+                             / count(*))::int as acerto
+                  from session_events ev
+                  join sess on sess.session_id = ev.session_id
+                 where ev.event_type = 'question_answer' and sess.materia is not null
+                 group by sess.materia
+                 order by acerto desc
                 """,
                 aluno_id,
             )
@@ -524,13 +583,20 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
         return JSONResponse({"erro": "Falha ao carregar estatísticas."}, status_code=502)
 
     desempenho, analise = None, []
-    if base and base["linhas"]:
+    if base and base["sessoes"]:
+        # acerto só existe se houve questão respondida. `None` (e não 0%) quando o
+        # aluno abriu sessões mas não respondeu nada: 0% afirmaria que ele errou
+        # tudo. O front mostra "—" nesse caso.
+        respostas = base["respostas"] or 0
+        acerto = round(100 * base["acertos"] / respostas) if respostas else None
         desempenho = {
-            "atencao": base["atencao"], "acerto": base["acerto"],
-            "min_semana": base["min_semana"], "semanas": base["semanas"],
+            "minutos": base["minutos"],
+            "acerto": acerto,
+            "min_semana": round(base["minutos"] / base["semanas"]),
+            "semanas": base["semanas"],
             "materias": base["materias"],
         }
-        analise = _analise_regras(base, [dict(r) for r in por_materia])
+        analise = _analise_regras(desempenho, [dict(r) for r in por_materia])
 
     ultima_sessao = None
     if ult:

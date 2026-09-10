@@ -100,11 +100,16 @@ def test_tendencia():
 
 
 def test_analise_regras_faixas():
-    assert "ótima" in app_mod._analise_regras({"atencao": 80}, [])[0]
-    assert "melhorar" in app_mod._analise_regras({"atencao": 60}, [])[0]
-    assert "baixa" in app_mod._analise_regras({"atencao": 30}, [])[0]
+    # A faixa passou a ser de ACERTO. A frase de atenção saiu junto com o campo:
+    # a atenção do modelo é uma leitura da janela corrente (/diagnose) e nunca é
+    # persistida, então não existe média histórica dela para afirmar aqui.
+    assert "ótimo" in app_mod._analise_regras({"acerto": 80}, [])[0]
+    assert "melhorar" in app_mod._analise_regras({"acerto": 60}, [])[0]
+    assert "blocos curtos" in app_mod._analise_regras({"acerto": 30}, [])[0]
+    # Sem questão respondida não há acerto — e nenhuma frase é inventada.
+    assert app_mod._analise_regras({"acerto": None}, []) == []
     frases = app_mod._analise_regras(
-        {"atencao": 80},
+        {"acerto": 80},
         [{"materia": "MAT", "acerto": 90}, {"materia": "HIS", "acerto": 40}],
     )
     assert any("MAT" in f for f in frases) and any("HIS" in f for f in frases)
@@ -933,16 +938,38 @@ async def test_anotacoes_put_ok():
 
 # ============================================================ /perfil/estatisticas
 async def test_perfil_estatisticas_ok():
-    base = {"atencao": 70, "acerto": 80, "min_semana": 120, "semanas": 4, "materias": 3, "linhas": 10}
+    # BASE calculada NA HORA: minutos e semanas de `sessions`, acerto de
+    # `session_events`. desempenho_semanal não é mais lida por esta rota.
+    base = {"minutos": 480, "sessoes": 12, "materias": 3, "semanas": 4,
+            "respostas": 50, "acertos": 40}
     conn = FakeConn(
-        fetchrow={"media_atencao": base, "session_features sf join": None},
-        fetch={"group by materia": [{"materia": "MAT", "acerto": 90}]},
+        fetchrow={"from resp)": base, "session_features sf join": None},
+        fetch={"group by sess.materia": [{"materia": "MAT", "acerto": 90}]},
     )
     _set_state(pool=FakePool(conn))
     async with _client() as c:
-        r = await c.get("/perfil/estatisticas", params={"aluno_id": "u1"})
+        r = await c.get("/perfil/estatisticas")
     body = r.json()
-    assert r.status_code == 200 and body["desempenho"]["atencao"] == 70 and body["analise"]
+    assert r.status_code == 200
+    d = body["desempenho"]
+    assert d["minutos"] == 480
+    assert d["acerto"] == 80            # 40 de 50
+    assert d["min_semana"] == 120       # 480 min / 4 semanas
+    assert "atencao" not in d           # o campo saiu do payload
+    assert body["analise"]
+
+
+async def test_perfil_estatisticas_sem_resposta_nao_afirma_zero():
+    # Sessões abertas mas nenhuma questão respondida: acerto é None, não 0%.
+    # 0% afirmaria que o aluno errou tudo — o front mostra "—" nesse caso.
+    base = {"minutos": 30, "sessoes": 2, "materias": 1, "semanas": 1,
+            "respostas": 0, "acertos": 0}
+    conn = FakeConn(fetchrow={"from resp)": base, "session_features sf join": None})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.get("/perfil/estatisticas")
+    d = r.json()["desempenho"]
+    assert r.status_code == 200 and d["acerto"] is None and d["minutos"] == 30
 
 
 async def test_perfil_estatisticas_usa_token_sem_dados():

@@ -1654,15 +1654,29 @@ async def rodar_intervencao(app, session_id):
             _ESTADO_STREAK[sid] = {"estado": res["estado"], "n": 1}
         janelas = _ESTADO_STREAK[sid]["n"]
 
-        if res["estado"] not in ESTADOS_QUE_INTERVEM:
+        # ==== QUEM PODE DISPARAR ====
+        # Tres caminhos, e o ponto e que o do MEIO nao passa pelo modelo de atencao.
+        # Sem ele, o RF seria porta obrigatoria: se estivesse quebrado, ou nada
+        # dispararia, ou dispararia na hora errada — ele voltaria a ser ponto unico de
+        # falha, so mais discreto. Com ele, o RF passa a ser ADITIVO: acrescenta o caso
+        # que regra nenhuma pega (o aluno cuja mente vagou mas segue acertando no ritmo,
+        # que e exatamente a hipotese diferenciadora do projeto).
+        corrob, motivo = await _corroboracao_objetiva(conn, session_id)
+        if res["estado"] == "muito_distraido":
+            gatilho = "medicao"          # saiu da aba: o navegador avisou, nao e inferencia
+        elif corrob:
+            gatilho = "regra"            # comportamento acusa queda — independe do RF
+        elif res["estado"] == "distraido" and res["score"] >= INTERV_SCORE_MIN:
+            gatilho = None               # o RF suspeita, mas nada objetivo confirma
+        else:
+            gatilho = None
+        if gatilho is None:
             return
-        if res["score"] < INTERV_SCORE_MIN:          # freio 3: confiança mínima
-            return
-        # Freio 5: `distraido` so interrompe com 2a evidencia objetiva (ver acima).
-        if res["estado"] == "distraido":
-            ok, motivo = await _corroboracao_objetiva(conn, session_id)
-            if not ok:
-                return
+        if gatilho == "medicao" and res["score"] < INTERV_SCORE_MIN:
+            return                       # freio 3: confiança mínima do modelo
+        # A regra so sabe dizer QUE caiu, nao qual dos dois estados. Sem leitura util do
+        # RF, trata como `distraido`: e o conjunto de intervencoes mais leve dos dois.
+        estado_alvo = res["estado"] if res["estado"] in ESTADOS_QUE_INTERVEM else "distraido"
         if janelas < INTERV_MIN_JANELAS:             # freio 1: estado sustentado (~60s)
             return
 
@@ -1672,7 +1686,9 @@ async def rodar_intervencao(app, session_id):
         respondidas = await conn.fetchval(
             "select count(*) from session_events where session_id = $1::uuid "
             "and event_type = 'question_answer'", session_id) or 0
-        duracao_min = float(res["feats"].get("duracao_sessao_min") or 0)
+        # A janela e limitada pelo inicio da sessao, entao no comeco ela vale
+        # min(duracao_da_sessao, JANELA_MIN) — o que mantem o warm-up funcionando.
+        duracao_min = float(res["feats"].get("duracao_janela_min") or 0)
         if respondidas < 1 or duracao_min < INTERV_WARMUP_MIN:
             return
 
@@ -1695,12 +1711,12 @@ async def rodar_intervencao(app, session_id):
             return
         if stats["ultima"] is not None:
             desde_min = (datetime.now(timezone.utc) - stats["ultima"]).total_seconds() / 60.0
-            if desde_min < INTERV_COOLDOWN_MIN[res["estado"]]:   # freio 2: cooldown por estado
+            if desde_min < INTERV_COOLDOWN_MIN[estado_alvo]:     # freio 2: cooldown por estado
                 return
 
         tempo_estudo_min = float(res["feats"].get("tempo_estudo_acumulado_dia_min") or 0)
         evitar = [stats.get("ultimo_tipo")] if stats.get("ultimo_tipo") else []   # penalidade de recência
-        tipo = thompson.select(res["estado"], tempo_estudo_min, evitar=evitar)
+        tipo = thompson.select(estado_alvo, tempo_estudo_min, evitar=evitar)
         if not tipo:
             return
 
@@ -1711,15 +1727,20 @@ async def rodar_intervencao(app, session_id):
         if AB_TESTE_ATIVO and _sorteio_micro_randomizado() == "controle":
             tipo = "controle_ab"
 
+        # `gatilho` e o que permite perguntar depois se o modelo de atencao acrescenta
+        # algo sobre a regra — sem ele os dois casos ficam indistinguiveis no dado.
         await conn.execute(
             """
-            insert into interventions (session_id, intervention_type, triggered_at, estado_antes)
-            values ($1::uuid, $2, now(), $3)
+            insert into interventions
+                (session_id, intervention_type, triggered_at, estado_antes, gatilho)
+            values ($1::uuid, $2, now(), $3, $4)
             """,
-            session_id, tipo, res["estado"],
+            session_id, tipo, res["estado"], gatilho,
         )
         if tipo != "controle_ab":
-            print(f"[KaIA Intervenção] {session_id} estado={res['estado']} -> {tipo}")
+            print(f"[KaIA Intervenção] {session_id} estado={res['estado']} "
+                  f"gatilho={gatilho} -> {tipo}"
+                  + (f" ({motivo})" if gatilho == "regra" else ""))
 
 
 async def reward_objetivo(conn, session_id, desde, ate):
@@ -1817,7 +1838,7 @@ FEATURE_ORDER = [
     # (muitos blocos medios) de mente vagando/ausencia (um bloco longo).
     "maior_bloco_parado_s", "n_blocos_parados",
     # contexto (absolutas)
-    "nivel_dificuldade_atividade", "duracao_sessao_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
+    "nivel_dificuldade_atividade", "duracao_janela_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
 ]
 
 # Internas expressas como DESVIO (sigma) do baseline do aluno; o resto é bruto.
@@ -1832,6 +1853,12 @@ MIN_SESSOES_BASELINE = 3     # abaixo disso não dá pra personalizar -> desvio 
 BASELINE_TTL_S = 600         # cache do baseline por aluno (sessões passadas não mudam)
 NIVEL_DIFICULDADE_PADRAO = 2  # fallback se a sessão ainda não tem resposta (CHECK 1..5)
 DURACAO_MAX_MIN = 240         # teto: acima disso é sessão que nunca fechou, não estudo
+# Janela de leitura. 10 min cabe ~6-10 questões de vestibular (50-100s cada), o que dá
+# base para as internas; e é curto o bastante para "voltei a focar" aparecer em poucas
+# questões. O DTS (Frontiers, 2020) detecta em ~2 questões usando 2 features; nós
+# precisamos de mais eventos porque usamos 23.
+JANELA_MIN = 10.0             # minutos de passado que a leitura considera
+JANELA_MIN_RESPOSTAS = 3      # estica a janela para trás até caber isto
 
 # Mapeamento do rótulo (int) -> estado, conforme encoding do treino.
 ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
@@ -1877,13 +1904,49 @@ INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a muda
 # reward_objetivo.
 
 
-async def _carregar_eventos(conn, session_id):
-    """Eventos de UMA sessão como lista de (event_type, payload_dict)."""
-    eventos = await conn.fetch(
-        "select event_type, payload from session_events where session_id = $1::uuid",
-        session_id,
-    )
+async def _carregar_eventos(conn, session_id, desde=None):
+    """Eventos de UMA sessão como (event_type, payload_dict), em ordem de tempo.
+    `desde` recorta a janela; None = a sessão inteira (usado no baseline)."""
+    if desde is None:
+        eventos = await conn.fetch(
+            "select event_type, payload from session_events where session_id = $1::uuid "
+            "order by ts", session_id)
+    else:
+        eventos = await conn.fetch(
+            "select event_type, payload from session_events where session_id = $1::uuid "
+            "and ts >= $2 order by ts", session_id, desde)
     return [(r["event_type"], json.loads(r["payload"])) for r in eventos]
+
+
+async def _inicio_janela(conn, session_id, session_start):
+    """Começo da janela de leitura, e o span dela em minutos.
+
+    O PROBLEMA que isto resolve: as features eram calculadas sobre a sessão INTEIRA, e
+    as externas são acumuladores — soma de tempo fora, MÁXIMO de ausência, contagem de
+    trocas de aba. Juntas são 42% do peso do modelo, e nenhuma delas desce. Uma saída de
+    5 minutos marcava a sessão para sempre: o aluno voltava, estudava concentrado por 40
+    minutos, e a leitura seguia travada em `muito_distraido` — com alta confiança, porque
+    são justamente as features que separam esse estado com ~95% de acerto.
+
+    Janela fixa também resolve de graça o problema da duração: "180s fora em 10 min" quer
+    dizer a mesma coisa no minuto 5 ou no minuto 50 da sessão. Antes, o mesmo valor
+    absoluto significava coisas opostas em sessões de tamanhos diferentes, e o modelo só
+    tinha `duracao_sessao_min` (2,1% do peso) para desambiguar.
+
+    A janela ESTICA para trás quando não cabem respostas suficientes: questão de
+    vestibular leva 50-100s, então 10 min podem conter poucas, e as internas precisam de
+    pelo menos duas para ter variabilidade. Sem isso, 48,8% do modelo ficaria mudo."""
+    agora = datetime.now(timezone.utc)
+    ini = max(session_start, agora - timedelta(minutes=JANELA_MIN))
+    ts = await conn.fetch(
+        "select ts from session_events where session_id = $1::uuid "
+        "and event_type = 'question_answer' order by ts desc limit $2",
+        session_id, JANELA_MIN_RESPOSTAS)
+    if len(ts) >= JANELA_MIN_RESPOSTAS:
+        ini = min(ini, ts[-1]["ts"])                 # estica até caber o mínimo
+    ini = max(ini, session_start)
+    span = max((agora - ini).total_seconds() / 60.0, 1e-6)
+    return ini, min(span, DURACAO_MAX_MIN)
 
 
 def _inclinacao(ys):
@@ -1971,9 +2034,11 @@ async def _baseline_aluno(conn, user_id, session_id):
 
 
 async def montar_features_sessao(conn, session_id):
-    """Monta o dict das 20 features v2 (CUMULATIVO, sessão inteira). Internas
-    relativizadas pelo baseline do aluno (desvio em sigma); externas/contexto
-    brutas. Retorna na ordem FEATURE_ORDER, ou None se a sessão não existir."""
+    """Monta o dict das features v2 sobre uma JANELA recente (ver _inicio_janela).
+    Internas relativizadas pelo baseline do aluno (desvio em sigma); externas/contexto
+    brutas. Retorna na ordem FEATURE_ORDER, ou None se a sessão não existir.
+
+    Era CUMULATIVO na sessão inteira, e por isso as externas nunca desciam."""
     sess = await conn.fetchrow(
         "select user_id, session_start_ts from sessions where session_id = $1::uuid",
         session_id,
@@ -1981,14 +2046,11 @@ async def montar_features_sessao(conn, session_id):
     if sess is None:
         return None
 
-    # Duração ANTES das externas: ela é o teto físico do tempo fora de foco. Sessão
-    # que nunca fechou (o sendBeacon do /end não manda header) inflaria sem limite,
-    # e o modelo nunca viu nada acima de ~44 min no treino.
-    duracao_min = min(
-        max((datetime.now(timezone.utc) - sess["session_start_ts"]).total_seconds() / 60.0, 1e-6),
-        DURACAO_MAX_MIN)
+    # A janela vem primeiro: o span dela é o teto físico do tempo fora de foco e o
+    # denominador de todas as contagens.
+    inicio, duracao_min = await _inicio_janela(conn, session_id, sess["session_start_ts"])
 
-    evs = await _carregar_eventos(conn, session_id)
+    evs = await _carregar_eventos(conn, session_id, desde=inicio)
     tab = [p for et, p in evs if et == "tab_change"]
     cliques = [p for et, p in evs if et == "click_outside"]
     brutos = _internos_brutos(evs)
@@ -2010,9 +2072,9 @@ async def montar_features_sessao(conn, session_id):
         f["contagem_lapsos_rt"] = 0
     f["erros_sem_offtask"] = brutos["_erros"] if brutos else 0
 
-    # externas absolutas
-    # Aba suspensa pelo navegador reporta tempo fora maior que a própria sessão —
-    # impossível, e fora da distribuição de treino. Teto na duração.
+    # externas absolutas, sobre a JANELA
+    # Aba suspensa pelo navegador reporta tempo fora maior que a própria janela —
+    # impossível, e fora da distribuição de treino. Teto no span da janela.
     teto_fora_s = duracao_min * 60.0
     ausencias = [min(float(p.get("tempo_fora_foco_s") or 0), teto_fora_s) for p in tab]
     f["mudancas_aba"] = len(tab)
@@ -2043,7 +2105,7 @@ async def montar_features_sessao(conn, session_id):
 
     # contexto absolutas
     f["nivel_dificuldade_atividade"] = round(mean(brutos["_niveis"])) if (brutos and brutos["_niveis"]) else NIVEL_DIFICULDADE_PADRAO
-    f["duracao_sessao_min"] = round(duracao_min, 2)
+    f["duracao_janela_min"] = round(duracao_min, 2)
     local = datetime.now()
     f["hora_do_dia"] = round(local.hour + local.minute / 60.0, 2)
     f["tempo_estudo_acumulado_dia_min"] = round(float(await conn.fetchval(

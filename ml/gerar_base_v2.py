@@ -45,7 +45,7 @@ FEATURE_ORDER = [
     # (muitos blocos medios) de mente vagando/ausencia (um bloco longo).
     "maior_bloco_parado_s", "n_blocos_parados",
     # contexto (absolutas)
-    "nivel_dificuldade_atividade", "duracao_sessao_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
+    "nivel_dificuldade_atividade", "duracao_janela_min", "hora_do_dia", "tempo_estudo_acumulado_dia_min",
 ]
 MOUSE_KEYS = ["velocidade_mouse_media", "variabilidade_velocidade_mouse",
               "entropia_trajetoria_mouse", "flips_cursor_xy"]
@@ -64,10 +64,19 @@ CONTAGEM = {  # médias de contagens (Poisson) por estado
     "contagem_lapsos_rt": {"engajado": 0.3, "distraido": 1.8, "muito_distraido": 0.9},
     "erros_sem_offtask":  {"engajado": 0.2, "distraido": 1.0, "muito_distraido": 0.4},
 }
-# Contagens/tempos acima valem para uma sessao de DUR_REF min; sessoes mais curtas
-# acumulam proporcionalmente menos. Sem isso o modelo aprende contagem ABSOLUTA e
-# fica cego no comeco da sessao, quando tudo ainda esta baixo por definicao.
-DUR_REF = 20.0
+# ==== UNIDADE DE OBSERVACAO: JANELA, NAO SESSAO ==============================
+# Cada linha da base descreve uma JANELA de ~JANELA_MIN minutos num estado, nao uma
+# sessao inteira. Mudou porque o serving pergunta "como o aluno esta AGORA", no meio da
+# sessao, e a base so tinha sessoes com UM rotulo do inicio ao fim: aluno que dispersa e
+# volta nao existia no treino. Era descasamento treino/serving na unidade de observacao
+# — nao em nenhuma feature isolada, e por isso escapou das auditorias anteriores.
+#
+# O gerador ja produzia um bloco coerente de comportamento num estado, com duracao
+# sorteada e todas as contagens escaladas por ela. Esse bloco SEMPRE foi uma janela;
+# o que faltava era sortear a duracao em torno do tamanho da janela do serving.
+#
+# Contagens/tempos abaixo valem para uma janela de DUR_REF min; janelas mais curtas
+DUR_REF = 10.0     # = JANELA_MIN do Backend/app.py; mudar os dois JUNTOS
 
 # O baseline do serving (_baseline_aluno) e a media das sessoes PASSADAS do aluno,
 # SEM filtrar estado. Logo o zero do sigma nao e "o eu engajado" — e "o eu medio".
@@ -148,7 +157,9 @@ def gerar_sessao(estado, aluno, base_mouse):
     # Contexto INDEPENDENTE do rotulo: hora e tempo acumulado vem da agenda do
     # aluno, nao do estado dele. Escrever o rotulo aqui inverteria a causalidade
     # e o modelo passaria a usar o relogio como prova em vez de regua.
-    dur = round(max(3, random.gauss(20.7, 8)), 1)
+    # em torno da janela do serving; a cauda curta cobre o comeco de sessao,
+    # quando a janela ainda nao encheu (ela e limitada pelo inicio da sessao).
+    dur = round(min(max(2.0, random.gauss(9.0, 2.6)), 12.0), 1)
     hora = min(23.9, max(7, random.gauss(17, 4)))
     acum = max(dur, random.gauss(53, 30))          # o dia inclui esta sessao
     fator = dur / DUR_REF
@@ -252,7 +263,7 @@ def gerar_sessao(estado, aluno, base_mouse):
 
     # contexto absolutas
     f["nivel_dificuldade_atividade"] = dif
-    f["duracao_sessao_min"] = dur
+    f["duracao_janela_min"] = dur
     f["hora_do_dia"] = round(hora, 2)
     f["tempo_estudo_acumulado_dia_min"] = round(acum, 1)
     return f

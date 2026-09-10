@@ -19,7 +19,7 @@ FEATS_VALIDAS = {
     "mudancas_aba": 1.0, "tempo_fora_foco_s": 6.0, "maior_ausencia_unica_s": 6.0,
     "cliques_fora_area_estudo": 1.0, "taxa_abandono_sessao": 0.3,
     "maior_bloco_parado_s": 40.0, "n_blocos_parados": 3,
-    "nivel_dificuldade_atividade": 3.0, "duracao_sessao_min": 20.0, "hora_do_dia": 21.0,
+    "nivel_dificuldade_atividade": 3.0, "duracao_janela_min": 20.0, "hora_do_dia": 21.0,
     "tempo_estudo_acumulado_dia_min": 50.0,
 }
 

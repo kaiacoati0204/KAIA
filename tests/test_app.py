@@ -670,7 +670,7 @@ def test_questao_utilizavel():
 def test_leitura_confiavel():
     feats = {n: 0.0 for n in app_mod.FEATURE_ORDER}
     assert app_mod.leitura_confiavel(feats) is False       # internas todas zeradas
-    feats["duracao_sessao_min"] = 20.0                     # externa não conta
+    feats["duracao_janela_min"] = 20.0                     # externa não conta
     assert app_mod.leitura_confiavel(feats) is False
     # sem baseline, off-task externo ainda se lê: as absolutas não dependem dele
     assert app_mod.leitura_confiavel(feats, "muito_distraido") is True
@@ -694,7 +694,7 @@ async def test_rodar_intervencao_engajado(monkeypatch):
 
 
 def _feats_ok():                                        # passa o warm-up (sessão >= 3 min)
-    return {"duracao_sessao_min": 10.0}
+    return {"duracao_janela_min": 10.0}
 
 
 def _respostas(regs):
@@ -814,7 +814,7 @@ async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
 
 async def test_rodar_intervencao_warmup_cedo(monkeypatch):
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": {"duracao_sessao_min": 1.0}, "confiavel": True}  # < 3 min
+        return {"estado": "distraido", "score": 0.9, "feats": {"duracao_janela_min": 1.0}, "confiavel": True}  # < 3 min
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
@@ -1037,3 +1037,38 @@ async def test_corroboracao_nega_quando_aluno_vai_bem():
             (True, 20000), (True, 21000)]
     ok, _ = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
     assert ok is False
+
+
+async def test_regra_dispara_sem_o_modelo_de_atencao(monkeypatch):
+    """O RF nao pode ser porta obrigatoria. Se ele disser `engajado` mas o comportamento
+    acusar queda, a regra dispara sozinha — e o gatilho fica registrado como 'regra'."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "engajado", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "engajado", "n": 1}
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 8},
+                    fetch={"select payload": _CORROBORA})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    inserts = [(q, a) for q, a in conn.executed if "insert into interventions" in q]
+    assert inserts, "a regra deveria disparar mesmo com o RF dizendo engajado"
+    assert "regra" in inserts[0][1]                       # gatilho gravado
+
+
+async def test_gatilho_medicao_para_muito_distraido(monkeypatch):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "muito_distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "muito_distraido", "n": 1}
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5},
+                    fetch={"select payload": _NAO_CORROBORA})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    inserts = [(q, a) for q, a in conn.executed if "insert into interventions" in q]
+    assert inserts and "medicao" in inserts[0][1]

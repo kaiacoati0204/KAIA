@@ -30,6 +30,10 @@ class FakeConn:
         return self._ab if "abandonadas" in q else self._s
 
     async def fetch(self, q, *a):
+        if "select ts from session_events" in q:
+            # _inicio_janela pergunta os ts das ultimas respostas para esticar a janela.
+            # Devolve poucos: a janela fica no tamanho nominal, sem esticar.
+            return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=1)}]
         if "session_events" in q:
             return self._ev
         return self._passadas          # baseline: sessões passadas encerradas
@@ -191,3 +195,42 @@ def test_internos_brutos_agrega():
     assert raw["_erros"] == 1
     assert raw["_rts"] == [4000.0, 8000.0]
     assert raw["_niveis"] == [3, 3]
+
+
+# ==================================================== janela de leitura
+async def test_janela_exclui_ausencia_antiga():
+    """O defeito que isto corrige: as externas eram acumuladores sobre a sessão inteira
+    (soma, máximo, contagem) e nunca desciam — 42% do peso do modelo travado depois de
+    qualquer ausência longa. A janela só olha o passado recente."""
+    start = datetime.now(timezone.utc) - timedelta(minutes=40)
+    antigos = [_ev("tab_change", {"tempo_fora_foco_s": 360.0})]      # saiu 6 min, la atras
+    recentes = [_ev("question_answer", {"tempo_resposta_ms": 21000, "acertou": True,
+                                        "nivel_dificuldade": 3, "mouse_track": []})
+                for _ in range(4)]
+
+    class ConnJanela(FakeConn):
+        """Filtra por ts como o Postgres faria: o `desde` chega como 2º parâmetro."""
+        async def fetch(self, q, *a):
+            if "select ts from session_events" in q:
+                return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=2)}]
+            if "session_events" in q:
+                return recentes if len(a) > 1 else antigos + recentes
+            return self._passadas
+
+    conn = ConnJanela({"user_id": "u", "session_start_ts": start},
+                      antigos + recentes, {"abandonadas": 0, "total": 1})
+    f = await app_mod.montar_features_sessao(conn, "sid")
+    assert f["tempo_fora_foco_s"] == 0          # a ausencia ficou fora da janela
+    assert f["maior_ausencia_unica_s"] == 0.0
+    assert f["mudancas_aba"] == 0
+    assert f["duracao_janela_min"] <= app_mod.JANELA_MIN + 0.1
+
+
+async def test_janela_limitada_pelo_inicio_da_sessao():
+    """Sessão de 2 min não pode reportar janela de 10 — é o que mantém o warm-up
+    das intervenções funcionando."""
+    start = datetime.now(timezone.utc) - timedelta(minutes=2)
+    conn = FakeConn({"user_id": "u", "session_start_ts": start}, [],
+                    {"abandonadas": 0, "total": 1})
+    f = await app_mod.montar_features_sessao(conn, "sid")
+    assert 1.5 <= f["duracao_janela_min"] <= 2.5

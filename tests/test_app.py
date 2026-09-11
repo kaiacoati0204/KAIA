@@ -72,7 +72,6 @@ def _set_state(pool=None, thompson=None, modelo=None, scaler=None):
 
 @pytest.fixture(autouse=True)
 def _limpa_streak():
-    app_mod._ESTADO_STREAK.clear()   # debounce por sessão é in-memory -> isola os testes
     yield
 
 
@@ -720,7 +719,6 @@ async def test_rodar_intervencao_dispara(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}   # esta janela vira a 2ª (passa o debounce)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5},                  # já respondeu questões (warm-up ok)
                     fetch={"select payload": _CORROBORA})
@@ -737,7 +735,6 @@ async def test_distraido_nao_interrompe_aluno_que_vai_bem(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.95, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 1}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 6},
                     fetch={"select payload": _NAO_CORROBORA})
@@ -754,7 +751,6 @@ async def test_muito_distraido_nao_exige_corroboracao(monkeypatch):
         return {"estado": "muito_distraido", "score": 0.9,
                 "feats": dict(_feats_ok(), tempo_fora_foco_s=90.0), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "muito_distraido", "n": 1}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5},
                     fetch={"select payload": _NAO_CORROBORA})   # nao corrobora, e nao importa
@@ -769,7 +765,6 @@ async def test_rodar_intervencao_cooldown(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # já passa o debounce
     agora = datetime.now(timezone.utc)
     conn = FakeConn(fetchrow={"from interventions": {"n": 1, "ultima": agora}},  # recém-disparada
                     fetchval={"question_answer": 5})
@@ -780,17 +775,43 @@ async def test_rodar_intervencao_cooldown(monkeypatch):
     assert conn.executed == []   # cooldown bloqueia
 
 
-async def test_rodar_intervencao_debounce(monkeypatch):
+async def test_leitura_nao_confiavel_nao_bloqueia_o_disparo(monkeypatch):
+    """O bug que isto corrige: havia um debounce que contava janelas consecutivas no
+    MESMO ESTADO DO MODELO, e que zerava o contador quando a leitura nao era confiavel.
+    Como o contador nunca chegava a 2, o `return` matava TODO disparo durante o
+    cold-start — inclusive a medicao do navegador, que nao e inferencia. Ou seja: o
+    modelo vetava uma decisao que havia sido tomada sem ele.
+
+    A exigencia de duracao vive em quem dispara: a regra pede queda nas ultimas
+    CORROB_RECENTES respostas, e a medicao e sobre uma janela de JANELA_MIN minutos."""
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+        # cold-start: internas mudas -> o modelo diz engajado e a leitura nao e confiavel
+        feats = dict(_feats_ok(), tempo_fora_foco_s=300.0)      # o navegador mediu 5 min fora
+        return {"estado": "engajado", "score": 0.9, "feats": feats, "confiavel": False}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
-    await app_mod.rodar_intervencao(fake_app, "sid")   # 1ª janela -> streak=1 < 2
-    assert conn.executed == []                          # debounce bloqueia o blip
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert any("insert into interventions" in q for q, _ in conn.executed)
+
+
+async def test_disparo_acontece_na_primeira_janela(monkeypatch):
+    """Sem debounce, a regra corroborada dispara ja na primeira leitura — ela propria
+    ja exige tres respostas de evidencia, nao precisa de 60s a mais de espera."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 5},
+                    fetch={"select payload": _CORROBORA})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert any("insert into interventions" in q for q, _ in conn.executed)
 
 
 async def test_confianca_do_modelo_nao_e_mais_freio(monkeypatch):
@@ -800,7 +821,6 @@ async def test_confianca_do_modelo_nao_e_mais_freio(monkeypatch):
         return {"estado": "distraido", "score": 0.4,       # confiança baixíssima
                 "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 8},
                     fetch={"select payload": _CORROBORA})
@@ -815,7 +835,6 @@ async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # passa debounce/score
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 0})                  # nenhuma questão respondida ainda
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
@@ -829,7 +848,6 @@ async def test_rodar_intervencao_warmup_cedo(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.9, "feats": {"duracao_janela_min": 1.0}, "confiavel": True}  # < 3 min
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5})                  # respondeu, mas cedo demais
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
@@ -1122,7 +1140,6 @@ async def test_regra_dispara_sem_o_modelo_de_atencao(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "engajado", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "engajado", "n": 1}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 8},
                     fetch={"select payload": _CORROBORA})
@@ -1140,7 +1157,6 @@ async def test_gatilho_medicao_para_muito_distraido(monkeypatch):
         return {"estado": "muito_distraido", "score": 0.9,
                 "feats": dict(_feats_ok(), tempo_fora_foco_s=90.0), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "muito_distraido", "n": 1}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5},
                     fetch={"select payload": _NAO_CORROBORA})

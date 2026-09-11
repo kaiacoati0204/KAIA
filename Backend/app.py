@@ -1746,12 +1746,12 @@ async def _corroboracao_objetiva(conn, session_id):
 
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
-    Freios (evitam excesso): só distraido/muito_distraido; estado SUSTENTADO por
-    >= INTERV_MIN_JANELAS janelas (debounce); warm-up (>=1 questão respondida e
-    sessão >= INTERV_WARMUP_MIN); cooldown por estado (INTERV_COOLDOWN_MIN) e teto
-    INTERV_MAX_POR_SESSAO por sessão.
+    Freios: warm-up (>=1 questão respondida e sessão >= INTERV_WARMUP_MIN); cooldown
+    por estado (INTERV_COOLDOWN_MIN); teto INTERV_MAX_POR_SESSAO por sessão. A
+    exigência de DURAÇÃO vive dentro de quem dispara — a regra pede queda nas últimas
+    CORROB_RECENTES respostas, e a medição é sobre uma janela de JANELA_MIN minutos.
 
-    Não há mais freio por confiança do modelo: o disparo não depende dele.
+    O disparo não depende do modelo: ele só escolhe QUAL conjunto de intervenções.
     Silencioso se a tabela interventions ainda não existir (Tarefa 4)."""
     thompson = app.state.thompson
     modelo, scaler = app.state.modelo, app.state.scaler
@@ -1767,24 +1767,6 @@ async def rodar_intervencao(app, session_id):
         # da leitura estar boa. Antes ficava depois, e reward de aluno em cold-start
         # nunca era fechado — ficava órfão para sempre.
         await resolver_rewards(conn, thompson, session_id)
-
-        # A leitura de atencao pode nao ser confiavel (cold-start, internas mudas). Isso
-        # SO invalida o que depende do modelo — a medicao do navegador e a regra
-        # comportamental continuam valendo. Antes este return vinha aqui e matava os dois
-        # junto: nas primeiras sessoes de cada aluno NADA disparava, que e justamente o
-        # periodo em que o beta coleta dado.
-        if not res["confiavel"]:
-            _ESTADO_STREAK.pop(str(session_id), None)
-
-        # Freio 1 (debounce): conta janelas consecutivas no mesmo estado. Atualiza
-        # SEMPRE (inclusive engajado) pra resetar quando o aluno reancora.
-        sid = str(session_id)
-        st = _ESTADO_STREAK.get(sid)
-        if st and st["estado"] == res["estado"]:
-            st["n"] += 1
-        else:
-            _ESTADO_STREAK[sid] = {"estado": res["estado"], "n": 1}
-        janelas = _ESTADO_STREAK[sid]["n"]
 
         # ==== QUEM PODE DISPARAR ====
         # DOIS caminhos, e NENHUM depende do modelo de atencao. Antes eram descritos como
@@ -1818,10 +1800,7 @@ async def rodar_intervencao(app, session_id):
                            else "distraido")
         else:
             return
-        if janelas < INTERV_MIN_JANELAS:             # freio 1: estado sustentado (~60s)
-            return
-
-        # Freio 4 (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
+        # Freio (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
         # Questões de vestibular são longas — a leitura inicial não pode virar "distração";
         # o timer segura caso a 1ª seja respondida rápido demais.
         respondidas = await conn.fetchval(
@@ -1852,7 +1831,7 @@ async def rodar_intervencao(app, session_id):
             return
         if stats["ultima"] is not None:
             desde_min = (datetime.now(timezone.utc) - stats["ultima"]).total_seconds() / 60.0
-            if desde_min < INTERV_COOLDOWN_MIN[estado_alvo]:     # freio 2: cooldown por estado
+            if desde_min < INTERV_COOLDOWN_MIN[estado_alvo]:     # freio: cooldown por estado
                 return
 
         tempo_estudo_min = float(res["feats"].get("tempo_estudo_acumulado_dia_min") or 0)
@@ -2041,14 +2020,12 @@ ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
 INTERV_COOLDOWN_MIN = {"distraido": 3, "muito_distraido": 3}
 INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
 ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
-INTERV_MIN_JANELAS = 2         # freio: estado sustentado por N janelas (~60s) antes de intervir
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
 # Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos.
 # 30s e deliberadamente mais conservador que o corte que melhor classifica (~10s): aqui
 # o objetivo nao e classificar, e decidir interromper alguem — e troca de aba curta
 # acontece por motivo banal. 30s esta acima do p90 das outras duas classes.
 AUSENCIA_MEDIDA_S = 30.0
-_ESTADO_STREAK = {}            # session_id -> {"estado", "n"}: janelas consecutivas no mesmo estado
 # A/B: grupo CONTROLE (detecta e mede, mas NÃO intervém) para provar que a leitura
 # serve — sem depender de autorrelato. Ligar com KAIA_AB_TESTE=1 desde o 1º teste
 # real: sessão que passa sem controle é evidência causal que não volta.

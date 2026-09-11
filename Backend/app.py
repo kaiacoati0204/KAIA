@@ -1737,9 +1737,11 @@ async def _corroboracao_objetiva(conn, session_id):
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
     Freios (evitam excesso): só distraido/muito_distraido; estado SUSTENTADO por
-    >= INTERV_MIN_JANELAS janelas (debounce); confiança >= INTERV_SCORE_MIN;
-    warm-up (>=1 questão respondida e sessão >= INTERV_WARMUP_MIN); cooldown por
-    estado (INTERV_COOLDOWN_MIN) e teto INTERV_MAX_POR_SESSAO por sessão.
+    >= INTERV_MIN_JANELAS janelas (debounce); warm-up (>=1 questão respondida e
+    sessão >= INTERV_WARMUP_MIN); cooldown por estado (INTERV_COOLDOWN_MIN) e teto
+    INTERV_MAX_POR_SESSAO por sessão.
+
+    Não há mais freio por confiança do modelo: o disparo não depende dele.
     Silencioso se a tabela interventions ainda não existir (Tarefa 4)."""
     thompson = app.state.thompson
     modelo, scaler = app.state.modelo, app.state.scaler
@@ -2008,7 +2010,6 @@ INTERV_COOLDOWN_MIN = {"distraido": 3, "muito_distraido": 3}
 INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
 ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
 INTERV_MIN_JANELAS = 2         # freio: estado sustentado por N janelas (~60s) antes de intervir
-INTERV_SCORE_MIN = 0.6         # freio: só intervir com confiança do modelo >= isto
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
 # Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos.
 # 30s e deliberadamente mais conservador que o corte que melhor classifica (~10s): aqui

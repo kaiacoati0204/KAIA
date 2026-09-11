@@ -793,18 +793,22 @@ async def test_rodar_intervencao_debounce(monkeypatch):
     assert conn.executed == []                          # debounce bloqueia o blip
 
 
-async def test_rodar_intervencao_score_baixo(monkeypatch):
+async def test_confianca_do_modelo_nao_e_mais_freio(monkeypatch):
+    """O freio por score foi removido junto com a constante: o disparo não depende do
+    modelo, então a confiança dele não pode barrar o que a regra confirmou."""
     async def fake_pred(m, s, conn, sid):
-        return {"estado": "distraido", "score": 0.4, "feats": _feats_ok(), "confiavel": True}   # < INTERV_SCORE_MIN
+        return {"estado": "distraido", "score": 0.4,       # confiança baixíssima
+                "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
-    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}   # debounce já ok -> isola a confiança
+    app_mod._ESTADO_STREAK["sid"] = {"estado": "distraido", "n": 2}
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
-                    fetchval={"question_answer": 5})
+                    fetchval={"question_answer": 8},
+                    fetch={"select payload": _CORROBORA})
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
     await app_mod.rodar_intervencao(fake_app, "sid")
-    assert conn.executed == []                          # confiança baixa bloqueia
+    assert any("insert into interventions" in q for q, _ in conn.executed)
 
 
 async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):

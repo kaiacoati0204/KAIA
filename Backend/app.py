@@ -1797,11 +1797,15 @@ async def rodar_intervencao(app, session_id):
         if fora_s >= AUSENCIA_MEDIDA_S:
             gatilho, estado_alvo = "medicao", "muito_distraido"
         elif corrob:
-            # A regra sabe dizer QUE caiu, nao qual estado. Usa a leitura do modelo se ela
-            # for confiavel; senao trata como `distraido`, o conjunto mais leve dos dois.
+            # A regra sabe dizer QUE caiu, nao qual estado. Quem separa e o modelo — e so
+            # para ESTE corte ele e confiavel mesmo sem baseline: `muito_distraido` se
+            # apoia nas features absolutas (0,894 com ou sem historico), enquanto
+            # `distraido` desaba para 0,379 sem elas. Entao: se ele disser `muito_distraido`,
+            # vale; qualquer outra coisa cai no conjunto mais leve, que e o certo de
+            # qualquer forma. Nao ha chute aqui — antes havia, no `else` do confiavel.
             gatilho = "regra"
-            estado_alvo = (res["estado"] if res["confiavel"]
-                           and res["estado"] in ESTADOS_QUE_INTERVEM else "distraido")
+            estado_alvo = ("muito_distraido" if res["estado"] == "muito_distraido"
+                           else "distraido")
         else:
             return
         if janelas < INTERV_MIN_JANELAS:             # freio 1: estado sustentado (~60s)
@@ -2150,21 +2154,36 @@ _BASELINE_CACHE = {}   # user_id -> (baseline_dict|None, computed_at)
 
 
 async def _baseline_aluno(conn, user_id, session_id):
-    """Baseline ENTRE-SESSÕES do aluno: (média, desvio) BRUTO de cada interna
-    sobre as sessões passadas encerradas. < MIN_SESSOES_BASELINE -> None
+    """Baseline ENTRE-SESSÕES do aluno NA MESMA MATÉRIA: (média, desvio) BRUTO de cada
+    interna sobre as sessões passadas encerradas. < MIN_SESSOES_BASELINE -> None
     (cold-start: sem histórico não dá pra personalizar -> desvios 0). Cacheado
     (BASELINE_TTL_S), pois sessões passadas não mudam."""
-    chave = str(user_id)
+    chave = (str(user_id), await conn.fetchval(
+        "select payload->>'materia' from session_events where session_id = $1::uuid "
+        "and event_type = 'session_start' order by ts limit 1", session_id))
     agora = datetime.now(timezone.utc)
     cache = _BASELINE_CACHE.get(chave)
     if cache and (agora - cache[1]).total_seconds() < BASELINE_TTL_S:
         return cache[0]
 
+    # Filtra por MATERIA. Sem isso a regua do aluno era a media de tarefas com ritmos
+    # diferentes: questao de Portugues leva ~30s, de Matematica ~90s. Um aluno que fez
+    # tres sessoes de Portugues e agora esta em Matematica tinha como "normal dele" um
+    # numero que nao correspondia a nenhuma das duas. A materia vive no payload do
+    # evento session_start — a tabela sessions nao guarda esse campo.
+    materia = chave[1]
     rows = await conn.fetch(
-        "select session_id from sessions where user_id = $1::uuid "
-        "and session_end_ts is not null and session_id <> $2::uuid "
-        "order by session_start_ts desc limit 20",
-        user_id, session_id,
+        """
+        select s.session_id from sessions s
+         where s.user_id = $1::uuid and s.session_end_ts is not null
+           and s.session_id <> $2::uuid
+           and ($3::text is null or exists (
+                 select 1 from session_events e
+                  where e.session_id = s.session_id and e.event_type = 'session_start'
+                    and e.payload->>'materia' = $3))
+         order by s.session_start_ts desc limit 20
+        """,
+        user_id, session_id, materia,
     )
     amostras, rts_pool = [], []
     for r in rows:
@@ -2183,7 +2202,7 @@ async def _baseline_aluno(conn, user_id, session_id):
     return base
 
 
-# ==== BASELINE DENTRO DA SESSAO (fallback do cold-start) =====================
+# ==== BASELINE DENTRO DA SESSAO (a regua PRINCIPAL) ==========================
 # O baseline entre-sessoes exige MIN_SESSOES_BASELINE sessoes encerradas. Ate la, TODAS
 # as internas viravam 0.0 — e 0.0 nao quer dizer "desconhecido", quer dizer "exatamente
 # na media do aluno". Duas consequencias ruins:
@@ -2263,9 +2282,19 @@ async def montar_features_sessao(conn, session_id):
     tab = [p for et, p in evs if et == "tab_change"]
     cliques = [p for et, p in evs if et == "click_outside"]
     brutos = _internos_brutos(evs)
-    base = await _baseline_aluno(conn, sess["user_id"], session_id)
-    if base is None:                                  # cold-start: tenta a propria sessao
-        base = _baseline_na_sessao(await _carregar_eventos(conn, session_id, ate=inicio))
+    # A regua da PROPRIA SESSAO vem primeiro. Duas razoes:
+    #   MATERIA — ela e feita das questoes que o aluno esta fazendo AGORA, entao casa
+    #             com o ritmo daquela materia por construcao.
+    #   COLD-START — existe desde a primeira sessao. O baseline entre-sessoes exige 3
+    #             sessoes encerradas com resposta, e num beta de gente nova isso
+    #             praticamente nunca acontece: hoje, em producao, ninguem tem.
+    # O entre-sessoes (agora filtrado por materia) fica para o comeco da sessao, antes
+    # de haver acertos suficientes — e ai ele e mais estavel, por ter mais amostras.
+    # O custo da regua da sessao e a suposicao do DTS: que o aluno comeca engajado. Se
+    # ele ja entrou disperso, a regua nasce torta. Limitacao conhecida e declarada.
+    base = _baseline_na_sessao(await _carregar_eventos(conn, session_id, ate=inicio))
+    if base is None:
+        base = await _baseline_aluno(conn, sess["user_id"], session_id)
 
     f = {}
     # internas relativas (desvio em sigma; cold-start ou sessão sem resposta -> 0)

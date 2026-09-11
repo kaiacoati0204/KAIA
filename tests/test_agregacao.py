@@ -34,11 +34,15 @@ class FakeConn:
             # _inicio_janela pergunta os ts das ultimas respostas para esticar a janela.
             # Devolve poucos: a janela fica no tamanho nominal, sem esticar.
             return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=1)}]
+        if "from sessions s" in q:
+            return self._passadas      # baseline entre-sessões, filtrado por matéria
         if "session_events" in q:
             return self._ev
-        return self._passadas          # baseline: sessões passadas encerradas
+        return self._passadas
 
     async def fetchval(self, q, *a):
+        if "payload->>'materia'" in q:
+            return "MAT"               # matéria da sessão atual (filtro do baseline)
         if "extract(epoch" in q:
             return self._estudo
         if "user_id" in q:
@@ -282,3 +286,35 @@ def test_sigma_respeita_o_teto_nos_dois_lados():
 def test_sigma_normal_passa_intacto():
     """O caso comum não pode ser distorcido pelas travas."""
     assert abs(app_mod._sigma(25000, 20000, 5000) - 1.0) < 1e-6
+
+
+async def test_regua_da_sessao_tem_prioridade_sobre_o_historico():
+    """A régua da própria sessão vem primeiro: casa com a matéria por construção, e
+    existe desde a primeira sessão. O histórico entra só quando ainda não há acertos
+    suficientes na sessão atual."""
+    start = datetime.now(timezone.utc) - timedelta(minutes=30)
+    # 5 acertos ANTES da janela -> a régua da sessão se forma
+    antes = [_ev("question_answer", {"tempo_resposta_ms": rt, "acertou": True,
+                                     "nivel_dificuldade": 3, "mouse_track": []})
+             for rt in (20000, 21000, 19000, 20500, 21500)]
+    dentro = [_ev("question_answer", {"tempo_resposta_ms": 95000, "acertou": False,
+                                      "nivel_dificuldade": 3, "mouse_track": []})]
+
+    historico_absurdo = []   # se o histórico fosse usado, não haveria nada aqui
+
+    class ConnPrioridade(FakeConn):
+        async def fetch(self, q, *a):
+            if "select ts from session_events" in q:
+                return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=2)}]
+            if "from sessions s" in q:
+                return historico_absurdo        # histórico VAZIO de propósito
+            if "session_events" in q:
+                return dentro if (len(a) > 1 and "ts >=" in q) else antes
+            return historico_absurdo
+
+    conn = ConnPrioridade({"user_id": "u", "session_start_ts": start},
+                          antes + dentro, {"abandonadas": 0, "total": 1})
+    f = await app_mod.montar_features_sessao(conn, "sid")
+    # sem histórico nenhum, as internas ainda saem != 0 -> veio da régua da sessão
+    assert f["tempo_resposta_ms"] != 0.0
+    assert app_mod.leitura_confiavel(f) is True

@@ -50,6 +50,19 @@ FEATURE_ORDER = [
 MOUSE_KEYS = ["velocidade_mouse_media", "variabilidade_velocidade_mouse",
               "entropia_trajetoria_mouse", "flips_cursor_xy"]
 
+# ESCALA E LIMITES — espelham Backend/app.py (_esc, _sigma). Mudar os dois JUNTOS:
+# se o gerador relativiza numa escala e o serving noutra, um sigma da base e um sigma
+# da producao nao sao o mesmo objeto, e o modelo aprende a ler a regua errada.
+SIGMA_PISO = 0.14
+SIGMA_TETO = 4.0
+
+def _esc(v):
+    """log1p: distribuicao de tempo/velocidade e assimetrica a direita."""
+    return math.log1p(max(0.0, float(v)))
+
+def _sigma(bruto, mu, sd):
+    return round(max(-SIGMA_TETO, min(SIGMA_TETO, (bruto - mu) / max(abs(sd), SIGMA_PISO))), 3)
+
 # desvio-alvo (em sigma) das internas geradas direto; engajado=baseline=0
 # deslocamentos MENORES + episódios fracos deixam engajado↔distraído genuinamente fuzzy
 DESVIO = {
@@ -78,11 +91,21 @@ CONTAGEM = {  # médias de contagens (Poisson) por estado
 # Contagens/tempos abaixo valem para uma janela de DUR_REF min; janelas mais curtas
 DUR_REF = 10.0     # = JANELA_MIN do Backend/app.py; mudar os dois JUNTOS
 
-# O baseline do serving (_baseline_aluno) e a media das sessoes PASSADAS do aluno,
-# SEM filtrar estado. Logo o zero do sigma nao e "o eu engajado" — e "o eu medio".
-# O gerador dizia outra coisa (baseline so do engajado), e um sigma significava
-# coisas diferentes nos dois lados. Mistura tipica de um historico de estudo:
-MISTURA_HISTORICO = {"engajado": 0.60, "distraido": 0.30, "muito_distraido": 0.10}
+# O ZERO DO SIGMA: contra o que o serving compara.
+#
+# A regua do serving nao e mais "a media de tudo que o aluno ja fez". E feita so das
+# questoes que ele ACERTOU (_baseline_na_sessao / _baseline_aluno). Acertar e evidencia
+# de que estava tentando, entao o zero pende para o engajado — mas nao e engajado puro,
+# porque da para acertar meio disperso.
+#
+# Quanto pende sai de Bayes, com os acertos medidos no DTS (Chen et al., 2021:
+# engajado 71,8%, desengajado 18,5%) sobre uma mistura tipica de estudo. Derivado,
+# nao escolhido a mao — se os numeros do artigo mudarem, este muda junto.
+ESTUDO_TIPICO = {"engajado": 0.60, "distraido": 0.30, "muito_distraido": 0.10}
+ACERTO_DTS = {"engajado": 0.718, "distraido": 0.185, "muito_distraido": 0.185}
+_post = {e: ESTUDO_TIPICO[e] * ACERTO_DTS[e] for e in ESTADOS}
+_tot = sum(_post.values())
+MISTURA_HISTORICO = {e: round(v / _tot, 3) for e, v in _post.items()}
 
 # Desloca DESVIO para o centro da mistura: derivado, nao escolhido a mao.
 for _nome, _m in DESVIO.items():
@@ -118,8 +141,8 @@ def _perfil_mouse(aluno, ef, z=0.8, imovel=False):
 
 
 def baseline_mouse(aluno):
-    """Baseline de mouse do aluno: media/desvio sobre sessoes passadas com estados
-    MISTURADOS — o que o serving calcula. So-engajado inflaria os desvios."""
+    """Baseline de mouse do aluno: media/desvio na escala de comparacao (_esc) sobre a
+    MISTURA_HISTORICO — a mesma que o serving ve ao filtrar por acerto."""
     fs = []
     for _ in range(8):
         ef = random.choices(list(MISTURA_HISTORICO), weights=list(MISTURA_HISTORICO.values()))[0]
@@ -128,8 +151,8 @@ def baseline_mouse(aluno):
         fs.append(features_mouse(gerar_track(max(0.05, er), n)))
     base = {}
     for k in MOUSE_KEYS:
-        vals = [f[k] for f in fs]
-        base[k] = (statistics.mean(vals), statistics.pstdev(vals) or 1.0)
+        vals = [_esc(f[k]) for f in fs]
+        base[k] = (statistics.mean(vals), statistics.pstdev(vals))
     return base
 
 # ---- geração de uma sessão ----
@@ -220,7 +243,7 @@ def gerar_sessao(estado, aluno, base_mouse):
     mf = features_mouse(gerar_track(max(0.05, erratic), n))
     for k in MOUSE_KEYS:
         mu, sd = base_mouse[k]
-        f[k] = round((mf[k] - mu) / sd, 3)
+        f[k] = _sigma(_esc(mf[k]), mu, sd)
 
     # externas absolutas — muito_distraído = frequente+longo; presente (eng/dist) = blip ocasional
     # Ausencias geradas UMA A UMA: soma e maximo saem delas, coerentes por construcao.
@@ -266,6 +289,9 @@ def gerar_sessao(estado, aluno, base_mouse):
     f["duracao_janela_min"] = dur
     f["hora_do_dia"] = round(hora, 2)
     f["tempo_estudo_acumulado_dia_min"] = round(acum, 1)
+    # A base so contem o que o serving consegue emitir: ele corta o sigma em SIGMA_TETO.
+    for k in DESVIO:
+        f[k] = round(max(-SIGMA_TETO, min(SIGMA_TETO, f[k])), 3)
     return f
 
 MODELO_PATH = os.path.join(BASE, "models", "modelo_rf_v2.pkl")

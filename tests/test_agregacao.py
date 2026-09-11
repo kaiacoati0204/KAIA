@@ -1,5 +1,6 @@
 """Testes unitários da agregação de features v2 (mock do banco)."""
 import json
+import math
 import pickle
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -194,10 +195,16 @@ def test_internos_brutos_agrega():
                                 "tempo_iniciacao_resposta_ms": 500, "tempo_ocioso_s": 4,
                                 "tempo_dwell_sem_responder_s": 3.0, "mouse_track": []})]
     raw = app_mod._internos_brutos(evs)
-    assert raw["tempo_resposta_ms"] == 6000.0
-    assert raw["tempo_dwell_sem_responder_s"] == 2.0     # média de 1.0 e 3.0
+    # A escala de comparação é log e é aplicada POR QUESTÃO, antes da média — o valor
+    # agregado é a média GEOMÉTRICA. É isso que impede uma questão de cinco minutos de
+    # dominar a régua; logar depois da média não desfaria a contaminação.
+    assert math.isclose(math.expm1(raw["tempo_resposta_ms"]),
+                        math.sqrt(4001 * 8001) - 1, rel_tol=1e-9)
+    assert math.expm1(raw["tempo_resposta_ms"]) < 6000.0          # a aritmética daria 6000
+    assert math.isclose(math.expm1(raw["tempo_dwell_sem_responder_s"]),
+                        math.sqrt(2 * 4) - 1, rel_tol=1e-9)
     assert raw["_erros"] == 1
-    assert raw["_rts"] == [4000.0, 8000.0]
+    assert raw["_rts"] == [4000.0, 8000.0]          # _rts segue CRU: o lapso é medido em ms
     assert raw["_niveis"] == [3, 3]
 
 
@@ -217,6 +224,8 @@ async def test_janela_exclui_ausencia_antiga():
         async def fetch(self, q, *a):
             if "select ts from session_events" in q:
                 return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=2)}]
+            if "from sessions s" in q:
+                return []                      # sem historico: o teste e sobre a janela
             if "session_events" in q:
                 return recentes if len(a) > 1 else antigos + recentes
             return self._passadas
@@ -253,29 +262,37 @@ def test_baseline_na_sessao_precisa_de_acertos():
     assert app_mod._baseline_na_sessao(evs) is None
 
 
+def test_baseline_na_sessao_poucos_acertos_nao_forma_regua():
+    """Com menos de BASE_SESSAO_BLOCOS blocos a mediana não tem o que descartar."""
+    evs = [("question_answer", _resp(True, rt)) for rt in (18000, 20000, 22000, 21000)]
+    assert app_mod._baseline_na_sessao(evs) is None
+
+
 def test_baseline_na_sessao_forma_a_regua():
-    evs = [("question_answer", _resp(True, rt)) for rt in (18000, 20000, 22000, 21000, 19000)]
+    evs = [("question_answer", _resp(True, rt))
+           for rt in (18000, 20000, 22000, 21000, 19000, 20000)]
     base = app_mod._baseline_na_sessao(evs)
     assert base is not None
     mu, sd = base["tempo_resposta_ms"]
-    assert 18000 < mu < 22000 and sd > 0
+    assert 18000 < math.expm1(mu) < 22000       # a régua vive em log; volta a ms só aqui
+    assert sd > 0
 
 
-def test_baseline_na_sessao_descarta_extremos():
-    """Uma questão muito lenta no começo não pode virar a régua do aluno."""
-    normais = [_resp(True, rt) for rt in (20000, 21000, 19000)]
-    com_outlier = [("question_answer", p) for p in
-                   ([_resp(True, 400000)] + normais + [_resp(True, 1000)])]
-    base = app_mod._baseline_na_sessao(com_outlier)
+def test_baseline_na_sessao_ignora_bloco_fora_da_curva():
+    """Uma questão de 400s não pode virar a régua: a mediana descarta o bloco inteiro.
+    Era o papel do descarte de extremos, que só funcionava no tamanho fixo antigo."""
+    evs = [("question_answer", _resp(True, rt))
+           for rt in (400000, 20000, 21000, 19000, 20000, 1000)]
+    base = app_mod._baseline_na_sessao(evs)
     mu, _ = base["tempo_resposta_ms"]
-    assert 18000 < mu < 23000        # os extremos (400s e 1s) ficaram de fora
+    assert 18000 < math.expm1(mu) < 23000
 
 
 # ================================================ travas do sigma
 def test_sigma_tem_piso_no_desvio():
     """Régua feita de poucas respostas parecidas tem desvio quase zero. Sem piso,
     qualquer diferença vira sigma absurdo — foi visto em teste real: +182 sigma."""
-    assert app_mod._sigma(95000, 20000, 400) <= app_mod.SIGMA_TETO
+    assert app_mod._sigma(app_mod._lg(95000), app_mod._lg(20000), 0.0) <= app_mod.SIGMA_TETO
 
 
 def test_sigma_respeita_o_teto_nos_dois_lados():
@@ -296,7 +313,7 @@ async def test_regua_da_sessao_tem_prioridade_sobre_o_historico():
     # 5 acertos ANTES da janela -> a régua da sessão se forma
     antes = [_ev("question_answer", {"tempo_resposta_ms": rt, "acertou": True,
                                      "nivel_dificuldade": 3, "mouse_track": []})
-             for rt in (20000, 21000, 19000, 20500, 21500)]
+             for rt in (20000, 21000, 19000, 20500, 21500, 20000)]
     dentro = [_ev("question_answer", {"tempo_resposta_ms": 95000, "acertou": False,
                                       "nivel_dificuldade": 3, "mouse_track": []})]
 

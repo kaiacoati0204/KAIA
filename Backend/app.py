@@ -15,7 +15,7 @@ import asyncpg
 import pandas as pd
 import requests
 
-from statistics import mean, pstdev
+from statistics import mean, median, pstdev
 
 from thompson import ThompsonSampling, INTERVENCOES, PARAMS_PATH
 from auth import usuario_autenticado, usuario_identidade
@@ -1992,6 +1992,24 @@ INTERNAS_RELATIVAS = (
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse",
 )
+# ESCALA DA COMPARACAO: log em tudo que e tempo ou velocidade, aplicado A CADA QUESTAO,
+# ANTES de qualquer media ou desvio. A distribuicao dessas medidas e assimetrica a
+# direita — nao existe tempo negativo, mas existe questao de cinco minutos — e na escala
+# crua a media e o desvio ficam refens da cauda: foi dai que saiu o +182 sigma do
+# primeiro teste com dado real. A regra (_corroboracao_objetiva) ja fazia isso; as
+# features, nao.
+#
+# ANTES de agregar, nao depois: log(media) nao e media(log). Logar o resultado de uma
+# media ja contaminada por um outlier nao desfaz a contaminacao.
+#
+# Fica de fora tendencia_desempenho_sessao — e uma inclinacao, pode ser negativa.
+
+
+def _lg(v):
+    """Valor cru na escala de comparacao. log1p e nao log: aceita zero (dwell/ocioso)."""
+    return math.log1p(max(0.0, float(v)))
+
+
 MIN_SESSOES_BASELINE = 3     # abaixo disso não dá pra personalizar -> desvio 0 (neutro)
 BASELINE_TTL_S = 600         # cache do baseline por aluno (sessões passadas não mudam)
 NIVEL_DIFICULDADE_PADRAO = 2  # fallback se a sessão ainda não tem resposta (CHECK 1..5)
@@ -2116,8 +2134,8 @@ def _inclinacao(ys):
 
 
 def _internos_brutos(evs):
-    """Valores BRUTOS das internas de UMA sessão (média/desvio por questão).
-    NÃO relativiza — isso é feito depois contra o baseline do aluno.
+    """Internas de UMA janela/bloco, agregadas por questão na escala de comparação (`_lg`).
+    NÃO relativiza — isso é feito depois contra o baseline do aluno (`_regua`).
     Retorna None se a sessão não tem nenhuma resposta (não serve de amostra)."""
     respostas = [p for et, p in evs if et == "question_answer"]
     if not respostas:
@@ -2129,16 +2147,18 @@ def _internos_brutos(evs):
     mfs = [features_mouse(p.get("mouse_track") or []) for p in respostas]  # mesma fn da base v2
 
     def _mm(k):
-        vs = [m[k] for m in mfs]
+        vs = [_lg(m[k]) for m in mfs]
         return mean(vs) if vs else 0.0
 
     acertos = [1.0 if p.get("acertou") else 0.0 for p in respostas]
+    lrt = [_lg(v) for v in rts]
     return {
-        "variabilidade_tempo_resposta": pstdev(rts) if len(rts) > 1 else 0.0,
-        "tempo_resposta_ms": mean(rts) if rts else 0.0,
-        "tempo_iniciacao_resposta_ms": mean(inis) if inis else 0.0,
-        "tempo_dwell_sem_responder_s": mean(dwell) if dwell else 0.0,   # hover nas alternativas sem responder
-        "tempo_ocioso_s": mean(ocio) if ocio else 0.0,
+        # pstdev DOS LOGS = espalhamento relativo; em ms uma questao lenta domina tudo
+        "variabilidade_tempo_resposta": pstdev(lrt) if len(lrt) > 1 else 0.0,
+        "tempo_resposta_ms": mean(lrt) if lrt else 0.0,
+        "tempo_iniciacao_resposta_ms": mean([_lg(v) for v in inis]) if inis else 0.0,
+        "tempo_dwell_sem_responder_s": mean([_lg(v) for v in dwell]) if dwell else 0.0,
+        "tempo_ocioso_s": mean([_lg(v) for v in ocio]) if ocio else 0.0,
         "tendencia_desempenho_sessao": _inclinacao(acertos),
         "velocidade_mouse_media": _mm("velocidade_mouse_media"),
         "variabilidade_velocidade_mouse": _mm("variabilidade_velocidade_mouse"),
@@ -2154,8 +2174,9 @@ _BASELINE_CACHE = {}   # user_id -> (baseline_dict|None, computed_at)
 
 
 async def _baseline_aluno(conn, user_id, session_id):
-    """Baseline ENTRE-SESSÕES do aluno NA MESMA MATÉRIA: (média, desvio) BRUTO de cada
-    interna sobre as sessões passadas encerradas. < MIN_SESSOES_BASELINE -> None
+    """Baseline ENTRE-SESSÕES do aluno NA MESMA MATÉRIA: (média, desvio) de cada interna
+    sobre as sessões passadas encerradas, na escala de comparação (`_lg`).
+    FALLBACK — a régua principal é a da própria sessão. < MIN_SESSOES_BASELINE -> None
     (cold-start: sem histórico não dá pra personalizar -> desvios 0). Cacheado
     (BASELINE_TTL_S), pois sessões passadas não mudam."""
     chave = (str(user_id), await conn.fetchval(
@@ -2185,19 +2206,32 @@ async def _baseline_aluno(conn, user_id, session_id):
         """,
         user_id, session_id, materia,
     )
-    amostras, rts_pool = [], []
+    # MESMA FORMA da regua da sessao: blocos de BASE_SESSAO_BLOCO questoes CORRETAS.
+    # Antes cada amostra era uma sessao inteira — o "normal" de variabilidade medido
+    # sobre 40 minutos nao e comparavel ao de uma janela de 10, e o zero do sigma queria
+    # dizer coisas diferentes nas duas reguas. Aqui elas so diferem no de onde tiram as
+    # amostras (sessoes passadas x esta sessao), nao em como as medem.
+    amostras, rts_pool, n_sessoes = [], [], 0
     for r in rows:
-        raw = _internos_brutos(await _carregar_eventos(conn, r["session_id"]))
-        if raw:
-            amostras.append(raw)
-            rts_pool += raw["_rts"]
+        evs = await _carregar_eventos(conn, r["session_id"])
+        corretas = [p for et, p in evs if et == "question_answer" and p.get("acertou")]
+        blocos = [corretas[i:i + BASE_SESSAO_BLOCO]
+                  for i in range(0, len(corretas), BASE_SESSAO_BLOCO)]
+        usou = False
+        for b in blocos:
+            if len(b) < BASE_SESSAO_BLOCO:
+                continue
+            raw = _internos_brutos([("question_answer", p) for p in b])
+            if raw:
+                amostras.append(raw)
+                rts_pool += raw["_rts"]
+                usou = True
+        n_sessoes += 1 if usou else 0
 
-    if len(amostras) < MIN_SESSOES_BASELINE:
+    if n_sessoes < MIN_SESSOES_BASELINE or len(amostras) < BASE_SESSAO_BLOCOS:
         base = None
     else:
-        base = {k: (mean([a[k] for a in amostras]), pstdev([a[k] for a in amostras]) or 1.0)
-                for k in INTERNAS_RELATIVAS}
-        base["_rt"] = (mean(rts_pool), pstdev(rts_pool) or 1.0) if len(rts_pool) > 1 else None
+        base = _regua(amostras, rts_pool)
     _BASELINE_CACHE[chave] = (base, agora)
     return base
 
@@ -2218,24 +2252,48 @@ async def _baseline_aluno(conn, user_id, session_id):
 # fraca que a do baseline historico, e por isso este e fallback, nao substituto. Mas
 # qualquer estimativa e melhor que um zero que mente.
 #
-# So questoes CORRETAS: acertar e evidencia de que estava tentando de verdade. E os
-# extremos saem, para uma unica questao lenta nao virar a regua.
-BASE_SESSAO_MIN = 3          # minimo de acertos para formar a regua
-BASE_SESSAO_OLHA = 5         # olha as N primeiras corretas e descarta os extremos
+# So questoes CORRETAS: acertar e evidencia de que estava tentando de verdade.
+#
+# A regua CRESCE com a sessao — ela e todas as corretas anteriores a janela, nao as
+# cinco primeiras. Congelada no comeco ela nao acompanhava ninguem: na questao 30 o
+# aluno ainda era comparado com as questoes 1-5. E a forma da regra, que compara as
+# ultimas respostas contra TODO o resto da sessao (_corroboracao_objetiva).
+#
+# As amostras da regua sao BLOCOS de BASE_SESSAO_BLOCO questoes, nao questoes soltas.
+# Tem que ser: a janela avaliada agrega varias questoes, entao a referencia precisa ter
+# a mesma forma. Com questao solta, variabilidade_tempo_resposta era pstdev de um valor
+# so — zero por construcao — e a feature saturava no teto do sigma em toda leitura.
+BASE_SESSAO_BLOCO = 2        # questoes por bloco de referencia
+BASE_SESSAO_BLOCOS = 3       # minimo de blocos (= 6 corretas) para a mediana ter o que descartar
 
-# Duas travas contra regua degenerada. Poucas amostras muito parecidas produzem desvio
-# quase zero, e ai qualquer diferenca vira um sigma absurdo: no primeiro teste com dado
-# real, tres respostas de ~20s deram desvio de ~400ms, e uma questao de 95s virou
-# +182 sigma. O modelo so viu ate ~+3,5 no treino — um valor desses e ponto fora da
-# distribuicao, e a previsao em cima dele nao significa nada.
-SIGMA_PISO_REL = 0.15        # desvio minimo = 15% da media (coef. de variacao tipico de RT)
+# Trava contra regua degenerada. Poucas amostras parecidas produzem desvio quase zero, e
+# ai qualquer diferenca vira um sigma absurdo: no primeiro teste com dado real, tres
+# respostas de ~20s deram desvio de ~400ms e uma questao de 95s virou +182 sigma. O
+# piso e absoluto porque agora a escala e log: 0,14 em log ~ 15% de variacao de tempo,
+# que e ruido normal. E o mesmo numero de CORROB_SD_PISO, pela mesma razao.
+SIGMA_PISO = 0.14
 SIGMA_TETO = 4.0             # corta no limite do que o treino conhece
 
 
 def _sigma(bruto, mu, sd):
     """Desvio em sigma, com piso no desvio e teto no resultado."""
-    sd = max(abs(sd), SIGMA_PISO_REL * abs(mu), 1e-9)
+    sd = max(abs(sd), SIGMA_PISO, 1e-9)
     return round(max(-SIGMA_TETO, min(SIGMA_TETO, (bruto - mu) / sd)), 3)
+
+
+def _regua(amostras, rts):
+    """(media, desvio) por interna sobre `amostras`, na escala de comparacao (_lg)."""
+    base = {}
+    for k in INTERNAS_RELATIVAS:
+        vs = [a[k] for a in amostras]
+        # MEDIANA no centro: a regua nao pode ser arrastada por um bloco fora da curva
+        # (a questao em que o aluno foi no banheiro). Era o papel do descarte de extremos,
+        # que so funcionava no tamanho fixo antigo. O desvio segue sendo pstdev — um
+        # outlier o infla, e inflar o desvio ENCOLHE o sigma: erra para o lado prudente.
+        base[k] = (median(vs), pstdev(vs))
+    logs = [_lg(rt) for rt in rts if rt and rt > 0]
+    base["_rt"] = (median(logs), max(pstdev(logs), SIGMA_PISO)) if len(logs) > 1 else None
+    return base
 
 
 def _baseline_na_sessao(evs_antes):
@@ -2243,22 +2301,17 @@ def _baseline_na_sessao(evs_antes):
 
     `evs_antes` sao os eventos ANTERIORES a janela de leitura — a regua nao pode ser
     calculada sobre a mesma janela que ela vai avaliar."""
-    corretas = [p for et, p in evs_antes
-                if et == "question_answer" and p.get("acertou")][:BASE_SESSAO_OLHA]
-    if len(corretas) < BASE_SESSAO_MIN:
+    corretas = [p for et, p in evs_antes if et == "question_answer" and p.get("acertou")]
+    blocos = [corretas[i:i + BASE_SESSAO_BLOCO]
+              for i in range(0, len(corretas), BASE_SESSAO_BLOCO)]
+    blocos = [b for b in blocos if len(b) == BASE_SESSAO_BLOCO]   # bloco incompleto nao conta
+    if len(blocos) < BASE_SESSAO_BLOCOS:
         return None
-    if len(corretas) > BASE_SESSAO_MIN:                  # tira o mais lento e o mais rapido
-        por_rt = sorted(corretas, key=lambda p: float(p.get("tempo_resposta_ms") or 0))
-        corretas = por_rt[1:-1]
-    amostras = [_internos_brutos([("question_answer", p)]) for p in corretas]
+    amostras = [_internos_brutos([("question_answer", p) for p in b]) for b in blocos]
     amostras = [a for a in amostras if a]
-    if len(amostras) < 2:
+    if len(amostras) < BASE_SESSAO_BLOCOS:
         return None
-    base = {k: (mean([a[k] for a in amostras]), pstdev([a[k] for a in amostras]) or 1.0)
-            for k in INTERNAS_RELATIVAS}
-    rts = [rt for a in amostras for rt in a["_rts"]]
-    base["_rt"] = (mean(rts), pstdev(rts) or 1.0) if len(rts) > 1 else None
-    return base
+    return _regua(amostras, [rt for a in amostras for rt in a["_rts"]])
 
 
 async def montar_features_sessao(conn, session_id):
@@ -2306,7 +2359,9 @@ async def montar_features_sessao(conn, session_id):
             f[k] = _sigma(brutos[k], mu, sd)
     # contagens brutas (não relativizadas, como no gerador v2)
     if brutos and base and base.get("_rt"):
-        limite = base["_rt"][0] + 2 * base["_rt"][1]         # RT típico do aluno + 2σ = lapso
+        # +2σ em LOG: na escala crua a cauda inflava a média e o desvio, e o limiar
+        # subia junto — o lapso passava a ser detectado só em casos extremos.
+        limite = math.expm1(base["_rt"][0] + 2 * base["_rt"][1])   # expm1 inverte _lg
         f["contagem_lapsos_rt"] = sum(1 for rt in brutos["_rts"] if rt > limite)
     else:
         f["contagem_lapsos_rt"] = 0

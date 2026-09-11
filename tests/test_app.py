@@ -1049,6 +1049,29 @@ def _fc(regs):
         {"payload": {"acertou": ok, "tempo_resposta_ms": rt}} for ok, rt in regs]})
 
 
+async def test_corroboracao_nao_se_envenena_com_a_propria_dispersao():
+    """A regua da regra nao pode engolir as questoes dispersas que ela deveria detectar.
+
+    Era o defeito: a base do z era TODAS as respostas anteriores, dispersas incluidas.
+    Conforme o episodio se estendia, o sd inflava, o z encolhia e a regra parava de ver
+    um aluno que continuava disperso — medido: z caia de +7,1 para +2,6 na 15a questao.
+    So ACERTOS na regua (como no DTS) resolve, porque quem dispersa erra."""
+    engajado = [(True, 20000)] * 10
+    for n_dispersas in (3, 6, 10):                  # episodio cada vez mais longo
+        regs = engajado + [(False, 60000)] * n_dispersas
+        ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+        assert ok is True, f"perdeu a deteccao com {n_dispersas} dispersas: {motivo}"
+
+
+async def test_corroboracao_ignora_a_primeira_questao_na_regua():
+    """DTS descarta a #1: o aluno gasta tempo extra se situando. Se ela entrasse na
+    regua, uma #1 lenta inflaria a media e esconderia a lentidao de depois."""
+    # #1 absurdamente lenta; o resto do ritmo em 20s e a dispersao em 60s
+    regs = [(True, 600000)] + [(True, 20000)] * 6 + [(False, 60000)] * 3
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True, motivo
+
+
 async def test_corroboracao_exige_minimo_de_respostas():
     """Sem base de comparacao dentro da sessao, nao corrobora — e nao interrompe."""
     ok, _ = await app_mod._corroboracao_objetiva(_fc([(True, 20000)] * 3), "sid")

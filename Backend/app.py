@@ -1680,7 +1680,7 @@ async def _corroboracao_objetiva(conn, session_id):
     TRES condicoes, como no DTS original (Chen et al., 2021):
       1. vai bem na sessao inteira (senao e dificuldade, nao dispersao)
       2. mas o acerto caiu nas ultimas
-      3. e o tempo saiu do proprio ritmo (rapido OU lento demais)
+      3. e o tempo saiu do ritmo dele quando ACERTAVA (rapido OU lento demais)
 
     As tres juntas. Uma sozinha nao basta: questao dificil derruba o acerto, uma pausa
     para pensar estica o tempo, e aluno com dificuldade tem os dois o tempo todo.
@@ -1718,7 +1718,17 @@ async def _corroboracao_objetiva(conn, session_id):
     # |z|, nao z: tempo curto demais e chute/afobamento, tempo longo demais e ausencia
     # ou travamento. O artigo trata os dois — "fast-disengage" e "slow-disengage" — e a
     # base sintetica ja modela o chute; so o serving nao olhava.
-    rts_base = [math.log(rt) for _, rt in base if rt and rt > 0]
+    # So ACERTOS na regua, e sem a #1 — as duas coisas vem do DTS e nenhuma estava aqui.
+    #
+    # ACERTO: a referencia tem que ser "o tempo dele ENGAJADO", nao "o tempo dele". Sem o
+    # filtro a regua engolia as proprias questoes dispersas, o sd inflava e a regra
+    # parava de ver quem continuava disperso — medido em simulacao: o z caia de +7,1 para
+    # +2,6 na 15a questao, abaixo do limiar, com o aluno ainda disperso.
+    #
+    # #1 FORA: "the users usually take extra time to read the text in the first question"
+    # (Chen et al., 2021, p.5). Nos dados nossos a #1 foi mais lenta em 3 de 4 sessoes
+    # (razao mediana 1,33x) — so 2 sao utilizaveis, entao e indicio, nao medicao.
+    rts_base = [math.log(rt) for ok, rt in base[1:] if ok and rt and rt > 0]
     ult = recentes[-1][1]
     if len(rts_base) < 2 or not ult or ult <= 0:
         return False, "sem base de tempo para comparar"

@@ -1,16 +1,11 @@
 -- ============================================================
 --  Proveniência e aceite — dados que não se recuperam depois
 -- ============================================================
--- Três lacunas que só apareceriam quando já fosse tarde:
---
---   1. quem gerou cada questão. O prompt mudou cinco vezes e o modelo pode mudar;
---      sem registrar, não dá para responder depois "a regra nova reduziu o erro?"
---   2. quem aceitou os termos e quando. O checkbox só existia no navegador — não
---      havia como provar aceite, e o público é menor de idade.
---   3. em que versão do app a sessão rodou. `app_version` era o default fixo
---      "mvp-0.1" em toda sessão, então "antes x depois" de qualquer correção
---      ficaria indistinguível.
---
+-- Registra o que não se reconstrói depois: modelo/versão do prompt de cada questão
+-- (o prompt já mudou cinco vezes; sem isso não se mede se a regra nova reduziu o
+-- erro); quem aceitou os termos e quando (o checkbox só existia no navegador, sem
+-- prova de aceite, e o público é menor de idade). A terceira lacuna, `app_version`
+-- fixo em "mvp-0.1", não passa por aqui: o front manda KAIA_VERSAO no POST /sessions.
 -- Aditiva e idempotente.
 
 alter table if exists public.questoes_cache

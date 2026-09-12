@@ -2,15 +2,12 @@
 """
 Incremento C — passo 1: gerador sintético v2 + treino (OFFLINE).
 
-Desenho aprovado:
-- internas RELATIVAS (desvio do baseline do aluno, em sigma); externas/contexto ABSOLUTAS.
-- INTENSIDADE LATENTE z por sessão: as internas sobem/descem juntas (co-variação).
-- ruído gaussiano + sobreposição -> acurácia-alvo ~80-90% (NÃO 1.0).
-- dificuldade × estado modula tempo_resposta e erros.
-- blip externo ocasional (10-15%) no engajado E distraído (ambos "presentes");
-  muito_distraído = frequente + longo. -> engajado vs distraído só pelas INTERNAS.
-- mouse: simula o BRUTO e passa pela MESMA features_mouse da produção (consistência),
-  relativizado pelo baseline de mouse do aluno.
+Internas RELATIVAS (sigma do baseline do aluno), externas/contexto ABSOLUTAS. Intensidade
+latente z por sessão faz as internas co-variarem; ruído + sobreposição miram ~80-90% (NÃO
+1.0); dificuldade × estado modula tempo_resposta e erros. Blip externo ocasional (10-15%)
+em engajado E distraído, muito_distraído = frequente e longo: engajado vs distraído só pelas
+INTERNAS. Mouse: simula o BRUTO, passa pela MESMA features_mouse da produção e relativiza
+pelo baseline de mouse do aluno.
 
 NÃO mexe na produção: salva como modelo_rf_v2.pkl / scaler_v2.pkl / metricas_v2.json.
 """
@@ -78,29 +75,17 @@ CONTAGEM = {  # médias de contagens (Poisson) por estado
     "erros_sem_offtask":  {"engajado": 0.2, "distraido": 1.0, "muito_distraido": 0.4},
 }
 # ==== UNIDADE DE OBSERVACAO: JANELA, NAO SESSAO ==============================
-# Cada linha da base descreve uma JANELA de ~JANELA_MIN minutos num estado, nao uma
-# sessao inteira. Mudou porque o serving pergunta "como o aluno esta AGORA", no meio da
-# sessao, e a base so tinha sessoes com UM rotulo do inicio ao fim: aluno que dispersa e
-# volta nao existia no treino. Era descasamento treino/serving na unidade de observacao
-# — nao em nenhuma feature isolada, e por isso escapou das auditorias anteriores.
-#
-# O gerador ja produzia um bloco coerente de comportamento num estado, com duracao
-# sorteada e todas as contagens escaladas por ela. Esse bloco SEMPRE foi uma janela;
-# o que faltava era sortear a duracao em torno do tamanho da janela do serving.
-#
-# Contagens/tempos abaixo valem para uma janela de DUR_REF min; janelas mais curtas
+# Cada linha e uma JANELA de ~JANELA_MIN min num estado, nao a sessao inteira: o serving
+# pergunta "como esta AGORA" e a base antiga (UM rotulo por sessao) nao tinha aluno que
+# dispersa e volta. Descasamento treino/serving na unidade de observacao, nao numa feature,
+# por isso escapou das auditorias. Contagens/tempos valem para DUR_REF min (escalam por dur/DUR_REF).
 DUR_REF = 10.0     # = JANELA_MIN do Backend/app.py; mudar os dois JUNTOS
 
 # O ZERO DO SIGMA: contra o que o serving compara.
-#
-# A regua do serving nao e mais "a media de tudo que o aluno ja fez". E feita so das
-# questoes que ele ACERTOU (_baseline_na_sessao / _baseline_aluno). Acertar e evidencia
-# de que estava tentando, entao o zero pende para o engajado — mas nao e engajado puro,
-# porque da para acertar meio disperso.
-#
-# Quanto pende sai de Bayes, com os acertos medidos no DTS (Chen et al., 2021:
-# engajado 71,8%, desengajado 18,5%) sobre uma mistura tipica de estudo. Derivado,
-# nao escolhido a mao — se os numeros do artigo mudarem, este muda junto.
+# A regua do serving e feita so das questoes que o aluno ACERTOU (_baseline_na_sessao /
+# _baseline_aluno): o zero pende para o engajado, mas nao puro (da para acertar disperso).
+# Quanto pende sai de Bayes com os acertos do DTS (Chen et al., 2021: engajado 71,8%,
+# desengajado 18,5%) sobre uma mistura tipica — derivado; se o artigo mudar, muda junto.
 ESTUDO_TIPICO = {"engajado": 0.60, "distraido": 0.30, "muito_distraido": 0.10}
 ACERTO_DTS = {"engajado": 0.718, "distraido": 0.185, "muito_distraido": 0.185}
 _post = {e: ESTUDO_TIPICO[e] * ACERTO_DTS[e] for e in ESTADOS}
@@ -165,23 +150,16 @@ def gerar_aluno():
 def gerar_sessao(estado, aluno, base_mouse):
     z = random.uniform(0.1, 1.5)                 # intensidade latente; perto de 0 = episódio fraco (parece engajado)
     dif = random.randint(1, 5)
-    # ~15% dos muito são "leves": o aluno saiu tão de leve que o COMPORTAMENTO parece presente.
-    # O rótulo continua muito_distraído, mas as features não têm assinatura → o modelo às vezes
-    # erra e NADA dá 100% (o realista). estado_efetivo (ef) gera as features; o rótulo é o `estado`.
-    # fronteira distraído↔muito borrada nos DOIS sentidos (nada fica separável demais):
-    #  - alguns muito são "leves" e parecem distraído (saiu de leve, sem assinatura)
-    #  - alguns distraído são "pesados" e parecem muito (lapsou E trocou de aba umas vezes)
+    # Fronteira distraído↔muito borrada nos dois sentidos (8% e 5%), pra nada dar 100%:
+    # ef gera as features, o rótulo continua sendo `estado`.
     ef = estado
     if estado == "muito_distraido" and random.random() < 0.08:
         ef = "distraido"
     elif estado == "distraido" and random.random() < 0.05:
         ef = "muito_distraido"
 
-    # Contexto INDEPENDENTE do rotulo: hora e tempo acumulado vem da agenda do
-    # aluno, nao do estado dele. Escrever o rotulo aqui inverteria a causalidade
-    # e o modelo passaria a usar o relogio como prova em vez de regua.
-    # em torno da janela do serving; a cauda curta cobre o comeco de sessao,
-    # quando a janela ainda nao encheu (ela e limitada pelo inicio da sessao).
+    # dur em torno da janela do serving; a cauda curta cobre o comeco de sessao.
+    # hora/acum independem do rotulo, senao o modelo usaria o relogio como prova.
     dur = round(min(max(2.0, random.gauss(9.0, 2.6)), 12.0), 1)
     hora = min(23.9, max(7, random.gauss(17, 4)))
     acum = max(dur, random.gauss(53, 30))          # o dia inclui esta sessao
@@ -229,10 +207,9 @@ def gerar_sessao(estado, aluno, base_mouse):
         lam_e *= 4.0                             # e o erro e a assinatura do chute
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
 
-    # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno.
-    # LEITURA DENSA: parte das sessoes presentes fica quase imovel (enunciado longo,
-    # hiperfoco). Sem esse contraexemplo o modelo aprende "mouse parado = ausente" e
-    # confunde quem le concentrado com quem saiu — as externas e que separam os dois.
+    # mouse: bruto -> features_mouse -> relativiza pelo baseline do aluno. LEITURA DENSA:
+    # parte das presentes fica quase imovel (enunciado longo, hiperfoco); sem esse contraexemplo
+    # o modelo aprende "mouse parado = ausente" — as externas e que separam leitor de ausente.
     if ef == "engajado":
         imovel = random.random() < 0.18          # leitura densa de enunciado longo
     elif ef == "distraido":
@@ -245,10 +222,9 @@ def gerar_sessao(estado, aluno, base_mouse):
         mu, sd = base_mouse[k]
         f[k] = _sigma(_esc(mf[k]), mu, sd)
 
-    # externas absolutas — muito_distraído = frequente+longo; presente (eng/dist) = blip ocasional
-    # Ausencias geradas UMA A UMA: soma e maximo saem delas, coerentes por construcao.
-    # ~45% dos muito_distraido saem UMA vez e ficam — o padrao real do aluno que abre
-    # a rede social e some. Sem isso o modelo so aprende a CONTAR saidas.
+    # externas absolutas: muito_distraído = frequente+longo; presente (eng/dist) = blip ocasional.
+    # Ausencias geradas UMA A UMA (soma e maximo coerentes). ~45% dos muito_distraido saem UMA
+    # vez e ficam (abre a rede social e some); sem isso o modelo so aprende a CONTAR saidas.
     if ef == "muito_distraido":
         unica = random.random() < 0.45
         n_aus = max(1, int(np.random.poisson(1.2 if unica else 4 * fator)))

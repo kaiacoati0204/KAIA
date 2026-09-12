@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Relatório do bandit (Thompson) — análogo da avaliar.py, mas pro lado das
-INTERVENÇÕES. Lê o que já disparou (tabela `interventions`) e mostra, por braço:
-quantas dispararam, quantas têm reward, o reward médio, e a estimativa do bandit
-(α/β de thompson_params.json → taxa de sucesso que ele acredita).
+Relatório do bandit (Thompson) — análogo da avaliar.py pras INTERVENÇÕES. Por braço:
+disparos, com reward e reward médio (tabela `interventions`) e a estimativa do bandit
+(α/β de thompson_params.json). Pronto pra quando houver intervenções reais (hoje vazio).
 
-Fica PRONTO pra quando as intervenções reais começarem — hoje mostra vazio/zero.
 Offline. Precisa de DATABASE_URL (Backend/.env). Rodar na raiz:
     python ml/relatorio_bandit.py
 """

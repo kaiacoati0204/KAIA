@@ -44,10 +44,9 @@ STALE_SESSAO_MIN = int(os.getenv("STALE_SESSAO_MIN", "15"))
 
 ANON_USER = "00000000-0000-0000-0000-000000000000"
 
-# Sigla → nome da matéria. Fonte única: o frontend manda a SIGLA (ex.: "QUI") e
-# os prompts usam o NOME por extenso ("Química") — senão o Gemini teria que
-# adivinhar a sigla. A sigla continua sendo a chave do cache (temas_cache) e da
-# sessão. Para adicionar uma matéria, basta uma linha aqui + o card no frontend.
+# Sigla → nome da matéria. O frontend manda a SIGLA (chave do temas_cache e da sessão) e
+# os prompts usam o NOME por extenso, senão o Gemini teria que adivinhar a sigla.
+# Matéria nova: uma linha aqui + o card no frontend.
 MATERIAS = {
     "MAT":  "Matemática",
     "PORT": "Português",
@@ -122,10 +121,8 @@ _SEM_BANCO = JSONResponse(
 # Supabase: o modo transaction não suporta prepared statements.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Pool tolerante a falha: se DATABASE_URL não estiver setada ou o banco
-    # estiver inacessível, o servidor SOBE mesmo assim (pool = None). As rotas
-    # que dependem do banco respondem 503 com mensagem clara, e as de IA (Gemini)
-    # seguem funcionando. Isso evita o crash de startup em dev sem Supabase.
+    # Pool tolerante a falha: sem DATABASE_URL ou com banco inacessível o servidor SOBE
+    # (pool = None); rotas de banco dão 503 e as de IA seguem. Evita crash em dev sem Supabase.
     app.state.pool = None
     if not DATABASE_URL:
         print("[KaIA] AVISO: DATABASE_URL não definida no .env — subindo SEM banco. "
@@ -271,11 +268,9 @@ EMBED_DIM = 768   # TEM de bater com a coluna vector(768) da tabela questoes_rea
 FEWSHOT_DINAMICO = os.getenv("KAIA_FEWSHOT_DINAMICO") == "1"
 
 
-# O texto embeddado no serving e sempre "Materia: tema" — conjunto pequeno e fixo, e a
-# conversao texto->vetor e deterministica. Sem cache, a MESMA frase ia pra API a cada
-# geracao: era o que estourava o limite do embedding (126/100 RPM) enquanto a geracao
-# em si ficava em 15. Cacheia o VETOR, nao o resultado da busca — assim os filtros
-# (nivel, calculo) e as questoes recem-ingeridas continuam valendo.
+# Cacheia o VETOR de "Materia: tema" (conjunto fixo, conversao deterministica): sem isso a
+# mesma frase ia pra API a cada geracao e estourava o embedding (126/100 RPM). Nao cacheia
+# a busca, para os filtros (nivel, calculo) e as questoes recem-ingeridas continuarem valendo.
 _EMBED_CACHE = {}
 _EMBED_CACHE_MAX = 500        # teto de seguranca; materia x tema nao chega perto disso
 
@@ -348,10 +343,9 @@ async def temas(dados: dict = Body(default={})):
 
 @app.post("/intervencao/reancoragem", dependencies=[Depends(usuario_autenticado)])
 async def intervencao_reancoragem(dados: dict = Body(default={})):
-    """Reancoragem (refeita): dado o ENUNCIADO da questão atual, gera 3 frases curtas —
-    o que a questão REALMENTE pede + 2 leituras erradas plausíveis (presa à moldura /
-    foca num detalhe). Micro-check de compreensão do PRESENTE (vs checkpoint = passado).
-    Escopo: trabalha no enunciado da questão (o produto foca em questões, não em textos)."""
+    """Reancoragem: do ENUNCIADO atual gera 3 frases curtas — o que a questão REALMENTE pede
+    + 2 leituras erradas plausíveis (presa à moldura / foca num detalhe). Micro-check de
+    compreensão do PRESENTE (checkpoint = passado), no enunciado e não em textos."""
     enunciado = (dados.get("enunciado") or "").strip()
     if not enunciado:
         return JSONResponse({"erro": "sem enunciado"}, status_code=400)
@@ -380,11 +374,11 @@ em texto corrido sem markdown."""
 
 
 # ================== API: ANOTAÇÕES (caderno do aluno por tema) ================
-# Canvas de anotações da tela de estudo (Etapa 9a — só texto). Uma linha por
-# (aluno_id, tema); os elementos ficam num array jsonb. Só o backend acessa a
-# tabela `anotacoes` (RLS ligado, SEM policy para a anon key) — o isolamento por
-# aluno é o `where aluno_id = $1` daqui. Sem Supabase Auth, é o mesmo modelo de
-# confiança do resto do app: convém, não é segurança forte (ver Etapa 10).
+#"Sem Supabase Auth, convém mas não é segurança forte"
+#  Canvas de anotações (Etapa 9a, só texto): uma linha por (aluno_id, tema), elementos num
+# array jsonb. Só o backend acessa `anotacoes` (RLS ligado, SEM policy para a anon key). O dono
+# vem do TOKEN verificado (usuario_identidade), nunca do cliente; como o backend conecta como
+# postgres e ignora o RLS, o isolamento por aluno é o `where aluno_id = $1` com esse sub.
 @app.get("/anotacoes")
 async def obter_anotacoes(request: Request, tema: str = "",
                           ident: dict = Depends(usuario_identidade)):
@@ -450,24 +444,14 @@ async def salvar_anotacoes(body: AnotacoesIn, request: Request,
 
 
 # ================== API: ESTATÍSTICAS DO PERFIL (Etapa 4.1 Parte 2) ==========
-# BASE calculada NA HORA, a partir do que o produto REALMENTE grava: sessions
-# (minutos e semanas) + session_events (acerto e matéria).
-#
-# desempenho_semanal saiu desta rota. Ela era a base sintética da pesquisa (224
-# alunos) e NINGUÉM no repositório escreve nela — nenhum insert, em nenhum .py,
-# .sql ou .js. Para um aluno real ela é e continuará vazia, então metade do
-# perfil nascia muda. A tabela fica INTOCADA: o painel do responsável ainda a lê.
-#
-# COMPLEMENTO ao vivo (session_features, só quando há sessão) e a análise por
-# REGRAS seguem como estavam.
+# BASE calculada NA HORA do que o produto realmente grava: sessions (minutos, semanas) +
+# session_events (acerto, matéria). desempenho_semanal saiu: é a base sintética da pesquisa
+# (224 alunos), ninguém escreve nela e para aluno real fica vazia. A tabela fica INTOCADA
+# (o painel do responsável ainda a lê). Complemento ao vivo e análise por regras seguem.
 def _analise_regras(base, por_materia):
-    """Frases curtas e HONESTAS derivadas do que foi medido (sem IA).
-
-    A frase de ATENÇÃO saiu junto com o campo. A atenção do modelo é uma leitura
-    da JANELA CORRENTE (/diagnose, montar_features_sessao) e nunca é persistida —
-    não existe "atenção média histórica" para prometer aqui. O que sobrou é o que
-    de fato se mede depois que a sessão acabou: acerto e matéria.
-    """
+    """Frases curtas e HONESTAS derivadas do que foi medido (sem IA). Sem frase de ATENÇÃO:
+    a do modelo é leitura da janela corrente e nunca é persistida, então não há média
+    histórica a prometer. Sobram acerto e matéria."""
     frases = []
     ac = base["acerto"]
     if ac is not None:
@@ -486,15 +470,10 @@ def _analise_regras(base, por_materia):
     return frases
 
 
-# As sessões do aluno, com a duração e a MATÉRIA de cada uma. A matéria não é
-# coluna de sessions nem de session_features: ela vive no payload do evento
-# `session_start` ({"materia": "MAT", "tema": ...}) — medido, cobre 100% das
-# sessões. Reaproveitada pelas duas consultas abaixo, daí a constante.
-#
-# Note o `payload::jsonb ->> 'campo'` em vez de trazer o payload inteiro: a
-# extração acontece no servidor e só o texto do campo volta pela rede. O payload
-# de question_answer carrega o mouse_track (centenas de pontos por questão), e
-# trazê-lo para o Python só para descartar seria o custo real desta rota.
+# Sessões do aluno com duração e MATÉRIA (usada nas duas consultas abaixo). A matéria só
+# existe no payload do `session_start` (cobre 100% das sessões). `payload::jsonb ->> 'campo'`
+# extrai no servidor: o payload de question_answer carrega o mouse_track (centenas de
+# pontos), e trazê-lo ao Python seria o custo real desta rota.
 _SQL_SESSOES_DO_ALUNO = """
     with sess as (
         select s.session_id,
@@ -550,11 +529,9 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
                 """,
                 aluno_id,
             )
-            # Acerto por MATÉRIA DA SESSÃO, não da questão. O join questão->matéria
-            # (questoes_cache.questao_id) cobre só 1/3 das respostas: o resto vem de
-            # questoes_reais, cujo id é bigint enquanto o payload manda uuid. Pela
-            # sessão a cobertura é total, e uma sessão é de uma matéria só — é a
-            # mesma resposta, medida onde o dado existe inteiro.
+            # Acerto por MATÉRIA DA SESSÃO, não da questão: o join via questoes_cache
+            # cobre só 1/3 das respostas (questoes_reais tem id bigint, o payload manda
+            # uuid). Pela sessão a cobertura é total, e cada sessão é de uma matéria só.
             por_materia = await conn.fetch(
                 _SQL_SESSOES_DO_ALUNO + """
                 select sess.materia,
@@ -641,7 +618,6 @@ async def questoes_hoje(request: Request, uid: str = Depends(usuario_autenticado
     return {"respondidas_hoje": int(n or 0), "meta": META_QUESTOES_DIA}
 
 
-# Alinha porque_erradas a opts (o frontend acessa por índice) e garante explicacao.
 def _sem_markdown(t):
     """Tira markdown do texto (cabeçalhos ##, negrito **, crase) — os exemplos reais
     do ENEM têm isso e a IA às vezes copia."""
@@ -652,11 +628,9 @@ def _sem_markdown(t):
 
 
 def _enunciado_incompleto(q, opts):
-    """True quando o enunciado fecha em frase completa mas as alternativas sao
-    FRAGMENTOS que precisariam completa-la — a questao acaba sem pergunta nenhuma.
-    Foi assim que passou uma do DIP: texto correto, alternativas soltas, nada ligando.
-    Medido contra as 715 reais do banco: marca 0,7% delas, e nao marca o estilo ENEM de
-    completar (que termina SEM ponto final)."""
+    """True quando o enunciado fecha em frase completa mas as alternativas sao FRAGMENTOS
+    que precisariam completa-la (questao sem pergunta). Nas 715 reais do banco marca 0,7%,
+    e nao marca o estilo ENEM de completar (que termina SEM ponto final)."""
     e = (q or "").strip()
     if not e or not e.endswith("."):
         return False                       # pergunta direta ou trecho a completar: ok
@@ -679,6 +653,7 @@ def _questao_utilizavel(questao):
     return not _enunciado_incompleto(questao.get("q"), opts)
 
 
+# Alinha porque_erradas a opts (o frontend acessa por índice) e garante explicacao.
 def _normalizar_questao(questao):
     questao["q"] = _sem_markdown(questao.get("q", ""))
     opts = [_sem_markdown(o) for o in (questao.get("opts") or [])]
@@ -761,15 +736,9 @@ def _pot_num(s):
 def _pot_acha_opcao(calc, opts, tol=0.005, folga=2.0):
     """Índice da opção que É o valor calculado. None = descarta a questão.
 
-    Duas regras, as duas vindas de defeito achado à mão:
-
-    tol — a opção tem de SER o resultado, não ficar perto dele. Com os 3% de antes,
-    uma média ponderada que dá 7,3 casava com 7,2 e com 7,4 (ambas a 1,4%) e virava
-    gabarito, sem que 7,3 estivesse entre as alternativas. Meio por cento cobre
-    arredondamento de exibição (7,333 escrito "7,33") e não cobre distrator.
-
-    folga — se a segunda mais próxima também está perto, o número não identifica
-    uma opção só. Aí a questão é ambígua e não se serve, mesmo com uma vencedora."""
+    tol: a opção tem de SER o resultado. Com 3%, um 7,3 casava com 7,2 e 7,4 e virava
+    gabarito; 0,5% cobre arredondamento de exibição (7,333 -> "7,33") e não cobre distrator.
+    folga: se a segunda mais próxima também está perto, a questão é ambígua e não se serve."""
     limite = max(tol * abs(calc), 1e-6)
     dists = []
     for i, o in enumerate(opts):
@@ -1020,24 +989,16 @@ Regras:
 
 
 # ==== VERIFICACAO INDEPENDENTE (2a barreira) =================================
-# O filtro estrutural pega enunciado malformado; o PoT pega a conta que nao fecha com
-# nenhuma alternativa. Nenhum dos dois pega GABARITO ERRADO, que foi o defeito mais
-# grave achado na avaliacao com professores. Aqui um modelo DIFERENTE do gerador
-# resolve a questao sem ver o gabarito. Diferente de proposito: verificador da mesma
-# familia compartilha os mesmos vieses e concorda com o proprio erro.
-#
-# Roda em BACKGROUND, nao na geracao: verificar na hora somaria ~5s de espera ao aluno.
-# Ate ser verificada, a questao fica em QUARENTENA — servida a poucos alunos, para que
-# um defeito atinja um punhado e nao a base inteira.
-# Versao das REGRAS do prompt. Suba quando mudar qualquer regra de geracao: e o que
-# permite responder depois "a regra nova reduziu o erro?". Sem isso, questao velha e
-# questao nova ficam indistinguiveis no banco.
+# Filtro estrutural e PoT nao pegam GABARITO ERRADO, o defeito mais grave achado com
+# professores: um modelo DIFERENTE do gerador resolve a questao sem ver o gabarito (mesma
+# familia compartilha vieses e concorda com o proprio erro). Roda em BACKGROUND (na hora
+# somaria ~5s ao aluno); ate la a questao fica em QUARENTENA, servida a poucos alunos.
+# Versao das REGRAS do prompt: suba ao mudar qualquer regra de geracao, senao questao
+# velha e nova ficam indistinguiveis no banco.
 VERSAO_PROMPT = "v4-2026-09"
 
-# Pede mais questoes do que precisa e fica com as que passam nas barreiras — e o que o
-# Duolingo faz (gera variantes, seleciona). A saida e a parte cara, entao isto encarece
-# ~50% a geracao (fracao de centavo) e evita entregar lote curto quando alguma e
-# descartada. So a geracao aumenta: o que o aluno ve continua sendo n.
+# Gera mais do que precisa e fica com as que passam nas barreiras (como o Duolingo).
+# Encarece ~50% a geracao (fracao de centavo) e evita lote curto; o aluno continua vendo n.
 FATOR_SOBRA_GERACAO = 1.5
 # Familia Flash (nao Flash-Lite, que e a do gerador): a independencia vem justamente
 # de nao compartilhar treinamento. O 3.6 tem cota diaria pequena demais no tier
@@ -1046,17 +1007,13 @@ MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.8-flash")
 VERIF_LOTE = int(os.getenv("KAIA_VERIF_LOTE", "5"))   # questoes por chamada de verificacao
 QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
 VERIFICA_POR_RODADA = 20          # quantas por ciclo do job (em lotes de VERIF_LOTE)
-# O verificador tem cota DIARIA (GenerateRequestsPerDayPerProjectPerModel-FreeTier):
-# medido em 20 chamadas/dia. Com VERIF_LOTE=5 isso cobre 100 questoes por dia — e o
-# cache tem quase mil. Verificar a rodada INTEIRA numa chamada so muda a ordem de
-# grandeza, e ainda gasta a cota no que importa: o que o aluno vai ver AGORA, em vez
-# do que o job pegar por ordem de criacao.
+# Cota DIARIA do verificador (GenerateRequestsPerDayPerProjectPerModel-FreeTier) medida em
+# 20 chamadas/dia: com VERIF_LOTE=5 cobre 100 questoes, e o cache tem quase mil. A rodada
+# INTEIRA numa chamada muda a ordem de grandeza e gasta a cota no que o aluno ve AGORA.
 VERIF_LOTE_RODADA = int(os.getenv("KAIA_VERIF_LOTE_RODADA", "12"))
 
-# Verifica em LOTE: uma chamada para VERIF_LOTE questoes, nao uma por questao. Foi o
-# que destravou o volume — a cota do tier gratuito nao aguenta uma chamada por questao.
-# Pede o raciocinio de cada uma antes da resposta para o modelo nao ficar preguicoso
-# despachando o lote inteiro sem conferir.
+# Verifica em LOTE (uma chamada por VERIF_LOTE questoes): a cota gratuita nao aguenta uma
+# por questao. Pede o raciocinio antes da resposta para o modelo nao despachar o lote sem conferir.
 _PROMPT_VERIFICACAO = """Resolva cada questão de múltipla escolha do ensino médio brasileiro
 abaixo. Trate cada uma de forma independente e confira a conta/o conteúdo antes de responder.
 
@@ -1127,11 +1084,8 @@ _TAREFAS_VERIF = set()
 
 
 async def _verificar_entregues(pool, entregues):
-    """Verifica em UMA chamada as questoes recem-entregues que ainda nao tem veredito.
-
-    Roda em background (nao segura a resposta do aluno — verificar na hora somaria
-    ~5s de espera). O ganho nao e so gastar menos: prioriza a cota diaria nas questoes
-    que estao indo para a tela agora, em vez de deixar o job escolher por data."""
+    """Verifica em UMA chamada as questoes recem-entregues ainda sem veredito. Em background
+    (na hora somaria ~5s ao aluno), gastando a cota diaria no que vai para a tela agora."""
     if pool is None or not API_KEY:
         return
     alvos = [q for q in entregues
@@ -1347,10 +1301,9 @@ async def _enunciados_existentes(conn, materia, tema, nivel, limite=10):
 
 
 async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
-    """Monta até `n` questões de UMA faixa (materia+tema+nivel): cache-first (hobbie ->
-    genérica -> reset de vistas antigas) e gera o que faltar no Gemini (few-shot),
-    salvando no cache. Marca as entregues como vistas e etiqueta o nível em cada uma
-    (o front escolhe pela faixa no buffer)."""
+    """Monta até `n` questões de UMA faixa (materia+tema+nivel): cache-first (hobbie -> genérica
+    -> reset de vistas antigas), gera o que faltar no Gemini salvando no cache, marca as
+    entregues como vistas e etiqueta o nível (o front escolhe pela faixa no buffer)."""
     entregues = []
     # 1) cache com o hobbie da vez
     if hobbie:
@@ -1580,10 +1533,9 @@ async def agregar_features(pool, session_id):
 
 
 async def encerrar_sessoes_ociosas(app):
-    """Sweep: fecha sessões abertas sem evento há > STALE_SESSAO_MIN min, usando o
-    ÚLTIMO evento como fim (não now(), para não inflar a duração). Idempotente e
-    não toca em sessão com evento recente. Loga só quando fecha ≥1 (o silêncio já
-    diz 'nada fechado'; assim não vira ruído a cada execução)."""
+    """Sweep: fecha sessões abertas sem evento há > STALE_SESSAO_MIN min, usando o ÚLTIMO
+    evento como fim (não now(), para não inflar a duração). Idempotente, não toca em sessão
+    recente e só loga quando fecha ≥1, para não virar ruído a cada execução."""
     pool = app.state.pool
     if pool is None:
         return
@@ -1634,60 +1586,37 @@ async def job_agregacao(app):
 
 
 # ==== CORROBORACAO OBJETIVA (2a evidencia antes de interromper) ==============
-# `muito_distraido` e MEDICAO: o navegador avisa que a aba saiu. Pode disparar sozinho.
-# `distraido` (mente vagando com o aluno sentado ali) e INFERENCIA — a parte que a
-# literatura coloca em 60-75% so com log de interacao, e que a nossa base sintetica
-# nunca viu acontecer no meio de uma sessao. Errar aqui interrompe quem estava indo
-# bem, e com publico TEA/TDAH retomar o fio e caro: o falso positivo nao e neutro.
-#
-# Entao esse estado passa a exigir uma segunda evidencia, vinda do COMPORTAMENTO e nao
-# do modelo — o criterio do DTS (Frontiers, 2020), que valida desengajamento por tempo
-# de resposta anomalo E queda de acerto. Sem corroboracao, a leitura ainda vale para
-# adaptar em silencio; so nao vira interrupcao.
+# `muito_distraido` e MEDICAO (o navegador avisa que a aba saiu) e pode disparar sozinho.
+# `distraido` e INFERENCIA (60-75% na literatura so com log de interacao; a base sintetica
+# nunca viu isso no meio de sessao), e errar interrompe quem ia bem: em TEA/TDAH retomar o
+# fio e caro. Por isso exige 2a evidencia do COMPORTAMENTO, nao do modelo (DTS, Frontiers
+# 2020: tempo de resposta anomalo E queda de acerto). Sem ela, so adapta em silencio.
 CORROB_MIN_RESPOSTAS = 4     # abaixo disso nao ha base de comparacao dentro da sessao
 CORROB_RECENTES = 3          # tamanho da janela recente
 CORROB_ACERTO_MAX = 0.34     # no maximo 1 de 3 certas
-# 3 sigma, nao 2. O artigo do DTS deriva o custo da escolha (Chen et al., 2021, p.6):
-# "the probability that a student is falsely tested to be disengaged is only
-#  P(|z| > 3) = 0.03% ... Theoretically, the probability of false positives would be 5%
-#  if z* = 2. The choice of z* should be guided by users' tolerance of false positives."
-# Estava em 2 por escolha minha, sem eu saber que o custo era esse: ~150x mais alarme
-# falso. E alarme falso aqui interrompe quem estava concentrado — caro em qualquer
-# publico, mais ainda em TEA/TDAH.
+# 3 sigma, nao 2: falso positivo de 0,03% contra 5% (DTS, Chen et al., 2021, p.6).
+# Alarme falso interrompe quem estava concentrado, e isso pesa mais em TEA/TDAH.
 CORROB_RT_SIGMAS = 3.0
-# Piso no desvio, em unidades de log. Base de poucas respostas parecidas produz sd ~ 0,
-# e ai QUALQUER diferenca vira dezenas de sigmas — foi pego por teste: respostas todas em
-# 20s davam sd=0 e uma de 20,5s aparecia como desengajamento. Mesmo defeito que ja tinha
-# sido corrigido no baseline do cold-start, aqui num calculo separado.
+# Piso no desvio (unidades de log): poucas respostas parecidas dao sd ~ 0 e qualquer diferenca
+# vira dezenas de sigmas (teste: tudo em 20s dava sd=0 e uma de 20,5s virava desengajamento).
 # 0.14 em log ~ 15% de coeficiente de variacao, o piso tipico de tempo de resposta.
 CORROB_SD_PISO = 0.14
-# Desempenho GLOBAL minimo para a queda local significar alguma coisa (DTS: bu = 0.5).
-# Separa esforco de habilidade: aluno disperso ESTAVA BEM E CAIU; aluno com dificuldade
-# SEMPRE ESTEVE assim. Os dois produzem o mesmo sinal local — lento e errando — e so o
-# historico distingue. Sem isso, interrompe-se quem esta penando numa questao dificil,
-# que e o falso positivo mais caro no nosso publico.
-#
-# O custo, assumido tambem pelos autores: o aluno persistentemente disperso passa batido
-# (o acerto global dele e baixo, entao nunca marca). "Our predictive algorithm is
-# conservative rather than been generous at detecting disengagement." Troca deteccao
-# perdida por alarme falso — de proposito.
+# Desempenho GLOBAL minimo para a queda local significar algo (DTS: bu = 0.5). Separa esforco
+# de habilidade: o disperso ESTAVA BEM E CAIU, quem tem dificuldade SEMPRE ESTEVE assim; sem
+# isso interrompe-se quem pena numa questao dificil, o falso positivo mais caro no nosso publico.
+# Custo assumido (como os autores): o persistentemente disperso passa batido, porque o acerto
+# global dele e baixo. Troca deteccao perdida por alarme falso, de proposito.
 CORROB_ACERTO_GLOBAL_MIN = 0.5
 
 
 async def _corroboracao_objetiva(conn, session_id):
     """(bool, motivo) — o comportamento recente confirma a queda de foco?
 
-    TRES condicoes, como no DTS original (Chen et al., 2021):
-      1. vai bem na sessao inteira (senao e dificuldade, nao dispersao)
-      2. mas o acerto caiu nas ultimas
-      3. e o tempo saiu do ritmo dele quando ACERTAVA (rapido OU lento demais)
-
-    As tres juntas. Uma sozinha nao basta: questao dificil derruba o acerto, uma pausa
-    para pensar estica o tempo, e aluno com dificuldade tem os dois o tempo todo.
-
-    log do tempo de resposta, nao o tempo cru: a distribuicao e muito assimetrica a
-    direita e sem o log o sigma fica refem da cauda (uma questao lenta estraga a regua).
-    """
+    TRES condicoes juntas, como no DTS (Chen et al., 2021): vai bem na sessao inteira (senao
+    e dificuldade), o acerto caiu nas ultimas, e o tempo saiu do ritmo dele quando ACERTAVA
+    (rapido OU lento). Uma so nao basta: questao dificil derruba o acerto e pausa para pensar
+    estica o tempo. Usa log do tempo: a distribuicao e assimetrica a direita e, sem log, o
+    sigma fica refem da cauda."""
     linhas = await conn.fetch(
         "select payload from session_events where session_id = $1::uuid "
         "and event_type = 'question_answer' order by ts", session_id)
@@ -1715,19 +1644,11 @@ async def _corroboracao_objetiva(conn, session_id):
         return False, "acerto recente nao caiu"
 
     # CONDICAO 3 — o tempo saiu do proprio ritmo? (para os DOIS lados)
-    # |z|, nao z: tempo curto demais e chute/afobamento, tempo longo demais e ausencia
-    # ou travamento. O artigo trata os dois — "fast-disengage" e "slow-disengage" — e a
-    # base sintetica ja modela o chute; so o serving nao olhava.
-    # So ACERTOS na regua, e sem a #1 — as duas coisas vem do DTS e nenhuma estava aqui.
-    #
-    # ACERTO: a referencia tem que ser "o tempo dele ENGAJADO", nao "o tempo dele". Sem o
-    # filtro a regua engolia as proprias questoes dispersas, o sd inflava e a regra
-    # parava de ver quem continuava disperso — medido em simulacao: o z caia de +7,1 para
-    # +2,6 na 15a questao, abaixo do limiar, com o aluno ainda disperso.
-    #
-    # #1 FORA: "the users usually take extra time to read the text in the first question"
-    # (Chen et al., 2021, p.5). Nos dados nossos a #1 foi mais lenta em 3 de 4 sessoes
-    # (razao mediana 1,33x) — so 2 sao utilizaveis, entao e indicio, nao medicao.
+    # |z|: curto demais e chute/afobamento, longo demais e ausencia ou travamento (o artigo
+    # trata "fast-" e "slow-disengage"). Regua so de ACERTOS, o tempo ENGAJADO: sem o filtro o
+    # sd inflava com as dispersas (simulacao: z caia de +7,1 para +2,6 na 15a questao, com o
+    # aluno ainda disperso). Sem a #1, que tem leitura extra (Chen et al., 2021, p.5; aqui mais
+    # lenta em 3 de 4 sessoes, razao mediana 1,33x, so 2 utilizaveis: indicio, nao medicao).
     rts_base = [math.log(rt) for ok, rt in base[1:] if ok and rt and rt > 0]
     ult = recentes[-1][1]
     if len(rts_base) < 2 or not ult or ult <= 0:
@@ -1746,13 +1667,10 @@ async def _corroboracao_objetiva(conn, session_id):
 
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
-    Freios: warm-up (>=1 questão respondida e sessão >= INTERV_WARMUP_MIN); cooldown
-    por estado (INTERV_COOLDOWN_MIN); teto INTERV_MAX_POR_SESSAO por sessão. A
-    exigência de DURAÇÃO vive dentro de quem dispara — a regra pede queda nas últimas
-    CORROB_RECENTES respostas, e a medição é sobre uma janela de JANELA_MIN minutos.
-
-    O disparo não depende do modelo: ele só escolhe QUAL conjunto de intervenções.
-    Silencioso se a tabela interventions ainda não existir (Tarefa 4)."""
+    Freios: warm-up (>=1 questão e sessão >= INTERV_WARMUP_MIN), cooldown por estado
+    (INTERV_COOLDOWN_MIN) e teto INTERV_MAX_POR_SESSAO. A DURAÇÃO vive em quem dispara
+    (regra: últimas CORROB_RECENTES respostas; medição: janela de JANELA_MIN min). O modelo
+    só escolhe QUAL intervenção. Silencioso se a tabela interventions não existir (Tarefa 4)."""
     thompson = app.state.thompson
     modelo, scaler = app.state.modelo, app.state.scaler
     if thompson is None or modelo is None or scaler is None:
@@ -1762,39 +1680,22 @@ async def rodar_intervencao(app, session_id):
         res = await predizer_estado(modelo, scaler, conn, session_id)
         if res is None:
             return
-        # Fecha intervenções cuja janela já expirou. Vem ANTES do gate de confiabilidade
-        # de propósito: o desfecho é objetivo (o que o aluno respondeu), então não depende
-        # da leitura estar boa. Antes ficava depois, e reward de aluno em cold-start
-        # nunca era fechado — ficava órfão para sempre.
+        # Fecha intervenções vencidas ANTES de qualquer return: o desfecho é objetivo e não
+        # depende da leitura, então roda até em cold-start (senão o reward ficava órfão).
         await resolver_rewards(conn, thompson, session_id)
 
         # ==== QUEM PODE DISPARAR ====
-        # DOIS caminhos, e NENHUM depende do modelo de atencao. Antes eram descritos como
-        # tres, e o comentario mentia em duas frentes: o caminho "medicao" lia
-        # res["estado"], que e modelo.predict(), e o "terceiro caminho" era ramo morto
-        # (fazia o mesmo que o else). Na pratica o RF era porta obrigatoria de tudo.
-        #
-        #   medicao — tempo_fora_foco_s e o que o NAVEGADOR reportou. Dado bruto, nao
-        #             inferencia. Sozinho, um corte nessa feature separa off-task em
-        #             ~93% na base — o modelo nunca foi necessario aqui.
-        #   regra   — queda de acerto ou tempo fora do proprio ritmo (criterio do DTS).
-        #
-        # O modelo NAO dispara sozinho, de proposito: ele nao esta validado com dado real,
-        # e falso positivo aqui interrompe quem estava concentrado — caro em qualquer
-        # publico, mais ainda em TEA/TDAH. O papel dele e escolher QUAL intervencao
-        # (estado_alvo), nao SE intervem. A coluna `gatilho` e o que vai permitir decidir
-        # depois, com dado, se vale abrir um caminho para ele.
+        # Dois caminhos, nenhum depende do modelo: medicao (tempo fora da aba, dado do
+        # navegador) e regra (queda de acerto ou ritmo fora do normal, criterio do DTS).
+        # O modelo so escolhe QUAL intervencao: nao esta validado, e falso positivo pesa em TEA/TDAH.
         fora_s = float(res["feats"].get("tempo_fora_foco_s") or 0)
         corrob, motivo = await _corroboracao_objetiva(conn, session_id)
         if fora_s >= AUSENCIA_MEDIDA_S:
             gatilho, estado_alvo = "medicao", "muito_distraido"
         elif corrob:
-            # A regra sabe dizer QUE caiu, nao qual estado. Quem separa e o modelo — e so
-            # para ESTE corte ele e confiavel mesmo sem baseline: `muito_distraido` se
-            # apoia nas features absolutas (0,894 com ou sem historico), enquanto
-            # `distraido` desaba para 0,379 sem elas. Entao: se ele disser `muito_distraido`,
-            # vale; qualquer outra coisa cai no conjunto mais leve, que e o certo de
-            # qualquer forma. Nao ha chute aqui — antes havia, no `else` do confiavel.
+            # A regra diz QUE caiu, nao qual estado. O modelo separa, confiavel sem baseline
+            # so nesse corte (`muito_distraido` usa features absolutas: 0,894 com ou sem
+            # historico; `distraido` cai para 0,379). Outra resposta vai ao conjunto mais leve.
             gatilho = "regra"
             estado_alvo = ("muito_distraido" if res["estado"] == "muito_distraido"
                            else "distraido")
@@ -1840,10 +1741,9 @@ async def rodar_intervencao(app, session_id):
         if not tipo:
             return
 
-        # A/B (DESLIGADO por padrão): em metade dos MOMENTOS DE DECISÃO não se intervém —
-        # loga 'controle_ab' pra medir a recuperação SEM ajuda e comparar com o bandit.
-        # O sorteio é por decisão, não por aluno: é o que torna o teste analisável com
-        # poucos participantes (ver _sorteio_micro_randomizado).
+        # A/B (DESLIGADO por padrão): em metade dos MOMENTOS DE DECISÃO não intervém e loga
+        # 'controle_ab' para comparar a recuperação sem ajuda. Sorteio por decisão, não por
+        # aluno, para ser analisável com poucos participantes (ver _sorteio_micro_randomizado).
         if AB_TESTE_ATIVO and _sorteio_micro_randomizado() == "controle":
             tipo = "controle_ab"
 
@@ -1855,10 +1755,8 @@ async def rodar_intervencao(app, session_id):
                 (session_id, intervention_type, triggered_at, estado_antes, gatilho)
             values ($1::uuid, $2, now(), $3, $4)
             """,
-            # estado_alvo, nao res["estado"]: e o contexto que o bandit usou para escolher
-            # o braco, e o reward tem que voltar para o MESMO contexto. Quando a leitura
-            # nao e confiavel os dois divergem, e gravar o do modelo mandaria o reward
-            # para um braco que nao existe em params.
+            # estado_alvo, nao res["estado"]: o reward tem que voltar ao MESMO contexto que o
+            # bandit usou; gravar o do modelo mandaria o reward a um braco inexistente em params.
             session_id, tipo, estado_alvo, gatilho,
         )
         if tipo != "controle_ab":
@@ -1870,20 +1768,13 @@ async def rodar_intervencao(app, session_id):
 async def reward_objetivo(conn, session_id, desde, ate):
     """Reward (0..1) do que o aluno FEZ depois da intervenção — não do que o modelo achou.
 
-    Era calculado pela transição estado_antes -> estado_depois, e os dois estados vinham
-    do Random Forest. Ou seja: o bandit aprendia a partir da saída do modelo de atenção.
-    Se a leitura estivesse errada, ele treinava em cima de um sinal inventado e não tinha
-    como perceber — os três componentes ficavam em série, e uma falha no primeiro
-    contaminava todo o resto.
-
-    Aqui o desfecho é comportamento observado:
-        nenhuma questão respondida na janela -> 0.0   (não retomou)
-        retomou                              -> 0.5 + 0.5 * proporção de acertos
-
-    Retomar já vale metade: voltar a responder é o efeito imediato que se espera de uma
-    intervenção de refoco. A outra metade mede se voltou rendendo.
-
-    Devolve None se não houver como avaliar (sem evento na janela por falha de coleta)."""
+    Antes vinha da transição de estados prevista pelo Random Forest: o bandit aprendia da
+    saída do modelo e não tinha como perceber leitura errada. Aqui é comportamento observado:
+        nenhuma resposta na janela, sessão aberta -> 0.0   (não retomou)
+        retomou                                   -> 0.5 + 0.5 * proporção de acertos
+    Retomar já vale metade (efeito imediato do refoco); a outra metade mede se voltou rendendo.
+    Devolve None se não houve resposta e a sessão foi encerrada dentro da janela (parar pode
+    ser o sucesso de alerta_fadiga/pausa_ativa, então não avalia)."""
     linhas = await conn.fetch(
         """
         select payload from session_events
@@ -1893,10 +1784,8 @@ async def reward_objetivo(conn, session_id, desde, ate):
         session_id, desde, ate,
     )
     if not linhas:
-        # Janela vazia é ambígua: pode ser "não retomou" (fracasso) ou "a sessão acabou"
-        # (não dá para avaliar). Tratar tudo como 0.0 penalizava justamente os braços
-        # cujo sucesso PODE ser o aluno parar — alerta_fadiga e pausa_ativa sugerem
-        # descanso, e quem obedece fecha o navegador.
+        # Janela vazia é ambígua: "não retomou" ou "a sessão acabou". Tudo 0.0 penalizava os
+        # braços cujo sucesso PODE ser parar (alerta_fadiga e pausa_ativa sugerem descanso).
         fim = await conn.fetchval(
             "select session_end_ts from sessions where session_id = $1::uuid", session_id)
         if fim is not None and fim <= ate:
@@ -1912,11 +1801,8 @@ async def reward_objetivo(conn, session_id, desde, ate):
 
 
 async def resolver_rewards(conn, thompson, session_id):
-    """Fecha intervenções cuja janela de medição já passou e ainda não têm reward.
-
-    NÃO depende do modelo de atenção: pode rodar mesmo quando a leitura não é confiável
-    (cold-start), porque o desfecho é objetivo. Era o contrário antes — sem leitura
-    confiável o reward ficava órfão para sempre."""
+    """Fecha intervenções cuja janela de medição já passou e ainda não têm reward. NÃO
+    depende do modelo de atenção (desfecho objetivo), então roda até em cold-start."""
     if thompson is None:
         return
     try:
@@ -1981,17 +1867,10 @@ INTERNAS_RELATIVAS = (
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse",
 )
-# ESCALA DA COMPARACAO: log em tudo que e tempo ou velocidade, aplicado A CADA QUESTAO,
-# ANTES de qualquer media ou desvio. A distribuicao dessas medidas e assimetrica a
-# direita — nao existe tempo negativo, mas existe questao de cinco minutos — e na escala
-# crua a media e o desvio ficam refens da cauda: foi dai que saiu o +182 sigma do
-# primeiro teste com dado real. A regra (_corroboracao_objetiva) ja fazia isso; as
-# features, nao.
-#
-# ANTES de agregar, nao depois: log(media) nao e media(log). Logar o resultado de uma
-# media ja contaminada por um outlier nao desfaz a contaminacao.
-#
-# Fica de fora tendencia_desempenho_sessao — e uma inclinacao, pode ser negativa.
+# ESCALA DA COMPARACAO: log em tudo que e tempo ou velocidade, A CADA QUESTAO e ANTES de media
+# ou desvio (log(media) nao e media(log): logar depois nao desfaz o outlier). Na escala crua a
+# cauda a direita domina media e desvio — dai o +182 sigma do primeiro teste com dado real.
+# Fica de fora tendencia_desempenho_sessao, que e inclinacao e pode ser negativa.
 
 
 def _lg(v):
@@ -2003,10 +1882,9 @@ MIN_SESSOES_BASELINE = 3     # abaixo disso não dá pra personalizar -> desvio 
 BASELINE_TTL_S = 600         # cache do baseline por aluno (sessões passadas não mudam)
 NIVEL_DIFICULDADE_PADRAO = 2  # fallback se a sessão ainda não tem resposta (CHECK 1..5)
 DURACAO_MAX_MIN = 240         # teto: acima disso é sessão que nunca fechou, não estudo
-# Janela de leitura. 10 min cabe ~6-10 questões de vestibular (50-100s cada), o que dá
-# base para as internas; e é curto o bastante para "voltei a focar" aparecer em poucas
-# questões. O DTS (Frontiers, 2020) detecta em ~2 questões usando 2 features; nós
-# precisamos de mais eventos porque usamos 23.
+# Janela de leitura: 10 min cabe ~6-10 questões de vestibular (50-100s cada), base para as
+# internas, e é curto o bastante para "voltei a focar" aparecer logo. O DTS (Frontiers, 2020)
+# detecta em ~2 questões com 2 features; com 23 precisamos de mais eventos.
 JANELA_MIN = 10.0             # minutos de passado que a leitura considera
 JANELA_MIN_RESPOSTAS = 3      # estica a janela para trás até caber isto
 
@@ -2014,16 +1892,14 @@ JANELA_MIN_RESPOSTAS = 3      # estica a janela para trás até caber isto
 ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
 
 # Regras de disparo de intervenção (no scheduler de 30s).
-# Cooldown por estado (min). Por ora 3 nos dois: a distração interna é quase
-# constante, então ~3 min já é responsivo sem naguear (10 min seria lento demais).
-# Estrutura por-estado pronta caso queira diferenciar depois.
+# Cooldown por estado (min): 3 nos dois, pois a distração interna é quase constante e ~3 min
+# responde sem naguear (10 seria lento). Estrutura por-estado pronta para diferenciar depois.
 INTERV_COOLDOWN_MIN = {"distraido": 3, "muito_distraido": 3}
-INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
+INTERV_MAX_POR_SESSAO = 5
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
-# Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos.
-# 30s e deliberadamente mais conservador que o corte que melhor classifica (~10s): aqui
-# o objetivo nao e classificar, e decidir interromper alguem — e troca de aba curta
-# acontece por motivo banal. 30s esta acima do p90 das outras duas classes.
+# Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos. 30s e
+# mais conservador que o melhor corte de classificacao (~10s) porque aqui se decide interromper,
+# e troca de aba curta e banal. 30s esta acima do p90 das outras duas classes.
 AUSENCIA_MEDIDA_S = 30.0
 # A/B: grupo CONTROLE (detecta e mede, mas NÃO intervém) para provar que a leitura
 # serve — sem depender de autorrelato. Ligar com KAIA_AB_TESTE=1 desde o 1º teste
@@ -2034,33 +1910,19 @@ AB_TESTE_ATIVO = os.getenv("KAIA_AB_TESTE") == "1"
 def _sorteio_micro_randomizado():
     """Sorteia CONTROLE ou BANDIT a cada momento de decisão (micro-randomized trial).
 
-    Era por ALUNO, fixo pra vida da conta. Com um beta de 5 pessoas isso da n=5 — dois
-    de um lado, tres do outro — e nenhum resultado sai dali, por mais que se colete.
-
-    Randomizar a cada decisao e o desenho padrao da literatura de JITAI, e resolve os
-    dois problemas de uma vez:
-      PODER — cada aluno contribui com dezenas de decisoes em vez de uma designacao;
-              5 pessoas x ~20 decisoes = ~100 unidades randomizadas.
-      VIES  — cada aluno e o proprio controle, entao diferenca entre pessoas (nivel,
-              rotina, dispositivo) para de contaminar a comparacao.
-
-    Sem seed: aleatoriedade real e o que sustenta a inferencia causal."""
+    Por ALUNO, um beta de 5 pessoas daria n=5 e nenhum resultado. Por decisao (desenho padrao
+    de JITAI) ganha PODER (5 pessoas x ~20 decisoes = ~100 unidades) e tira VIES (cada aluno e
+    o proprio controle, sem diferenca entre pessoas contaminar). Sem seed: aleatoriedade real
+    e o que sustenta a inferencia causal."""
     return "controle" if random.random() < 0.5 else "bandit"
 
 INTERV_JANELA_REWARD_MIN = 3   # minutos após a intervenção para medir a mudança de estado
 
 
-# reward_por_transicao foi removida: media o efeito pela mudanca de estado prevista
-# pelo PROPRIO modelo de atencao, o que fazia o bandit aprender da saida dele. Ver
-# reward_objetivo.
-
-
 async def _carregar_eventos(conn, session_id, desde=None, ate=None):
-    """Eventos de UMA sessão como (event_type, payload_dict), em ordem de tempo.
-
-    `desde` recorta a janela de leitura; `ate` pega o que veio ANTES dela (usado pelo
-    baseline da própria sessão, que não pode ser calculado sobre a janela que avalia).
-    Sem nenhum dos dois: a sessão inteira (usado pelo baseline entre-sessões)."""
+    """Eventos de UMA sessão como (event_type, payload_dict), em ordem de tempo. `desde` recorta
+    a janela de leitura; `ate` pega o que veio ANTES dela (baseline da própria sessão, que não
+    pode usar a janela que avalia); sem nenhum, a sessão inteira (baseline entre-sessões)."""
     if desde is not None:
         eventos = await conn.fetch(
             "select event_type, payload from session_events where session_id = $1::uuid "
@@ -2079,21 +1941,12 @@ async def _carregar_eventos(conn, session_id, desde=None, ate=None):
 async def _inicio_janela(conn, session_id, session_start):
     """Começo da janela de leitura, e o span dela em minutos.
 
-    O PROBLEMA que isto resolve: as features eram calculadas sobre a sessão INTEIRA, e
-    as externas são acumuladores — soma de tempo fora, MÁXIMO de ausência, contagem de
-    trocas de aba. Juntas são 42% do peso do modelo, e nenhuma delas desce. Uma saída de
-    5 minutos marcava a sessão para sempre: o aluno voltava, estudava concentrado por 40
-    minutos, e a leitura seguia travada em `muito_distraido` — com alta confiança, porque
-    são justamente as features que separam esse estado com ~95% de acerto.
-
-    Janela fixa também resolve de graça o problema da duração: "180s fora em 10 min" quer
-    dizer a mesma coisa no minuto 5 ou no minuto 50 da sessão. Antes, o mesmo valor
-    absoluto significava coisas opostas em sessões de tamanhos diferentes, e o modelo só
-    tinha `duracao_sessao_min` (2,1% do peso) para desambiguar.
-
-    A janela ESTICA para trás quando não cabem respostas suficientes: questão de
-    vestibular leva 50-100s, então 10 min podem conter poucas, e as internas precisam de
-    pelo menos duas para ter variabilidade. Sem isso, 48,8% do modelo ficaria mudo."""
+    Na sessão INTEIRA as externas são acumuladores (soma fora, MÁXIMO de ausência, trocas de
+    aba; 42% do peso do modelo) que nunca descem: uma saída de 5 min travava a leitura em
+    `muito_distraido` mesmo após 40 min concentrado. Janela fixa também tira a ambiguidade da
+    duração ("180s fora em 10 min" vale igual no minuto 5 ou 50; antes só `duracao_sessao_min`,
+    2,1% do peso, desambiguava). A janela ESTICA para trás até caber respostas (questão leva
+    50-100s e as internas precisam de ao menos duas); sem isso 48,8% do modelo ficaria mudo."""
     agora = datetime.now(timezone.utc)
     ini = max(session_start, agora - timedelta(minutes=JANELA_MIN))
     ts = await conn.fetch(
@@ -2160,11 +2013,9 @@ _BASELINE_CACHE = {}   # user_id -> (baseline_dict|None, computed_at)
 
 
 async def _baseline_aluno(conn, user_id, session_id):
-    """Baseline ENTRE-SESSÕES do aluno NA MESMA MATÉRIA: (média, desvio) de cada interna
-    sobre as sessões passadas encerradas, na escala de comparação (`_lg`).
-    FALLBACK — a régua principal é a da própria sessão. < MIN_SESSOES_BASELINE -> None
-    (cold-start: sem histórico não dá pra personalizar -> desvios 0). Cacheado
-    (BASELINE_TTL_S), pois sessões passadas não mudam."""
+    """Baseline ENTRE-SESSÕES do aluno NA MESMA MATÉRIA: (média, desvio) de cada interna nas
+    sessões passadas encerradas, escala `_lg`. FALLBACK da régua da própria sessão; None se
+    < MIN_SESSOES_BASELINE (cold-start -> desvios 0). Cacheado (BASELINE_TTL_S)."""
     chave = (str(user_id), await conn.fetchval(
         "select payload->>'materia' from session_events where session_id = $1::uuid "
         "and event_type = 'session_start' order by ts limit 1", session_id))
@@ -2173,11 +2024,8 @@ async def _baseline_aluno(conn, user_id, session_id):
     if cache and (agora - cache[1]).total_seconds() < BASELINE_TTL_S:
         return cache[0]
 
-    # Filtra por MATERIA. Sem isso a regua do aluno era a media de tarefas com ritmos
-    # diferentes: questao de Portugues leva ~30s, de Matematica ~90s. Um aluno que fez
-    # tres sessoes de Portugues e agora esta em Matematica tinha como "normal dele" um
-    # numero que nao correspondia a nenhuma das duas. A materia vive no payload do
-    # evento session_start — a tabela sessions nao guarda esse campo.
+    # Filtra por MATERIA: Portugues leva ~30s e Matematica ~90s, e misturadas a regua virava
+    # um "normal" que nao era de nenhuma das duas. A materia so existe no payload do session_start.
     materia = chave[1]
     rows = await conn.fetch(
         """
@@ -2192,11 +2040,8 @@ async def _baseline_aluno(conn, user_id, session_id):
         """,
         user_id, session_id, materia,
     )
-    # MESMA FORMA da regua da sessao: blocos de BASE_SESSAO_BLOCO questoes CORRETAS.
-    # Antes cada amostra era uma sessao inteira — o "normal" de variabilidade medido
-    # sobre 40 minutos nao e comparavel ao de uma janela de 10, e o zero do sigma queria
-    # dizer coisas diferentes nas duas reguas. Aqui elas so diferem no de onde tiram as
-    # amostras (sessoes passadas x esta sessao), nao em como as medem.
+    # MESMA FORMA da regua da sessao (blocos de BASE_SESSAO_BLOCO questoes CORRETAS): variabilidade
+    # de uma sessao inteira (40 min) nao compara com janela de 10. So a origem das amostras difere.
     amostras, rts_pool, n_sessoes = [], [], 0
     for r in rows:
         evs = await _carregar_eventos(conn, r["session_id"])
@@ -2223,40 +2068,21 @@ async def _baseline_aluno(conn, user_id, session_id):
 
 
 # ==== BASELINE DENTRO DA SESSAO (a regua PRINCIPAL) ==========================
-# O baseline entre-sessoes exige MIN_SESSOES_BASELINE sessoes encerradas. Ate la, TODAS
-# as internas viravam 0.0 — e 0.0 nao quer dizer "desconhecido", quer dizer "exatamente
-# na media do aluno". Duas consequencias ruins:
-#
-#   1. O aluno novo ficava sem leitura interna por 3 sessoes. Como o beta tem poucas
-#      pessoas usando poucas vezes, isso e quase todo mundo, quase sempre.
-#   2. Vetor com as 10 internas zeradas NAO EXISTE na base de treino — o gerador nunca
-#      produz isso. Ou seja, o cold-start ja era um descasamento treino/serving: o
-#      modelo recebia um ponto fora da distribuicao que ele conhece.
-#
-# O DTS (Frontiers, 2020) resolve assim: usa as primeiras questoes CORRETAS da propria
-# sessao como referencia de "engajado". A suposicao — o aluno comeca engajado — e mais
-# fraca que a do baseline historico, e por isso este e fallback, nao substituto. Mas
-# qualquer estimativa e melhor que um zero que mente.
-#
-# So questoes CORRETAS: acertar e evidencia de que estava tentando de verdade.
-#
-# A regua CRESCE com a sessao — ela e todas as corretas anteriores a janela, nao as
-# cinco primeiras. Congelada no comeco ela nao acompanhava ninguem: na questao 30 o
-# aluno ainda era comparado com as questoes 1-5. E a forma da regra, que compara as
-# ultimas respostas contra TODO o resto da sessao (_corroboracao_objetiva).
-#
-# As amostras da regua sao BLOCOS de BASE_SESSAO_BLOCO questoes, nao questoes soltas.
-# Tem que ser: a janela avaliada agrega varias questoes, entao a referencia precisa ter
-# a mesma forma. Com questao solta, variabilidade_tempo_resposta era pstdev de um valor
-# so — zero por construcao — e a feature saturava no teto do sigma em toda leitura.
+# O entre-sessoes exige MIN_SESSOES_BASELINE sessoes encerradas; ate la as internas viravam
+# 0.0, que diz "exatamente na media" e nao "desconhecido": o aluno novo ficava sem leitura
+# interna (no beta, quase todo mundo) e o vetor zerado nao existe no treino (descasamento
+# treino/serving). Como no DTS (Frontiers, 2020), a referencia sao as questoes CORRETAS da
+# propria sessao (acertar = estava tentando), supondo que o aluno comeca engajado.
+# A regua CRESCE: todas as corretas anteriores a janela, nao as cinco primeiras (congelada, na
+# questao 30 ainda comparava com 1-5), como em _corroboracao_objetiva. Amostras sao BLOCOS de
+# BASE_SESSAO_BLOCO questoes, na forma da janela: questao solta dava pstdev zero por construcao
+# e variabilidade_tempo_resposta saturava no teto do sigma.
 BASE_SESSAO_BLOCO = 2        # questoes por bloco de referencia
 BASE_SESSAO_BLOCOS = 3       # minimo de blocos (= 6 corretas) para a mediana ter o que descartar
 
-# Trava contra regua degenerada. Poucas amostras parecidas produzem desvio quase zero, e
-# ai qualquer diferenca vira um sigma absurdo: no primeiro teste com dado real, tres
-# respostas de ~20s deram desvio de ~400ms e uma questao de 95s virou +182 sigma. O
-# piso e absoluto porque agora a escala e log: 0,14 em log ~ 15% de variacao de tempo,
-# que e ruido normal. E o mesmo numero de CORROB_SD_PISO, pela mesma razao.
+# Trava contra regua degenerada: poucas amostras parecidas dao desvio ~0 (primeiro teste real:
+# tres de ~20s, desvio ~400ms, uma de 95s virou +182 sigma). Piso absoluto porque a escala e
+# log: 0,14 ~ 15% de variacao de tempo, ruido normal. Mesmo numero de CORROB_SD_PISO.
 SIGMA_PISO = 0.14
 SIGMA_TETO = 4.0             # corta no limite do que o treino conhece
 
@@ -2272,10 +2098,8 @@ def _regua(amostras, rts):
     base = {}
     for k in INTERNAS_RELATIVAS:
         vs = [a[k] for a in amostras]
-        # MEDIANA no centro: a regua nao pode ser arrastada por um bloco fora da curva
-        # (a questao em que o aluno foi no banheiro). Era o papel do descarte de extremos,
-        # que so funcionava no tamanho fixo antigo. O desvio segue sendo pstdev — um
-        # outlier o infla, e inflar o desvio ENCOLHE o sigma: erra para o lado prudente.
+        # MEDIANA no centro: um bloco fora da curva (o aluno foi ao banheiro) nao arrasta a
+        # regua. Desvio segue pstdev: outlier o infla e ENCOLHE o sigma, erra para o lado prudente.
         base[k] = (median(vs), pstdev(vs))
     logs = [_lg(rt) for rt in rts if rt and rt > 0]
     base["_rt"] = (median(logs), max(pstdev(logs), SIGMA_PISO)) if len(logs) > 1 else None
@@ -2283,10 +2107,8 @@ def _regua(amostras, rts):
 
 
 def _baseline_na_sessao(evs_antes):
-    """(média, desvio) das internas a partir do INICIO da propria sessao, ou None.
-
-    `evs_antes` sao os eventos ANTERIORES a janela de leitura — a regua nao pode ser
-    calculada sobre a mesma janela que ela vai avaliar."""
+    """(média, desvio) das internas a partir do INICIO da propria sessao, ou None. `evs_antes`
+    sao os eventos ANTERIORES a janela: a regua nao pode usar a janela que vai avaliar."""
     corretas = [p for et, p in evs_antes if et == "question_answer" and p.get("acertou")]
     blocos = [corretas[i:i + BASE_SESSAO_BLOCO]
               for i in range(0, len(corretas), BASE_SESSAO_BLOCO)]
@@ -2301,11 +2123,9 @@ def _baseline_na_sessao(evs_antes):
 
 
 async def montar_features_sessao(conn, session_id):
-    """Monta o dict das features v2 sobre uma JANELA recente (ver _inicio_janela).
-    Internas relativizadas pelo baseline do aluno (desvio em sigma); externas/contexto
-    brutas. Retorna na ordem FEATURE_ORDER, ou None se a sessão não existir.
-
-    Era CUMULATIVO na sessão inteira, e por isso as externas nunca desciam."""
+    """Monta o dict das features v2 sobre uma JANELA recente (ver _inicio_janela), na ordem
+    FEATURE_ORDER, ou None se a sessão não existir. Internas em sigma do baseline do aluno;
+    externas/contexto brutas. Janela porque, cumulativas na sessão inteira, as externas nunca desciam."""
     sess = await conn.fetchrow(
         "select user_id, session_start_ts from sessions where session_id = $1::uuid",
         session_id,
@@ -2321,16 +2141,10 @@ async def montar_features_sessao(conn, session_id):
     tab = [p for et, p in evs if et == "tab_change"]
     cliques = [p for et, p in evs if et == "click_outside"]
     brutos = _internos_brutos(evs)
-    # A regua da PROPRIA SESSAO vem primeiro. Duas razoes:
-    #   MATERIA — ela e feita das questoes que o aluno esta fazendo AGORA, entao casa
-    #             com o ritmo daquela materia por construcao.
-    #   COLD-START — existe desde a primeira sessao. O baseline entre-sessoes exige 3
-    #             sessoes encerradas com resposta, e num beta de gente nova isso
-    #             praticamente nunca acontece: hoje, em producao, ninguem tem.
-    # O entre-sessoes (agora filtrado por materia) fica para o comeco da sessao, antes
-    # de haver acertos suficientes — e ai ele e mais estavel, por ter mais amostras.
-    # O custo da regua da sessao e a suposicao do DTS: que o aluno comeca engajado. Se
-    # ele ja entrou disperso, a regua nasce torta. Limitacao conhecida e declarada.
+    # A regua da PROPRIA SESSAO vem primeiro: casa com o ritmo da materia atual por construcao
+    # e existe desde a 1a sessao (o entre-sessoes exige 3 encerradas; em producao hoje ninguem
+    # tem). O entre-sessoes (filtrado por materia) cobre o comeco, antes de haver acertos.
+    # Limitacao declarada (suposicao do DTS): se o aluno ja entrou disperso, a regua nasce torta.
     base = _baseline_na_sessao(await _carregar_eventos(conn, session_id, ate=inicio))
     if base is None:
         base = await _baseline_aluno(conn, sess["user_id"], session_id)
@@ -2404,16 +2218,11 @@ def vetor_para_modelo(feats):
 
 
 def leitura_confiavel(feats, estado=None):
-    """As 10 internas TODAS zeradas é a assinatura de cold-start (< MIN_SESSOES_BASELINE)
-    ou sessão sem resposta: zero ali não é "o aluno está na média", é "não há com o que
-    comparar". Como o vetor todo em 0σ é o retrato do aluno concentrado, o modelo
-    responde engajado com confiança alta sobre informação nenhuma.
-
-    Mas a confiança depende de QUAL estado foi afirmado. `muito_distraido` se apoia nas
-    11 features ABSOLUTAS (trocar de aba, sumir da tela), que valem sem referência
-    pessoal nenhuma — medido: 0,894 de acerto com ou sem baseline. Já engajado e
-    distraído dependem das internas (o distraído cai para 0,379 sem elas). Sem `estado`
-    responde só se há baseline — é o que o probe quer saber sobre as features."""
+    """As 10 internas TODAS zeradas são a assinatura de cold-start (< MIN_SESSOES_BASELINE) ou
+    sessão sem resposta: não é "na média", é "sem com o que comparar", e o vetor em 0σ faz o
+    modelo responder engajado com confiança alta sobre nada. Depende do estado: `muito_distraido`
+    se apoia nas 11 ABSOLUTAS (0,894 com ou sem baseline); engajado e distraído nas internas
+    (distraído cai para 0,379). Sem `estado`, responde só se há baseline (o que o probe quer)."""
     if any(float(feats.get(k) or 0.0) != 0.0 for k in INTERNAS_RELATIVAS):
         return True
     return estado == "muito_distraido"
@@ -2454,8 +2263,8 @@ async def _dono_sessao(conn, session_id):
 async def diagnose(request: Request, session_id: str,
                    _uid: str = Depends(usuario_autenticado)):
     """Prediz o estado de atenção da sessão (engajado/distraido/muito_distraido)
-    usando o RandomForest v2 carregado no startup. As features são o vetor
-    CUMULATIVO da sessão (montar_features_sessao), na ordem exata do treino."""
+    usando o RandomForest v2 carregado no startup. As features são as da JANELA
+    recente da sessão (montar_features_sessao), na ordem exata do treino."""
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
@@ -2493,14 +2302,10 @@ class FeedbackIn(BaseModel):
 @app.get("/intervencao/pendente")
 async def intervencao_pendente(request: Request, session_id: str,
                                uid: str = Depends(usuario_autenticado)):
-    """Frontend consulta a intervenção recém-disparada nos últimos 5 min. É a
-    'flag' que substitui o WebSocket: o front faz polling.
-
-    ENTREGA UMA VEZ SÓ. Antes o critério era `reward is null`, e como só o polegar
-    (ou o reward automático, 3 min depois) preenchia isso, fechar o card sem
-    responder trazia a MESMA intervenção de volta a cada ciclo de 15s. O update com
-    RETURNING marca e devolve no mesmo comando: sem janela para duas entregas, mesmo
-    com dois polls simultâneos."""
+    """Frontend faz polling da intervenção disparada nos últimos 5 min (substitui WebSocket).
+    ENTREGA UMA VEZ SÓ: só com `reward is null`, fechar o card sem responder a trazia de volta a
+    cada ciclo de 15s. O update com RETURNING marca e devolve no mesmo comando, sem janela para
+    duas entregas mesmo com polls simultâneos."""
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
@@ -2684,14 +2489,10 @@ class ReporteIn(BaseModel):
 @app.post("/questoes/reportar")
 async def reportar_questao(body: ReporteIn, request: Request,
                            uid: str = Depends(usuario_autenticado)):
-    """O aluno marca a questão como errada. Tira do cache NA HORA (não volta para mais
-    ninguém) e registra o evento.
-
-    Existe porque nenhum filtro automático chega a zero: os estruturais pegam alternativa
-    repetida e enunciado sem pergunta, o PoT pega a conta que não fecha com a alternativa —
-    mas erro de CONTEÚDO passa por todos. Sem isto, uma questão errada fica no cache
-    servindo indefinidamente. Com isto, sai no primeiro aluno que a encontra, e a contagem
-    de reportes é a única medida real da taxa de defeito no volume real."""
+    """O aluno marca a questão como errada: sai do cache NA HORA (não volta para ninguém) e o
+    evento é registrado. Nenhum filtro automático chega a zero (estruturais e PoT não pegam erro
+    de CONTEÚDO); sem isto a questão errada serve indefinidamente, e a contagem de reportes é a
+    única medida real da taxa de defeito no volume real."""
     pool = request.app.state.pool
     if pool is None:
         return _SEM_BANCO
@@ -2744,9 +2545,8 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
                 "select user_id from sessions where session_id = $1::uuid", body.session_id)
             if str(dono) != str(sub) and str(dono) != str(ANON_USER):
                 return JSONResponse({"erro": "Sessão não pertence ao usuário."}, status_code=403)
-            # ts = now() do BANCO (autoritativo). NÃO usamos body.ts do frontend:
-            # o relógio do navegador pode estar defasado e quebraria a janela de
-            # tempo do job de agregação (session_features). Eventos chegam em
+            # ts = now() do BANCO (autoritativo), não body.ts: relógio do navegador defasado
+            # quebraria a janela do job de agregação (session_features). Eventos chegam em
             # tempo real (fetch por evento), então now() ≈ hora do evento.
             ev = await conn.fetchrow(
                 """
@@ -2811,10 +2611,9 @@ async def perfil(request: Request, dados: dict = Body(default={}),
     ambiente = p.get("ambiente_dispositivo")
     seq = int(p.get("sequencia_dias_estudo") or 0)
     sess_dia = int(p.get("sessoes_no_dia") or 0)
-    # Aceite dos termos: ate agora existia so como checkbox no navegador, entao nao
-    # havia como responder depois QUEM aceitou, QUANDO e QUAL versao. Publico menor de
-    # idade e coleta de comportamento (mouse, ocioso, autorrelato) — nao da pra
-    # reconstruir isso retroativamente. Grava na PRIMEIRA vez e nao sobrescreve.
+    # Aceite dos termos: grava QUEM aceitou, QUANDO e QUAL versao, na PRIMEIRA vez e sem
+    # sobrescrever. Publico menor de idade e coleta de comportamento (mouse, ocioso,
+    # autorrelato): so checkbox no navegador nao permite reconstruir isso depois.
     versao_termos = (p.get("versao_termos") or dados.get("versao_termos") or None)
 
     # ultima_sessao_ts vem como epoch em ms → timestamptz
@@ -3169,17 +2968,10 @@ async def dados_grafico(request: Request):
 
 
 # ================== API: DADOS DO DASHBOARD =================================
-# FONTE ÚNICA: o Supabase, via _agregar_supabase(). Sem banco, a rota responde
-# 503 como todas as outras rotas de dados.
-#
-# Havia um fallback offline em cascata (base sintética em xlsx → planilha manual
-# → demo do front), de quando o projeto ainda não tinha banco externo. Saiu: a
-# base sintética não era mais usada, a planilha manual nunca existiu no repo, e
-# manter a cascata custava ~120 linhas que ninguém exercitava.
-#
-# Os blocos financeiros (`mrr_mensal`, `metas_fase`, `saude_financeira`) nunca
-# foram emitidos por aqui — o frontend preenche com dados de demonstração e
-# sinaliza isso na UI. Segue valendo.
+# FONTE ÚNICA: o Supabase, via _agregar_supabase(); sem banco responde 503 como as outras.
+# O fallback offline em cascata (xlsx sintético → planilha manual → demo do front) saiu: base
+# sintética em desuso, planilha nunca existiu no repo, ~120 linhas sem uso. Os blocos financeiros
+# (`mrr_mensal`, `metas_fase`, `saude_financeira`) não saem daqui: o front usa demo sinalizado na UI.
 
 # Rótulos amigáveis para o `target` (mantém a ordem verde → amarelo → vermelho,
 # que é a mesma ordem das cores do gráfico de rosca no frontend).
@@ -3215,12 +3007,10 @@ async def _role_do_usuario(pool, user_id, email=None):
 
 
 async def _agregar_supabase(conn, modelo, scaler):
-    """Monta os blocos do dashboard a partir dos dados REAIS do Supabase.
-    MEDIDO: contagens, médias de session_features, sessões por dia/hora, matérias.
-    PREDITO: os blocos de 'target' (engajado/distraído) NÃO são medidos — o banco
-    não guarda rótulo; são PREVISTOS pelo RandomForest (mesmo do /diagnose), por
-    isso vêm marcados como predição no front. Financeiro não existe no banco → é
-    omitido (o front cai no demo rotulado)."""
+    """Monta os blocos do dashboard a partir dos dados REAIS do Supabase. MEDIDO: contagens,
+    médias de session_features, sessões por dia/hora, matérias. PREDITO: os blocos de 'target'
+    vêm do RandomForest do /diagnose (o banco não guarda rótulo), marcados como predição no
+    front. Financeiro não existe no banco → omitido (o front cai no demo rotulado)."""
     from collections import defaultdict
 
     sessions = await conn.fetch(
@@ -3329,10 +3119,8 @@ async def _agregar_supabase(conn, modelo, scaler):
     distribuicao = [{"faixa": rot, "percentual": pct_pred(chave)} for chave, rot in _TARGETS]
 
     # --- alunos por escola (REAPROVEITA o slot da rosca 'planos'; ver nota) ---
-    # NOTA DE CONCEITO: antes esta rosca era o "perfil de comportamento" do aluno
-    # (persona da base sintética). O schema real NÃO tem persona de aluno, então
-    # o slot passa a mostrar DISTRIBUIÇÃO ADMINISTRATIVA (alunos por escola). Se um
-    # dia existir persona de aluno no banco, vale reverter para o significado antigo.
+    # NOTA: a rosca era o "perfil de comportamento" (persona da base sintética); o schema real
+    # não tem persona, então mostra alunos por escola. Se existir persona no banco, reverter.
     escolas = await conn.fetch("""
         select coalesce(e.nome, case when p.escola_id is null then 'Sem escola'
                                      else 'Escola ' || left(p.escola_id::text, 4) end) nome,
@@ -3419,10 +3207,7 @@ async def dashboard_dados(request: Request, ident: dict = Depends(usuario_identi
         return JSONResponse({"erro": "Não foi possível montar o dashboard."}, status_code=500)
 
 # ========================================= PERFIL =============================================
-# AUTH: a validação de JWT do Supabase existe em auth.py (dependência
-# usuario_autenticado) e já protege o /diagnose. DÍVIDA: estender o Depends às
-# demais rotas de dados — depende do frontend passar a enviar Authorization:
-# Bearer <token> em todas as páginas (hoje várias não carregam o supabase-js).
+# AUTH: JWT do Supabase via Depends (auth.py). Ainda sem token: /sessions/{id}/end, /seed e /.
 @app.get("/perfil")
 async def get_perfil(request: Request, ident: dict = Depends(usuario_identidade)):
     # Identidade vem do TOKEN (sub + email verificados), NUNCA de query param: o
@@ -3478,23 +3263,15 @@ async def get_perfil(request: Request, ident: dict = Depends(usuario_identidade)
         return JSONResponse({"status": "erro"}, status_code=500)
 
 # ============ API: PAINEL DO RESPONSÁVEL (professor/coordenador/pai) ========
-# Um endpoint só, que despacha pela `role` do perfil — o frontend faz uma
-# chamada e renderiza conforme o que voltar.
-#
-# NOTA SOBRE O SCHEMA: `professores` tem escola_id + materia, mas NÃO tem
-# turma_id. Então "a turma do professor" não existe no banco: o professor vê os
-# alunos de TODAS as turmas da escola dele, filtrados pela matéria que leciona.
-#
-# A semana é o inteiro `semana` (1..8) de desempenho_semanal — não é uma data.
-# "Semana mais recente" = max(semana).
+# Um endpoint só, que despacha pela `role` do perfil. `professores` não tem turma_id, então o
+# professor vê os alunos de TODAS as turmas da escola, filtrados pela matéria que leciona.
+# A semana é o inteiro `semana` (1..8) de desempenho_semanal, não data; mais recente = max(semana).
 def _turma_rotulo(ano, turno):
     return f"{ano}º ano · {turno}" if ano is not None else "—"
 
 
-# Faixas de status por % de atenção. Cortes fixos, validados contra a
-# distribuição real do dataset (mediana ~0.65): < 50% = em risco ·
-# 50–70% = atenção · ≥ 70% = bem. Espalha ~30/25/45 (vs. 82% em "bem" com
-# cortes de 20/30%, que escondiam quase todo mundo).
+# Faixas por % de atenção, cortes fixos validados na distribuição real (mediana ~0.65): < 50%
+# risco · 50–70% atenção · ≥ 70% bem. Espalha ~30/25/45 (cortes de 20/30% punham 82% em "bem").
 def _status_atencao(media):
     if media is None:
         return None
@@ -3738,12 +3515,9 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
 # ================== HEALTHCHECK =============================================
 @app.get("/")
 def health():
-    """Healthcheck do Render + o estado das flags que mudam o EXPERIMENTO.
-
-    Existe porque a flag do A/B ficou desligada em produção sem ninguém notar: ela estava
-    só no .env local. Descobrir isso depois do beta significaria dado coletado sem grupo
-    controle — e nenhuma resposta para "a intervenção muda alguma coisa?".
-    Não expõe segredo nenhum: só liga/desliga e nomes de modelo, tudo público."""
+    """Healthcheck do Render + o estado das flags que mudam o EXPERIMENTO. Existe porque a flag
+    do A/B ficou desligada em produção sem ninguém notar (só no .env local): beta sem grupo
+    controle não responde se a intervenção muda algo. Não expõe segredo: só flags e nomes de modelo."""
     return {
         "status": "KaIA backend no ar",
         "schema": DB_SCHEMA,

@@ -1,10 +1,7 @@
-"""Cria um schema `teste` no MESMO banco Supabase, com CÓPIAS vazias das tabelas do
-`public` — um sandbox isolado. O backend de teste aponta pra ele com KAIA_DB_SCHEMA=teste
-(search_path), então grava tudo (sessões/eventos/probes/cache) em `teste.*` sem tocar
-no `public`. Só copia os DADOS de referência (questoes_reais) pro few-shot funcionar.
-
-NÃO modifica o schema public — apenas LÊ dele e cria coisas no schema `teste`.
-Idempotente: pode rodar de novo (create ... if not exists).
+"""Cria o schema sandbox `teste` no mesmo banco, com cópias vazias das tabelas do `public`.
+O backend de teste usa KAIA_DB_SCHEMA=teste (search_path) e grava tudo em `teste.*`;
+só os dados de questoes_reais são copiados, pro few-shot funcionar. Só LÊ o public.
+Idempotente (create ... if not exists).
 
     python Backend/criar_schema_teste.py            # cria/atualiza o schema teste
     python Backend/criar_schema_teste.py --refazer  # dropa e recria o schema teste

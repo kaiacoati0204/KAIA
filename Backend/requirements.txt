@@ -12,10 +12,9 @@ apscheduler
 # Auth — validação do JWT do Supabase (ES256 via JWKS)
 pyjwt[crypto]
 
-# ML — o backend faz pickle.load do RandomForest e do StandardScaler, então
-# scikit-learn precisa existir em RUNTIME, não só no treino. Versões fixas de
-# propósito: o modelo é regerado no build (ml/gerar_base_v2.py) e um upgrade
-# silencioso de major quebraria o unpickle ou o próprio gerador.
+# ML — pickle.load do RandomForest/StandardScaler exige scikit-learn em RUNTIME.
+# Versões fixas: o modelo é regerado no build (ml/gerar_base_v2.py) e um upgrade
+# de major quebraria o unpickle ou o gerador.
 numpy==2.2.6
 pandas==3.0.3
 scikit-learn==1.7.1

@@ -1,15 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Avaliação reutilizável do modelo de atenção — a MESMA função roda na base
-SINTÉTICA (gerar_base_v2) e nos rótulos REAIS do probe (treinar_com_probe).
-Assim, quando o probe tiver dado, a medição rica já roda automática, sem código novo.
+Avaliação reutilizável do modelo de atenção — a MESMA função roda na base SINTÉTICA
+(gerar_base_v2) e nos rótulos REAIS do probe (treinar_com_probe), sem código novo.
 
-Métricas:
-- `relatorio`: acurácia, relatório por classe, MATRIZ DE CONFUSÃO e BASELINE
-  majoritário (referência trivial — "sempre chutar a classe mais comum").
-- `cv_agrupada`: cross-validation AGRUPADA por aluno (nenhum aluno em treino E
-  teste ao mesmo tempo) — evita o vazamento que infla a métrica e mede a
-  generalização pra alunos nunca vistos. Devolve média ± desvio entre os folds.
+`relatorio`: acurácia, por classe, matriz de confusão e baseline majoritário.
+`cv_agrupada`: CV AGRUPADA por aluno (nenhum aluno em treino E teste) — evita o
+vazamento que infla a métrica e mede generalização pra aluno nunca visto; média ± desvio.
 """
 import numpy as np
 import pandas as pd
@@ -19,9 +15,8 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 def relatorio(y_true, y_pred, classes, y_score=None):
     """Métricas de um conjunto já predito. `classes` = nomes na ordem 0..n-1.
-    `y_score` (probabilidades N x classes, opcional) liga o Brier (CALIBRAÇÃO):
-    0 = perfeito, 2 = péssimo — diz se a confiança do modelo bate com a realidade.
-    Só é significativo no dado REAL; no sintético é ruído."""
+    `y_score` (probs N x classes, opcional) liga o Brier (calibração; 0 = perfeito,
+    2 = péssimo). Só é significativo no dado REAL; no sintético é ruído."""
     y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
     labels = list(range(len(classes)))
     if len(y_true):
@@ -41,7 +36,7 @@ def relatorio(y_true, y_pred, classes, y_score=None):
     if y_score is not None and len(y_true):
         ys = np.asarray(y_score, dtype=float)
         if ys.ndim == 2 and ys.shape[1] == len(classes):
-            onehot = np.eye(len(classes))[y_true]                         # rótulo real em one-hot
+            onehot = np.eye(len(classes))[y_true]
             d["brier"] = float(np.mean(np.sum((ys - onehot) ** 2, axis=1)))
     return d
 

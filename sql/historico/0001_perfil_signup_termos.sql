@@ -1,17 +1,11 @@
 -- ============================================================
 --  KaIA — perfil no signup + consentimento (LGPD)
 -- ============================================================
--- Versiona a infra que garante auth + perfil ATÔMICOS: o trigger
--- `on_auth_user_created` em auth.users chama `criar_perfil_no_signup()`, que
--- cria a linha em `perfis` na MESMA transação do Supabase Auth. Assim, mesmo que
--- o aluno feche a aba logo após o signup, não existe conta órfã.
---
--- Esta migration:
---   1) adiciona o registro de consentimento em `perfis` (LGPD, público menor);
---   2) estende a função para gravar o consentimento vindo do metadata do signup;
---   3) (re)garante o trigger — idempotente, reconstrói tudo num banco limpo.
---
--- Idempotente: pode rodar quantas vezes precisar.
+-- Auth + perfil ATÔMICOS: o trigger `on_auth_user_created` em auth.users chama
+-- `criar_perfil_no_signup()`, que cria a linha em `perfis` na MESMA transação do
+-- Supabase Auth — fechar a aba logo após o signup não deixa conta órfã. Adiciona o
+-- consentimento em `perfis` (LGPD, público menor), gravado do metadata do signup,
+-- e (re)garante o trigger. Idempotente, reconstrói tudo num banco limpo.
 
 -- 1) Consentimento -----------------------------------------------------------
 alter table public.perfis add column if not exists termos_aceite_ts timestamptz;

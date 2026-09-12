@@ -1,13 +1,9 @@
 """
-limpar_contas_teste.py — desfaz o seed_contas_teste.py.
+limpar_contas_teste.py — desfaz o seed_contas_teste.py, numa transação.
 
-- DELETA as contas net-new (aluno1, aluno2, aluno individual): auth + perfis.
-- RESTAURA os 2 slots reaproveitados (professor/coordenador da Vale Verde) ao
-  nome/email ORIGINAIS e remove o login deles. Esses slots são UNIQUE por
-  escola/(escola,materia) — nunca podem ser deletados.
-- MANTÉM o admin (kaia.coati0204@gmail.com): é a conta real, não uma de teste.
-
-Toda a escrita roda numa transação (tudo-ou-nada).
+Deleta os alunos net-new (auth + perfis); restaura nome/email originais do
+professor/coordenador reaproveitados e tira o login deles (slots UNIQUE, nunca
+deletar). Mantém o admin kaia.coati0204@gmail.com, que é conta real.
 
 Uso:
     python limpar_contas_teste.py            # dry-run

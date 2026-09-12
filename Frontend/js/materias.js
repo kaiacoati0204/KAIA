@@ -17,16 +17,10 @@ let sessaoDeEstudoAberta = false;
 let idleInterval    = null;
 
 // ==== LIMIAR DE OCIOSIDADE (overlay "ainda esta conosco?") ====
-// Era o tempo de LEITURA: ceil(palavras/3.3)+5, ~23s numa questao curta. So que ler
-// nao e responder — nos dados da primeira sessao real as respostas levaram 50s, 57s e
-// 99s, e o overlay subiu 11 vezes em 6 minutos. Aluno lendo o enunciado e fazendo a
-// conta (na cabeca ou no papel) fica parado, e isso e trabalho, nao desatencao.
-//
-// O overlay existe para pegar quem SAIU, nao quem esta pensando. Quem saiu fica fora
-// por minutos. Dai o piso alto e o fator sobre a leitura.
-//
-// Publico TEA/TDAH: escurecer a tela a cada 30s e exatamente o estimulo desnecessario
-// que o CLAUDE.md proibe — e interrompe o raciocinio de quem mais precisa mante-lo.
+// Era o tempo de LEITURA (ceil(palavras/3.3)+5, ~23s), mas ler nao e responder: na 1a sessao
+// real as respostas levaram 50-99s e o overlay subiu 11x em 6 min. Ele e pra quem SAIU (fica
+// fora por minutos), nao pra quem esta pensando — dai o piso alto e o fator sobre a leitura.
+// TEA/TDAH: escurecer a cada 30s e estimulo desnecessario e corta o raciocinio.
 const PISO_OCIOSO_S        = 60;    // nunca abaixo disto, por mais curta que seja
 const PISO_OCIOSO_CALCULO_S = 90;   // MAT/FIS/QUI: tem conta pra fazer
 const FATOR_OCIOSO         = 3;     // sobre a estimativa de leitura
@@ -141,36 +135,18 @@ const _variar = (a) => a[Math.floor(Math.random() * a.length)];
 // ============================================================
 //   TODO: ajustar tempo pra produção — TEMPOS DE TESTE
 // ============================================================
-// Enquanto o visual das 7 está sendo calibrado, TODOS os tempos das
-// intervenções estão encurtados: com os valores reais, ver uma pausa ativa
-// inteira custa 90 segundos por rodada de ajuste.
-//
-// COMO RESTAURAR: troque TEMPOS_DE_TESTE para false. Só isso. Cada chamada de
-// T() carrega os DOIS valores — T(teste, produção) — então o valor real nunca
-// se perdeu, está ali do lado. Todos os pontos afetados carregam o comentário
-// "TODO: ajustar tempo pra produção", então um grep por esse texto lista a
-// lista inteira.
-//
-// Os tempos de PRODUÇÃO abaixo são os que estavam valendo antes desta fase e
-// ainda NÃO foram calibrados de verdade — isso é etapa própria, com dados de
-// uso. Não trate a segunda coluna como número final.
+// T(teste, produção): true encurta tudo pra iterar no visual sem esperar 90s por pausa.
+// Os de produção ainda NÃO foram calibrados com dado de uso — não são número final.
+// Pontos afetados: grep "TODO: ajustar tempo pra produção".
 const TEMPOS_DE_TESTE = false;
 const T = (teste, producao) => (TEMPOS_DE_TESTE ? teste : producao);
 
 // ============================================================
 //   ÍCONES DAS 7 — trocar aqui pelos ícones da marca
 // ============================================================
-// Substituem os emojis dos títulos. Emoji renderiza diferente em cada sistema
-// operacional e nenhum deles é da marca; estes são SVG de traço, no mesmo
-// vocabulário dos ícones da rail (comum.js), herdando cor via currentColor.
-//
-// PARA TROCAR: substitua o SVG da entrada correspondente. Só isso — o CSS
-// (.kaia-ic no style.css) cuida de tamanho, cor e alinhamento, e nenhuma outra
-// parte do código conhece os desenhos.
-//
-// NOTA: os emojis que aparecem DENTRO do texto dos passos (🙆 👀 💧 🌬️ em
-// PAUSA_ATIVA_PASSOS) continuam como estão — são conteúdo da instrução, não
-// identidade da intervenção. Dá para trocar também, é só pedir.
+// SVG de traço no vocabulário da rail (comum.js), cor via currentColor — emoji muda por SO
+// e não é da marca. Pra trocar, só o SVG da entrada: .kaia-ic (style.css) cuida do resto.
+// Os emojis dentro de PAUSA_ATIVA_PASSOS ficam: são conteúdo do passo, não identidade.
 const ICONES_INTERVENCAO = {
     // bússola — "onde está sua atenção agora?"
     auto_monitoramento: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg>',
@@ -196,17 +172,9 @@ function _iconeHTML(tipo, chip = false) {
     return `<span class="kaia-ic${chip ? ' kaia-ic-chip' : ''}" aria-hidden="true">${svg}</span>`;
 }
 
-// Copy dos braços que renderizam como CARD de texto. Os demais do alvo
-// (micro_refoco, pausa_ativa, troca_atividade, checkpoint, reancoragem) são AÇÃO —
-// mostrarIntervencao desvia antes deste lookup. `texto` é uma LISTA: sorteia uma
-// frase a cada disparo. Adicionar/editar frases aqui.
-// `titulo` e `texto` são LISTAS: cada disparo sorteia um de cada, então o card
-// muda de cabeçalho E de corpo. Combinado com a rotação de POSIÇÃO (POSICOES_CARD,
-// abaixo), duas aparições seguidas nunca são iguais nem no lugar nem no que dizem
-// — que é o que impede o card de virar banner ignorado.
-// Tom das listas: nomear o que está acontecendo sem cobrar, sem urgência e sem
-// prometer resultado. Nada de "você precisa", "foque!" ou exclamação dupla.
-// Para editar: acrescenta ou troca linhas aqui, nada mais depende disso.
+// Copy dos cards de texto (os outros braços são AÇÃO e desviam antes daqui).
+// titulo/texto sorteados a cada disparo, pro card não virar banner ignorado.
+// Tom: nomeia sem cobrar nem prometer — nada de "você precisa" ou "foque!".
 const INTERVENCOES_MSG = {
     auto_monitoramento: {
         titulo: [
@@ -269,14 +237,9 @@ function _pilhaNotif() {
 }
 
 // ---- Strip de feedback ("isso ajudou?") — reutilizável em TODA intervenção ----
-// Fase 2. O tipo e o instante de exibição ficam FECHADOS no closure, não lidos do
-// global: as intervenções de AÇÃO já liberaram o polling (intervencaoAtual = null)
-// quando o strip aparece, e ler o global ali perderia o feedback em silêncio.
-//
-// O CSS de TODAS as intervenções (este strip, os cards, os overlays) mora no
-// style.css, seção "INTERVENÇÕES". Antes era injetado daqui em template string;
-// mudou de lugar para poder ser editado como CSS de verdade. Este arquivo só
-// monta os elementos e aplica as classes.
+// Fase 2. Tipo e instante ficam no closure, não no global: nas intervenções de AÇÃO o polling
+// já liberou (intervencaoAtual = null) quando o strip aparece, e o feedback se perderia calado.
+// CSS de todas as intervenções mora no style.css, seção "INTERVENÇÕES"; aqui só DOM e classes.
 
 // Bloco pronto: rótulo opcional + os 3 botões. `agradecer` troca o strip por um
 // "valeu" ao responder — nos cards do polling isso não faz sentido (o card some na
@@ -318,20 +281,10 @@ function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
     return wrap;
 }
 
-// ---- Onde o card aparece, e por que não é sempre no mesmo canto ------------
-// Dispensar o card aqui é RESPONDER o feedback (não há X): um clique no
-// automático não desperdiça só a intervenção, ele injeta recompensa falsa no
-// Thompson — e como os 3 botões saem sempre na mesma ordem, o reflexo acerta
-// sempre a mesma resposta, o que é viés e não ruído.
-// O reflexo se prende a um PONTO da tela. Então o REPERTÓRIO de zonas é fixo e
-// pequeno (achar continua barato: são sempre os mesmos 6 lugares, todos na
-// metade de baixo) e o ponto dentro dele roda. Em ORDEM, e não por sorteio:
-// sorteio repetiria o mesmo canto ~1/6 das vezes, e é na repetição que o
-// reflexo se forma.
-// São 3 colunas x 2 linhas. A ordem abaixo é escolhida a dedo para que zonas
-// CONSECUTIVAS mudem de coluna E de linha — o salto entre uma aparição e a
-// seguinte é sempre o maior possível. As classes moram no style.css, junto com
-// as medidas que provam que nenhuma zona toca a questão nem a barra lateral.
+// ---- Onde o card aparece ---------------------------------------------------
+// Dispensar = responder o feedback; clique reflexo no mesmo ponto vira reward falso no Thompson.
+// Daí a rotação em ordem por 6 zonas (salto máximo entre seguidas, índice salvo entre sessões).
+// Hoje DESLIGADA: _posicionarPilhaNotif fixa pos-dir, e o índice abaixo fica sem uso.
 const POSICOES_CARD = [
     ['pos-esq'],                  // inferior esquerda
     ['pos-centro', 'pos-alta'],   // meio-alta, centro
@@ -342,10 +295,6 @@ const POSICOES_CARD = [
 ];
 const _TODAS_POSICOES = POSICOES_CARD.flat();
 
-// O índice VIVE ENTRE SESSÕES. Com teto de 5 intervenções por sessão e só 2 dos
-// 7 braços sendo card, o aluno vê ~1 card por sessão: se o índice zerasse a cada
-// carregamento, ele cairia SEMPRE na primeira zona — a rotação existiria no
-// código e não na experiência, que é exatamente o reflexo que ela veio evitar.
 const POS_CARD_CHAVE = 'kaia_pos_card_idx';
 let _posicaoCardIdx = parseInt(localStorage.getItem(POS_CARD_CHAVE), 10);
 if (!Number.isInteger(_posicaoCardIdx)) _posicaoCardIdx = -1;
@@ -363,12 +312,8 @@ function _posicionarPilhaNotif() {
     pilha.classList.add('pos-dir');            // SEMPRE canto inferior direito
 }
 
-// Portão antes de o feedback aceitar clique. Vale para TODO card, não só o
-// primeiro da sessão: com teto de 5 intervenções por sessão (app.py) e só 2 dos
-// 7 arms sendo card, o aluno vê ~1 card por sessão — o reflexo não se forma
-// DENTRO da sessão, vem das anteriores. Gatear "só o primeiro" seria quase o
-// mesmo na prática e deixaria o card com dois comportamentos para o mesmo
-// visual, que é a inconsistência que atrapalha TEA/TDAH.
+// Portão antes do feedback aceitar clique, em TODO card (não só o 1º): o reflexo vem das
+// sessões anteriores, e dois comportamentos pro mesmo visual atrapalham TEA/TDAH.
 const CARD_GATE_MS = T(350, 900);   // TODO: ajustar tempo pra produção
 const FB_APOS_MS = T(3000, 4500);   // feedback aparece só APÓS a intervenção (não junto)
 let _fbCardTimer = null;
@@ -517,26 +462,9 @@ function iniciarPollIntervencao() {
 // =============================================================================
 // ===== GATILHO DE TESTE (PROVISÓRIO) — REMOVER, o Vitor faz o motor real =====
 // =============================================================================
-// POR QUE EXISTE: as 7 intervenções não disparam sozinhas porque o motor de
-// decisão ainda não existe. Este bloco é uma muleta para a Bia CONSEGUIR VER as
-// intervenções acontecendo no fluxo real e validar o design. Não é heurística,
-// não é modelo, não pretende ser: é "ficou parado N segundos, mostra a próxima
-// da fila".
-//
-// COMO REMOVER (3 passos, nada mais depende disto):
-//   1. apague este bloco inteiro;
-//   2. apague a linha `iniciarGatilhoTeste();` (junto de iniciarPollIntervencao);
-//   3. apague o guarda marcado "(gatilho de teste)" em enviarFeedbackIntervencao
-//      e a linha `_intervencaoDeTeste = false;` em iniciarPollIntervencao.
-//
-// COMO DESLIGAR SEM APAGAR: GATILHO_TESTE = false. Ou, no console do navegador,
-// kaiaGatilhoTeste(false).
-//
-// NÃO CONTAMINA O DADO: toda intervenção nascida daqui é marcada em
-// _intervencaoDeTeste, e enviarFeedbackIntervencao NÃO envia o feedback nesse
-// caso — o Thompson do backend não recebe recompensa de intervenção falsa. Os
-// eventos que passarem por logEvent durante uma delas vão marcados com
-// origem: 'gatilho_teste' no payload, para dar para filtrar depois.
+// Dock manual pra ver as 7 intervenções no fluxo real (desliga: kaiaGatilhoTeste(false)).
+// Não contamina o dado: _intervencaoDeTeste bloqueia o reward no Thompson e marca origem 'gatilho_teste'.
+// Remover: apagar este bloco e todo trecho marcado "(gatilho de teste)".
 const GATILHO_TESTE = false;
 
 // Barra de teste: AUTOMÁTICA nas contas @teste.kaia (as de teste que criamos), OU por
@@ -569,15 +497,10 @@ let _gtUltimoEm      = 0;
 let _intervencaoDeTeste = false;   // lido por enviarFeedbackIntervencao e logEvent
 
 // ---- Dock de botões: uma bolinha por intervenção --------------------------
-// Só existe com GATILHO_TESTE ligado; no modo normal nem é criado.
-// O CSS mora AQUI, injetado, e não no style.css — de propósito. A convenção do
-// projeto é o contrário (CSS das intervenções foi todo para o style.css), mas
-// isto é ferramenta de teste descartável: mantendo estilo e marcação no mesmo
-// bloco, remover é apagar UM trecho, sem deixar regra órfã na folha de estilo.
-//
-// Fica no topo, encostado depois da rail: a faixa y 0→63 é a única área grande
-// que não é usada nem pela questão (começa em 136) nem pelas 6 zonas dos cards
-// (metade de baixo) nem pelos botões Caderno/ABANDONAR (x 984→1220).
+// Só existe com a barra de teste ligada. CSS injetado aqui, contra a convenção do style.css, de
+// propósito: ferramenta descartável, remover é apagar UM trecho sem deixar regra órfã.
+// No topo após a rail: y 0→63 é a única faixa livre da questão (começa em 136), dos cards
+// (metade de baixo) e dos botões Caderno/ABANDONAR (x 984→1220).
 function _montarDockTeste() {
     if (!_barraTesteLigada() || $('kaia-dock-teste')) return;
 
@@ -653,19 +576,15 @@ function dispararIntervencaoTeste(tipo) {
         console.warn('[KaIA] tipo desconhecido:', tipo, '— use um destes:', GATILHO_TESTE_ORDEM);
         return;
     }
-    // Encerra de verdade o que estiver rodando antes de abrir a próxima.
-    // Em produção duas intervenções nunca se sobrepõem (o polling é travado por
-    // intervencaoAtual), mas o dock deixa clicar uma em cima da outra — e um
-    // temporizador pendente do micro_refoco (o MR_DELAY_MS) voltava a abrir a
-    // barra POR CIMA da intervenção seguinte, zerando pausaAtiva junto.
+    // Fecha de verdade o que estiver rodando: em produção intervencaoAtual impede sobreposição,
+    // mas o dock deixa clicar uma em cima da outra — e o MR_DELAY_MS pendente do micro_refoco
+    // reabria a barra POR CIMA da seguinte, zerando pausaAtiva junto.
     _fecharMicroRefoco();
     _fecharSeq();
     _esconderTroca();
 
-    // O checkpoint precisa de pelo menos uma questão RESPONDIDA para ter o que
-    // recuperar — num teste avulso o histórico está vazio e ele não abriria.
-    // Só no modo de teste: empresta uma questão de exemplo para o design poder
-    // ser visto. Em produção o histórico vem das questões de verdade.
+    // Só no teste: o checkpoint precisa de ao menos 1 questão RESPONDIDA e num disparo avulso
+    // o histórico está vazio, então empresta uma de exemplo pra ver o design.
     if (tipo === 'checkpoint' && historicoQuestoes.length === 0) {
         console.log('[KaIA] (teste) histórico vazio — usando questão de exemplo no checkpoint.');
         historicoQuestoes.push({
@@ -710,10 +629,8 @@ let _seqMostradaEm     = 0;      // instante em que a intervenção apareceu
 let _seqFeedbackAberto = false;  // card já trocou para "como foi?"
 
 // ---- Troca suave da frase do roteiro (pausa_ativa) -------------------------
-// O tick roda 4x por segundo e reescrevia a frase toda vez; agora ele só age
-// quando o ÍNDICE do passo muda de verdade, e a troca é animada.
-// Estes dois valores CASAM com as animações kaiaPassoSai/kaiaPassoEntra no
-// style.css — mexeu num, mexe no outro.
+// O tick roda 4x/s; a frase só troca (animada) quando o ÍNDICE do passo muda. Os dois
+// valores CASAM com kaiaPassoSai/kaiaPassoEntra no style.css — mexeu num, mexe no outro.
 const SEQ_PASSO_SAIDA_MS   = 220;
 const SEQ_PASSO_ENTRADA_MS = 450;
 let _seqPassoIdx   = -1;
@@ -845,10 +762,8 @@ function _pedirFeedbackSeq() {
     setTimeout(() => { if (_seqFeedbackAberto) _fecharSeq(); }, SEQ_FEEDBACK_MS);
 }
 
-// Pausa ativa (movimento) — Passo 3.
-// Bancos da pausa ativa. Os passos são um ROTEIRO (rodam em ordem durante a
-// pausa), não um sorteio — sortear passo a passo mandaria o aluno alongar depois
-// de já ter voltado a sentar. Quem varia entre disparos é o título.
+// Pausa ativa (movimento) — Passo 3. Passos são ROTEIRO em ordem, não sorteio (sortear
+// mandaria alongar depois de já ter sentado); quem varia entre disparos é o título.
 const PAUSA_ATIVA_TITULOS = [
     'Pausa ativa',
     'Hora de mexer o corpo',
@@ -878,26 +793,21 @@ function iniciarPausaAtiva() {
 
 // Micro-refoco (respiração) — Passo 4 · barra fixa NO RODAPÉ, deslizando de
 // baixo: mensagem + barra que cai linearmente com o tempo restante (sem
-// números). Não usa o overlay central. (Dizia "no TOPO" — a barra desceu para o
-// rodapé e o comentário tinha ficado para trás.)
+// números). Não usa o overlay central.
 let _mrInterval = null;
 let _mrDelayTimer     = null;
 let _mrMostradaEm     = 0;
 let _mrFeedbackAberto = false;
 
-// Respiro ANTES de a barra começar a descer: ela aparece cheia e fica parada,
-// dando tempo de LER a frase de acolhimento antes de qualquer movimento
-// começar. Sem isso a barra já entrava descendo, e uma contagem correndo em
-// cima do texto é justamente o tipo de pressa que a intervenção veio tirar.
-// O tempo total na tela é MR_DELAY_MS + a duração da respiração.
+// Barra entra cheia e parada antes de descer, pra dar tempo de LER a frase: contagem
+// correndo sobre o texto é a pressa que a intervenção veio tirar.
+// Tempo total na tela = MR_DELAY_MS + duração da respiração.
 // TODO: ajustar tempo pra produção — 1,5s no teste, 4s de verdade.
 const MR_DELAY_MS = T(1500, 4000);
 
-// Banco de frases de acolhimento da barra. Uma é sorteada na ABERTURA e fica
-// PARADA do começo ao fim: variar entre aparições dá variedade, variar durante a
-// respiração viraria movimento numa intervenção que existe para acalmar.
-// Tom: sem cobrança, sem urgência, sem prometer resultado. Lista pensada para
-// ser editada — é só acrescentar/trocar linhas aqui.
+// Frases de acolhimento: sorteada na ABERTURA e PARADA até o fim (variar durante a respiração
+// viraria movimento numa intervenção pra acalmar). Tom sem cobrança, urgência nem promessa;
+// editar é só acrescentar/trocar linhas.
 const FRASES_MICRO_REFOCO = [
     'Sem pressa. A questão continua aí quando você voltar.',
     'Estes trinta segundos são seus. Nada some enquanto isso.',
@@ -933,19 +843,14 @@ function _garantirBarraMicroRefoco() {
       <div class="kaia-mr-track"><div class="kaia-mr-fill" id="kaia-mr-fill"></div></div>
       <div id="kaia-mr-fb"></div>`;
     document.body.appendChild(el);
-    // Reflow logo após inserir: sem ele o navegador nunca chega a calcular o
-    // estado FECHADO, e a primeira abertura (criação + .aberto no mesmo tick)
-    // pula a transição — justo a que o aluno mais nota. Mesmo truque que a
-    // barra de progresso já usa abaixo.
+    // Reflow logo após inserir: sem ele o estado FECHADO nunca é calculado e a 1ª abertura
+    // (criação + .aberto no mesmo tick) pula a transição. Mesmo truque da barra de progresso.
     void el.offsetWidth;
     $('kaia-mr-pular').addEventListener('click', () => {
         if (_mrFeedbackAberto) _fecharMicroRefoco(); else encerrarMicroRefoco();
     });
 
-    // (O X de teste que existia aqui saiu: com MR_DELAY_MS a barra fica parada
-    // tempo suficiente para ser vista, e o "Pular" já é a saída. A barra volta a
-    // se fechar sozinha em todos os modos, que é o conceito dela — faixa passiva
-    // de "respire", sem exigir ação.)
+    // Sem X: a barra fecha sozinha (faixa passiva de "respire") e "Pular" é a saída.
 }
 
 function iniciarMicroRefoco() {
@@ -968,10 +873,8 @@ function iniciarMicroRefoco() {
     document.body.classList.add('kaia-mr-aberta');
     $('kaia-mr-msg').innerText = fraseTxt;      // intro: a frase ocupa o lugar do "Inspira"
     _medirBarraMicroRefoco();
-    // A barra entra CHEIA e fica parada por MR_DELAY_MS — tempo de ler a frase.
-    // Só depois ela começa a cair linearmente até 0 (via transition CSS, sem
-    // números). A contagem que encerra a intervenção também só começa aí: o
-    // delay é respiro, não desconto do tempo de respiração.
+    // Entra CHEIA e parada por MR_DELAY_MS; só depois cai linear até 0 (transition CSS). A
+    // contagem que encerra também começa aí: o delay é respiro, não desconto da respiração.
     const fill = $('kaia-mr-fill');
     clearInterval(_mrInterval);
     clearTimeout(_mrDelayTimer);
@@ -994,10 +897,8 @@ function iniciarMicroRefoco() {
     }, MR_DELAY_MS);
 }
 
-// A barra vive no rodapé, onde o probe de autorrelato e a pilha de cards também
-// moram. Publica a altura REAL dela para o CSS subir os dois enquanto ela está
-// aberta — medida em vez de fixa porque a barra encolhe no modo feedback e
-// cresce se a frase quebrar em duas linhas.
+// O rodapé é dividido com o probe e a pilha de cards: publica a altura REAL da barra pro CSS
+// subir os dois. Medida, não fixa: encolhe no modo feedback e cresce se a frase quebrar.
 function _medirBarraMicroRefoco() {
     const el = $('kaia-mr');
     if (el) document.body.style.setProperty('--mr-altura', `${el.offsetHeight}px`);
@@ -1118,20 +1019,16 @@ function _trocarTema() {
 // ============================================================
 //   CHECKPOINT DE RECUPERAÇÃO (intervenção com AÇÃO — Passo 6)
 // ============================================================
-// INLINE (não é modal escuro): um card CURTO aparece no topo da área de estudo,
-// com UMA pergunta do conteúdo RECENTE (últimas respondidas) — retrieval practice.
-// A questão atual fica atenuada; ao fechar, um REALCE de re-entrada volta o olho
-// pra ela (reduz o custo de retomada, alto no TEA/TDAH). Base: teste interpolado
-// (Szpunar 2013) + resumption lag. Reusa pausaAtiva; warm-up garante histórico.
+// INLINE (não modal escuro): card CURTO no topo da área de estudo com UMA pergunta das últimas
+// respondidas (retrieval practice). A atual fica atenuada e, ao fechar, um REALCE devolve o olho
+// a ela (custo de retomada, alto no TEA/TDAH). Base: teste interpolado (Szpunar 2013) +
+// resumption lag. Reusa pausaAtiva; warm-up garante histórico.
 let _cpQuestao    = null;
 let _cpMostradaEm = 0;
 
 // ---- Bancos de texto do checkpoint ---------------------------------------
-// Três momentos, três listas. O checkpoint é a intervenção que mais se repete
-// dentro de uma mesma semana de estudo, então é a que mais sofre com texto
-// fixo: o aluno decora a frase de abertura e para de ler o que vem depois.
-// Em CHECKPOINT_ERRO, {r} é substituído pela resposta certa.
-// Para editar: acrescenta linhas. Nada além destas listas precisa mudar.
+// É a intervenção que mais se repete na semana: com texto fixo o aluno decora a abertura e
+// para de ler. Em CHECKPOINT_ERRO, {r} vira a resposta certa. Editar = acrescentar linhas.
 const CHECKPOINT_ABERTURAS = [
     'Pausa relâmpago — recupere isto:',
     'Rapidinho: você lembra desta?',
@@ -1178,11 +1075,8 @@ function checkpointRecuperacao() {
     const q = _questaoCheckpoint();
     const lado = document.querySelector('.quiz-lado-questao');
     if (!q || !Array.isArray(q.opts) || !lado) {
-        // Falhava em SILÊNCIO: sem nenhuma questão respondida ainda,
-        // historicoQuestoes está vazio, não há o que recuperar e a intervenção
-        // simplesmente não acontecia — sem nada no console, o que faz parecer
-        // que ela "quebrou". O aviso não muda o comportamento, só o torna
-        // visível para quem está testando ou depurando.
+        // Sem questão respondida (histórico vazio) falhava em SILÊNCIO e parecia quebrado.
+        // O aviso não muda o comportamento, só o torna visível pra quem testa.
         console.warn('[KaIA] checkpoint não disparou: '
             + (!lado ? 'a área de estudo não está na tela.'
                      : `é preciso ter respondido ao menos 1 questão (histórico: ${historicoQuestoes.length}).`));
@@ -1277,16 +1171,12 @@ function encerrarCheckpoint() {
 // ============================================================
 //   REANCORAGEM POR DESTAQUE (intervenção com AÇÃO — Passo 7)
 // ============================================================
-// NÃO mostra card: um backdrop suave escurece o entorno (nav/rail) e a área da
-// questão é ELEVADA acima dele (fica clara). Reduz a competição visual → reancora
-// na tarefa (segmenting effect). NÃO pausa sensores (é refoco, não descanso).
-// Reverte sozinho em REANCORA_MS. Sutil de propósito (regra TEA/TDAH: tirar
-// estímulo, não adicionar — nada pisca).
+// Sem card: backdrop suave escurece o entorno (nav/rail) e a questão fica ELEVADA e clara,
+// reduzindo a competição visual (segmenting effect). NÃO pausa sensores (é refoco, não
+// descanso). Reverte sozinho em REANCORA_MS; sutil de propósito (TEA/TDAH: tirar estímulo, nada pisca).
 const REANCORA_MS = T(2500, 4000);   // TODO: ajustar tempo pra produção
-// O véu é um ::before condicional: sumir a classe = sumir o elemento, e o que
-// não existe não transiciona. Então a saída é em dois tempos — liga a classe do
-// fade, espera ele terminar, só aí limpa. Este valor CASA com a animação
-// kaiaVeuSai no style.css; mexer num, mexer no outro.
+// O véu é ::before condicional (sumir a classe = sumir o elemento, sem transição), então a saída
+// é em dois tempos: classe do fade, espera, limpa. CASA com kaiaVeuSai no style.css — mexer nos dois.
 const REANCORA_SAIDA_MS = 800;
 let _reancoraTimer = null;
 
@@ -1414,10 +1304,9 @@ function encerrarReancora() {
 const definirAmbiente  = (valor) => gravarPerfil({ ...lerPerfil(), ambiente_dispositivo: valor });
 const definirDataProva = (iso)   => gravarPerfil({ ...lerPerfil(), data_prova: iso });
 
-// Login/cadastro (finalizarLogin, salvarLogin, criarConta, ROTA_POR_ROLE,
-// TERMOS_VERSAO), hobbies (HOBBIES, registrarHobbies, salvarHobbies) e a luz
-// do login (registrarLuz): removidos daqui — vivem so em login.js e
-// hobbies.js (materias.html nao os carrega). Eram copias mortas do split antigo.
+// Login/cadastro (finalizarLogin, salvarLogin, criarConta, ROTA_POR_ROLE, TERMOS_VERSAO),
+// hobbies (HOBBIES, registrarHobbies, salvarHobbies) e registrarLuz vivem so em login.js/
+// hobbies.js (materias.html nao os carrega) — as copias daqui eram mortas.
 
 // ============================================================
 //                  SENSORES DE COMPORTAMENTO
@@ -1439,16 +1328,10 @@ function setEstado(texto, alertar = false) {
 
 // calculateReadingTime foi movida para puros.js (testável); carregada antes.
 
-// Há intervenção ocupando a tela?
-// Três checagens, e as três são necessárias:
-//   1. `intervencaoAtual` — o registro de quem está segurando o polling. Só
-//      vale quando a intervenção entrou por mostrarIntervencao().
-//   2. a classe no body — a reancoragem libera o polling na hora, de propósito
-//      (é refoco, não descanso), então some da checagem 1 imediatamente.
-//   3. o DOM — a rede de segurança. Se algo abrir uma intervenção por fora do
-//      mostrarIntervencao (o gatilho de teste chamando a função direto, ou o
-//      motor do Vitor amanhã), 1 e 2 não veem, mas o elemento aberto está lá.
-//      Sem esta, a troca_atividade voltava a ficar sob a tela de inatividade.
+// Há intervenção ocupando a tela? As três checagens são necessárias: intervencaoAtual (só vale
+// via mostrarIntervencao); a classe do body (a reancoragem libera o polling na hora); e o DOM,
+// rede de segurança pra quem abrir por fora (gatilho de teste, motor do Vitor) — sem ela a
+// troca_atividade voltava a ficar sob a tela de inatividade.
 const _intervencaoNaTela = () =>
     !!intervencaoAtual
     || document.body.classList.contains('kaia-reancorar')
@@ -1468,13 +1351,9 @@ function iniciarIdleMonitor() {
         escreveuDesdeUltimoTick = false;
         const timer = $('timer');
         if (timer) timer.innerText = idleTime;
-        // O overlay de inatividade NÃO sobe enquanto há intervenção na tela.
-        // Subir o z-index resolveu para as que têm camada própria, mas não para
-        // o checkpoint (inline, sem camada) nem para a reancoragem (o véu dela
-        // mora em 40, dentro do #quiz-view). E, mesmo onde resolveu, mostrar
-        // "Ainda está Conosco?" por cima de uma intervenção é dizer duas coisas
-        // ao mesmo tempo para quem já está com a atenção comprometida: a
-        // intervenção JÁ é o chamado de volta.
+        // Overlay de inatividade NÃO sobe com intervenção na tela: z-index não cobre o checkpoint
+        // (inline) nem a reancoragem (véu em 40, dentro do #quiz-view), e "Ainda está Conosco?"
+        // por cima diz duas coisas a quem já está disperso — a intervenção JÁ é o chamado de volta.
         if (idleTime >= limiteOciosoS && !_intervencaoNaTela()) setEstado('FALTA DE INTERAÇÃO', true);
     }, 1000);
 }
@@ -1508,10 +1387,8 @@ function registrarSensores() {
     });
 
     // --- teclado no caderno: escrever é foco, não ociosidade (Fase 5) ---
-    // Espelha o mousemove acima, mas para a digitação. Listener DELEGADO no #caderno
-    // (o container persiste; o evento `input` borbulha dos blocos .cad-texto criados
-    // sob demanda). Só a escrita ATIVA reseta — caderno aberto e parado segue
-    // contando como ocioso.
+    // Espelha o mousemove. Listener DELEGADO no #caderno (o `input` borbulha dos .cad-texto
+    // criados sob demanda). Só escrita ATIVA reseta: caderno aberto e parado segue ocioso.
     $('caderno')?.addEventListener('input', () => {
         if (!isMissionActive) return;      // o idle-monitor só corre nesse estado
         idleTime = 0;                      // não escurece por causa da escrita
@@ -1571,20 +1448,17 @@ function registrarSensores() {
     });
 
     // --- exit-intent: cursor cruzando a borda superior (rumo à barra de abas) ---
-    // Camada VISÍVEL da distração; o registro real continua no visibilitychange acima.
-    // relatedTarget nulo = o mouse saiu do documento; clientY numa faixa fina do
-    // topo (não exatamente 0) para pegar saídas RÁPIDAS, cujo último evento
-    // costuma reportar alguns px dentro da tela.
+    // Camada VISÍVEL da distração; o registro real é o visibilitychange. relatedTarget nulo = saiu
+    // do documento; faixa fina do topo (não y=0) porque saída RÁPIDA reporta alguns px dentro.
     document.addEventListener('mouseout', (e) => {
         if (!sessaoDeEstudoAberta || pausaAtiva) return;   // não avisa durante o descanso
         if (e.relatedTarget || e.clientY > EXIT_TOPO_PX) return;
         mostrarAvisoSaida();
     });
 
-    // (v2 dizia: scroll removido porque múltipla escolha não rola. A premissa mudou —
-    //  enunciado de Humanas com texto-base NÃO cabe na tela, e rolar é a evidência mais
-    //  direta de leitura que existe. Voltou como CAPTURA; virar feature é decisão futura.)
-    // `capture: true` porque scroll não borbulha — pega o container que realmente rolou.
+    // Scroll voltou como CAPTURA (virar feature é decisão futura): texto-base de Humanas não cabe
+    // na tela e rolar é a evidência mais direta de leitura. `capture: true` porque scroll não
+    // borbulha — pega o container que realmente rolou.
     document.addEventListener('scroll', (e) => {
         if (!isMissionActive || questionShownAt === 0) return;
         const agora = performance.now();
@@ -1652,10 +1526,9 @@ const questaoFallback = (subject, tema) => ({
 // ============================================================
 //        LOTE DE QUESTÕES (economiza cota do Gemini)
 // ============================================================
-// Buffer da RODADA: UMA chamada ao /gerar-questao traz um LEQUE de níveis (janela
-// centrada no nível atual) pra rodada inteira — carregado no INÍCIO e servido da
-// fila, sem rede no meio. Só re-busca quando a fila esvazia (fronteira das 10) ou
-// ao trocar de tema (descarta o buffer).
+// Buffer da RODADA: UMA chamada ao /gerar-questao traz um LEQUE de níveis (janela no nível
+// atual), servido da fila sem rede no meio. Re-busca só quando esvazia (fronteira das 10)
+// ou ao trocar de tema (descarta o buffer).
 let filaQuestoes     = [];
 let filaChave        = null;   // `${materia}::${tema}` do buffer em memória
 let loteBloqueadoAte = 0;      // enquanto performance.now() < isto, não re-chama o backend
@@ -1680,11 +1553,9 @@ function sortearHobbiesSessao() {
     }
 }
 
-// Sorteia a distribuição de níveis da rodada (~META_QUESTOES questões): pesos
-// concentrados no centro (dist 0->4, ±1->2, ±2->1) e AMOSTRADOS aleatoriamente ->
-// as quantidades por nível variam a cada rodada, como uma prova real puxada pro nível
-// do aluno. Nas pontas (centro 1/5), os níveis fora da régua saem e concentra ainda
-// mais nos disponíveis.
+// Distribuição de níveis da rodada (~META_QUESTOES): pesos no centro (dist 0->4, ±1->2, ±2->1)
+// AMOSTRADOS, então as quantidades variam como numa prova real. Nas pontas (centro 1/5) os
+// níveis fora da régua saem e concentra nos disponíveis.
 function sortearDistribuicao(centro, total = META_QUESTOES) {
     const c = Math.max(NIVEL_MIN, Math.min(centro, NIVEL_MAX));
     const pesoDist = d => (d === 0 ? 4 : d === 1 ? 2 : d === 2 ? 1 : 0);
@@ -1798,12 +1669,10 @@ function mostrarTela(id) {
     });
 }
 
-// Liga/desliga o AI Loader (ilha React em js/ai-loader.js). `alvo` é o container
-// ESTÁVEL onde a ilha monta (.question-wrapper no quiz, #temas-view nos temas) —
-// nunca um que a lógica limpe. Devolve true se montou de fato: só nesse caso quem
-// chama apaga o texto de espera, então sem a ilha a tela fica com a mensagem de
-// sempre. Blindado: falha da ilha vira aviso no console e a geração segue normal,
-// inclusive o fallback. Ver CLAUDE.md.
+// Liga/desliga o AI Loader (ilha React, js/ai-loader.js). `alvo` é o container ESTÁVEL onde
+// monta (.question-wrapper / #temas-view), nunca um que a lógica limpe. Devolve true só se
+// montou — aí quem chama apaga o texto de espera. Falha vira aviso no console e a geração
+// segue, fallback incluso.
 const areaQuestao = () => document.querySelector('.question-wrapper');
 
 function esperaIA(palavra, rotulo, alvo) {
@@ -1860,10 +1729,8 @@ const META_QUESTOES = 10;       // meta = 10 (por rodada e por dia)
 // Probe de self-report (rótulo real de atenção p/ o ML): 1 por rodada, numa questão
 // sorteada da 5ª à 9ª — baseline de RT já aquecido e antes do fim da rodada.
 let probeAlvoRodada = 0;
-// A abertura da sessão nunca era rotulada: o 1º probe só vinha na 5ª questão, mas o
-// sistema já pode intervir a partir de INTERV_WARMUP_MIN (3 min) — havia uma faixa em
-// que ele agia sem nenhum rótulo real para conferir depois. A 1ª rodada sorteia 3..7;
-// as seguintes voltam a 5..9, para não interromper mais do que o necessário.
+// 1ª rodada sorteia 3..7: o sistema já intervém a partir de INTERV_WARMUP_MIN (3 min) e, com o
+// probe só na 5ª, a abertura ficava sem rótulo real. As seguintes voltam a 5..9 (interrompe menos).
 function sortearAlvoProbe(primeiraDaSessao = false) {
     probeAlvoRodada = (primeiraDaSessao ? 3 : 5) + Math.floor(Math.random() * 5);
 }
@@ -1991,9 +1858,9 @@ async function carregarQuestao(subject, tema) {
     atualizarContador();
 
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
-    limiteLeituraMs = dynamicLimit;      // ja era calculado e descartado: sem ele, "demorou
+    limiteLeituraMs = dynamicLimit;      // ja era calculado e descartado: sem ele, "demorou 90s" nao da pra interpretar
     limiteOciosoS = limiarOcioso(dynamicLimit, subject);   // overlay: bem mais folgado
-    questaoIniciadaEm = new Date().toISOString();   // 90s" nao da pra interpretar
+    questaoIniciadaEm = new Date().toISOString();
     $('question-display').innerText = currentQuestion.q;
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
@@ -2280,41 +2147,19 @@ async function reportarQuestao() {
 // ============================================================
 //   COMO EDITAR AS PERGUNTAS (é só mexer no PERGUNTAS_PROBE abaixo)
 // ============================================================
-// Adicionar uma pergunta = colar mais um objeto na lista. Nada de lógica muda.
-// Só duas regras, e as duas existem porque isto aqui NÃO é texto de tela — é o
-// rótulo que treina o modelo de atenção:
-//
-//   1. SEMPRE três opções, SEMPRE nesta ordem:
-//         [engajado, distraido, muito_distraido]
-//      A 2ª é "a mente vagou mas eu continuei aqui"; a 3ª é "eu saí para outra
-//      coisa". Inverter a ordem não muda a tela, corrompe o dataset em silêncio.
-//      (Há uma checagem em _validarPergunta que descarta entrada malformada.)
-//
-//   2. O `id` é ESTÁVEL e nunca se reaproveita. É ele que vai no evento, não a
-//      posição na lista — se a análise dependesse do índice, inserir uma
-//      pergunta no meio reescreveria o significado de todo o dado já coletado.
-//
-// Ao escrever: nenhuma opção pode soar como "a resposta certa". Autorrelato que
-// premia o foco devolve dado enviesado, e é esse dado que vira modelo. Daí o
-// "sem certo nem errado" e o "sem julgamento" em algumas frases.
+// Adicionar = colar mais um objeto. Não é texto de tela, é o rótulo que treina o modelo, daí
+// duas regras: (1) SEMPRE três opções nesta ordem [engajado, distraido, muito_distraido] — 2ª
+// "vagou mas continuei aqui", 3ª "saí pra outra coisa"; inverter não muda a tela e corrompe o
+// dataset calado (_validarPergunta descarta malformada). (2) O `id` é ESTÁVEL e nunca
+// reaproveitado: vai no evento no lugar do índice, senão inserir no meio reescreve o dado já
+// coletado. Nenhuma opção pode soar "certa": autorrelato que premia foco enviesa o modelo.
 const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 
-// UMA pergunta só, fixa. Foram oito, sorteadas — e trocar a frase a cada disparo
-// custava dos dois lados:
-//
-//   MEDIDA  — formulações diferentes deslocam a distribuição das respostas. Como
-//             isto aqui é o rótulo que treina o modelo, variar a frase injeta ruído
-//             exatamente na variável que se quer limpa. Um instrumento, uma régua.
-//   ALUNO   — pergunta sempre igual vira uma coisa reconhecível ("é a checagem da
-//             KaIA"), lida em um segundo. Frase nova toda vez exige releitura, e com
-//             público TEA/TDAH esse custo não é pequeno.
-//
-// O risco conhecido é o oposto: pergunta fixa convida ao clique automático. Se isso
-// aparecer no dado (uma opção dominando muito além do plausível), a saída NÃO é
-// voltar a sortear frases — é mudar QUANDO se pergunta, não O QUE se pergunta.
-//
-// Para trocar a frase depois: mude o texto E o `id`. O id viaja no evento e é o que
-// permite separar o que foi colhido com qual régua; reaproveitá-lo mistura as duas.
+// UMA pergunta fixa (eram oito sorteadas). Medida: formulações diferentes deslocam a distribuição
+// e põem ruído no rótulo — um instrumento, uma régua. Aluno: pergunta igual se lê em um segundo;
+// frase nova exige releitura, custo alto no TEA/TDAH. Risco: clique automático — se aparecer no
+// dado (uma opção dominando além do plausível), mudar QUANDO se pergunta, não voltar a sortear.
+// Trocar a frase = trocar também o `id` (separa o que foi colhido com qual régua).
 const PERGUNTAS_PROBE = [
     { id: 'onde-estava-atencao',
       pergunta: 'Onde estava sua atenção agora?',
@@ -2324,25 +2169,18 @@ const PERGUNTAS_PROBE = [
 ];
 
 // ---- JANELAS DE TAMANHOS VARIADOS ---------------------------------------
-// A CAPACIDADE está pronta; a LÓGICA de quando usar cada uma, não — é decisão
-// de ML (Bia + Vitor). Enquanto _escolherTamanhoProbe devolver 'medio', a
-// janelinha fica idêntica à de sempre: 'medio' É o tamanho atual, 340px.
-// As classes CSS correspondentes estão no style.css, no bloco do #kaia-probe.
+// Capacidade pronta; QUANDO usar cada um é decisão de ML (Bia + Vitor). Com 'medio' (340px, o
+// tamanho atual) nada muda. Classes no style.css, bloco do #kaia-probe.
 const TAMANHOS_PROBE = {
     pequeno: 'probe-pequeno',   // 260px
     medio:   'probe-medio',     // 340px — o de hoje, e o padrão
     grande:  'probe-grande',    // 460px
 };
 
-// PENDENTE (Bia + Vitor): QUANDO cada tamanho aparece e POR QUÊ.
-// Para ligar a variação, troque SÓ o corpo desta função — devolva a chave de
-// TAMANHOS_PROBE que quiser ('pequeno' | 'medio' | 'grande'). O tamanho
-// escolhido já viaja no evento (campo `tamanho`), então o experimento nasce
-// analisável: sem esse registro dá para ver os rótulos, mas não com qual
-// janela cada um foi colhido.
-// Ideias que ficaram na mesa, nenhuma decidida: sortear por sessão (mantém o
-// tamanho estável para o aluno e compara ENTRE alunos), alternar por rodada
-// (compara DENTRO do mesmo aluno), ou amarrar ao estado previsto pelo modelo.
+// PENDENTE (Bia + Vitor): QUANDO cada tamanho aparece e POR QUÊ. Pra ligar, troque só o corpo
+// e devolva uma chave de TAMANHOS_PROBE. O tamanho já vai no evento (`tamanho`), então o
+// experimento nasce analisável. Na mesa, nada decidido: sortear por sessão (compara ENTRE
+// alunos), alternar por rodada (DENTRO do aluno) ou amarrar ao estado previsto pelo modelo.
 function _escolherTamanhoProbe() {
     return 'medio';
 }
@@ -2369,10 +2207,8 @@ function _sortearPergunta() {
     return candidatas[Math.floor(Math.random() * candidatas.length)];
 }
 
-// Remonta o conteúdo a CADA disparo — o card é o mesmo nó (o CSS e o
-// _probeNaTela contam com isso), mas a pergunta e o tamanho mudam. Montado com
-// textContent, não com innerHTML: o texto vem de uma lista que humanos editam,
-// e um `&` ou um apóstrofo não podem virar marcação.
+// Remonta a CADA disparo no mesmo nó (CSS e _probeNaTela contam com isso). textContent, não
+// innerHTML: a lista é editada à mão e um `&` ou apóstrofo não pode virar marcação.
 function _montarCardProbe(pergunta, tamanho) {
     let card = $('kaia-probe');
     if (!card) {
@@ -2425,11 +2261,9 @@ function esconderProbe() {
 function responderProbe(estado) {
     logEvent('probe_atencao', {
         estado,
-        // QUAL frase e QUAL janela geraram este rótulo. Vai no payload do evento
-        // (session_events.payload é jsonb — não precisa de migration). A tabela
-        // probe_labels segue só com estado + as 20 features.
-        // PENDENTE (Bia + Vitor): se o treinar_com_probe.py precisar destes dois
-        // campos direto em probe_labels, aí sim é uma migration.
+        // QUAL frase e janela geraram o rótulo — vai no payload jsonb (sem migration); probe_labels
+        // segue só com estado + as 20 features. PENDENTE (Bia + Vitor): se treinar_com_probe.py
+        // precisar deles em probe_labels, aí é migration.
         pergunta_id: probeAtual?.id ?? null,
         tamanho: probeAtual?.tamanho ?? null,
         questao_na_rodada: questoesNaRodada,
@@ -2688,11 +2522,9 @@ function resetSystem() {
     location.reload();
 }
 
-// Fechar/recarregar a aba com a sessão contínua aberta também a encerra
-// (mesmo durante a explicação, quando isMissionActive já é false).
-// A questão EM CURSO só vira evento quando é respondida — quem sai no meio leva
-// consigo trajeto, ocioso, scroll e dwell. E é justo o caso mais informativo:
-// o aluno que saiu e não voltou. Aqui vai o parcial (logEvent usa keepalive).
+// Fechar/recarregar com a sessão aberta também a encerra (mesmo na explicação). A questão EM
+// CURSO só vira evento ao ser respondida, e quem sai no meio — o caso mais informativo — levaria
+// trajeto, ocioso, scroll e dwell junto. Aqui vai o parcial (logEvent usa keepalive).
 function registrarQuestaoAbandonada() {
     if (!isMissionActive || questionShownAt === 0) return;
     logEvent('question_abandon', {
@@ -2764,11 +2596,9 @@ function mostrarAvisoSaida() {
 // ============================================================
 //        POMODORO (fixo por enquanto; adaptação vem depois)
 // ============================================================
-// Ciclo foco → pausa durante a sessão de estudo. A pausa PERSISTE por timestamp
-// absoluto (localStorage): recarregar, trocar de aba ou fechar/reabrir não zera —
-// o tempo corre mesmo com a aba oculta (anti-burla). O botão "Estou concentrado"
-// pula a pausa (registrado para a fase adaptativa). Durante a pausa, os sensores
-// de distração ficam suspensos (descanso não é distração).
+// Ciclo foco → pausa. A pausa PERSISTE por timestamp absoluto (localStorage): recarregar, trocar
+// ou fechar a aba não zera, e o tempo corre oculto (anti-burla). "Estou concentrado" pula
+// (registrado pra fase adaptativa); na pausa os sensores de distração ficam suspensos.
 const POMODORO_FOCO_MS  = 25 * 60 * 1000;   // FOCO 25 min
 const POMODORO_PAUSA_MS = 5 * 60 * 1000;    // PAUSA 5 min
 const POMODORO_KEY      = 'kaia_pomodoro';
@@ -2902,14 +2732,10 @@ function retomarPomodoroSePendente() {
 // ============================================================
 //     CADERNO — canvas livre de anotações por tema (Etapa 9)
 // ============================================================
-// Cada tema tem seu canvas; cada aluno vê só o dele.
-//  · TEXTO: localStorage (anticrash, síncrono) + PUT /anotacoes com debounce →
-//    Supabase (cross-device). O servidor é a fonte de verdade do texto.
-//  · IMAGEM: SÓ no localStorage (base64). Nunca vai pro Supabase — o backend
-//    ainda filtra tipo!="texto" como 2ª barreira. Em outro dispositivo, o texto
-//    vem do servidor e as imagens simplesmente não aparecem.
-// Os caminhos de salvamento são ISOLADOS: gravar no localStorage nunca lança
-// (retorna bool), então uma imagem que estoure a cota jamais derruba o texto.
+// Um canvas por tema, cada aluno vê só o dele. TEXTO: localStorage (anticrash) + PUT /anotacoes
+// com debounce → Supabase, a fonte de verdade. IMAGEM: SÓ localStorage (base64), nunca sobe — o
+// backend ainda filtra tipo!="texto" como 2ª barreira; em outro dispositivo só o texto aparece.
+// gravarLocal nunca lança (retorna bool): imagem que estoure a cota não derruba o texto.
 const CAD_LARGURA_PADRAO = 200;          // px — largura inicial de um bloco de texto
 const CAD_IMG_MAX_LADO   = 1000;         // px — re-encode: maior lado da imagem
 const CAD_IMG_QUALIDADE  = 0.7;          // WebP

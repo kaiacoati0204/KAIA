@@ -1,8 +1,7 @@
 """Testes unitários da validação de token (auth.py) — sem rede, sem JWKS.
 
-Cobrem o parse do header Bearer e o caminho 'token ausente -> 401', que roda
-ANTES de qualquer chamada ao JWKS (logo é determinístico e offline). O caminho
-de token inválido depende do JWKS (rede) e fica de fora de propósito.
+Cobrem o parse do Bearer e 'token ausente -> 401', que roda antes do JWKS.
+Token inválido depende do JWKS (rede) e fica de fora de propósito.
 """
 from types import SimpleNamespace
 

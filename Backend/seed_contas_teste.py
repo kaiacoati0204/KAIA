@@ -1,32 +1,20 @@
 """
-seed_contas_teste.py — cria ~6 contas de teste COM senha real no Supabase Auth.
-
-Todas passam pelo MESMO caminho de uma conta real (auth.users + login por senha),
-sem flag de desvio. Idempotente por e-mail; toda a escrita roda numa transação
-(tudo-ou-nada), então uma falha no meio não deixa meio-estado.
+seed_contas_teste.py — cria ~6 contas de teste COM senha real no Supabase Auth,
+pelo mesmo caminho de uma conta real. Idempotente por e-mail, tudo numa transação.
 
 Uso:
     python seed_contas_teste.py            # dry-run: só mostra o plano
     python seed_contas_teste.py --commit   # aplica
 
-Limpeza / rollback: limpar_contas_teste.py (restaura os 2 slots reaproveitados).
+Limpeza/rollback: limpar_contas_teste.py.
 
-================================================================================
-AVISO DE ROBUSTEZ (test-only)
---------------------------------------------------------------------------------
-Insere DIRETO em auth.users / auth.identities — schema interno do GoTrue, que
-NÃO é API pública. Aceitável só por serem poucas contas de teste, controladas e
-recriáveis. Regras:
-  - Cadastro de usuário REAL (Etapa 2) vai por supabase.auth.signUp, nunca aqui.
-  - Colunas de token string entram como '' (não NULL): o GoTrue-Go quebra o login
-    ao ler NULL num string ("converting NULL to string is unsupported").
-  - Professor/coordenador NÃO são criados: `coordenadores` é UNIQUE(escola_id) e
-    `professores` é UNIQUE(escola_id, materia). Reaproveitamos as linhas que já
-    ocupam esses slots na Vale Verde (mesmo padrão do admin: dar login a quem já
-    existe). A limpeza restaura nome/email originais desses dois.
-  - Se algum login quebrar após um update do Supabase/GoTrue, ESTE script é o
-    primeiro suspeito.
-================================================================================
+AVISO (test-only): insere direto em auth.users/identities (schema interno do
+GoTrue, não é API pública) — aceitável só por serem poucas contas recriáveis.
+Cadastro REAL nunca passa por aqui (usa supabase.auth.signUp). Colunas de token
+entram como '' e não NULL, senão o GoTrue quebra o login. Professor e
+coordenador reaproveitam linhas existentes (UNIQUE por escola impede criar
+novos) — a limpeza restaura os dados originais. Suspeite deste script primeiro
+se algum login quebrar após update do Supabase/GoTrue.
 """
 import asyncio, os, re, json, sys
 import asyncpg

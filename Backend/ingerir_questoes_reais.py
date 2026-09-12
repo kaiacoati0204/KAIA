@@ -1,14 +1,9 @@
-"""Ingere questões REAIS de vestibulares na tabela `questoes_reais` do Supabase,
-COM embeddings (pgvector), para o few-shot DINÂMICO (Passo 2). As reais NÃO são
-servidas ao aluno — entram só como exemplo recuperado no prompt (o embedding faz
-o casamento fino do tema).
+"""Ingere questões reais de vestibulares em `questoes_reais` com embeddings (pgvector),
+para o few-shot dinâmico. Nunca servidas ao aluno, só exemplo recuperado no prompt.
 
-Duas bases:
-  - maritaca-ai/enem (Apache 2.0): ENEM, rotulado por ÁREA (posição da questão).
-  - portuguese-benchmark-datasets/BLUEX: USP/UNICAMP/FUVEST, por DISCIPLINA (fina).
-Guardamos o maritaca por ÁREA (HUMANAS, NATUREZA...) e o BLUEX por matéria FINA
-(HIS, GEO, FIL...). O app (_exemplos_similares) busca em [matéria_fina, área],
-unindo as duas.
+Bases: maritaca-ai/enem (Apache 2.0), guardado por ÁREA (posição da questão), e
+BLUEX (USP/UNICAMP/FUVEST), por matéria fina. _exemplos_similares busca em
+[matéria_fina, área], unindo as duas.
 
 Pré-requisitos:
   - Migration 20260815120000_questoes_reais_pgvector.sql aplicada (pgvector + tabela).

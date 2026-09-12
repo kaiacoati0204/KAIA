@@ -2,21 +2,12 @@
 """
 Item analysis — acha questão defeituosa pelas RESPOSTAS dos alunos, sem modelo nenhum.
 
-É a técnica padrão da psicometria para validar itens de prova, e ela pega justamente o
-defeito que nenhum filtro automático pega: gabarito errado. Dois índices:
-
-  p-value (dificuldade)
-      proporção de acertos. Perto de 0 num nível fácil = algo está errado.
-
-  ponto-bisserial (discriminação)
-      correlação entre acertar ESTA questão e o desempenho geral do aluno na sessão.
-      NEGATIVO significa que os bons alunos erram e os fracos acertam — e a literatura
-      é direta: isso quase sempre é gabarito trocado ou conteúdo incorreto.
-
-Vantagem sobre o verificador por IA: não custa chamada nenhuma e não erra por
-"achismo" — é o comportamento real dos alunos falando. Desvantagem: precisa de VOLUME.
-Abaixo de MIN_RESPOSTAS por questão o número não significa nada, e o script diz isso em
-vez de fingir precisão.
+Técnica padrão da psicometria; pega o que nenhum filtro automático pega: gabarito errado.
+p-value = proporção de acertos (perto de 0 em nível fácil = algo errado). Ponto-bisserial =
+correlação entre acertar ESTA questão e a nota do aluno na sessão; NEGATIVO (bons erram,
+fracos acertam) quase sempre é gabarito trocado ou conteúdo incorreto. Não custa chamada
+nem erra por "achismo" como o verificador por IA, mas precisa de VOLUME: abaixo de
+MIN_RESPOSTAS o script diz que o número não significa nada.
 
 Uso (na raiz do projeto):
     python ml/item_analysis.py                  # relatório

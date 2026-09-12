@@ -1,10 +1,7 @@
-"""Gera Backend/exemplos_few_shot.json a partir do dataset ENEM (maritaca-ai/enem,
-licença Apache 2.0). São exemplos REAIS usados como FEW-SHOT no /gerar-questao —
-NÃO servidos ao aluno, entram só no prompt como referência de estilo/dificuldade.
-
-Só TEXTO PURO, matérias NÃO-DE-CONTA, ~5 por matéria com tipos de enunciado
-variados. Humanas/BIO foram classificadas à mão (o dataset não etiqueta matéria
-fina); PORT/ING saem por espaçamento no pool.
+"""Gera Backend/exemplos_few_shot.json (few-shot do /gerar-questao) a partir do ENEM.
+Só entram no prompt como referência de estilo, nunca são servidos ao aluno. Texto puro,
+matérias não-de-conta, ~5 por matéria; Humanas/BIO curadas à mão (o dataset não
+etiqueta matéria fina), PORT/ING por espaçamento no pool.
 
 Atribuição: questões do ENEM (INEP), via dataset maritaca-ai/enem (Apache 2.0).
 

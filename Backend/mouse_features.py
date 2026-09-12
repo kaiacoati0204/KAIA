@@ -1,10 +1,8 @@
 """
-Features de mouse (Incremento B): transforma o mouse_track bruto capturado no
-front — [[dt_ms, x, y], ...] — nas 4 features do modelo v2.
+Features de mouse: mouse_track bruto do front ([[dt_ms, x, y], ...]) -> 4 features do v2.
 
-Função pura (sem estado, sem I/O): é chamada pela agregação (Incremento C) e
-testável isoladamente. Guardar o trajeto bruto e computar aqui deixa recalcular
-sem re-coletar.
+Função pura, chamada pela agregação. Guardar o trajeto bruto e computar aqui deixa
+recalcular sem re-coletar.
 """
 import math
 from statistics import mean, pstdev

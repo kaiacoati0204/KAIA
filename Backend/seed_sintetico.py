@@ -1,8 +1,7 @@
 # ============================================================
 #  KaIA — seed de sessões SINTÉTICAS para o dashboard interno
 # ============================================================
-# Objetivo: dar volume/variedade para AVALIAR VISUALMENTE os gráficos (com 34
-# sessões em 2 dias não dá). NÃO é dado real.
+# Volume/variedade para avaliar os gráficos visualmente. NÃO é dado real.
 #
 # Marcação: sessions.app_version = 'seed-sintetico'  (apagável via limpar_sintetico.sql).
 # Vínculo:  apenas às contas @aluno.sintetico.kaia já existentes (não cria usuários).

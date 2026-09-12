@@ -1,9 +1,8 @@
 """
 Benchmark de latência do GET /diagnose contra o Supabase real (Sprint 4, Tarefa 2).
 
-Cria uma sessão de teste, injeta eventos sintéticos, espera o scheduler (35s),
-mede 20 chamadas ao /diagnose e imprime min/média/mediana/p95/máx (ms). Ao fim,
-encerra a sessão e LIMPA os dados de teste do banco (não deixa resíduo).
+Cria sessão com eventos sintéticos, espera o scheduler (35s), mede 20 chamadas
+(min/média/mediana/p95/máx em ms) e limpa os dados de teste do banco no fim.
 
 Requer o servidor no ar: cd Backend && uvicorn app:app --port 5000
 Uso: python tests/benchmark_latencia.py

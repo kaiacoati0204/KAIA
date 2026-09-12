@@ -13,17 +13,8 @@ async function carregarPerfil() {
     $('nomeUsuario').textContent  = usuario?.nome || usuario?.email || SEM_DADO;
     $('emailUsuario').textContent = usuario?.email || SEM_DADO;
 
-    // user_id do perfil EXIBIDO. NÃO usar localStorage.kaia_user_id: ele é
-    // compartilhado entre abas (o último login sobrescreve para todas), então
-    // discordaria da identidade desta aba. sessionStorage é por aba; o /perfil
-    // é a fonte autoritativa.
-    // lerUsuario() preserva essa regra: a sessionStorage continua tendo
-    // prioridade, e a cópia do "lembre de mim" só entra quando a aba não tem
-    // identidade nenhuma (aí ela é a única resposta possível, melhor que "—").
-    // O ?email= saiu: o backend NUNCA leu esse parâmetro. O GET /perfil tira a
-    // identidade do TOKEN (sub, com o e-mail como fallback) justamente para que
-    // ninguém leia o perfil alheio trocando a query string. Mandá-lo sugeria o
-    // contrário de como a rota funciona.
+    // NÃO usar localStorage.kaia_user_id: é compartilhado entre abas e discordaria desta.
+    // Sem ?email=: o /perfil tira a identidade do TOKEN, pra ninguém ler perfil alheio.
     try {
         const r = await apiFetch('/perfil');
         if (r.ok) {
@@ -63,12 +54,7 @@ async function carregarEstatisticasPerfil() {
     const SEM_DADO = '—';
     if (!$('minutosTotais')) return;   // no-op fora do perfil
 
-    // Sem o ?aluno_id= e sem a guarda que existia aqui. Os dois eram o mesmo
-    // engano: o backend identifica o aluno pelo TOKEN, então o parâmetro nunca
-    // foi lido — e a guarda `if (!alunoId) return` chegava a CANCELAR a busca
-    // quando o /perfil falhava, mesmo com um token perfeitamente válido que
-    // teria trazido as estatísticas. Falhar numa rota derrubava a outra, sem
-    // nada na tela explicando.
+    // Sem ?aluno_id= e sem guarda: o backend usa o TOKEN, e falha no /perfil não pode cancelar esta busca.
     let D = null, falhou = false;
     try {
         const r = await apiFetch('/perfil/estatisticas');
@@ -97,10 +83,7 @@ async function carregarEstatisticasPerfil() {
         if (cards) cards.style.display = '';
         if (vazio) vazio.style.display = 'none';
     } else {
-        // Antes ficava a fileira de "—" com o subtítulo "Média das últimas
-        // semanas" — prometendo uma média que não existia. Agora a seção diz o
-        // que está acontecendo, e distingue os DOIS casos: o backend respondeu
-        // que ainda não há histórico, ou nem deu para perguntar.
+        // Em vez de "—" prometendo média: diz se ainda não há histórico ou se falhou ao carregar.
         if (sub)   sub.textContent = '';
         if (cards) cards.style.display = 'none';
         if (vazio) {

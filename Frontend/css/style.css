@@ -24,24 +24,15 @@
   --rail-col: 60px;
   --rail-col-aberta: 180px;
   /* --- COLUNA DE ESTUDO (responsividade em telas largas) -------------------
-     A tela de estudo não tinha teto de largura: em 1920 a pergunta chegava a
-     ~145 caracteres por linha e em 3440 a ~272, contra os 45–75 confortáveis
-     para leitura — e os botões de resposta viravam barras de 3.200px com o
-     texto perdido no canto. Estes dois tokens são o teto.
-     1100px NÃO é um número novo: é exatamente a largura que a coluna já tinha
-     em 1280 (60 de rail + 60 de padding + 1100 + 60 de padding = 1280). Ou
-     seja, do notebook para baixo nada muda — o teto só impede o esticamento
-     daí para cima. */
+     Teto de largura: sem ele a pergunta passava de 145 caracteres por linha
+     (confortável é 45–75). 1100px é a largura que a coluna já tinha em 1280
+     (60 rail + 60 + 1100 + 60), então do notebook para baixo nada muda. */
   --col-estudo: 1100px;
-  /* ONDE a coluna está agora — as três medidas derivadas.
-     Desde que a coluna passou a ser CENTRADA, "o fim do conteúdo" não é mais
-     "a borda da janela": num monitor de 3440 a coluna vai de x1200 a x2300, com
-     1.100px de margem de cada lado. As intervenções se ancoram nestes tokens em
-     vez de na janela — sem isso, o card de canto nasceria a mais de 1.000px de
-     distância do texto que a aluna está lendo, fora do campo de visão útil.
-     A conta é a mesma do layout: 60px de padding do .main-content de cada lado,
-     e o que sobrar além do teto vira margem igual dos dois lados. Em 1280 não
-     sobra nada, --estudo-esq dá 120px e tudo cai exatamente onde já caía. */
+  /* ONDE a coluna está agora — as três medidas derivadas (--estudo-*), declaradas
+     no body mais abaixo, não aqui. Com a coluna centrada, as intervenções se ancoram nela e não na janela
+     (senão, em 3440, o card de canto nasce a >1.000px do texto). Mesma conta do
+     layout: 60px de padding de cada lado + sobra dividida igual. Em 1280
+     --estudo-esq dá 120px, como antes. */
   --rail-atual: var(--rail-col);
   /* Fundo marfim (acessibilidade TEA/TDAH): off-white no lugar do bege escuro.
      Regra fixa do projeto: nunca #fff/#000 puros — off-white e quase-preto. */
@@ -68,10 +59,9 @@
   --surface: #f6f2ec;
   --border: rgba(var(--profundo-rgb), 0.08);
   --sep: #f0ebe3;
-  /* Escurecido de #8b8b8b (Fase 4): dava 3.16:1 sobre o marfim e reprovava nos
-     TRÊS lugares onde é usado — todos texto secundário pequeno (13px e 10px),
-     que é onde contraste baixo mais machuca. Agora 5.5:1, e segue lendo como
-     secundário pelo tamanho/peso, não por estar apagado. */
+  /* Escurecido de #8b8b8b (Fase 4): dava 3.16:1 sobre o marfim e reprovava em
+     texto secundário pequeno (13px e 10px). Agora 5.5:1; secundário pelo
+     tamanho/peso, não por estar apagado. */
   --muted: #635e56;
   --raio: 12px;
 }
@@ -99,16 +89,9 @@ body {
   background-color: var(--gravata-kinrou);
   border-radius: 20px;
 }
-/* A TRILHA (o sulco atrás do polegar) não tinha regra: sem ela o navegador
-   pinta o padrão dele, que é BRANCO PURO — uma faixa branca de ponta a ponta na
-   direita de toda página, justo o que a regra fixa do projeto proíbe. Era o
-   "quadro branco" que aparecia atrás da barra amarela.
-   `transparent` em vez de um token: assim o sulco mostra o fundo de QUEM ESTÁ
-   ATRÁS, e a barra continua certa tanto no marfim das páginas quanto em
-   qualquer superfície com fundo próprio (dashboard, listas com rolagem interna)
-   — sem precisar de uma regra por lugar.
-   O `scrollbar-color` faz o mesmo fora do WebKit (Firefox), que ignora os
-   pseudo-elementos acima. */
+/* Trilha sem regra = branco puro do navegador (proibido no projeto). Fica
+   `transparent`, não token, para mostrar o fundo de quem está atrás em qualquer
+   superfície. O `scrollbar-color` cobre o Firefox, que ignora os ::-webkit. */
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-corner {
   background: transparent;
@@ -120,13 +103,10 @@ html {
 /* =========================
    TELA DE LOGIN / HOBBIES
 ========================= */
-/* Fundo CLARO ("Céu coati", Fase 3): azul-coati bem diluído descendo para o
-   marfim do resto do app — o login era a única tela escura do produto. Vale para
-   login, cadastro e hobbies (as três usam .tela-login/.caixa-*).
-   REGRA que guiou as cores daqui: o dourado da marca tem 1.3:1 sobre fundo
-   claro, então ele NÃO serve mais como texto nem como borda de foco. Sobrevive
-   onde é FUNDO com tinta escura por cima (o .botao-login, 9.3:1). Nos lugares
-   onde ele carregava informação, quem entra é o --azul-coati (6.7:1). */
+/* Fundo CLARO ("Céu coati", Fase 3) para login, cadastro e hobbies.
+   REGRA: o dourado tem 1.3:1 sobre claro, então não serve como texto nem foco;
+   só como FUNDO com tinta escura (.botao-login, 9.3:1). Onde carregava
+   informação, entra o --azul-coati (6.7:1). */
 .tela-login {
   position: relative;
   width: 100%;
@@ -135,10 +115,8 @@ html {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  /* QUATRO cores da marca espalhadas pelos cantos, em duas camadas:
-     as duas manchas com blur são os pseudo-elementos (dourado e azul-coati); as
-     duas lavagens largas abaixo são verde-união e bege. Nenhuma delas é branco —
-     a base é azul-névoa → marfim → creme, todos off-white da paleta. */
+  /* Quatro cores da marca nos cantos: dourado e azul-coati nos pseudo-elementos
+     (com blur), verde-união e bege aqui. Base azul-névoa → marfim → creme, sem branco. */
   background:
     radial-gradient(48vw 48vw at 90% 8%, rgba(var(--vd-uniao-rgb), 0.2), transparent 60%),
     radial-gradient(56vw 56vw at 8% 94%, rgba(var(--bege-rgb), 0.32), transparent 62%),
@@ -283,10 +261,9 @@ html {
   background: rgba(var(--card-rgb), 0.97);
   box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.18);
 }
-/* Olho de mostrar/ocultar senha. O Edge já desenha um (::-ms-reveal), mas por
-   segurança ele some quando o campo perde o foco e só volta para um valor
-   digitado do zero — quem errou a senha e voltou ao campo ficava sem olho. O
-   nativo sai e entra este, que aparece sempre que há texto (login.js). */
+/* Olho de mostrar/ocultar senha. O ::-ms-reveal do Edge some ao perder o foco e
+   não volta para quem errou a senha; sai o nativo, entra este, visível sempre
+   que há texto (login.js). */
 .campo-senha {
   position: relative;
 }
@@ -518,11 +495,9 @@ html {
   overflow-y: auto;
   background-color: var(--marfim);
 }
-/* Telas ALTAS: o conteúdo grudava no topo e sobrava meia tela vazia embaixo —
-   o cabeçalho parecia apertado contra a borda justamente onde havia espaço de
-   sobra. Mais respiro em cima usa esse vazio e centra melhor o bloco no campo
-   de visão. O corte em 950px é acima da altura de notebook (768/800/900), onde
-   não há folga para dar: lá o padding continua o de sempre. */
+/* Telas ALTAS: mais respiro em cima para o conteúdo não grudar no topo com meia
+   tela vazia embaixo. Corte em 950px, acima dos notebooks (768/800/900), que
+   não têm folga e mantêm o padding de sempre. */
 @media (min-height: 950px) {
   .main-content { padding-top: 96px; }
 }
@@ -550,24 +525,16 @@ html {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 25px;
 }
-/* Grade de matérias (não a de temas, que compartilha a classe): 5 colunas fixas
-   → sempre 5+5, sem o card órfão que aparecia em telas largas (era 9+1). Fica
-   ALINHADA À ESQUERDA (sem margin auto), acompanhando o cabeçalho e o campo de
-   pergunta. max-width 1500px deixa os cards largos o bastante p/ o subtítulo
-   caber em uma linha. Responsivo: 10 cards só fecham equilibrado em 5 ou 2
-   colunas (3/4 dariam órfão), então caímos direto para 2 em telas estreitas. */
+/* Grade de matérias (não a de temas): 5 colunas fixas → sempre 5+5, sem card
+   órfão. max-width 1500px para o subtítulo caber. 10 cards só fecham em 5 ou 2
+   colunas (3/4 dariam órfão), então em tela estreita cai direto para 2. */
 #menu-view .mission-grid {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   max-width: 1500px;
 }
-/* CENTRALIZAÇÃO em telas grandes. A grade já parava em 1500px, mas o bloco
-   inteiro ficava colado na esquerda: num monitor de 3440 sobravam ~1.900px de
-   bege vazio de um lado só, e o conteúdo lia como "esquecido no canto".
-   O teto vai na VIEW, não na grade, de propósito: assim o cabeçalho
-   ("Selecione uma matéria…") e os cards se movem JUNTOS e continuam alinhados
-   entre si — que era a razão original de a grade estar à esquerda. O que muda é
-   só onde esse bloco inteiro cai na tela: agora com margens iguais dos dois
-   lados. */
+/* CENTRALIZAÇÃO em telas grandes. O teto vai na VIEW, não na grade: cabeçalho
+   e cards se movem juntos e continuam alinhados entre si; só o bloco inteiro
+   ganha margens iguais dos dois lados. */
 #menu-view,
 #temas-view {
   max-width: 1500px;
@@ -577,18 +544,9 @@ html {
    ela abria 12 colunas num monitor largo. O mesmo 1500 da grade de matérias. */
 #temas-view .mission-grid { max-width: 1500px; }
 /* TELAS DE NOTEBOOK (1101–1680px): devolve espaço ao subtítulo.
-   O comentário acima diz que o max-width de 1500px existe "p/ o subtítulo caber
-   em uma linha" — medindo, isso NÃO acontecia em nenhum notebook. Em 1280 cada
-   card tem 200px, dos quais 60 são padding: sobram 140px de texto. O subtítulo
-   mais longo ("Mecânica & Eletromagnetismo") precisa de 233px, e nove dos dez
-   quebravam em duas linhas.
-   Não dá para resolver por completo: 5 colunas de 233px + respiro não cabem em
-   1100px de área útil — é aritmética, não CSS. O que dá é apertar o que sobra
-   (gap 25→20, padding 30→24), o que devolve ~35px de texto por card e derruba
-   de nove para quatro os subtítulos que quebram em 1280 (e para dois em 1366).
-   Acima de 1680px a grade já tem folga e volta ao respiro original.
-   Os dois que quebram em qualquer notebook são os mais longos — se um dia
-   valer a pena zerar isso, o caminho é encurtar o TEXTO, não o CSS. */
+   Em notebook o subtítulo não cabe mesmo com o 1500px (5 colunas de 233px não
+   cabem em 1100px). Apertar gap 25→20 e padding 30→24 derruba de nove para
+   quatro os que quebram em 1280 (dois em 1366). Zerar isso = encurtar o TEXTO. */
 @media (max-width: 1680px) {
   #menu-view .mission-grid { gap: 20px; }
   #menu-view .mission-card { padding: 24px; }
@@ -599,11 +557,9 @@ html {
   }
 }
 .mission-card {
-  /* O card vira a RÉGUA do próprio texto: com container-type, o `cqw` usado no
-     h3 e no span abaixo mede 1% da largura útil DESTE card, não da janela.
-     É o que faz o texto caber sozinho em qualquer monitor — inclusive nos que
-     nunca testamos e nos que rodam com zoom do sistema, onde um breakpoint
-     fixo em px erra. Ver o comentário do h3. */
+  /* Container-type: o `cqw` do h3 e do span mede a largura DESTE card, não da
+     janela — o texto cabe sozinho em qualquer monitor e zoom do sistema, onde
+     breakpoint em px erra. */
   container-type: inline-size;
   padding: 30px;
   border-radius: 20px;
@@ -630,18 +586,9 @@ html {
   height: 3rem;
   fill: var(--profundo);
 }
-/* O NOME da matéria NUNCA corta — em nenhuma largura.
-   "Matemática" em 2rem mede 187px. Num notebook o card oferece ~156px de texto
-   e, sendo uma palavra só, não existe onde quebrar: a palavra saía para fora da
-   borda do card. Com o zoom do sistema ligado (comum em PC de escola) o card
-   aperta ainda mais e o corte piora.
-   Um breakpoint em px não resolve isso — só empurra o problema para a largura
-   seguinte. Aqui o tamanho da letra é uma fração da largura DO CARD (cqw), então
-   ele se ajusta sozinho a qualquer combinação de monitor e zoom: 2rem sempre que
-   couber, encolhendo só o necessário, e nunca abaixo de 1.1rem (onde ainda
-   sobra folga até a largura em que a grade já virou de 5 para 2 colunas).
-   O overflow-wrap é a rede de segurança final: se um dia entrar uma matéria de
-   nome muito mais longo, ela quebra a palavra em vez de vazar. */
+/* O NOME da matéria NUNCA corta. "Matemática" em 2rem mede 187px e o card de
+   notebook dá ~156px (pior com zoom de PC de escola). Fonte em cqw: 2rem quando
+   cabe, nunca abaixo de 1.1rem. overflow-wrap é a rede para nomes mais longos. */
 .mission-card h3 {
   font-size: clamp(1.1rem, 16cqw, 2rem);
   margin-bottom: 10px;
@@ -668,23 +615,15 @@ html {
   display: flex;
   flex-direction: column;
   gap: 30px;
-  /* Teto de leitura (ver --col-estudo nos TOKENS) + CENTRALIZAÇÃO. Em 1280 a
-     coluna já media 1100px e as margens já eram simétricas, então nada muda de
-     1280 para baixo. Acima disso o teto impede o esticamento e o margin auto
-     mantém a coluna no meio da área útil, com o mesmo respiro dos dois lados —
-     em vez de encostada na esquerda com meia tela vazia à direita.
-     O #quiz-view É este container, então o cabeçalho da questão acompanha a
-     coluna e continua alinhado com a pergunta e as opções. */
+  /* Teto de leitura (--col-estudo) + centralização; de 1280 para baixo nada
+     muda. O #quiz-view É este container, então o cabeçalho da questão acompanha
+     a coluna e segue alinhado com pergunta e opções. */
   max-width: var(--col-estudo);
   margin-inline: auto;
 }
-/* Cabeçalho da questão: matéria + dificuldade | barra da meta + "Questão X de
-   10" + streak | Caderno + Abandonar.
-   Eram três grupos apertados numa linha só, com os itens de cada grupo quase
-   encostados — "Questão 1 de 10 🔥 2 dias" lia como uma coisa só. Ganharam ar
-   (gap maior dentro e entre os grupos) e permissão para quebrar de linha: em
-   coluna estreita ou com zoom alto, o grupo que não couber desce inteiro em vez
-   de espremer os vizinhos. */
+/* Cabeçalho da questão: matéria + dificuldade | meta + "Questão X de 10" +
+   streak | Caderno + Abandonar. Gap maior para os grupos não lerem como um só,
+   e wrap: em coluna estreita/zoom alto o grupo desce inteiro. */
 .quiz-nav {
   display: flex;
   flex-wrap: wrap;
@@ -723,20 +662,10 @@ html {
   gap: 15px;
 }
 /* POR QUE AS ALTERNATIVAS CONTINUAM EM UMA COLUNA SÓ
-   Numa tela larga cada botão fica com ~94% da largura vazia à direita, porque a
-   resposta costuma ser curta ("CO₂ e H₂O") dentro de uma barra de 1100px. A
-   tentação é quebrar em duas ou três colunas para preencher.
-   Não é seguro: o CSS enxerga a largura da coluna, nunca o TAMANHO da
-   alternativa. Uma grade de 3 colunas serviria bem às respostas curtas e
-   amassaria as longas em quatro linhas cada — e o comprimento das alternativas
-   varia por questão, porque quem escreve é a IA. Some-se a isso que a lista
-   vertical A–E é o padrão de varredura mais barato para quem está com a atenção
-   comprometida (o público desta tela), e que botões de larguras diferentes dão
-   peso visual diferente a alternativas que precisam parecer equivalentes — a
-   escolha alimenta o bandit.
-   O vazio dentro do botão é o preço de uma lista previsível. O que dá para
-   melhorar sem esse risco é a PROPORÇÃO do bloco todo — feito na media query de
-   1800px, mais acima. */
+   O CSS não enxerga o tamanho da alternativa (escrita pela IA): várias colunas
+   amassariam as longas. A lista A–E é a varredura mais barata para atenção
+   comprometida (TEA/TDAH), e larguras diferentes dariam peso desigual a opções
+   que alimentam o bandit. A proporção do bloco sobe na media query de 1800px. */
 .option-btn {
   padding: 20px;
   border: 1px solid var(--border);
@@ -753,20 +682,10 @@ html {
   color: var(--profundo);
   transform: translateX(5px);
 }
-/* MONITOR LARGO (a partir de 1800px): o bloco cresce em PROPORÇÃO, não só em
-   largura. Num monitor de 2560 a coluna de 1100px lia como uma tira estreita no
-   meio da tela — o conteúdo estava centrado e preenchia a coluna inteira (medido),
-   mas a coluna era pequena demais para o tamanho do monitor.
-   Alargar só o container pioraria a leitura: a linha da pergunta iria dos ~92
-   caracteres para ~110, longe dos 45–75 confortáveis. Por isso a largura e a
-   TIPOGRAFIA sobem juntas, +18% cada: a coluna vai a 1300px, a pergunta a
-   1.75rem, e a contagem de caracteres por linha fica onde estava (~92). O bloco
-   ocupa mais tela e continua se lendo igual — de mais longe, que é como se olha
-   um monitor grande.
-   Uma media query só, e para CIMA: abaixo de 1800px nada aqui existe, então as
-   telas médias e de notebook ficam exatamente como estão hoje.
-   NÃO mexi no número de colunas das alternativas de propósito — ver o comentário
-   do .option-btn mais abaixo. */
+/* MONITOR LARGO (a partir de 1800px): largura e tipografia sobem juntas, +18%
+   cada (coluna 1300px, pergunta 1.75rem), para a linha ficar nos ~92
+   caracteres — alargar só o container a levaria a ~110. Abaixo de 1800px nada
+   muda. Colunas das alternativas: ver o comentário do .option-btn. */
 @media (min-width: 1800px) {
   :root { --col-estudo: 1300px; }
   .quiz-container { gap: 36px; }
@@ -1015,11 +934,9 @@ html {
   line-height: 1.15;
   color: var(--profundo);
 }
-/* Nome em duas linhas: o nome indígena manda no tamanho e o rótulo comercial
-   ("Básico", "Pro"...) fica de legenda — quem chega comparando com o mercado
-   ainda se localiza sem que o rótulo dispute o nome próprio. Vai DENTRO do
-   <h4> de propósito: o leitor de tela anuncia "Mirim, Básico" como um título
-   só, em vez de um cabeçalho órfão seguido de um texto solto. */
+/* Nome indígena grande, rótulo comercial ("Básico", "Pro") de legenda. Vai
+   DENTRO do <h4> para o leitor de tela anunciar "Mirim, Básico" como um título
+   só, em vez de cabeçalho órfão + texto solto. */
 .plano-nome-desc {
   display: block;
   margin-top: 3px;
@@ -1765,10 +1682,10 @@ canvas {
 .dashboard-page .fe { background: var(--bege); }
 
 /* ============================================================
-   SESSÃO DO USUÁRIO — erro de login e saudação no header
+   SESSÃO DO USUÁRIO — erro de login
    ============================================================ */
 
-/* login.html — mensagem quando o e-mail não é encontrado */
+/* login.html e cadastro.html — mensagem de erro do formulário */
 /* --erro-tx (não --vermelho): sobre o card claro do login o vermelho vivo dá
    2.8:1 e reprova em texto de 13px. O tom escuro da mesma família dá 6.5:1. */
 .erro-login {
@@ -2194,11 +2111,8 @@ body.rail-aberta .rail-tx { opacity: 1; }
 /* ============================================================
    TEXTURA DE PAPEL (Etapa 6) — desligada por padrão (body.textura-papel)
    ============================================================ */
-/* Ruído procedural via SVG feTurbulence embutido (data URI: sem imagem externa,
-   sem rede). É uma background-image sobre as superfícies marfim (body + os
-   contêineres de conteúdo), então fica ATRÁS do texto — não altera o contraste.
-   A opacidade é baixíssima (alfa ~0.06 no pico, ~0.03 médio): "alma de papel".
-   Grão monocromático (feColorMatrix saturate 0) para não colorir o fundo. */
+/* Ruído feTurbulence em data URI (sem rede), atrás do texto: não mexe no
+   contraste. Alfa ~0.06 no pico, ~0.03 médio; saturate 0 para não colorir. */
 body.textura-papel,
 body.textura-papel .main-content,
 body.textura-papel .conteudo {
@@ -2259,10 +2173,8 @@ body.textura-papel .conteudo {
   font-weight: 400;
   color: color-mix(in srgb, var(--tinta) 55%, transparent);
 }
-/* Hobbies no topo do perfil: as etiquetas são as .perfil-tag que já existiam,
-   então aqui só o contêiner que as alinha e deixa quebrar linha em coluna
-   estreita. Some sozinho quando não há hobbies — o :empty evita a margem de um
-   bloco vazio. */
+/* Hobbies no topo do perfil: contêiner das .perfil-tag, com quebra de linha.
+   O :empty some com a margem quando não há hobbies. */
 .perfil-hobbies {
   display: flex;
   flex-wrap: wrap;
@@ -2338,32 +2250,17 @@ body.textura-papel .conteudo {
 #kaia-notificacoes > * { pointer-events: auto; }
 
 /* ---- SEIS zonas na metade de baixo, alternadas em rotação pelo materias.js -
-   O card sempre no mesmo canto vira invisível (o aluno aprende a dispensar sem
-   ler, e como dispensar aqui é RESPONDER o feedback, isso vira dado falso no
-   Thompson). Mas posição ALEATÓRIA cobraria uma varredura da tela a cada
-   aparição — caro justo para quem já está com a atenção comprometida, que é o
-   público desta tela.
-   O acordo: as zonas são POUCAS, FIXAS e sempre as mesmas (a busca continua
-   barata porque o repertório é conhecido), e a rotação garante que duas
-   aparições seguidas nunca caiam no mesmo ponto.
-
-   POR QUE SÓ A METADE DE BAIXO — medido na tela de estudo (viewport 1280x900):
-     rail ............... x 0→60 (fechada) / 0→180 (aberta)
-     Caderno/ABANDONAR .. x 984→1220, y 63→111
-     questão + opções ... y 141→487 (fechada) / 136→512 (aberta)
-     LIVRE .............. y 512→900, à direita da rail
-   A faixa superior tem 63px de altura útil — não cabe um card de ~170px. Então
-   as 6 zonas são 3 colunas x 2 linhas dentro da área livre, e nenhuma toca a
-   questão, a rail ou os botões do topo.
-   As colunas da ESQUERDA partem DEPOIS da rail (e acompanham quando ela abre):
-   é o que garante que o card nunca fique atrás nem por cima dela. */
+   Canto fixo vira invisível (dispensar sem ler = dado falso no Thompson);
+   posição aleatória cobra varredura cara para atenção comprometida. Acordo:
+   poucas zonas fixas e rotação que nunca repete o ponto seguido.
+   Metade de baixo porque, em 1280x900, a questão vai até y512 (rail aberta) e
+   a faixa de cima tem só 63px para um card de ~170px. São 3 colunas x 2 linhas;
+   as da esquerda partem depois da rail e a acompanham. */
 /* Com a rail aberta a coluna toda desloca 120px — trocar UM token reposiciona
    as três zonas e a barra de uma vez. */
-/* As três medidas derivadas da coluna moram no BODY, não no :root — um var()
-   dentro de uma custom property resolve no elemento onde ela é DECLARADA, e no
-   :root elas congelariam com a rail fechada (a rail aberta deixaria de mover as
-   intervenções). No body, a linha seguinte troca o --rail-atual e as três
-   recalculam junto. */
+/* As três medidas derivadas moram no BODY, não no :root: var() em custom
+   property resolve onde é DECLARADA, e no :root congelariam com a rail fechada.
+   No body, o body.rail-aberta troca o --rail-atual e as três recalculam. */
 body {
   --estudo-larg: min(var(--col-estudo), calc(100vw - var(--rail-atual) - 120px));
   --estudo-esq: calc(
@@ -2373,10 +2270,8 @@ body {
   --estudo-dir: calc(var(--estudo-esq) + var(--estudo-larg));
 }
 body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
-/* As zonas seguem a COLUNA DE ESTUDO, não a janela (ver os tokens --estudo-*).
-   Em 1280 a coluna encosta nas bordas e as contas dão exatamente os valores de
-   antes; num monitor largo é isto que mantém o card ao lado do texto em vez de
-   exilado na borda da tela. */
+/* As zonas seguem a COLUNA DE ESTUDO (--estudo-*), não a janela: em monitor
+   largo o card fica ao lado do texto; em 1280 dá os mesmos valores de antes. */
 #kaia-notificacoes.pos-dir {
   right: calc(100vw - var(--estudo-dir) - 40px);
   left: auto;
@@ -2400,36 +2295,23 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
    caso mais apertado dos dois. */
 #kaia-notificacoes.pos-alta { --notif-baixo: 200px; }
 
-/* Portão: os botões nascem inertes por CARD_GATE_MS. O clique-reflexo dispara
-   antes disso e encontra botão morto — o que por si só devolve o olhar ao card.
-   Quem está lendo não percebe: 0,9s é menos do que ler a frase. Sem contagem
-   regressiva visível — seria um estímulo pulsando, o oposto do que o card quer;
-   a própria transição de opacidade é o aviso de que já dá para responder. */
+/* Portão: botões inertes por CARD_GATE_MS (0,9s, menos que ler a frase). O
+   clique-reflexo acha botão morto e o olhar volta ao card. Sem contagem
+   visível (seria estímulo pulsando); o fade de opacidade é o aviso. */
 .kaia-fb.kaia-fb-travado button { opacity: 0.45; cursor: default; }
 
 /* ============================================================
    INTERVENÇÕES — o visual das 7 que o aluno vê
    ============================================================
-   Este CSS vivia em template strings dentro das funções _garantir*() do
-   materias.js, injetado em runtime na primeira vez que cada intervenção
-   disparava. Foi trazido inteiro para cá para poder ser editado como CSS de
-   verdade — com realce, com o resto da paleta por perto e sem escapar aspas.
-   O JS segue criando os ELEMENTOS; aqui mora só a aparência.
-
+   O JS (materias.js) cria os ELEMENTOS; aqui mora só a aparência.
    Ordem: card de notificação → strip de feedback (compartilhado) →
    micro_refoco → pausa_ativa → troca_atividade → checkpoint → reancoragem.
    ============================================================ */
 
 /* ---- BEGE: os tokens que dão presença à marca nas 7 ----------------------
-   As 7 puxavam para o azul-névoa e o creme; o bege da marca só aparecia em
-   rótulo pequeno. Estes quatro tokens são o vocabulário do bege nas
-   intervenções — e existem porque o --bege puro (#c4a186) NÃO pode ser usado
-   em texto: sobre o --card ele dá ~2:1 e reprova em AA com folga.
-     --bege-tinta  texto (5,4:1 sobre o --card — o mesmo tom já usado na landing)
-     --bege-forte  acento sólido: barra de progresso, filete, realce
-     --bege-linha  bordas e filetes
-     --bege-veu    preenchimento suave: chip de ícone, fundo de opção
-   Mudou a identidade? Mexe SÓ aqui: as 7 leem daqui, nenhuma tem hex solto. */
+   Existem porque o --bege puro dá ~2:1 sobre o --card e reprova em AA como
+   texto. --bege-tinta: texto (5,4:1); --bege-forte: acento sólido/filete;
+   --bege-linha: bordas; --bege-veu: preenchimento suave. As 7 leem só daqui. */
 :root {
   --bege-tinta: #7d5f45;
   --bege-forte: #b08a68;
@@ -2438,12 +2320,8 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
 }
 
 /* ---- Ícone de identidade das 7 -------------------------------------------
-   Substitui os emojis dos títulos. Emoji renderiza diferente em cada sistema
-   (o 🤸 sai colorido no Windows, outro desenho no Android) e nenhum é da marca.
-   Estes são SVG de TRAÇO, herdando a cor por `currentColor` — o mesmo
-   vocabulário dos ícones da rail.
-   PARA TROCAR PELOS ÍCONES DA MARCA: os desenhos ficam em ICONES_INTERVENCAO,
-   no materias.js. Substitua o SVG de cada entrada; nada aqui precisa mudar. */
+   SVG de traço com currentColor no lugar de emoji (que muda por sistema e não é
+   da marca). Para trocar os desenhos: ICONES_INTERVENCAO no materias.js. */
 .kaia-ic {
   display: inline-flex;
   align-items: center;
@@ -2471,25 +2349,16 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
 .kaia-ic-chip svg { width: 24px; height: 24px; }
 
 /* ---- Card de notificação: auto_monitoramento e alerta_fadiga --------------
-   As duas usam ESTE mesmo card; o que muda é emoji/título/frase, definidos em
-   INTERVENCOES_MSG (materias.js). Era um cartão cinza-ardósia (#1f2937 com
-   texto #f9fafb) — o único ponto do produto com tema escuro, o que destoava
-   ainda mais depois do login claro. Agora usa os tokens da marca; a separação
-   do fundo, que antes vinha do contraste escuro, vem da borda + sombra. */
-/* MAIOR que as outras superfícies pequenas do produto, de propósito: é a única
-   das 7 que aparece no canto, longe de onde o olho está (a questão, no centro).
-   As centrais não precisam disso — elas já chegam ocupando a tela.
-   O aumento é de corpo, não de peso: mais largura, mais respiro e texto maior,
-   mantendo a mesma paleta e o mesmo filete. Nada de sombra mais forte nem cor
-   mais saturada, que é o que faria virar anúncio. */
+   As duas usam este card; texto em INTERVENCOES_MSG (materias.js). Tokens da
+   marca, separado do fundo por borda + sombra. */
+/* MAIOR de propósito: é a única das 7 no canto, longe do olho. Aumento de corpo
+   (largura, respiro, texto), não de peso — sombra ou cor mais forte viraria anúncio. */
 .kaia-card-notif {
   max-width: 440px;
   padding: 24px 26px;
   border: 1px solid var(--bege-linha);
-  /* Filete de bege à esquerda: é o que dá presença à marca sem pintar o fundo
-     inteiro (fundo bege cheio derrubaria o contraste do texto). O mesmo filete
-     reaparece no checkpoint e na barra do micro_refoco — é o fio que costura
-     as 7 visualmente. */
+  /* Filete de bege: marca sem pintar o fundo (bege cheio derruba o contraste).
+     Reaparece no checkpoint e no micro_refoco, costurando as 7. */
   border-left: 5px solid var(--bege-forte);
   border-radius: 16px;
   background: var(--card);
@@ -2523,9 +2392,8 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
 }
 
 /* ---- Strip de feedback ("isso ajudou?") — usado por TODAS ----------------
-   Os três botões eram hex soltos e saturados (#22c55e/#eab308/#ef4444). Agora
-   são os pares de status já validados em contraste: fundo claro + texto escuro
-   da mesma família, iguais aos badges do painel do professor. */
+   Pares de status validados em contraste (fundo claro + texto escuro), iguais
+   aos badges do painel do professor. */
 .kaia-fb {
   display: flex;
   gap: 8px;
@@ -2565,34 +2433,18 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
 }
 
 /* ---- micro_refoco: barra fixa NO RODAPÉ (respiração de 30s) --------------
-   `display: none → block` NÃO transiciona — era por isso que a barra pipocava.
-   Agora ela fica sempre no DOM e a transição é opacity + transform; o
-   `visibility` entra junto para que, fechada, ela não receba clique nem seja
-   lida por leitor de tela (opacity: 0 sozinha deixaria uma faixa invisível
-   capturando a base da página). O `visibility` só muda no FIM da saída — daí o
-   delay igual à duração — e no INÍCIO da entrada (delay 0).
-
-   Ficava no TOPO e tinha dois problemas: as questões começam na parte de cima
-   da coluna, então sobravam ~10px entre a barra e o conteúdo com a tela inteira
-   vazia embaixo; e, com `left: 0`, ela passava POR CIMA da barra lateral.
-   Agora começa depois da rail (e acompanha quando a rail abre) e sobe do
-   rodapé, que é de onde ela passou a vir. */
+   `display` não transiciona: fica sempre no DOM com opacity + transform. O
+   `visibility` impede clique e leitor de tela quando fechada; muda só no FIM da
+   saída (delay = duração) e no início da entrada. Começa depois da rail. */
 #kaia-mr {
   position: fixed;
   bottom: 0;
-  /* LARGURA CHEIA: da rail até a borda direita, em qualquer monitor. Chegou a
-     acompanhar a coluna de estudo junto com as outras intervenções, e ficou
-     errado: as outras são cards que precisam nascer perto do texto, esta é uma
-     faixa de rodapé — encurtá-la deixava um pedaço de barra solto no meio da
-     tela em vez de uma faixa.
-     A frase continua alinhada com a questão de graça: a barra ocupa a mesma
-     área ao lado da rail em que a coluna é centrada, então os dois centros
-     coincidem (em 3440, ambos em x1750).
-     O --rail-atual já cobre a rail aberta, e a transição de `left` faz a barra
-     acompanhar a abertura no mesmo tempo dela (0.25s). */
+  /* LARGURA CHEIA, da rail à borda: é faixa de rodapé, não card — presa à
+     coluna virava barra solta no meio. O centro coincide com o da coluna. O
+     --rail-atual cobre a rail aberta, e a transição de `left` segue os 0.25s dela. */
   left: var(--rail-atual);
   right: 0;
-  z-index: 5600;   /* ver a escala de camadas acima */
+  z-index: 5600;   /* ver a escala de camadas abaixo */
   padding: 18px 16px 16px;
   background: var(--card);
   /* Mesmo filete de bege do card de notificação, agora na aresta por onde a
@@ -2606,8 +2458,6 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
   transition: opacity 0.35s ease, transform 0.35s ease, left 0.25s ease,
               visibility 0s linear 0.35s;
 }
-/* A rail aberta já é tratada pelo --rail-atual nos tokens da coluna: a barra
-   reposiciona sozinha, no mesmo tempo em que a rail se abre (0.25s). */
 #kaia-mr.aberto {
   opacity: 1;
   visibility: visible;
@@ -2640,14 +2490,9 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
   font-size: 14px;
   line-height: 1.4;
 }
-/* Trilho em PROPORÇÃO da faixa, não em medida fixa. Era `max-width: 520px`, o
-   mesmo teto da frase — os dois formavam um par, mas o trilho ficava com ~40%
-   da faixa num notebook e ~20% num monitor grande, some sumindo conforme a tela
-   cresce. Os 65% (≈63% depois do padding lateral) dão os mesmos ~63% em
-   qualquer largura, que é o ponto: presença constante.
-   A FRASE fica nos 520px de propósito — ali o limite é de leitura, não de
-   proporção: a 14px, 520px já dão ~74 caracteres por linha, o teto do
-   confortável. Alargar a frase junto pioraria o que o trilho melhora. */
+/* Trilho em PROPORÇÃO (65%), não px fixo, para ter a mesma presença em qualquer
+   largura. A FRASE fica nos 520px: a 14px dá ~74 caracteres por linha, o teto
+   confortável de leitura. */
 #kaia-mr .kaia-mr-track {
   width: 65%;
   /* Era 6px — um fio, que sumia na faixa larga do rodapé. 10px dá corpo sem
@@ -2662,16 +2507,12 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
   width: 100%;
   height: 100%;
   border-radius: 99px;
-  /* Passou por verde-união (semáforo: sugeria certo/errado numa barra que só
-     marca tempo passando) e por bege-forte, que sumia contra o sulco de bege
-     do track. O azul-coati resolve os dois: é da marca, não tem leitura de
-     acerto/erro, e tem contraste de sobra contra o bege claro do sulco. */
+  /* Azul-coati: verde lia como certo/errado numa barra de tempo, e bege-forte
+     sumia contra o sulco bege. */
   background: var(--azul-coati);
 }
-/* O "Pular" era --tinta a 60% de opacidade: dava 2,8:1 e reprovava em AA (o axe
-   acusa). É a ÚNICA saída da barra — o controle que menos pode sumir. Agora usa
-   o bege legível em opacidade cheia: continua secundário pelo tamanho e pelo
-   sublinhado, não por estar apagado. */
+/* "Pular" é a ÚNICA saída da barra: --bege-tinta em opacidade cheia (a 60% dava
+   2,8:1 e reprovava em AA). Secundário pelo tamanho e sublinhado. */
 #kaia-mr .kaia-mr-pular {
   position: absolute;
   top: 8px;
@@ -2688,12 +2529,9 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
 #kaia-mr .kaia-mr-pular:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
 #kaia-mr-fb:not(:empty) { margin-top: 4px; }
 
-/* Com a barra no rodapé ela disputa espaço com o probe de autorrelato e com a
-   pilha de cards, que também vivem ancorados embaixo — e o probe dispara ao
-   responder questão, sem relação com as intervenções, então os dois aparecem
-   juntos de verdade. Enquanto a barra está aberta, os dois sobem a altura dela.
-   `--mr-altura` é escrita pelo materias.js com a altura REAL (ela encolhe no
-   modo feedback e cresce se a frase quebrar em duas linhas). */
+/* Probe e pilha de cards também vivem embaixo e aparecem junto com a barra:
+   enquanto ela está aberta, sobem a altura dela. `--mr-altura` vem do
+   materias.js com a altura REAL (muda no modo feedback e com quebra de linha). */
 body.kaia-mr-aberta #kaia-probe { bottom: calc(24px + var(--mr-altura, 0px)); }
 body.kaia-mr-aberta #kaia-notificacoes {
   bottom: calc(var(--notif-baixo, 20px) + var(--mr-altura, 0px));
@@ -2702,13 +2540,8 @@ body.kaia-mr-aberta #kaia-notificacoes {
 #kaia-notificacoes { transition: bottom 0.35s ease; }
 
 /* ---- AS CAMADAS DAS 7 (por que 5500/5600 e não 60/70) --------------------
-   As intervenções viviam em z-index 60 e 70 — abaixo do #overlay de
-   inatividade ("Ainda está Conosco?"), que é z-index 5000. E os dois se
-   encontram SEMPRE: o gatilho dispara aos 9s parado e o overlay sobe aos 10s
-   (dynamicLimit), então um segundo depois de a intervenção aparecer, uma tela
-   preta a 95% cobria tudo. A troca_atividade era a mais visível porque é a
-   única que espera uma DECISÃO do aluno e não suspende os sensores.
-
+   Abaixo do #overlay de inatividade (5000) elas eram cobertas: o gatilho
+   dispara aos 9s parado e o overlay sobe aos 10s (dynamicLimit).
    A escala do projeto, de baixo para cima:
       40/41  véu e questão da reancoragem (dentro do #quiz-view)
       1000   .resumo-overlay
@@ -2720,15 +2553,9 @@ body.kaia-mr-aberta #kaia-notificacoes {
       8000   #kaia-preloader
       9999   pilha de cards
 
-   Ficam ACIMA da inatividade e ABAIXO do exit-intent e da pausa do pomodoro:
-   "você está saindo da página" e "acabou o ciclo de foco" são estados mais
-   fortes que uma intervenção e devem cobri-la. O #kaia-pausa já usava 7000 com
-   este mesmo raciocínio — a escala aqui só estende o que ele começou.
-
-   O checkpoint não entra na lista: ele é INLINE, nasce dentro da coluna de
-   estudo e não tem camada própria. Para ele (e para a reancoragem, cujo véu
-   mora em 40) a proteção é outra — o idle-monitor não levanta o overlay
-   enquanto há intervenção na tela. Ver _intervencaoNaTela() no materias.js. */
+   Exit-intent e fim do pomodoro são estados mais fortes e cobrem a intervenção.
+   Checkpoint é INLINE, sem camada; para ele e a reancoragem a proteção é o
+   idle-monitor não subir o overlay com intervenção na tela (_intervencaoNaTela()). */
 
 /* ---- pausa_ativa: overlay da sequência guiada (90s) ---------------------- */
 #kaia-seq {
@@ -2785,17 +2612,9 @@ body.kaia-mr-aberta #kaia-notificacoes {
   line-height: 1.4;
 }
 /* ---- Troca de frase do roteiro (só na pausa_ativa) -----------------------
-   É a única das 7 cujo texto muda sozinha durante a intervenção, e trocar seco
-   dava um "corte" — o oposto do que uma pausa para acalmar deveria fazer.
-   O movimento é CONTÍNUO PARA CIMA: a frase que sai sobe e some, a que entra
-   vem de baixo. As duas na mesma direção viram uma coisa só subindo, como uma
-   linha de texto rolando; em direções opostas viraria um "vai-e-volta", que é
-   estímulo a mais.
-   Saída curta (0,22s) e entrada mais longa (0,45s), com desaceleração no fim:
-   quem chega merece mais tempo que quem sai, e terminar devagar é o que faz o
-   movimento ler como calmo em vez de rápido.
-   Os tempos CASAM com SEQ_PASSO_SAIDA_MS/SEQ_PASSO_ENTRADA_MS no materias.js —
-   mexeu num, mexe no outro. */
+   Movimento contínuo para CIMA (sai subindo, entra de baixo): direções opostas
+   virariam vai-e-volta. Saída 0,22s, entrada 0,45s desacelerando, para ler calmo.
+   Tempos CASAM com SEQ_PASSO_SAIDA_MS/SEQ_PASSO_ENTRADA_MS no materias.js. */
 #kaia-seq .kaia-seq-passo.kaia-passo-sai {
   animation: kaiaPassoSai 0.22s ease both;
 }
@@ -2832,11 +2651,8 @@ body.kaia-mr-aberta #kaia-notificacoes {
 #kaia-seq-fb:not(:empty) { margin-top: 12px; }
 
 /* ---- troca_atividade: modal com a escolha do aluno -----------------------
-   Era a única das 7 que aparecia SEM transição (`display: none → grid` cru):
-   pipocava enquanto as outras 6 deslizavam. Agora usa o mesmo par
-   opacity+visibility do #kaia-seq — `display` não transiciona, e o
-   `visibility` só muda no fim da saída para o modal não capturar clique
-   enquanto está invisível. E ganhou o filete de bege das outras. */
+   Mesmo par opacity+visibility do #kaia-seq (`display` não transiciona); o
+   `visibility` só muda no fim da saída para não capturar clique invisível. */
 #kaia-troca {
   position: fixed;
   inset: 0;
@@ -2968,12 +2784,9 @@ body.kaia-mr-aberta #kaia-notificacoes {
   cursor: pointer;
 }
 .kaia-cp-card .kaia-fb-wrap { margin-top: 12px; }
-/* A questão atual atenua enquanto o checkpoint está aberto, e recebe um realce
-   de re-entrada ao fechar (reduz o custo de retomada).
-   A transição mora na BASE, não na classe: se ficasse só em .kaia-cp-dim, ao
-   remover a classe a regra sairia junto e a questão voltaria de um salto.
-   0.35 deixava o texto de fundo em ~2:1 — atenuado a ponto de ser ilegível.
-   0.7 dá ~5:1, passa em AA: quem quiser ler a questão por trás, consegue. */
+/* Questão atenua com o checkpoint aberto e ganha realce ao fechar (custo de
+   retomada). Transição na BASE: só na classe, voltaria de um salto. Opacidade
+   0.7 dá ~5:1 e passa em AA (0.35 dava ~2:1). */
 .question-wrapper {
   transition: opacity 0.25s ease, background-color 0.6s ease, box-shadow 0.6s ease;
 }
@@ -2988,24 +2801,12 @@ body.kaia-mr-aberta #kaia-notificacoes {
 }
 
 /* ---- reancoragem: sem elemento próprio ----------------------------------
-   Escurece o entorno e ELEVA a questão acima do véu. Sutil de propósito
-   (regra TEA/TDAH: tirar estímulo, não adicionar — nada pisca).
-   O véu é um pseudo-elemento CONDICIONAL: quando a classe sai ele deixa de
-   existir, e o que não existe não transiciona. Por isso a entrada é animation
-   e a saída tem uma classe própria (.kaia-reancorar-saindo), que o timer do
-   materias.js liga antes de limpar as duas. Tempos longos de propósito — 0,6s
-   entrando, 0,8s saindo: esta é a mais sutil das 7, e um fade rápido num véu
-   de tela inteira seria um piscar.
-
-   O VÉU MORA NO #quiz-view, NÃO NO body — e isso não é detalhe de organização.
-   #quiz-view é `position: relative; z-index: 2`, ou seja, um CONTEXTO DE
-   EMPILHAMENTO. Com o véu no body, o z-index 41 da questão só valia dentro
-   desse contexto: vista de fora, a subárvore inteira pintava no nível 2, abaixo
-   do véu (40) — a questão era escurecida junto com o resto e o efeito só
-   desenhava um retângulo claro por baixo do véu. Pondo o véu no MESMO contexto,
-   40 e 41 finalmente competem entre si e a questão sobe de verdade.
-   `position: fixed` continua cobrindo a viewport toda (nenhum ancestral tem
-   transform) e sai do fluxo, então não vira item do flex do #quiz-view. */
+   Escurece o entorno e eleva a questão; sutil de propósito (TEA/TDAH: nada pisca).
+   Véu condicional não transiciona ao sumir: entrada é animation, saída usa
+   .kaia-reancorar-saindo (timer do materias.js). 0,6s/0,8s para não piscar.
+   O VÉU MORA NO #quiz-view, NÃO NO body: #quiz-view (z-index 2) é contexto de
+   empilhamento, e só no mesmo contexto o 41 da questão vence o 40 do véu.
+   `fixed` segue cobrindo a viewport (nenhum ancestral tem transform). */
 body.kaia-reancorar #quiz-view::before {
   content: "";
   position: fixed;
@@ -3021,42 +2822,16 @@ body.kaia-reancorar #quiz-view::before {
 body.kaia-reancorar-saindo #quiz-view::before { animation: kaiaVeuSai 0.8s ease both; }
 @keyframes kaiaVeuEntra { from { opacity: 0; } to   { opacity: 1; } }
 @keyframes kaiaVeuSai   { from { opacity: 1; } to   { opacity: 0; } }
-/* O painel que sobe é um PSEUDO-ELEMENTO, não a sombra do próprio wrapper.
-   Antes a folga vinha de `box-shadow` com spread sólido (`0 14px 0 14px`), que
-   pinta um retângulo de canto vivo do tamanho exato do elemento: virava uma
-   moldura grossa, com raio de 2px, colada no texto — o "quadrado" que a Bia
-   apontou. Um ::before posicionado com `inset` negativo faz o mesmo trabalho
-   (não desloca o texto, porque sai do fluxo) e permite o que a sombra não
-   permitia: raio generoso, folga DIFERENTE por lado e uma linha fina.
-
-   A delicadeza está em três escolhas:
-     · raio 18px em vez de 2px — o painel lê como superfície, não como recorte;
-     · um fio de bege de 1px no lugar de contorno grosso (0 0 0 1px), que é o
-       mesmo bege das outras 6 e dá a borda "suave" pedida;
-     · sombra larga e MUITO diluída (50px de blur a 20%), que separa do véu por
-       profundidade em vez de por contraste de aresta.
-
-   A folga é assimétrica e medida: acima da questão sobram 30px até a barra do
-   Caderno/ABANDONAR (questão em y=141 com a rail fechada, y=136 aberta; a barra
-   termina em 111/106), então -14px em cima ainda deixa 16px de respiro e nunca
-   encosta nos botões. Embaixo e nas laterais pode ser mais generoso.
-
-   `z-index: -1` fica ATRÁS do texto mas dentro do contexto de empilhamento do
-   próprio wrapper (que é z-index 41) — ou seja, ainda acima do véu (40). */
-/* Sobem a PERGUNTA e as OPÇÕES, cada uma por si — não o bloco todo.
-   A diferença é visível: elevar o .question-wrapper desenhava UM painel em
-   volta de tudo (uma moldura, por mais suave que fosse). Elevando os elementos
-   individualmente, o véu continua aparecendo NOS VÃOS entre as opções — o que
-   se lê é "a questão está nítida e o resto apagou", não "abriu um card por
-   cima". É a versão mais sutil das duas.
-
-   As opções já têm superfície própria (.option-btn tem background --card), então
-   sobem prontas: só ganham o fio de bege e uma sombra difusa. A pergunta é um
-   <h2> sem fundo — se subisse crua, ficaria texto escuro sobre a página
-   escurecida pelo véu e o contraste despencaria justo no elemento mais
-   importante. Por isso ela leva uma superfície própria, num ::before com inset
-   negativo: dá o fundo sem `padding` (que empurraria o texto e faria a questão
-   pular no disparo, num efeito cujo objetivo é não sobressaltar). */
+/* O painel é um ::before com inset negativo, não box-shadow com spread (que dava
+   moldura de canto vivo colada no texto): não desloca o texto e permite raio
+   (14px), fio de bege de 1px e sombra diluída (30px a 16%).
+   Folga medida: a barra do Caderno termina 30px acima da questão, então -12px
+   em cima ainda deixa 18px. `z-index: -1` fica atrás do texto mas dentro do
+   contexto do elemento (41), acima do véu (40). */
+/* Sobem a PERGUNTA e as OPÇÕES, cada uma por si — não o bloco todo: o véu
+   aparece nos vãos e não vira "card por cima". As opções já têm fundo --card.
+   A pergunta (<h2> sem fundo) perderia contraste sob o véu, então ganha
+   superfície num ::before — sem `padding`, que faria a questão pular. */
 body.kaia-reancorar #question-display,
 body.kaia-reancorar .option-btn {
   position: relative;
@@ -3079,10 +2854,7 @@ body.kaia-reancorar .option-btn {
 }
 
 /* ---- Quem pediu menos movimento recebe menos movimento -------------------
-   A transição suave é o PADRÃO porque aparição brusca agride a atenção — mas
-   para quem marcou "reduzir movimento" no sistema, o movimento é que agride.
-   Aqui os estados finais continuam iguais (mesmo véu, mesma opacidade, mesmos
-   tamanhos); só o caminho até eles vira instantâneo. */
+   Estados finais iguais (véu, opacidade, tamanhos); só o caminho vira instantâneo. */
 @media (prefers-reduced-motion: reduce) {
   #kaia-mr,
   #kaia-mr.aberto,
@@ -3112,10 +2884,7 @@ body.kaia-reancorar .option-btn {
 }
 
 /* ---- probe de atenção (autorrelato) -------------------------------------
-   NÃO é uma das 7 intervenções — é a pergunta de autorrelato que gera o rótulo
-   real do modelo. Veio junto porque tinha o mesmo CSS-dentro-de-string, e
-   deixar um bloco injetado para trás faria a próxima pessoa se perguntar por
-   que só esse é diferente. Aparência inalterada. */
+   NÃO é uma das 7: é a pergunta de autorrelato que gera o rótulo real do modelo. */
 #kaia-probe {
   position: fixed;
   left: 50%;
@@ -3136,13 +2905,9 @@ body.kaia-reancorar .option-btn {
   transform: translateX(-50%);
 }
 /* ---- JANELAS DE TAMANHOS VARIADOS --------------------------------------
-   A CAPACIDADE, sem a lógica: quem escolhe a classe é o _escolherTamanhoProbe
-   no materias.js, que hoje devolve sempre 'medio'. Por isso a janelinha está
-   EXATAMENTE como sempre esteve — 'probe-medio' repete os 340px da regra acima
-   de propósito, para que ligar a variação não seja também mudar o padrão.
-   PENDENTE (Bia + Vitor): quais tamanhos de fato entram no teste. Os 260 e os
-   460 são um ponto de partida (−24% e +35%), não uma decisão — mexer nos
-   valores aqui não pede nada do JS. */
+   Quem escolhe é o _escolherTamanhoProbe (materias.js), hoje sempre 'medio',
+   que repete os 340px de propósito. PENDENTE (Bia + Vitor): 260/460 são ponto
+   de partida, não decisão; mudar aqui não pede nada do JS. */
 #kaia-probe.probe-pequeno { max-width: 260px; }
 #kaia-probe.probe-medio   { max-width: 340px; }
 #kaia-probe.probe-grande  { max-width: 460px; }
@@ -3293,10 +3058,8 @@ body.kaia-reancorar .option-btn {
   color: var(--profundo);
 }
 /* ===== Accordion de questões erradas (Fase 1) =====
-   Substitui a lista plana por itens colapsados. Fechado: só "Questão N" + ✗ e a
-   tag "Rever" (indicador por ícone+rótulo, não só cor). Aberto: Pergunta / Sua
-   resposta / Correta / Por quê. Tom calmo — rosê (--erro-*) e verde (--vd-uniao)
-   suaves, sem vermelho de alarme. */
+   Fechado: "Questão N" + ✗ + tag "Rever" (ícone+rótulo, não só cor). Aberto:
+   Pergunta / Sua resposta / Correta / Por quê. Rosê e verde suaves, sem alarme. */
 #resumo-erros-lista {
   list-style: none;
   margin: 0;
@@ -3689,22 +3452,11 @@ body.kaia-reancorar .option-btn {
 
 /* =========================
    AI LOADER — espera da IA (temas e questão)
-   Porte do componente "AI Loader" do 21st.dev (@beratberkayg). A animação é
-   CSS no original também; os keyframes abaixo mantêm a geometria EXATA dele
-   (mesmos offsets/blur/spread de box-shadow, mesmos 5s lineares e 3s das letras).
-   O que mudou, de propósito:
-     - paleta: os seis azuis do original viraram os azuis do projeto. A
-       profundidade da esfera vem do contraste claro/escuro, então não dá para
-       usar um tom só: --profundo (#1a2b4c) é a sombra funda, --azul-coati
-       (#2d4ba5) o médio, e #6f97e8/#89adf0/#7ba3ec (derivados do coati) o brilho.
-     - INLINE, não overlay: o original é `fixed inset-0` com fundo em degradê até
-       o preto, cobrindo a página. Aqui a esfera ocupa só o lugar da mensagem de
-       espera, dentro da área da questão — sem fundo próprio, sem z-index, com o
-       resto da página visível atrás.
-     - letras: `text-white` virou --profundo. Sobre o marfim da página, branco
-       ficaria invisível (e #fff puro é proibido pela regra do projeto).
-     - prefers-reduced-motion: o original não trata; aqui para tudo (TEA/TDAH).
-   O markup vem da ilha React em js/ai-loader.js — ver CLAUDE.md.
+   Porte do "AI Loader" do 21st.dev (@beratberkayg) com a geometria EXATA dos
+   keyframes (box-shadow, 5s da esfera, 3s das letras). Mudou: paleta nos azuis
+   do projeto (--profundo sombra, --azul-coati médio, #6f97e8/#89adf0/#7ba3ec
+   brilho); INLINE no lugar da mensagem, não overlay; letras --profundo (não
+   #fff); reduced-motion para tudo (TEA/TDAH). Markup: ilha React em js/ai-loader.js.
 ========================= */
 .kaia-ail {
   display: flex;
@@ -3729,13 +3481,9 @@ body.kaia-reancorar .option-btn {
   animation: kaia-ail-letra 3s infinite;
 }
 .kaia-ail__esfera {
-  /* As seis cores da esfera viraram TOKENS para que o mesmo componente possa
-     aparecer em dois contextos com pesos diferentes. Os valores abaixo são os
-     de sempre (a esfera azul da espera da IA) — quem não sobrescreve nada não
-     vê diferença nenhuma. A tela de saudações sobrescreve com a variante clara
-     (ver .kaia-pre-esfera no bloco do PRELOADER).
-     --ail-funda é a sombra que dá o volume, --ail-media o meio-tom e
-     --ail-brilho* o realce que gira. */
+  /* Cores em TOKENS para o mesmo componente servir dois contextos: aqui a esfera
+     azul da espera da IA; .kaia-pre-esfera (PRELOADER) sobrescreve com a clara.
+     --ail-funda dá o volume, --ail-media o meio-tom, --ail-brilho* o realce. */
   --ail-brilho:  #6f97e8;
   --ail-brilho2: #89adf0;
   --ail-brilho3: #7ba3ec;
@@ -3800,29 +3548,15 @@ body.kaia-reancorar .option-btn {
 
 /* =========================
    PRELOADER — saudações na entrada (login e cadastro)
-   Tudo em CSS: degradê + véu escuro + encadeamento dos fades. O JS
-   (registrarPreloader, em js/login.js) só GARANTE a saída do overlay — ele não
-   anima nada.
-   Ritmo acelerado, SEM sobreposição: passo de 0,4s = duração do fade, então cada
-   saudação sai antes de a próxima entrar (não se cruzam — era o que "borrava" duas
-   palavras juntas). reduced-motion desliga tudo (regra no fim do bloco).
-   Saudações em vários alfabetos (latino, japonês, árabe, cirílico) pela variedade
-   de formas de letra. Linha do tempo: Olá 0s · こんにちは 0,4s · Hello 0,8s · Hola 1,2s ·
-   مرحبا 1,6s · Bonjour 2,0s · Ciao 2,4s · Привет 2,8s · Hallo 3,2s · Namaste entra
-   3,6s (fica) → overlay sai em 4,2s e a tela fica livre em ~4,7s.
-   ATENÇÃO ao mexer: são TRÊS lugares acoplados — o passo (nth-child abaixo), o
-   delay do kaia-pre-sair, e o PRE_MS do js/login.js (a rede de segurança, que
-   precisa ficar depois do fim da animação).
+   Tudo em CSS; o JS (registrarPreloader) só garante a saída. reduced-motion desliga.
+   Passo = duração do fade (0,32s), pra duas saudações nunca se cruzarem e borrarem.
+   ATENÇÃO: acoplados o passo (nth-child), o delay do kaia-pre-sair e o PRE_MS do login.js.
 ========================= */
 #kaia-preloader {
   /* ▼▼ CALIBRE AQUI ▼▼ opacidade do véu CLARO. Faixa útil: 0 a 0.25.
      0 = cor cheia · 0.06 = atual · 0.25 = bem mais lavado.
-     É o dial mais rápido para dosar a força do fundo inteiro de uma vez: subir
-     lava as quatro manchas juntas, descer deixa a cor mais cheia. Era escuro
-     (rgba(20,20,30,…)) quando o login era azul-marinho e as cores entravam
-     chapadas; hoje é marfim e entra baixo, porque a densidade já vem dos alphas
-     das manchas abaixo. Continua NEUTRO quanto à matiz (nada de
-     filter: saturate, que puxaria para marrom/cinza). */
+     Dial único da força do fundo: lava as quatro manchas juntas. Neutro na matiz
+     (nada de filter: saturate, que puxa para marrom/cinza). */
   --pre-veu: 0.06;
 
   position: fixed;
@@ -3832,25 +3566,13 @@ body.kaia-reancorar .option-btn {
   align-items: center;
   justify-content: center;
   /* TRÊS camadas, de cima para baixo na declaração:
-     1) granulação de papel — mesmo feTurbulence da textura do perfil
-        (body.textura-papel, mais acima), com bf 0.25 / oct 4 / tile 220px.
-        ▼ AJUSTE DO GRÃO: o slope aqui é 0.07, MENOR que o 0.15 do perfil.
-        Herança do fundo escuro, onde o grão saltava; sobre o claro de agora ele
-        ficou bem discreto — se quiser mais papel, dá para subir rumo ao 0.15 do
-        perfil. Mexa no slope dentro do data URI abaixo e NÃO no do perfil.
-        Estática de propósito: preenche o vazio sem movimento competindo pela
-        atenção (TEA/TDAH).
-     2) véu claro de marfim — só unifica; as cores já entram diluídas.
-     3) as MESMAS quatro cores nos MESMOS cantos do fundo do login (.tela-login,
-        lá em cima), sobre a MESMA base azul-névoa → marfim → creme. Era um
-        degradê vertical com faixas saturadas no rodapé; espelhar o login faz a
-        abertura e a tela que vem depois lerem como o mesmo ambiente, e a saída
-        do overlay deixa de ser uma troca de cenário.
-        Mesmo ARRANJO do login, cor MAIS FORTE de propósito: lá as manchas são
-        periferia de um card que ocupa o centro; aqui a tela é vazia, então elas
-        precisam ser maiores e mais densas para o fundo não parecer lavado.
-        Se mudar os cantos no .tela-login, mude aqui junto — o par é que faz a
-        transição funcionar. */
+     1) grão de papel, mesmo feTurbulence do body.textura-papel. ▼ AJUSTE DO
+        GRÃO: slope 0.07 (o perfil usa 0.15); mexa no data URI daqui, NÃO no do
+        perfil. Estático de propósito (TEA/TDAH).
+     2) véu claro de marfim — só unifica.
+     3) as mesmas quatro cores nos mesmos cantos do .tela-login, mais fortes (aqui
+        a tela é vazia), para abertura e login lerem como o mesmo ambiente. Mudou
+        os cantos no .tela-login, mude aqui junto. */
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.25' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.07'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E"),
     linear-gradient(rgba(var(--card-rgb), var(--pre-veu)), rgba(var(--card-rgb), var(--pre-veu))),
@@ -3873,24 +3595,14 @@ body.kaia-reancorar .option-btn {
      dele. ~51px em qualquer monitor: o 8vw só entra abaixo de 640px de
      largura, e aí a esfera encolhe junto — nunca sozinha. */
   --pre-fs: clamp(2rem, 8vw, 3.2rem);
-  /* DIÂMETRO FIXO, dimensionado para a MAIOR saudação. Medindo as dez em
-     51,2px, a maior não é "Namaste" (221px) e sim o japonês こんにちは, com
-     254x82px — o círculo que envolve essa caixa tem 267px. Os 6,25em dão 320px,
-     ~26px de respiro de cada lado.
-     É FIXO de propósito: preso ao tamanho da fonte, e não ao tamanho da palavra
-     da vez. Assim a esfera não pulsa quando a sequência passa de "Olá" (87px)
-     para こんにちは — ela fica parada e as palavras trocam dentro dela. */
+  /* DIÂMETRO FIXO, pela MAIOR saudação: こんにちは (254x82px a 51,2px, círculo de
+     267px). 6,25em = 320px, ~26px de respiro. Preso à fonte e não à palavra da
+     vez, para a esfera não pulsar entre "Olá" (87px) e こんにちは. */
   --pre-anel: calc(var(--pre-fs) * 6.25);
 }
-/* A MESMA esfera da espera da IA (.kaia-ail__esfera, no bloco AI LOADER acima):
-   mesma classe, mesma geometria de box-shadow, mesma rotação de 5s. Um só
-   elemento de "carregando/pensando" nos dois contextos — quem vê a abertura
-   reconhece o mesmo objeto depois, na espera da questão.
-   O que muda aqui é só o PESO das cores. Na tela da questão a esfera é o azul
-   cheio do Coati, porque ali ela é o assunto: o aluno está esperando por ela.
-   Na abertura ela é pano de fundo das saudações, então entra em bege bem
-   diluído — presença, não protagonismo — e as palavras continuam legíveis por
-   cima (o texto é --profundo, e a esfera clara não rouba contraste dele). */
+/* A MESMA esfera da espera da IA (.kaia-ail__esfera), para ser reconhecida
+   depois. Só muda o PESO: aqui é pano de fundo, em bege diluído, e não rouba
+   contraste do texto --profundo por cima. */
 .kaia-pre-esfera.kaia-ail__esfera {
   --ail-brilho:  rgba(var(--card-rgb), 0.85);
   --ail-brilho2: rgba(var(--card-rgb), 0.95);
@@ -3901,10 +3613,8 @@ body.kaia-reancorar .option-btn {
   --ail-halo:    rgba(var(--bege-rgb), 0.22);
   --ail-halo2:   rgba(var(--bege-rgb), 0.14);
 
-  /* TAMANHO FIXO — o motivo de existir o --pre-anel. A esfera fica do tamanho
-     da MAIOR saudação e não muda mais: as palavras trocam dentro dela.
-     `inset: auto` desfaz o inset:0 herdado do AI Loader, onde a esfera acompanha
-     o palco; aqui ela tem medida própria. */
+  /* TAMANHO FIXO pelo --pre-anel. `inset: auto` desfaz o inset:0 herdado do
+     AI Loader, onde a esfera acompanha o palco. */
   inset: auto;
   top: 50%;
   left: 50%;
@@ -3922,10 +3632,7 @@ body.kaia-reancorar .option-btn {
   /* Era --marfim (claro sobre fundo escuro). Com o fundo claro, inverte para o
      azul da marca: 11.9:1 na faixa onde as saudações aparecem. */
   color: var(--profundo);        /* cor SÓLIDA — o degradê é só no fundo */
-  /* ~50px em tela cheia; o 8vw só reduz em telas estreitas, sem estourar.
-     Mora no .kaia-pre-saudacoes porque o anel se dimensiona pelo mesmo valor —
-     mudou aqui, o anel acompanha em vez de descolar. */
-  font-size: var(--pre-fs);
+  font-size: var(--pre-fs);   /* definido no .kaia-pre-saudacoes, junto com a esfera */
   font-weight: 800;
   letter-spacing: -0.5px;
   opacity: 0;
@@ -3963,11 +3670,8 @@ body.kaia-reancorar .option-btn {
 @keyframes kaia-pre-sair {
   to { opacity: 0; visibility: hidden; }
 }
-/* Sem movimento: nada de tela de abertura. Um preloader que não anima só atrasa
-   o acesso, então ele simplesmente não aparece — e isso já cobre o anel, que é
-   filho dele: quem pede menos movimento não vê nada girando porque não vê a
-   tela. Não precisa de regra própria; se um dia o preloader deixar de sumir
-   aqui, a esfera já cai na regra de reduced-motion do próprio AI Loader. */
+/* Sem movimento: sem abertura (preloader parado só atrasa o acesso). Cobre a
+   esfera filha; se um dia ele não sumir, ela cai no reduced-motion do AI Loader. */
 @media (prefers-reduced-motion: reduce) {
   #kaia-preloader { display: none; }
 }
@@ -3975,17 +3679,9 @@ body.kaia-reancorar .option-btn {
 /* ============================================================
    LANDING PÚBLICA (index.html) — namespace lp-*
    ============================================================
-   Bloco NOVO, no fim do arquivo e sem tocar em nenhuma regra acima. O index
-   deixou de ser página interna (tinha guarda de login e barra lateral) e virou
-   a porta de entrada pública: quem chega aqui ainda não tem conta.
-
-   Tudo é escopado em `body.lp-page` ou no prefixo `.lp-`. As exceções são os
-   hovers de .plano/.coati-container, que já existiam e são reaproveitados — por
-   isso vêm sob `.lp-page`, que vence em especificidade sem editar o original
-   (as outras páginas continuam com o hover antigo).
-
-   Paleta: só tokens. Nada de #fff/#000 — fundo é --marfim/--card/--surface e
-   texto é --tinta/--profundo, a mesma regra do resto do projeto.
+   Porta de entrada pública (sem conta). Tudo escopado em `body.lp-page` ou
+   `.lp-`; .plano/.coati-container reaproveitados vêm sob `.lp-page`, que vence
+   por especificidade sem mudar as outras páginas. Só tokens, nada de #fff/#000.
    ============================================================ */
 
 /* Rolagem suave só na landing: o "Ver planos" do hero é o único link âncora do
@@ -4078,9 +3774,8 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 }
 
 /* ---- Hero ----------------------------------------------------------------
-   Sem gradiente e sem imagem de fundo: o público da KaIA é justamente quem se
-   dispersa com estímulo visual. A separação do resto da página vem de uma
-   mudança sutil de superfície (--surface sobre --marfim) e de uma linha. */
+   Sem gradiente nem imagem: o público se dispersa com estímulo visual.
+   Separa só pela superfície (--surface sobre --marfim). */
 .lp-hero {
   padding: 76px 24px 68px;
   background: var(--surface);
@@ -4186,10 +3881,8 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 }
 
 /* ---- Planos --------------------------------------------------------------
-   O grid base (.planos-grid) é auto-fit com mínimo de 240px: com 2 cards na
-   faixa escolar ele os esticaria por toda a largura, e cada card ficaria muito
-   mais largo que os individuais logo acima — a comparação entre as faixas
-   perderia a escala. Aqui a faixa escolar recebe colunas fixas e um teto. */
+   O auto-fit esticaria os 2 cards escolares e quebraria a escala com os
+   individuais: a faixa escolar tem colunas fixas e teto. */
 .lp-planos-grid { align-items: stretch; }
 .lp-planos-grid > .plano { height: 100%; }
 /* O botão desce para a base mesmo quando os cards têm listas de tamanhos
@@ -4211,10 +3904,7 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 }
 
 /* ---- Rodapé --------------------------------------------------------------
-   Fundo próprio (--surface) e padding folgado: o rodapé anterior era um botão
-   solto no fim da coluna de texto, sem nada que o encerrasse. */
-/* Mesmo fundo do corpo e sem linha em cima — a separação vem do padding
-   folgado do .lp-rodape-inner. */
+   Mesmo fundo do corpo, sem linha: separa pelo padding folgado do .lp-rodape-inner. */
 .lp-rodape {
   background: var(--marfim);
 }
@@ -4244,10 +3934,8 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-rodape-link:focus-visible { outline: 3px solid var(--azul-coati); outline-offset: 3px; }
 
 /* ---- Hover unificado dos cards ------------------------------------------
-   Os três tipos de card da landing sobem o MESMO tanto. .plano já subia 6px
-   (regra antiga, que segue valendo nas outras páginas); sob .lp-page ele passa
-   a 4px para bater com os cards de passo — card que sobe mais que o vizinho lê
-   como "mais importante", e aqui não é o caso. */
+   Os três sobem 4px (o .plano sobe 6px fora da landing): card que sobe mais lê
+   como "mais importante". */
 .lp-page .plano:hover,
 .lp-page .coati-container:hover,
 .lp-page .lp-passo:hover {
@@ -4260,16 +3948,8 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 }
 
 /* ---- Contraste dos rótulos bege ------------------------------------------
-   O --bege (#c4a186) sobre o --card dá ~2:1 — reprova em AA com folga, e cai
-   justo nos textos MENORES dos cards (0,7rem a 0,9rem), que é onde contraste
-   baixo mais machuca. Um axe na página acusa 19 nós.
-   Não é regressão desta frente: .plano-tipo/.plano-alvo/.plano-preco span e o
-   figcaption do Coati já eram assim. O que mudou é a exposição — o index virou
-   página PÚBLICA, e o "R$ 19,90 /mês" tem o valor legível e a unidade não.
-   O tom aqui é o MESMO bege, só escurecido até 5,4:1 sobre o --card. Mesmo
-   remédio já aplicado na Fase 4 ao --muted (5,5:1) e ao --alerta-tx (5,1:1).
-   Escopado em .lp-page: as outras páginas seguem exatamente como estavam. Para
-   desfazer, basta apagar este bloco.
+   --bege sobre --card dá ~2:1 e reprova em AA nos textos menores (0,7–0,9rem).
+   Mesmo bege escurecido até 5,4:1, só em .lp-page (apagar o bloco desfaz).
    SE ISTO SUBIR PARA O TOKEN --bege, apague daqui e ajuste lá. */
 .lp-page {
   --bege-legivel: #7d5f45;
@@ -4282,29 +3962,18 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-passo-num { color: var(--bege-legivel); }
 
 /* ---- Landing sem bordas -------------------------------------------------
-   Nada de linha em nenhuma seção: quem separa é espaçamento e sombra. As
-   regras de header/rodapé/hero/passo já nasceram sem borda logo acima; aqui
-   ficam as CLASSES COMPARTILHADAS (.plano, .coati-*), zeradas só sob .lp-page
-   para as outras páginas continuarem como estavam.
-   Os `padding` NÃO saem junto: o espaço que a borda tracejada ocupava em
-   .plano-alvo e .coati-imagem é dado pelo padding, então tirar só a linha
-   preserva o respiro. E como o box-sizing é border-box, remover a borda dos
-   cards não muda o tamanho externo de nenhum deles. */
+   Separa por espaçamento e sombra. Zera as bordas das classes compartilhadas só
+   sob .lp-page; os `padding` ficam (dão o respiro), e com border-box o tamanho
+   externo não muda. */
 .lp-page .plano,
 .lp-page .plano-destaque,
 .lp-page .coati-container { border: 0; }
 .lp-page .plano-alvo { border-bottom: 0; }
 .lp-page .coati-imagem { border-left: 0; }
 
-/* A "linha amarela" na lateral direita não era borda nenhuma: é o POLEGAR da
-   barra de rolagem, que o projeto pinta de --gravata-kinrou desde sempre
-   (regra global lá em cima). Numa página interna ele é um detalhe de marca;
-   numa landing de fundo liso vira um traço vertical de ponta a ponta.
-   Aqui ele fica discreto em vez de sumir: barra invisível numa página longa
-   tira a única pista de quanto ainda falta rolar. Só nesta página — o resto do
-   produto segue com a barra amarela.
-   `html:has(...)` porque a barra do DOCUMENTO lê os pseudo-elementos do <html>,
-   não os do <body>. */
+/* Polegar da rolagem discreto só na landing (amarelo vira traço de ponta a
+   ponta no fundo liso); não some, é a pista de quanto falta. `html:has(...)`
+   porque a barra do documento lê os pseudo-elementos do <html>. */
 html:has(body.lp-page)::-webkit-scrollbar-thumb {
   background-color: rgba(var(--profundo-rgb), 0.16);
 }
@@ -4324,10 +3993,7 @@ html:has(body.lp-page) {
 }
 
 /* ---- Quem pediu menos movimento recebe menos movimento -------------------
-   Mesma regra do bloco das intervenções: o estado final é idêntico (mesmas
-   cores, mesma sombra), só o caminho até ele deixa de ser animado. Inclui a
-   rolagem do "Ver planos", que é movimento de tela inteira — o mais pesado
-   deles para quem marcou a preferência. */
+   Estado final idêntico, sem animação — inclusive a rolagem do "Ver planos". */
 @media (prefers-reduced-motion: reduce) {
   html:has(body.lp-page) { scroll-behavior: auto; }
   .lp-btn,

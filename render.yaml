@@ -1,11 +1,8 @@
 # ============================================================
 #  KaIA no Render — API (Web Service) + site (Static Site)
 # ============================================================
-# São DOIS serviços. O site não hiberna; a API grátis dorme após 15 min parada e
-# a primeira chamada depois disso leva ~50s.
-#
-# O que NÃO está aqui, de propósito: os segredos. Todo `sync: false` precisa ser
-# preenchido à mão no painel (Environment) — assim nada sensível entra no git.
+# O site não hiberna; a API grátis dorme após 15 min parada (1ª chamada ~50s).
+# Segredos ficam FORA de propósito: todo `sync: false` é preenchido à mão no painel.
 #
 # Depois do primeiro deploy, volte e ajuste as duas URLs cruzadas:
 #   API   -> KAIA_CORS_ORIGINS = https://<site>.onrender.com

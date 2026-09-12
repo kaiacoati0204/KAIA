@@ -1,12 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-// ⚠️ TEMPLATE — não validado pelo Claude (ele não roda navegador). Mostra o padrão
-// pra testar páginas INTERNAS sem backend real:
-//   1) "fingir logado" injetando a sessão no storage (o app lê de lá);
-//   2) mockar as chamadas de API com page.route (respostas canned);
-//   3) afirmar que a tela carrega — e, no TODO, que interagir NÃO recarrega a
-//      página (a classe do bug que você viveu: feedback recarregava a matéria).
-// Ajuste seletores/rotas ao seu fluxo real.
+// ⚠️ TEMPLATE não validado: finge login no storage e mocka a API com page.route pra testar
+// página interna sem backend; o TODO checa que interagir NÃO recarrega a página.
 
 const A = 'aaaaaaaa-0000-0000-0000-00000000000a';
 

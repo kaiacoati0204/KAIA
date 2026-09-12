@@ -1,23 +1,16 @@
 // ============================================================
 //  KaIA — comum.js: base compartilhada por TODAS as páginas
 // ============================================================
-// Carregado ANTES do script.js (e dos scripts de página) em todos os HTML, e
+// Carregado ANTES dos scripts de página em todos os HTML, e
 // DEPOIS do config.js (usa window.KAIA_CONFIG e window.supabaseClient).
 const API_URL = window.KAIA_CONFIG?.API_URL || 'http://127.0.0.1:5000';
 
 // ============================================================
 //   WARM-UP DO BACKEND
 // ============================================================
-// O front é estático (CDN) e responde na hora; o backend é um processo que, no
-// plano grátis do Render, hiberna após 15 min sem requisição e leva ~50s para
-// voltar. Carregar a página NÃO o acorda — só uma chamada a alguma rota dele.
-//
-// Sem isto, a espera cai no pior lugar possível: o aluno abre o login (instantâneo),
-// digita e-mail e senha, clica em Entrar, e SÓ ENTÃO o /perfil encontra o servidor
-// dormindo. Disparando aqui, ele acorda enquanto a pessoa digita.
-//
-// Dispara e esquece: sem await, sem tratar resposta, erro engolido. Se o backend
-// já estiver de pé é um GET de alguns bytes; se estiver fora, a página segue igual.
+// No plano grátis do Render o backend hiberna após 15 min sem requisição e leva ~50s para voltar;
+// carregar a página estática não o acorda. Sem isto a espera cairia no clique em Entrar (/perfil);
+// aqui ele acorda enquanto o aluno digita. Dispara e esquece: sem await, erro engolido.
 function acordarBackend() {
     try {
         fetch(`${API_URL}/`, { method: 'GET', cache: 'no-store' }).catch(() => {});
@@ -28,14 +21,9 @@ acordarBackend();
 // ============================================================
 //   BETA: gestão desligada (Dashboard)
 // ============================================================
-// Durante o beta o painel de admin (dashboard.html) fica SEM entrada na rail e
-// SEM acesso por URL — para TODOS, inclusive admin. Página e backend intactos.
-// PARA REATIVAR: troque para false (volta o link na rail e o acesso).
-//
-// responsaveis.html SAIU desta lista na Fase 4: em vez de bloqueio para todos,
-// ela agora é liberada por ROLE (ver ROLES_RESPONSAVEL abaixo). A troca é de um
-// bloqueio grosso por um controle de acesso de verdade — o que o painel precisa
-// para valer alguma coisa no beta.
+// No beta o dashboard.html fica sem link na rail e sem acesso por URL para TODOS, inclusive admin
+// (página e backend intactos). PARA REATIVAR: troque para false.
+// responsaveis.html saiu desta lista na Fase 4: agora é liberada por ROLE (ROLES_RESPONSAVEL abaixo).
 const BETA_SEM_GESTAO = true;
 const PAGINAS_GESTAO  = ['dashboard.html'];
 
@@ -67,7 +55,6 @@ async function apiFetch(rota, options = {}) {
     return fetch(`${API_URL}${rota}`, { ...options, headers });
 }
 
-// POST em JSON, já com o token anexado. Quem chama decide se trata o erro.
 // Versão do front. SOBE a cada mudança que afete o comportamento medido — é o que
 // separa "antes" e "depois" nas análises do beta. Sem ela toda sessão ficava com o
 // mesmo rótulo e nenhuma correção era avaliável depois.
@@ -77,6 +64,7 @@ const KAIA_VERSAO = 'beta-1.0.0';
 // diz, depois, a QUAL texto cada aluno consentiu.
 const KAIA_VERSAO_TERMOS = '2026-09-08';
 
+// POST em JSON, já com o token anexado. Quem chama decide se trata o erro.
 async function postJSON(rota, corpo, keepalive = false) {
     const r = await apiFetch(rota, {
         method: 'POST',
@@ -102,10 +90,8 @@ const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p
 // matérias/perfil leem para mandar ao backend (alimentam o prompt da IA).
 const lerHobbies = () => JSON.parse(sessionStorage.getItem('hobbies') || '[]');
 
-// Usuário logado. O padrão é sessionStorage (morre com a aba); com "lembre de
-// mim" (Fase 3) existe também uma cópia em localStorage. Ler os dois nesta ordem
-// importa: a sessionStorage é a mais fresca, e o fallback é o que faz uma aba
-// recém-aberta reconhecer quem está logado em vez de mostrar a rail sem nome.
+// Usuário logado: sessionStorage (morre com a aba) primeiro, por ser a mais fresca; o fallback na cópia
+// do "lembre de mim" (Fase 3) em localStorage faz uma aba nova reconhecer quem está logado.
 const lerUsuario = () => JSON.parse(
     sessionStorage.getItem('kaia_usuario') || localStorage.getItem('kaia_usuario') || 'null'
 );
@@ -115,10 +101,7 @@ const lerUsuario = () => JSON.parse(
 // ============================================================
 // MENU_LINKS alimenta a barra lateral estática (montarRail) — fica aqui para
 // o markup do menu não ser copiado (e divergir) em cada HTML.
-// "Início" saiu: apontava para o index.html, que virou a LANDING PÚBLICA (página
-// de vendas, sem rail e sem login). Dentro do produto ele era um botão que
-// jogava o aluno logado para fora — e Matérias já era, na prática, a home.
-// Matérias assume o topo da lista.
+// Sem "Início": o index.html virou landing pública e jogava o aluno pra fora; Matérias é a home.
 const MENU_LINKS = [
     ['materias.html',     'Matérias'],
     ['perfil.html',       'Perfil'],
@@ -126,9 +109,6 @@ const MENU_LINKS = [
     ['responsaveis.html', 'Acompanhar'],
     ['dashboard.html',    'Dashboard'],
 ];
-
-// O menu lateral antigo (☰) e a saudação flutuante foram substituídos pela
-// barra estática (montarRail, abaixo). MENU_LINKS agora alimenta a rail.
 
 // ============================================================
 //              BARRA LATERAL ESTÁTICA (rail)
@@ -191,9 +171,7 @@ function montarRail() {
         localStorage.setItem('kaia_rail_aberta', aberta ? '1' : '0');
     });
 
-    // Sair: encerra a sessão do Supabase Auth, limpa o sessionStorage e volta ao
-    // login. O signOut é best-effort (não trava o logout se o cliente faltar).
-    // Derruba TAMBÉM o "lembre de mim" (Fase 3): sair tem que desfazer o lembrar,
+    // Sair: signOut best-effort, limpa sessionStorage e derruba TAMBÉM o "lembre de mim" (Fase 3),
     // senão o próximo a abrir o navegador entraria na conta de quem saiu.
     rail.querySelector('.rail-sair').addEventListener('click', async () => {
         try { await window.supabaseClient?.auth.signOut(); } catch (_) {}
@@ -279,28 +257,10 @@ function enviarPerfil(extra = {}) {
 }
 
 // ============================================================
-//                    INIT COMPARTILHADO
+// DOCK NA RAIL — barra q aumenta perto do cursor
 // ============================================================
-// ============================================================
-//        DOCK NA RAIL — magnificação por proximidade do cursor
-// ============================================================
-// Efeito inspirado na Dock do 21st.dev (@ibelick), refeito em JS puro: os ícones
-// perto do cursor crescem conforme a distância, com falloff suave.
-//
-// POR QUE NÃO O COMPONENTE ORIGINAL: ele é React + Framer Motion e RENDERIZA a
-// barra (exporta Dock/DockItem/DockIcon/DockLabel). Usá-lo obrigaria a reconstruir
-// a rail em React nas 6 páginas, reimplementando página ativa, gate do beta,
-// rodapé do usuário, toggle persistido e o logout do Supabase. Aqui a barra
-// continua sendo a do montarRail — este código só DECORA o DOM que já existe, e
-// navegação, rotas e logout ficam intocados. Ver CLAUDE.md.
-//
-// O efeito age no .rail-ic, NÃO no .rail-item: a caixa do ícone tem tamanho fixo
-// (flex: 0 0 24px), então nada aqui empurra os outros itens da coluna flex.
-//
-// SOBRE O DESFOQUE: o tamanho NÃO usa transform: scale(). Com scale() o navegador
-// rasteriza o ícone uma vez e estica o bitmap, embaçando o traço do SVG. Aqui o
-// width/height do <svg> é que muda, e o vetor é redesenhado nítido em cada tamanho.
-// O transform fica só para o deslocamento horizontal, que não sofre disso.
+// JS puro (não o componente React original) pra não reconstruir a rail toda;
+// muda width/height do svg em vez de scale() pra não embaçar o ícone.
 const DOCK_RAIO      = 92;    // px de alcance no eixo Y (a rail é vertical, não horizontal)
 const DOCK_AMP       = 0.34;  // crescimento máximo, no centro (1.34x)
 const DOCK_DESLOC    = 10;    // px de deslocamento para a direita, no centro
@@ -329,10 +289,7 @@ function ativarDockRail() {
                 // "salta"). translate NÃO desfoca — só reposiciona.
                 ic.style.transform = `translateX(${(DOCK_DESLOC * suave).toFixed(2)}px)`;
 
-                // O tamanho muda no width/height do SVG, não em transform: scale().
-                // scale() faz o navegador rasterizar o ícone e esticar o bitmap, o
-                // que embaça o traço; mudando a dimensão, o vetor é redesenhado
-                // nítido em cada tamanho.
+                // Tamanho via width/height, não scale() (ver topo da seção).
                 const svg = ic.querySelector('svg');
                 if (svg) {
                     const px = (DOCK_ICONE_PX * (1 + DOCK_AMP * suave)).toFixed(2);

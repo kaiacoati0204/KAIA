@@ -636,9 +636,7 @@ def test_pot_acha_opcao_pega_a_mais_proxima():
 
 def test_pot_descarta_quando_o_resultado_nao_e_alternativa():
     """Perto nao basta: media ponderada 7,3 com 7,2 e 7,4 na lista nao tem gabarito.
-
-    Achado a mao no teste do impostor — com a tolerancia de 3% de antes, as duas
-    ficavam dentro e uma delas virava resposta certa."""
+    Com a tolerancia antiga de 3%, as duas cabiam e uma virava resposta certa."""
     assert app_mod._pot_acha_opcao(7.3, ["7.6", "7.0", "7.2", "7.4", "7.8"]) is None
     # combustao do metanol: a conta da -647,5 e a mais proxima e -638
     assert app_mod._pot_acha_opcao(
@@ -776,14 +774,10 @@ async def test_rodar_intervencao_cooldown(monkeypatch):
 
 
 async def test_leitura_nao_confiavel_nao_bloqueia_o_disparo(monkeypatch):
-    """O bug que isto corrige: havia um debounce que contava janelas consecutivas no
-    MESMO ESTADO DO MODELO, e que zerava o contador quando a leitura nao era confiavel.
-    Como o contador nunca chegava a 2, o `return` matava TODO disparo durante o
-    cold-start — inclusive a medicao do navegador, que nao e inferencia. Ou seja: o
-    modelo vetava uma decisao que havia sido tomada sem ele.
-
-    A exigencia de duracao vive em quem dispara: a regra pede queda nas ultimas
-    CORROB_RECENTES respostas, e a medicao e sobre uma janela de JANELA_MIN minutos."""
+    """O debounce antigo zerava o contador com leitura nao confiavel e matava todo disparo
+    no cold-start, ate o da medicao do navegador: o modelo vetava decisao que nao era dele.
+    A exigencia de duracao vive em quem dispara (ultimas CORROB_RECENTES respostas na
+    regra, janela de JANELA_MIN minutos na medicao)."""
     async def fake_pred(m, s, conn, sid):
         # cold-start: internas mudas -> o modelo diz engajado e a leitura nao e confiavel
         feats = dict(_feats_ok(), tempo_fora_foco_s=300.0)      # o navegador mediu 5 min fora
@@ -1069,11 +1063,8 @@ def _fc(regs):
 
 async def test_corroboracao_nao_se_envenena_com_a_propria_dispersao():
     """A regua da regra nao pode engolir as questoes dispersas que ela deveria detectar.
-
-    Era o defeito: a base do z era TODAS as respostas anteriores, dispersas incluidas.
-    Conforme o episodio se estendia, o sd inflava, o z encolhia e a regra parava de ver
-    um aluno que continuava disperso — medido: z caia de +7,1 para +2,6 na 15a questao.
-    So ACERTOS na regua (como no DTS) resolve, porque quem dispersa erra."""
+    Com todas as respostas na base, o sd inflava e o z caia de +7,1 para +2,6 na 15a
+    questao. So ACERTOS na regua (como no DTS) resolve, porque quem dispersa erra."""
     engajado = [(True, 20000)] * 10
     for n_dispersas in (3, 6, 10):                  # episodio cada vez mais longo
         regs = engajado + [(False, 60000)] * n_dispersas

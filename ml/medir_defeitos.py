@@ -1,24 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Mede a taxa REAL de questões defeituosas geradas pelo pipeline.
+Mede a taxa REAL de questões defeituosas do pipeline, num lote grande: a avaliação com
+28 questões deu ~14%, mas com intervalo de 4% a 33% — não dá para decidir nada.
 
-Motivo: a avaliação com 28 questões apontou ~14% de defeito, mas com amostra desse
-tamanho o intervalo vai de 4% a 33% — não dá para decidir nada com isso. Este script
-gera um lote grande e mede.
-
-Três camadas, da mais barata à mais cara:
-
-  1. DESCARTE ESTRUTURAL — quantas o próprio pipeline já rejeita (_questao_utilizavel
-     e, nas de cálculo, o PoT quando a conta não bate com nenhuma alternativa). Sai de
-     graça: é só contar o que o gerador jogou fora.
-
-  2. VERIFICAÇÃO INDEPENDENTE — um modelo DIFERENTE do gerador resolve cada questão
-     SEM ver o gabarito e diz qual alternativa é a correta, ou que NENHUMA é. Onde ele
-     discorda, há candidato a defeito. Modelo diferente de propósito: verificador da
-     mesma família compartilha os mesmos vieses e concorda com o próprio erro.
-
-  3. REVISÃO HUMANA — as divergências saem num arquivo para você conferir. O verificador
-     também erra; divergência é suspeita, não veredito.
+Três camadas, da mais barata à mais cara: (1) descarte estrutural — conta o que o pipeline
+já rejeita (_questao_utilizavel e, no cálculo, o PoT sem alternativa que bata); (2) um modelo
+DIFERENTE resolve sem ver o gabarito (ou diz NENHUMA) — família diferente de propósito, a
+mesma compartilha vieses e concorda com o próprio erro; (3) revisão humana das divergências,
+pois o verificador também erra: divergência é suspeita, não veredito.
 
 Uso (na raiz do projeto):
     python ml/medir_defeitos.py                     # 10 por matéria, 6 matérias

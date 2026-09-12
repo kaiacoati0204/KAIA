@@ -14,12 +14,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../config.js"></script>
-    <!-- Proteção de rota: sem login volta ao login; sem role de responsável volta
-         ao início. A lista repete ROLES_RESPONSAVEL do comum.js de propósito —
-         esta guarda tem que rodar ANTES de qualquer render, e o comum.js só
-         carrega no fim do <body>. Mudou lá, mude aqui.
-         Guarda de CONVENIÊNCIA (evita mostrar tela que não é sua): o controle
-         REAL é o backend, que resolve a role pelo token em /responsavel/painel. -->
+    <!-- Proteção de rota: sem login → login; sem role de responsável → início.
+         Repete ROLES_RESPONSAVEL do comum.js de propósito (roda ANTES do render, e
+         o comum.js só carrega no fim do <body>) — mudou lá, mude aqui. É só
+         CONVENIÊNCIA: o controle REAL é o backend, pela role do token em /responsavel/painel. -->
     <script>
         const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario')
                                 || localStorage.getItem('kaia_usuario') || 'null');
@@ -29,7 +27,7 @@
     </script>
 </head>
 
-<!-- data-rail: o script.js injeta a barra lateral estática (com a saudação no rodapé) -->
+<!-- data-rail: o comum.js injeta a barra lateral estática (com a saudação no rodapé) -->
 <body data-rail>
 
     <main class="conteudo">
@@ -141,21 +139,12 @@
         // ========================================================
         //   FASE 4 — PAINEL DO PROFESSOR COM DADOS FICTÍCIOS
         // ========================================================
-        // Ligado: a visão de PROFESSOR monta de ALUNOS_DEMO, sem tocar na rede.
-        // Desligado: volta a GET /responsavel/painel, como sempre foi.
-        // Coordenador e pai NUNCA passam pelo mock — seguem no backend nos dois casos.
-        // Para plugar dados reais: `false` aqui + garantir que o payload de
-        // /responsavel/painel traga `aluno_id` (hoje não traz — ver nota abaixo).
+        // true: professor vê ALUNOS_DEMO sem rede; false: GET /responsavel/painel. Coordenador e pai nunca usam o mock.
+        // Dados reais: false + o payload trazer aluno_id (hoje não traz).
         const PAINEL_DEMO = true;
 
-        // Alunos fictícios. O formato espelha o payload real de /responsavel/painel
-        // (nome, turma, media_atencao, taxa_acerto, minutos) para a troca ser só
-        // apagar esta constante. Campos MOCK-ONLY, que o backend hoje NÃO devolve:
-        //   · aluno_id / turma_id → sem eles não dá para linkar o relatório individual
-        //   · motivo              → precisaria ser derivado da série de evolução
-        //   · serie[].atencao/.acerto → a série real tem só {dia, acertos, distracao}
-        // `status` NÃO fica aqui: é derivado por statusAtencao(), os mesmos cortes
-        // do backend (app.py:_status_atencao), para o mock não divergir da regra real.
+        // Espelha o payload real. MOCK-ONLY (backend não devolve): aluno_id, turma_id, motivo, serie[].atencao/.acerto.
+        // `status` sai de statusAtencao(), mesmos cortes do app.py, pro mock não divergir.
         const ALUNOS_DEMO = [
             { aluno_id: 'demo-01', nome: 'Ana Beatriz Rocha', turma_id: 't-7m', turma: '7º ano · manhã',
               media_atencao: 0.38, taxa_acerto: 0.52, minutos: 22,
@@ -294,14 +283,10 @@
         const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
         // ---- Tratamento das linhas (Fase 4) --------------------------------
-        // Refinamento sem brilho: esta tela mostra crianças em risco para
-        // professor e responsável. Glow/neon puxaria o olho para o efeito, não
-        // para o dado — e a marca é de tom calmo. O que dá o acabamento aqui é
-        // preenchimento em degradê, linha mais encorpada, ponto discreto que
-        // cresce no hover, e grade só na horizontal.
-        // Scriptable: o degradê é recalculado a cada layout, ancorado na ÁREA do
-        // gráfico. Criar a partir de canvas.height na montagem pegava a altura
-        // ainda não resolvida (150px default) e o degradê terminava no meio.
+        // Sem glow/neon: a tela mostra crianças em risco e o olho deve ir ao dado; a
+        // marca é calma. Acabamento = degradê, linha encorpada, ponto que cresce no hover.
+        // Scriptable: degradê recalculado a cada layout, na ÁREA do gráfico — com
+        // canvas.height na montagem pegava 150px default e o degradê parava no meio.
         const degrade = (rgbToken, topo = 0.3) => (ctx) => {
             const { chart } = ctx;
             const area = chart.chartArea;
@@ -399,10 +384,9 @@
             $('painel').style.display = 'block';
         }
 
-        // Evolução individual (Fase 4). MOCK-ONLY: só desenha quando a série traz
-        // `atencao`. O /responsavel/aluno devolve {dia, acertos, distracao} e mais
-        // nada, então pela busca por e-mail o bloco fica escondido — em vez de
-        // inventar uma linha que o dado real não sustenta.
+        // Evolução individual (Fase 4). MOCK-ONLY: só desenha se a série traz `atencao`.
+        // /responsavel/aluno devolve só {dia, acertos, distracao}, então na busca por
+        // e-mail o bloco fica escondido em vez de inventar linha.
         let gEvolucao = null;
         function desenharEvolucao(serie) {
             gEvolucao?.destroy(); gEvolucao = null;
@@ -764,10 +748,8 @@
                 b.addEventListener('click', () => irParaAluno(b.dataset.aluno)));
         }
 
-        // Só as contagens: três cards curtos ocupando a largura inteira. A rosca
-        // desceu para a fileira de gráficos — ao lado das contagens ela forçava
-        // os cards a esticar até a altura dela, e sobrava um vazio enorme dentro
-        // de cada um.
+        // Só as contagens, em três cards na largura toda. A rosca foi para a fileira
+        // de gráficos: ao lado, esticava os cards até a altura dela e sobrava vazio.
         function renderVisao(alunos) {
             const cont = { bem: 0, atencao: 0, risco: 0 };
             alunos.forEach(a => { if (a.status) cont[a.status]++; });
@@ -873,10 +855,8 @@
                 b.addEventListener('click', () => irParaAluno(b.dataset.aluno)));
         }
 
-        // Gráficos da turma. Separado de renderGraficos() de propósito: aquele serve
-        // o payload do backend (coordenador/pai) e continua intocado. Aqui a rosca já
-        // subiu para a visão geral, e as barras passam a ser POR ALUNO — com uma turma
-        // por vez, "atenção por turma" viraria uma barra só.
+        // Gráficos da turma, separado de renderGraficos() (payload do backend, coordenador/pai).
+        // Barras POR ALUNO: com uma turma por vez, "atenção por turma" viraria uma barra só.
         let gAluno = null, gEvoTurma = null;
         function renderGraficosTurma(alunos, cont) {
             gAluno?.destroy(); gEvoTurma?.destroy();

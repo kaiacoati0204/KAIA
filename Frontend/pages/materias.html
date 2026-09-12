@@ -19,7 +19,7 @@
     </script>
 </head>
 
-<!-- data-rail: o script.js injeta a barra lateral estática -->
+<!-- data-rail: o comum.js injeta a barra lateral estática -->
 <body data-rail>
 
     <!-- Aparece quando o aluno fica ocioso além do tempo de leitura da questão -->
@@ -186,10 +186,9 @@
     </div>
 
     <!-- Ilha React do AI Loader — SÓ a animação de espera da IA, nunca lógica.
-         Ver CLAUDE.md. `defer` de propósito: não bloqueia o render nem atrasa o
-         materias.js. Os deferidos rodam depois destes dois, mas antes de qualquer
-         clique do aluno, e o materias.js só chama a ilha se ela existir — logo,
-         CDN fora do ar = texto simples de sempre, sem tela quebrada. -->
+         `defer`: não bloqueia render nem materias.js, e roda antes
+         de qualquer clique. materias.js só chama a ilha se ela existir, então CDN
+         fora do ar = texto simples, sem tela quebrada. -->
     <script defer src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script defer src="../js/ai-loader.js"></script>

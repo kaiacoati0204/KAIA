@@ -283,6 +283,65 @@ html {
   background: rgba(var(--card-rgb), 0.97);
   box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.18);
 }
+/* Olho de mostrar/ocultar senha. O Edge já desenha um (::-ms-reveal), mas por
+   segurança ele some quando o campo perde o foco e só volta para um valor
+   digitado do zero — quem errou a senha e voltou ao campo ficava sem olho. O
+   nativo sai e entra este, que aparece sempre que há texto (login.js). */
+.campo-senha {
+  position: relative;
+}
+.campo-senha input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-right: 58px;             /* o texto não corre por baixo do olho */
+}
+.campo-senha input::-ms-reveal,
+.campo-senha input::-ms-clear {
+  display: none;
+}
+.olho-senha {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(var(--profundo-rgb), 0.7);
+  cursor: pointer;
+}
+.olho-senha[hidden] {
+  display: none;                   /* display:grid acima venceria o atributo */
+}
+.olho-senha:hover {
+  color: var(--profundo);
+  background: rgba(var(--profundo-rgb), 0.06);
+}
+.olho-senha:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.35);
+}
+.olho-senha svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.olho-senha .olho-fechado,
+.olho-senha[aria-pressed="true"] .olho-aberto {
+  display: none;
+}
+.olho-senha[aria-pressed="true"] .olho-fechado {
+  display: block;
+}
 .botao-login {
   padding: 18px;
   border: none;

@@ -230,6 +230,42 @@ function registrarLuz() {
 }
 
 // ============================================================
+//        OLHO DA SENHA — mostrar/ocultar
+// ============================================================
+// Visível SEMPRE que o campo tem texto, reavaliado a cada digitação e a cada
+// foco. O olho nativo do Edge seguia outra regra (some ao sair do campo e não
+// volta para aquele valor), então quem errou a senha e voltou para reescrever
+// ficava sem ele. Serve login e cadastro: os dois carregam este arquivo.
+function registrarOlhoSenha() {
+    document.querySelectorAll('.campo-senha').forEach((campo) => {
+        const input = campo.querySelector('input');
+        const olho  = campo.querySelector('.olho-senha');
+        if (!input || !olho) return;
+
+        const mostrar = (visivel) => {
+            input.type = visivel ? 'text' : 'password';
+            olho.setAttribute('aria-pressed', String(visivel));
+            olho.setAttribute('aria-label', visivel ? 'Ocultar senha' : 'Mostrar senha');
+        };
+        const sincronizar = () => {
+            const temTexto = input.value.length > 0;
+            olho.hidden = !temTexto;
+            if (!temTexto) mostrar(false);   // apagou tudo: volta a ocultar
+        };
+
+        // Sem isto o clique tira o foco do campo antes de alternar, e o cursor
+        // de quem está digitando pula para fora.
+        olho.addEventListener('mousedown', (e) => e.preventDefault());
+        olho.addEventListener('click', () => {
+            mostrar(input.type === 'password');
+            input.focus();
+        });
+        ['input', 'focus', 'change'].forEach((ev) => input.addEventListener(ev, sincronizar));
+        sincronizar();
+    });
+}
+
+// ============================================================
 //        PRELOADER — garantia de saída
 // ============================================================
 // O visual (degradê + fades das saudações) é 100% CSS: #kaia-preloader no
@@ -255,6 +291,7 @@ function registrarPreloader() {
 document.addEventListener('DOMContentLoaded', () => {
     registrarLuz();
     registrarPreloader();
+    registrarOlhoSenha();
     // Só no login: o cadastro carrega este mesmo arquivo e não deve pular etapa.
     if ($('login-lembrar')) restaurarSessao();
 });

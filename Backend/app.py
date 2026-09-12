@@ -2019,7 +2019,6 @@ ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
 # Estrutura por-estado pronta caso queira diferenciar depois.
 INTERV_COOLDOWN_MIN = {"distraido": 3, "muito_distraido": 3}
 INTERV_MAX_POR_SESSAO = 5      # teto de intervenções por sessão
-ESTADOS_QUE_INTERVEM = ("distraido", "muito_distraido")
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
 # Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos.
 # 30s e deliberadamente mais conservador que o corte que melhor classifica (~10s): aqui

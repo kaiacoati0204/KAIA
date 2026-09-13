@@ -7,8 +7,7 @@
 (() => {
     const $ = (id) => document.getElementById(id);
 
-    // Preços dos planos escolares. ⚠ A landing (index.html) mostra o Ara a R$ 27,90;
-    // aqui está 28,90 como pedido — alinhar os dois antes de publicar.
+    // Preços dos planos escolares — mesmos valores da landing (index.html); mudou lá, mude aqui.
     const PLANOS_ESCOLA = {
         ara:   { nome: 'Ara',   rotulo: 'Turma', preco: 28.90, minimo: 20 },
         guara: { nome: 'Guará', rotulo: 'Rede',  preco: 23.90, minimo: 80 },

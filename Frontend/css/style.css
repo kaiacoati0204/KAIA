@@ -189,12 +189,19 @@ html {
 .caixa-login {
   width: 400px;
 }
+/* Sem altura fixa: a grade flui e a PÁGINA rola, sem scroll dentro de scroll. clip (não
+   hidden) porque o hidden compartilhado deixava o foco rolar o card por dentro. */
 .caixa-hobbies {
-  width: min(1100px, 98vw);
-  height: min(800px, 95vh);
+  width: min(1100px, 100%);
   padding: 55px;
   border-radius: 32px;
   gap: 28px;
+  overflow: clip;
+}
+.tela-login:has(.caixa-hobbies) {
+  overflow: clip;
+  padding: 40px 16px;
+  box-sizing: border-box;
 }
 .caixa-login::before {
   content: "";
@@ -407,44 +414,62 @@ html {
   margin-top: 20px;
   text-align: center;
 }
-.lista-hobbies {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+.grupos-hobbies {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
 }
-.lista-hobbies::-webkit-scrollbar-thumb {
-  background: #ffd12c;
+/* Subtítulo de categoria: organiza sem competir com os botões. */
+.hobbies-categoria {
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .botoes-hobbies {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));   /* minmax: nome comprido não alarga a coluna */
+  gap: 14px;
   width: 100%;
-  margin-top: 20px;
 }
+/* Calmo por padrão, azul-coati quando escolhido: o dourado fica só no "Começar".
+   Texto 7.3:1 nos dois estados (azul-coati × --card). */
 .botao-hobbies {
   display: inline-flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
-  border: none;
+  border: 1px solid rgba(var(--profundo-rgb), 0.14);
   border-radius: 20px;
   text-align: center;
-  background: linear-gradient(150deg, var(--gravata-kinrou), #ffc558);
-  color: var(--profundo);
+  background: var(--card);
+  color: var(--azul-coati);
   font-family: inherit;
   font-size: 1rem;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease,
+              transform 0.3s ease, box-shadow 0.3s ease;
 }
 .botao-hobbies:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 15px 30px rgba(226, 174, 2, 0.34);
+  transform: translateY(-2px);
+  border-color: rgba(var(--azul-coati-rgb), 0.35);
+  box-shadow: 0 8px 20px rgba(var(--profundo-rgb), 0.08);
+}
+.botao-hobbies:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.35);
 }
 .botao-hobbies.selecionado {
-  background: var(--vd-uniao);
-  font-weight: 700;
+  background: var(--azul-coati);
+  border-color: var(--azul-coati);
+  color: var(--card);
+}
+@media (prefers-reduced-motion: reduce) {
+  .botao-hobbies { transition: none; }
+  .botao-hobbies:hover { transform: none; }
 }
 
 /* =========================
@@ -1261,7 +1286,7 @@ canvas {
     font-size: 2rem;
   }
   .botoes-hobbies {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .coati-imagem {
     border-left: none;

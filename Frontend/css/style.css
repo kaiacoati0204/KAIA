@@ -4033,3 +4033,282 @@ html:has(body.lp-page) {
   font: inherit; padding: 6px 10px; border-radius: 6px;
   border: 1px solid var(--marfim); background: var(--card); color: var(--tinta);
 }
+
+/* =========================
+   CADASTRO DA ESCOLA (cadastro-escola.html) — namespace ce-
+========================= */
+/* Mesmo "Céu coati" e vidro do login; dourado só no Avançar/Finalizar. */
+.tela-login:has(.ce-caixa) {
+  overflow: clip;       /* mesmo motivo do card abaixo: as manchas transbordam */
+  align-items: flex-start;
+  padding: 48px 16px;
+  box-sizing: border-box;
+}
+.caixa-login.ce-caixa {
+  width: min(620px, 100%);
+  gap: 20px;
+  padding: 44px;
+  /* clip, não hidden: o brilho do ::before transborda, e com hidden o foco num
+     campo rolava o card por dentro (logo e bordas cortados). */
+  overflow: clip;
+}
+.ce-caixa h1 { font-size: 3rem; }
+.ce-caixa .ce-passo p {
+  margin-top: 0;
+  text-align: left;
+  line-height: 1.5;
+}
+
+/* ---- progresso ---- */
+.ce-progresso {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.ce-etapa {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  transition: color 0.3s ease;
+}
+.ce-bolinha {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(var(--profundo-rgb), 0.18);
+  background: var(--card);
+  font-size: 0.85rem;
+  transition: background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+.ce-etapa.ce-atual { color: var(--azul-coati); }
+.ce-etapa.ce-atual .ce-bolinha { border-color: var(--azul-coati); color: var(--azul-coati); }
+.ce-etapa.ce-feita { color: var(--profundo); }
+.ce-etapa.ce-feita .ce-bolinha {
+  border-color: var(--azul-coati);
+  background: var(--azul-coati);
+  color: var(--card);
+}
+/* Trilho sob as bolinhas: vai do centro da 1ª ao centro da 4ª (12,5% de cada lado). */
+.ce-trilho {
+  height: 4px;
+  margin: -6px 12.5% 0;
+  border-radius: 4px;
+  background: rgba(var(--profundo-rgb), 0.1);
+  overflow: hidden;
+}
+.ce-trilho-cheio {
+  width: 0;
+  height: 100%;
+  background: var(--azul-coati);
+  transition: width 0.4s ease;
+}
+
+/* ---- passos ---- */
+.ce-passo {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: ceEntra 0.35s ease both;
+}
+@keyframes ceEntra {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.ce-titulo {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--profundo);
+  outline: none;
+}
+.ce-linha { display: flex; gap: 14px; }
+.ce-cresce { flex: 1; min-width: 0; }
+.ce-uf { width: 110px; }
+.ce-caixa .grupo-input select {
+  padding: 18px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(var(--profundo-rgb), 0.14);
+  background: rgba(var(--card-rgb), 0.85);
+  color: var(--tinta);
+  font: inherit;
+  outline: none;
+  transition: 0.3s ease;
+}
+.ce-caixa .grupo-input select:focus {
+  border-color: var(--azul-coati);
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.18);
+}
+.ce-nota {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ---- planos: reusa .plano/.plano-escolar; seleção em azul-coati ---- */
+.ce-planos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.ce-plano {
+  gap: 4px;
+  padding: 18px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border: 2px solid rgba(var(--bege-rgb), 0.35);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.ce-plano:hover { transform: translateY(-3px); }
+.ce-plano:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.35);
+}
+.ce-plano.ce-plano-sel {
+  border-color: var(--azul-coati);
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.14);
+}
+.ce-plano-nome {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--profundo);
+}
+.ce-plano-preco {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--azul-coati);
+}
+.ce-plano-preco span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--bege);
+}
+.ce-plano .plano-alvo {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+/* ---- total ao vivo ---- */
+.ce-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(var(--azul-coati-rgb), 0.07);
+}
+.ce-total-rotulo {
+  width: 100%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ce-total-valor {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: var(--azul-coati);
+}
+.ce-total-conta {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---- aviso âmbar (status suave, nada de vermelho) ---- */
+.ce-aviso {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--alerta-bg);
+  color: var(--alerta-tx);
+  font-size: 0.9rem;
+  font-weight: 700;
+  animation: ceEntra 0.3s ease both;
+}
+.ce-caixa .ce-aviso p { color: var(--alerta-tx); }
+.ce-btn-suave {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--alerta-tx);
+  background: transparent;
+  color: var(--alerta-tx);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+.ce-btn-suave:hover { background: rgba(var(--card-rgb), 0.6); }
+
+/* ---- resumo (passo 4) ---- */
+.ce-resumo {
+  margin: 0;
+  border-radius: 16px;
+  background: rgba(var(--card-rgb), 0.7);
+  border: 1px solid var(--border);
+}
+.ce-resumo-linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--sep);
+}
+.ce-resumo-linha:last-child { border-bottom: none; }
+.ce-resumo dt { color: var(--muted); font-size: 0.9rem; }
+.ce-resumo dd { margin: 0; color: var(--profundo); font-weight: 700; text-align: right; }
+.ce-resumo-total dd { color: var(--azul-coati); font-size: 1.2rem; font-weight: 800; }
+.ce-info {
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(var(--azul-coati-rgb), 0.07);
+  color: var(--profundo);
+  font-size: 0.9rem;
+}
+
+/* ---- ações ---- */
+.ce-acoes {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ce-btn-avancar { flex: 0 1 220px; }
+.ce-acoes-sozinho .ce-btn-avancar { flex: 1; }   /* passo 1, sem Voltar */
+.ce-btn-voltar {
+  padding: 18px 22px;
+  border-radius: 20px;
+  border: 1px solid rgba(var(--profundo-rgb), 0.18);
+  background: transparent;
+  color: var(--profundo);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+.ce-btn-voltar:hover { background: rgba(var(--profundo-rgb), 0.05); }
+.ce-btn-voltar:focus-visible,
+.ce-btn-avancar:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.35);
+}
+.ce-sucesso,
+.ce-caixa .ce-sucesso p { text-align: center; }
+
+@media (max-width: 560px) {
+  .caixa-login.ce-caixa { padding: 28px 20px; }
+  .ce-planos { grid-template-columns: 1fr; }
+  .ce-rotulo { font-size: 0.7rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ce-passo, .ce-aviso { animation: none; }
+  .ce-trilho-cheio, .ce-bolinha, .ce-plano { transition: none; }
+  .ce-plano:hover { transform: none; }
+}

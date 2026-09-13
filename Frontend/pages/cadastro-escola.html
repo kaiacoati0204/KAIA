@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA | Cadastro da escola</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+    <!-- MOCK: nada aqui fala com o backend. Gerar código, gravar escola/turma e
+         pagamento são frente separada (Bia + Vitor). -->
+    <div class="tela-login">
+        <form class="caixa-login ce-caixa" id="ce-form" novalidate>
+            <h1>Ka<span>IA</span></h1>
+            <p>Cadastre sua escola em 4 passos.</p>
+
+            <!-- ==================== PROGRESSO ==================== -->
+            <ol class="ce-progresso" aria-label="Passos do cadastro">
+                <li class="ce-etapa" data-etapa="1"><span class="ce-bolinha">1</span><span class="ce-rotulo">Escola</span></li>
+                <li class="ce-etapa" data-etapa="2"><span class="ce-bolinha">2</span><span class="ce-rotulo">Coordenador</span></li>
+                <li class="ce-etapa" data-etapa="3"><span class="ce-bolinha">3</span><span class="ce-rotulo">Plano</span></li>
+                <li class="ce-etapa" data-etapa="4"><span class="ce-bolinha">4</span><span class="ce-rotulo">Confirmar</span></li>
+            </ol>
+            <div class="ce-trilho" aria-hidden="true"><div class="ce-trilho-cheio" id="ce-trilho"></div></div>
+
+            <!-- ==================== PASSO 1 ==================== -->
+            <section class="ce-passo" data-passo="1" aria-labelledby="ce-t1">
+                <h2 class="ce-titulo" id="ce-t1" tabindex="-1">Sobre a escola</h2>
+
+                <div class="grupo-input">
+                    <label for="ce-escola">Nome da escola</label>
+                    <input id="ce-escola" type="text" placeholder="Ex.: Colégio Vale Verde" autocomplete="organization">
+                </div>
+
+                <div class="ce-linha">
+                    <div class="grupo-input ce-cresce">
+                        <label for="ce-cidade">Cidade</label>
+                        <input id="ce-cidade" type="text" placeholder="Cidade" autocomplete="address-level2">
+                    </div>
+                    <div class="grupo-input ce-uf">
+                        <label for="ce-estado">Estado</label>
+                        <select id="ce-estado" autocomplete="address-level1">
+                            <option value="">UF</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grupo-input">
+                    <label for="ce-salas">Número de salas</label>
+                    <input id="ce-salas" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex.: 6" aria-describedby="ce-salas-nota">
+                    <small class="ce-nota" id="ce-salas-nota">Serve pra organizar as turmas, não muda o preço.</small>
+                </div>
+            </section>
+
+            <!-- ==================== PASSO 2 ==================== -->
+            <section class="ce-passo" data-passo="2" aria-labelledby="ce-t2" hidden>
+                <h2 class="ce-titulo" id="ce-t2" tabindex="-1">Coordenador</h2>
+
+                <div class="grupo-input">
+                    <label for="ce-coord-nome">Nome</label>
+                    <input id="ce-coord-nome" type="text" placeholder="Nome completo" autocomplete="name">
+                </div>
+                <div class="grupo-input">
+                    <label for="ce-coord-email">E-mail</label>
+                    <input id="ce-coord-email" type="email" placeholder="email@escola.com.br" autocomplete="email">
+                </div>
+                <div class="grupo-input">
+                    <label for="ce-coord-tel">Telefone</label>
+                    <input id="ce-coord-tel" type="tel" placeholder="(00) 00000-0000" autocomplete="tel" inputmode="tel">
+                </div>
+            </section>
+
+            <!-- ==================== PASSO 3 ==================== -->
+            <section class="ce-passo" data-passo="3" aria-labelledby="ce-t3" hidden>
+                <h2 class="ce-titulo" id="ce-t3" tabindex="-1">Plano e alunos</h2>
+
+                <div class="ce-planos" role="radiogroup" aria-label="Plano">
+                    <!-- Preenchido pelo cadastro-escola.js a partir de PLANOS_ESCOLA -->
+                </div>
+
+                <div class="grupo-input">
+                    <label for="ce-alunos">Número de alunos</label>
+                    <input id="ce-alunos" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex.: 45">
+                </div>
+
+                <div class="ce-total" aria-live="polite">
+                    <span class="ce-total-rotulo">Mensalidade estimada</span>
+                    <strong class="ce-total-valor" id="ce-total">—</strong>
+                    <span class="ce-total-conta" id="ce-total-conta"></span>
+                </div>
+
+                <!-- Aviso âmbar, nunca vermelho: é ajuste de plano, não erro -->
+                <div class="ce-aviso" id="ce-aviso" role="status" aria-live="polite" hidden>
+                    <p id="ce-aviso-texto"></p>
+                    <button type="button" class="ce-btn-suave" id="ce-aviso-trocar" hidden>Trocar para o Ara</button>
+                </div>
+            </section>
+
+            <!-- ==================== PASSO 4 ==================== -->
+            <section class="ce-passo" data-passo="4" aria-labelledby="ce-t4" hidden>
+                <h2 class="ce-titulo" id="ce-t4" tabindex="-1">Confirmar</h2>
+
+                <dl class="ce-resumo" id="ce-resumo"></dl>
+
+                <p class="ce-info">Depois do envio, nosso time revisa os dados e manda a confirmação, com os códigos de acesso de professores e alunos, para o e-mail do coordenador.</p>
+
+                <!-- PENDENTE (Bia + Vitor/Daniel): consentimento LGPD. A escola contrata, mas
+                     os alunos são menores: falta decidir onde o consentimento entra (aceite da
+                     escola aqui? do responsável quando o aluno usa o código?) e quem consente.
+                     Esta etapa vai precisar existir no fluxo — não implementada. -->
+            </section>
+
+            <!-- ==================== SUCESSO (mock) ==================== -->
+            <section class="ce-passo ce-sucesso" data-passo="fim" aria-labelledby="ce-tfim" hidden>
+                <h2 class="ce-titulo" id="ce-tfim" tabindex="-1">Cadastro enviado!</h2>
+                <p>Recebemos os dados da sua escola! Nosso time vai revisar e enviar a confirmação
+                    para o e-mail do coordenador, com os códigos de acesso.</p>
+                <p class="ce-nota">Tela de demonstração: nenhum dado foi enviado de verdade.</p>
+                <a href="index.html" class="link-secundario">Voltar para a página inicial</a>
+            </section>
+
+            <p id="ce-erro" class="erro-login" role="alert" aria-live="polite"></p>
+
+            <div class="ce-acoes" id="ce-acoes">
+                <button type="button" class="ce-btn-voltar" id="ce-voltar">Voltar</button>
+                <button type="submit" class="botao-login ce-btn-avancar" id="ce-avancar">Avançar</button>
+            </div>
+
+            <a href="login.html" class="link-secundario" id="ce-link-login">Já tem conta? Entrar</a>
+        </form>
+    </div>
+
+    <script src="../js/cadastro-escola.js"></script>
+</body>
+
+</html>

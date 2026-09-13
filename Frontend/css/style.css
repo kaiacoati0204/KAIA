@@ -4337,3 +4337,290 @@ html:has(body.lp-page) {
   .ce-trilho-cheio, .ce-bolinha, .ce-plano { transition: none; }
   .ce-plano:hover { transform: none; }
 }
+
+/* =========================
+   PAINEL DA ESCOLA (escola.html) — namespace ep-
+========================= */
+/* Céu coati sem as manchas do login (área logada, leitura longa): só a base.
+   Dourado só no "Copiar código" do professor; o resto é azul-coati ou neutro. */
+/* Fundo UNIFORME na página toda: o degradê mora na raiz (cobre rail e rodapé em qualquer
+   altura) e o body/.conteudo ficam transparentes. Com a textura de papel ligada, o grão
+   vem do body inteiro — antes só a coluna do .conteudo o recebia e o fundo rachava em dois. */
+html:has(body.ep-page) {
+  min-height: 100%;
+  background: linear-gradient(160deg, var(--azul-nevoa) 0%, var(--marfim) 45%, var(--creme-bg) 100%);
+}
+body.ep-page { background-color: transparent; }
+body.ep-page .conteudo.ep-conteudo {
+  max-width: 1100px;
+  margin: 0 auto;
+  gap: 24px;
+  background: transparent;   /* vence o body.textura-papel .conteudo */
+}
+body.ep-page .railnav {
+  background: rgba(var(--card-rgb), 0.55);
+  backdrop-filter: blur(12px);
+}
+.ep-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.ep-sobre {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ep-escola {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--profundo);
+}
+.ep-plano {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(var(--azul-coati-rgb), 0.1);
+  color: var(--azul-coati);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.ep-bloco { padding: 32px; }
+.ep-pilulas { display: flex; flex-wrap: wrap; gap: 8px; }
+.ep-plano-neutro { background: var(--surface); color: var(--profundo); }
+.ep-bloco-cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 25px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--creme-bg);
+}
+.ep-bloco .ep-bloco-cab h2 { margin: 0; padding: 0; border: none; }
+
+/* ---- nova turma ---- */
+.ep-nova { margin: 0 0 20px; }
+.ep-nova-campos { display: flex; flex-wrap: wrap; gap: 12px 16px; }
+.ep-campo { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.ep-campo input { min-width: 240px; }
+.ep-aviso-preco {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--alerta-bg);
+  color: var(--alerta-tx);
+  font-weight: 700;
+}
+.ep-erro { min-height: 1em; color: var(--erro-tx); font-weight: 700; }
+.ep-renomear { display: flex; flex-direction: column; gap: 10px; animation: epEntra 0.3s ease both; }
+.ep-erro:empty { display: none; }
+.ep-bloco h2 { margin-bottom: 10px; }
+.ep-explica {
+  margin-bottom: 20px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* ---- códigos e validade ---- */
+.ep-codigo {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(var(--azul-coati-rgb), 0.08);
+  color: var(--azul-coati);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.ep-codigo-grande {
+  padding: 10px 18px;
+  font-size: 1.6rem;
+}
+.ep-codigo-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 18px;
+}
+.ep-validade {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+.ep-validade-alerta {
+  background: var(--alerta-bg);
+  color: var(--alerta-tx);
+}
+
+/* ---- botões ---- */
+.ep-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ep-btn {
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--azul-coati-rgb), 0.35);
+  background: var(--card);
+  color: var(--azul-coati);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.ep-btn:hover:not(:disabled) {
+  background: rgba(var(--azul-coati-rgb), 0.07);
+  border-color: var(--azul-coati);
+}
+.ep-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.35);
+}
+.ep-btn:disabled { opacity: 0.45; cursor: default; }
+.ep-btn-principal {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--gravata-kinrou), #ffe96b);   /* mesmo par do .botao-login */
+  color: var(--profundo);
+}
+.ep-btn-principal:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--gravata-kinrou), #ffe96b);
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(var(--gravata-rgb), 0.35);
+}
+.ep-btn-texto { border-color: transparent; background: transparent; }
+.ep-btn-peq { padding: 6px 12px; font-size: 0.85rem; }
+
+.ep-confirma {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--profundo);
+  font-size: 0.9rem;
+  animation: epEntra 0.3s ease both;
+}
+@keyframes epEntra {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- turmas ---- */
+.ep-turmas {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+}
+.ep-turma {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(var(--card-rgb), 0.7);
+}
+.ep-turma-cab {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+.ep-turma-nome {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--profundo);
+}
+.ep-turma-meta { color: var(--muted); font-size: 0.9rem; }
+.ep-turma-codigo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ep-rotulo { color: var(--muted); font-size: 0.82rem; font-weight: 700; }
+.ep-btn-gerenciar { margin-left: auto; }
+
+.ep-alunos { animation: epEntra 0.3s ease both; }
+.ep-alunos-lista {
+  list-style: none;
+  padding: 0;
+  border-top: 1px solid var(--sep);
+}
+.ep-aluno {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sep);
+}
+.ep-aluno-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.ep-aluno-nome { color: var(--tinta); font-weight: 700; }
+.ep-acoes-aluno { gap: 6px; }
+.ep-confirma-aluno label { font-weight: 700; }
+.ep-select {
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(var(--profundo-rgb), 0.14);
+  background: var(--card);
+  color: var(--tinta);
+  font: inherit;
+}
+.ep-select:focus-visible {
+  outline: none;
+  border-color: var(--azul-coati);
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.18);
+}
+.ep-vazio { padding: 12px 0; color: var(--muted); }
+
+/* ---- aviso das ações (toast discreto) ---- */
+.ep-aviso {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  max-width: min(380px, calc(100vw - 48px));
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--profundo);
+  color: var(--card);
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(var(--profundo-rgb), 0.2);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.ep-aviso.ep-aviso-on { opacity: 1; transform: none; }
+
+@media (max-width: 700px) {
+  .conteudo.ep-conteudo { padding: 24px 16px; }
+  .ep-bloco { padding: 22px 18px; }
+  .ep-escola { font-size: 1.7rem; }
+  .ep-btn-gerenciar { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ep-confirma, .ep-alunos, .ep-renomear { animation: none; }
+  .ep-btn, .ep-validade, .ep-aviso { transition: none; }
+  .ep-btn-principal:hover:not(:disabled) { transform: none; }
+}

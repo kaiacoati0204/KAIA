@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA | Minha escola</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../config.js"></script>
+    <!-- Proteção de rota: sem login → login; quem não é coordenador → matérias.
+         Mesmo esquema de responsaveis/dashboard: é CONVENIÊNCIA (dá pra burlar no
+         DevTools). O controle real vai ser o backend, na frente de códigos/turmas. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario')
+                                || localStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+        else if ((usuario.role || '').toLowerCase() !== 'coordenador')
+            window.location.href = 'materias.html';
+    </script>
+</head>
+
+<!-- data-rail: o comum.js injeta a barra lateral estática -->
+<body data-rail class="ep-page">
+
+    <!-- MOCK: tudo vem de ESCOLA_DEMO (escola.js). Nenhuma ação chama o backend. -->
+    <main class="conteudo ep-conteudo">
+
+        <header class="ep-topo">
+            <div>
+                <p class="ep-sobre">Painel da coordenação</p>
+                <h1 class="ep-escola" id="ep-escola">Carregando…</h1>
+            </div>
+            <div class="ep-pilulas">
+                <span class="ep-plano" id="ep-plano"></span>
+                <span class="ep-plano ep-plano-neutro" id="ep-contagem"></span>
+            </div>
+        </header>
+
+        <!-- ==================== CÓDIGO DE PROFESSOR ==================== -->
+        <section class="secao-perfil ep-bloco" aria-labelledby="ep-t-prof">
+            <h2 id="ep-t-prof">Código de professor</h2>
+            <p class="ep-explica">Um código só pra escola inteira. O professor entra com ele e escolhe as próprias turmas e matérias.</p>
+
+            <div class="ep-codigo-linha">
+                <code class="ep-codigo ep-codigo-grande" id="ep-prof-codigo"></code>
+                <span class="ep-validade" id="ep-prof-validade"></span>
+            </div>
+
+            <div class="ep-acoes">
+                <button type="button" class="ep-btn ep-btn-principal" id="ep-prof-copiar">Copiar código</button>
+                <button type="button" class="ep-btn" id="ep-prof-gerar">Gerar novo</button>
+            </div>
+            <!-- Confirmação inline: gerar novo invalida o código que já foi distribuído -->
+            <div class="ep-confirma" id="ep-prof-confirma" hidden>
+                <p>O código atual para de funcionar. Quem ainda não entrou vai precisar do novo.</p>
+                <div class="ep-acoes">
+                    <button type="button" class="ep-btn" id="ep-prof-gerar-sim">Gerar novo código</button>
+                    <button type="button" class="ep-btn ep-btn-texto" id="ep-prof-gerar-nao">Cancelar</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TURMAS ==================== -->
+        <section class="secao-perfil ep-bloco" aria-labelledby="ep-t-turmas">
+            <div class="ep-bloco-cab">
+                <h2 id="ep-t-turmas">Turmas</h2>
+                <button type="button" class="ep-btn" id="ep-nova-abrir" aria-expanded="false" aria-controls="ep-nova">+ Nova turma</button>
+            </div>
+            <p class="ep-explica">Cada turma tem o próprio código de aluno, válido por 7 dias. Quem entra com ele cai direto na turma.</p>
+
+            <!-- Nova turma (mock): entra só no estado local, com código gerado e 7 dias -->
+            <form class="ep-confirma ep-nova" id="ep-nova" novalidate hidden>
+                <div class="ep-nova-campos">
+                    <div class="ep-campo">
+                        <label for="ep-nova-nome">Nome da turma</label>
+                        <input id="ep-nova-nome" class="ep-select" type="text" placeholder="Ex.: 6º ano D" autocomplete="off">
+                    </div>
+                    <div class="ep-campo">
+                        <label for="ep-nova-turno">Turno</label>
+                        <select id="ep-nova-turno" class="ep-select">
+                            <option>Manhã</option>
+                            <option>Tarde</option>
+                            <option>Noite</option>
+                            <option>Integral</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- PENDENTE (Daniel): impacto de criar/remover turma e alunos no preço e na
+                     cobrança — hoje o mock não recalcula nada. -->
+                <p class="ep-aviso-preco">Adicionar turmas pode alterar o valor do plano. A cobrança é ajustada pela equipe KaIA.</p>
+                <p class="ep-erro" id="ep-nova-erro" role="alert"></p>
+                <div class="ep-acoes">
+                    <button type="submit" class="ep-btn">Criar turma</button>
+                    <button type="button" class="ep-btn ep-btn-texto" id="ep-nova-cancelar">Cancelar</button>
+                </div>
+            </form>
+
+            <!-- PENDENTE (Bia + Vitor/Daniel): consentimento LGPD. O aluno é menor de idade:
+                 falta decidir ONDE o consentimento pelo uso dos dados entra (ao usar o código?
+                 antes de aparecer na lista?) e QUEM consente (responsável, escola em nome
+                 dele?). Essa etapa vai precisar existir entre o código e o aluno aparecer
+                 aqui — não implementada. -->
+            <ul class="ep-turmas" id="ep-turmas"></ul>
+        </section>
+
+        <!-- Avisos das ações (copiado, movido, removido) para leitor de tela e de relance -->
+        <p class="ep-aviso" id="ep-aviso" role="status" aria-live="polite"></p>
+    </main>
+
+    <script src="../js/comum.js"></script>
+    <script src="../js/escola.js"></script>
+</body>
+
+</html>

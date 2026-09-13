@@ -107,6 +107,7 @@ const MENU_LINKS = [
     ['perfil.html',       'Perfil'],
     ['meu-coati.html',    'Meu Coati'],
     ['responsaveis.html', 'Acompanhar'],
+    ['escola.html',       'Turmas'],
     ['dashboard.html',    'Dashboard'],
 ];
 
@@ -123,6 +124,7 @@ const RAIL_ICONES = {
     'materias.html':     '<svg viewBox="0 0 24 24"><path d="M4 4h13a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4z"/><path d="M4 4v14"/></svg>',
     'meu-coati.html':    '<svg viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5"/><path d="M12 12v10"/></svg>',
     'responsaveis.html': '<svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg>',
+    'escola.html':       '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.8c2 .7 3 2.5 3 5.2"/></svg>',
     'dashboard.html':    '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
     sair:                '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
 };
@@ -139,6 +141,8 @@ function montarRail() {
         // "Acompanhar" só para quem tem painel. Sem isto o aluno veria um link que
         // a guarda de rota rejeita — pior que não mostrar.
         .filter(([href]) => href !== 'responsaveis.html' || ehResponsavel(u))
+        // "Turmas" só para coordenador: mostra dados de vários alunos (mesma regra da guarda da escola.html).
+        .filter(([href]) => href !== 'escola.html' || (u?.role || '').toLowerCase() === 'coordenador')
         .map(([href, rotulo]) => {
             const ativo = href === atual ? ' ativo' : '';
             return `<a href="${href}" class="rail-item${ativo}">${item(RAIL_ICONES[href] || '', rotulo)}</a>`;

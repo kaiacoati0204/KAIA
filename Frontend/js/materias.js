@@ -1720,7 +1720,8 @@ async function abrirMateria(subject) {
 
 // ==== SESSÃO CONTÍNUA + META POR RODADA + META DIÁRIA ====
 let questoesRespondidas = 0;    // respondidas NESTA sessão (para o resumo)
-let acertosSessao       = 0;    // acertos NESTA sessão (resumo/XP)
+let acertosSessao       = 0;    // acertos NESTA sessão (resumo)
+let xpSessao            = 0;    // XP real ganho NESTA sessão pela economia do coati (resumo)
 let questoesNaRodada    = 0;    // respondidas na RODADA atual (0..META); zera a cada rodada
 let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (backend)
 let metaDiariaContada   = false;// já contou a meta diária na streak nesta sessão?
@@ -1796,6 +1797,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     sessaoDeEstudoAberta = true;
     questoesRespondidas = 0;
     acertosSessao = 0;
+    xpSessao = 0;
     questoesNaRodada = 0;
     metaDiariaContada = false;
     sortearAlvoProbe(true);        // 1ª rodada da sessão: cobre a abertura
@@ -1979,6 +1981,8 @@ function checkAnswer(idx, btn) {
         clearInterval(idleInterval);
         revisaoRespondidas++;
         if (acertou) currentQuestion.pendenteRevisao = false;   // acertou na revisão → sai da fila de pendências (Fase 1.1). Mesmo objeto de errosSessao (fila é cópia rasa), então o registro é atualizado.
+        // correção vale 70% (FATOR_REVISAO); como sai da fila de pendências, não ganha 2× pela mesma
+        if (acertou) xpSessao += window.kaiaEconomia?.ganharPorAcerto(currentQuestion.nivel || nivelDificuldade, { revisao: true })?.xp || 0;
         atualizarBarraRevisao();     // a barra enche ao longo da revisão
         mostrarExplicacao(idx, acertou);
         return;
@@ -2023,7 +2027,11 @@ function checkAnswer(idx, btn) {
     }
     questoesRespondidas++;
     historicoQuestoes.push(currentQuestion);   // fonte do checkpoint de recuperação
-    if (acertou) acertosSessao++;
+    if (acertou) {
+        acertosSessao++;
+        // XP/moeda do coati (nível × 10). Com ?.: sem a economia carregada, a questão segue igual.
+        xpSessao += window.kaiaEconomia?.ganharPorAcerto(currentQuestion.nivel || nivelDificuldade)?.xp || 0;
+    }
     else errosSessao.push({ ...currentQuestion, escolhaAluno: idx, pendenteRevisao: true });   // revisão (Parte 7): resposta do aluno (accordion) + ainda pendente de revisão (Fase 1.1)
     questoesNaRodada++;
     // A nota da rodada decide subir/descer de nível. Questão em quarentena (ainda não
@@ -2289,12 +2297,11 @@ const FRASES_RESUMO = [
 function preencherResumo() {
     const total   = questoesRespondidas;
     const acertos = acertosSessao;
-    const xp      = acertos * 10 + (total - acertos) * 5;   // 10 por acerto, 5 por erro (só exibe)
     const streak  = lerPerfil().sequencia_dias_estudo || 0;
     const set = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
     set('resumo-acerto', `${acertos} de ${total}`);
     set('resumo-streak', `🔥 ${streak}`);
-    set('resumo-xp',     `${xp} XP`);
+    set('resumo-xp',     `${xpSessao} XP`);   // XP REAL da economia do coati: erro não dá ponto, correção dá 70%
 }
 
 // Ao completar a rodada de 10: modal SEM título — só o resumo rápido + escolha.
@@ -2497,6 +2504,7 @@ function carregarQuestaoRevisao() {
     if (!revisaoFila.length) {
         emRevisao = false;
         preencherErros();                     // atualiza botão (pendentes) + selos das revisadas (Fase 1.1)
+        preencherResumo();                    // o XP das correções entra no resumo que reaparece
         $('resumo-overlay').hidden = false;   // volta ao resumo
         return;
     }

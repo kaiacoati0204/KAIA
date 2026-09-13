@@ -22,26 +22,82 @@
 </head>
 
 <!-- data-rail: o comum.js injeta a barra lateral estática -->
-<body data-rail>
+<body data-rail class="mc-page">
 
-    <main class="main-content">
-        <header class="content-header">
+    <main class="main-content mc-conteudo">
+        <header class="content-header mc-cabecalho">
             <h2>Meu Coati</h2>
-            <p>Visualize o modelo 3D do seu mascote.</p>
+            <p>Dê carinho e comidinhas pro seu mascote com o que você ganha estudando.</p>
         </header>
 
-        <model-viewer
-            class="visor-3d"
-            src="../assets/Coati_3d.glb"
-            alt="Modelo 3D do Coati, mascote da KaIA"
-            auto-rotate
-            camera-controls
-            shadow-intensity="1">
-        </model-viewer>
+        <!-- ==== SALDOS (gamificação em cima) ==== -->
+        <section class="mc-saldos" aria-label="Seus saldos">
+            <div class="mc-saldo">
+                <span class="mc-saldo-ic" aria-hidden="true">⭐</span>
+                <span class="mc-saldo-tx"><strong id="mc-xp">0</strong><small>XP</small></span>
+            </div>
+            <div class="mc-saldo">
+                <span class="mc-saldo-ic" id="mc-moeda-ic" aria-hidden="true">🪙</span>
+                <span class="mc-saldo-tx"><strong id="mc-moedas">0</strong><small>moedas</small></span>
+            </div>
+            <!-- PENDENTE (Bia + Vitor): ligar folga (gasta XP) e unificar com a streak do
+                 materias — hoje o foguinho aqui é só conceito, não mexe na feature do modelo. -->
+            <div class="mc-saldo mc-foguinho">
+                <span class="mc-saldo-ic" aria-hidden="true">🔥</span>
+                <span class="mc-saldo-tx"><strong id="mc-fogo">0</strong><small>sua sequência</small></span>
+            </div>
+        </section>
+
+        <div class="mc-palco">
+            <!-- ==== COATI ==== -->
+            <!-- Solta comida só na MOLDURA, não no model-viewer: ele usa o arrasto pra girar. -->
+            <section class="mc-coati" aria-label="Seu coati">
+                <div class="mc-moldura" id="mc-moldura">
+                    <span class="mc-moldura-dica" aria-hidden="true">Solte a comida aqui na moldura</span>
+
+                    <model-viewer
+                        class="visor-3d"
+                        src="../assets/Coati_3d.glb"
+                        alt="Modelo 3D do Coati, mascote da KaIA"
+                        auto-rotate
+                        camera-controls
+                        shadow-intensity="1">
+                    </model-viewer>
+
+                    <div class="mc-balao" id="mc-balao" aria-live="polite" hidden>
+                        <span class="mc-balao-emoji" id="mc-balao-emoji"></span>
+                        <span class="mc-balao-frase" id="mc-balao-frase"></span>
+                    </div>
+                </div>
+                <p class="mc-ajuda">Clique no coati pra fazer carinho. Arraste pra girar.</p>
+            </section>
+
+            <!-- ==== GELADEIRA (barra lateral direita) ==== -->
+            <aside class="mc-geladeira" aria-label="Geladeira">
+                <div class="mc-abas" role="tablist">
+                    <button class="mc-aba" role="tab" id="mc-aba-loja" aria-controls="mc-painel-loja" aria-selected="true" type="button">Loja</button>
+                    <button class="mc-aba" role="tab" id="mc-aba-geladeira" aria-controls="mc-painel-geladeira" aria-selected="false" tabindex="-1" type="button">
+                        Geladeira <span class="mc-aba-qtd" id="mc-geladeira-qtd"></span>
+                    </button>
+                </div>
+                <div class="mc-painel" id="mc-painel-loja" role="tabpanel" aria-labelledby="mc-aba-loja">
+                    <ul class="mc-lista" id="mc-lista-loja"></ul>
+                </div>
+                <div class="mc-painel" id="mc-painel-geladeira" role="tabpanel" aria-labelledby="mc-aba-geladeira" hidden>
+                    <p class="mc-vazia" id="mc-geladeira-vazia">Geladeira vazia. Compre algo na Loja!</p>
+                    <ul class="mc-lista" id="mc-lista-geladeira"></ul>
+                </div>
+                <p class="mc-dica-lateral">Arraste uma comida até a moldura do coati.</p>
+            </aside>
+        </div>
     </main>
 
-    <!-- Só comum.js: rail + textura vêm do init compartilhado; esta página não tem JS próprio. -->
+    <!-- Fantasma que segue o dedo/mouse durante o arrasto. -->
+    <div class="mc-fantasma" id="mc-fantasma" aria-hidden="true" hidden></div>
+
     <script src="../js/comum.js"></script>
+    <script src="../js/coati-economia.js"></script>
+    <script src="../js/meu-coati.js"></script>
 </body>
 
 </html>

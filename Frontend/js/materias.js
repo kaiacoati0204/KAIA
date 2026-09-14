@@ -48,6 +48,8 @@ let firstInteractionAt = 0;   // 1ª interação com a questão → tempo_inicia
 let mouseSamples = [];        // trajeto do mouse na questão: [dt_ms, x, y] (features de mouse no Incr. B)
 let lastMouseSampleAt = 0;    // throttle da amostragem do mouse
 let tempoOciosoMs = 0;  // tempo ocioso COM a aba focada, na questão (proxy do estado interno)
+let maiorParadoS = 0;        // maior trecho sem mexer na questão aberta (vai no questao_andamento)
+let andamentoEnviadoEm = 0;
 let mexeuDesdeUltimoTick = false;  // houve mousemove desde o último tick do idle?
 let tempoDwellMs = 0;   // tempo com o cursor sobre as alternativas SEM responder (hesitação)
 // Scroll: sozinho NÃO é comparável entre alunos (tela grande não rola). Por isso vai
@@ -114,7 +116,7 @@ function logEvent(type, payload) {
     }
     const event = { session_id: sessionId, ts: new Date().toISOString(), event_type: type, payload };
     console.log('[KaIA Event]', event);
-    postJSON('/events', event, true).catch(() => {});
+    return postJSON('/events', event, true).catch(() => null);
 }
 
 // Maior extensão rolável entre os candidatos — qual container rola muda com a tela.
@@ -1476,7 +1478,30 @@ function iniciarIdleMonitor() {
         // ao mesmo tempo para quem já está com a atenção comprometida: a
         // intervenção JÁ é o chamado de volta.
         if (idleTime >= limiteOciosoS && !_intervencaoNaTela()) setEstado('FALTA DE INTERAÇÃO', true);
+        maiorParadoS = Math.max(maiorParadoS, idleTime);
+        enviarAndamento();
     }, 1000);
+}
+
+// questão aberta ao vivo
+// A regra só vê respostas; parado ENTRE respostas precisa chegar antes delas. Vai a cada 15 s
+// (o job do servidor roda a cada 30 s e descarta sinal com mais de 45 s), só com aba em foco.
+// Para depois de 10 min parado: senão a aba esquecida aberta nunca deixa o sweep fechar a sessão (15 min).
+const ANDAMENTO_S = 15;
+const ANDAMENTO_TETO_S = 600;
+function enviarAndamento() {
+    if (emRevisao || document.hidden || _intervencaoNaTela() || !questionShownAt) return;
+    if (idleTime > ANDAMENTO_TETO_S) return;
+    const agora = performance.now();
+    if (agora - andamentoEnviadoEm < ANDAMENTO_S * 1000) return;
+    andamentoEnviadoEm = agora;
+    logEvent('questao_andamento', {
+        aba_visivel: true,
+        parado_agora_s: idleTime,
+        maior_parado_s: maiorParadoS,
+        ocioso_s: Math.round(tempoOciosoMs / 1000),
+        limite_ocioso_s: limiteOciosoS,
+    });
 }
 
 function registrarSensores() {
@@ -1881,6 +1906,7 @@ let revisaoRespondidas = 0;
 let nivelDificuldade = 2;    // centro atual (1..5)
 let acertosNaRodada  = 0;    // acertos da rodada corrente -> define a troca de nível
 let validadasNaRodada = 0;   // dessas, quantas NÃO estavam em quarentena
+let rodadaId = 0;           // muda a cada rodada: resposta atrasada do /events não mexe na rodada seguinte
 const NIVEL_MIN = 1, NIVEL_MAX = 5;
 
 // Fecha a rodada: a nota das META questões desloca o centro em ±1. Retorna se mudou.
@@ -1898,6 +1924,7 @@ function fecharNivelDaRodada() {
     }
     acertosNaRodada = 0;
     validadasNaRodada = 0;
+    rodadaId++;
     atualizarNivel();
     return nivelDificuldade !== antigo;
 }
@@ -1937,6 +1964,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     nivelDificuldade = 2;
     acertosNaRodada = 0;
     validadasNaRodada = 0;
+    rodadaId++;
     sortearHobbiesSessao();                     // 2 hobbies fixos p/ a sessão (variedade)
     iniciarPomodoro();                          // ciclo foco/pausa da sessão inteira
     await criarSessao();                        // 1 session_id para toda a série
@@ -2001,6 +2029,8 @@ async function carregarQuestao(subject, tema) {
     firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
     mouseSamples = [];
     tempoOciosoMs = 0;
+    maiorParadoS = 0;
+    andamentoEnviadoEm = performance.now();   // primeiro envio só depois de 15 s na questão
     tempoDwellMs = 0;
     dwellEntrouEm = 0;
     const _brOff = $('btn-reportar');
@@ -2121,8 +2151,9 @@ function checkAnswer(idx, btn) {
         tempoDwellMs += performance.now() - dwellEntrouEm;
         dwellEntrouEm = 0;
     }
+    let envioResposta = null;
     if (questionShownAt > 0) {
-        logEvent('question_answer', {
+        envioResposta = logEvent('question_answer', {
             tempo_resposta_ms: Math.round(performance.now() - questionShownAt),
             tempo_iniciacao_resposta_ms: firstInteractionAt ? Math.round(firstInteractionAt - questionShownAt) : null,
             nivel_dificuldade: currentQuestion.nivel || nivelDificuldade,   // nível REAL da questão servida (mistura da rodada)
@@ -2165,10 +2196,18 @@ function checkAnswer(idx, btn) {
     if (!currentQuestion?.em_quarentena) {
         validadasNaRodada++;
         if (acertou) acertosNaRodada++;
+        // questão desengajada fora da nota
+        // a regra (DTS) marcou esta resposta; o acerto dela não mede o que o aluno sabe
+        const rodada = rodadaId;
+        envioResposta?.then(r => {
+            if (!r?.desengajada || rodada !== rodadaId) return;
+            validadasNaRodada--;
+            if (acertou) acertosNaRodada--;
+        });
     }
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
     if (_trocaFeedbackPendente) { _trocaFeedbackPendente = false; _perguntarDepoisDaTroca(); }   // troca: feedback só depois de responder no tema novo
-    if (questoesNaRodada === probeAlvoRodada) dispararProbe();   // 1/rodada (3ª–7ª na 1ª, 5ª–9ª depois)
+    const probeAgora = questoesNaRodada === probeAlvoRodada;   // 1/rodada (3ª–7ª na 1ª, 5ª–9ª depois)
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
     if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {
         registrarMetaDiaria();
@@ -2184,7 +2223,10 @@ function checkAnswer(idx, btn) {
     const _br = $('btn-reportar');
     if (_br) { _br.hidden = false; _br.disabled = false; _br.textContent = 'Reportar problema nesta questão'; }
 
-    mostrarExplicacao(idx, acertou);
+    if (!probeAgora) { mostrarExplicacao(idx, acertou); return; }
+    // probe antes do resultado: trava as alternativas sem marcar certa/errada
+    $$('#options-display .option-btn').forEach(b => { b.disabled = true; });
+    dispararProbe(() => mostrarExplicacao(idx, acertou));
 }
 
 // Destaca correta/errada e mostra a explicação do erro, sem trocar de tela (Etapa 7).
@@ -2315,9 +2357,13 @@ const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 //
 // Para trocar a frase depois: mude o texto E o `id`. O id viaja no evento e é o que
 // permite separar o que foi colhido com qual régua; reaproveitá-lo mistura as duas.
+// aviso de que é normal + antes do resultado
+// Dias da Silva et al.: vergonha de admitir e o resultado visto logo antes enviesam o
+// autorrelato. Por isso a `nota` e o probe antes do acertou/errou — régua nova, id novo.
 const PERGUNTAS_PROBE = [
-    { id: 'onde-estava-atencao',
+    { id: 'onde-estava-atencao-2',
       pergunta: 'Onde estava sua atenção agora?',
+      nota: 'É normal a mente vagar. Não tem resposta certa.',
       opcoes: ['Na questão',
                'Vagando — continuei aqui, mas a cabeça foi longe',
                'Fora daqui — fui ver outra coisa'] },
@@ -2388,6 +2434,12 @@ function _montarCardProbe(pergunta, tamanho) {
     q.className = 'probe-q';
     q.textContent = pergunta.pergunta;
     card.appendChild(q);
+    if (pergunta.nota) {
+        const nota = document.createElement('p');
+        nota.className = 'probe-nota';
+        nota.textContent = pergunta.nota;
+        card.appendChild(nota);
+    }
 
     const caixa = document.createElement('div');
     caixa.className = 'probe-btns';
@@ -2403,9 +2455,13 @@ function _montarCardProbe(pergunta, tamanho) {
     return card;
 }
 
-function dispararProbe() {
+// `aoFechar` roda uma vez quando o probe some (respondido ou ignorado): é o que revela o resultado.
+let _probeAoFechar = null;
+
+function dispararProbe(aoFechar = null) {
     const pergunta = _sortearPergunta();
-    if (!pergunta) return;            // banco vazio ou todo malformado: não pergunta nada
+    if (!pergunta) { aoFechar?.(); return; }   // banco vazio ou malformado: não pergunta, não trava
+    _probeAoFechar = aoFechar;
     const tamanho = _escolherTamanhoProbe();
     const card = _montarCardProbe(pergunta, tamanho);
     probeAtual = { id: pergunta.id, tamanho, mostradoEm: performance.now() };
@@ -2420,6 +2476,9 @@ function esconderProbe() {
     const c = $('kaia-probe');
     if (c) c.style.display = 'none';
     probeAtual = null;
+    const aoFechar = _probeAoFechar;
+    _probeAoFechar = null;
+    aoFechar?.();
 }
 
 function responderProbe(estado) {

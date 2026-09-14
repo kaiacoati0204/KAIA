@@ -27,7 +27,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)                              # p/ importar avaliar (mesma pasta)
 sys.path.insert(0, os.path.join(BASE, "..", "Backend"))
 from mouse_features import features_mouse
-from avaliar import relatorio, cv_agrupada
+from avaliar import relatorio, cv_agrupada, na_proporcao
 
 random.seed(42); np.random.seed(42)
 
@@ -38,6 +38,7 @@ FEATURE_ORDER = [
     "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
+    "queda_acerto",
     # externas (absolutas)
     "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
     "cliques_fora_area_estudo", "taxa_abandono_sessao",
@@ -114,7 +115,7 @@ for _nome, _m in DESVIO.items():
         _m[_e] = round(_m[_e] - _centro, 3)
 
 # ---- mouse ----
-def gerar_track(erratic, n):
+def gerar_track(erratic, n, ritmo=1.0):
     if n < 2:
         return []
     track, t = [], 0
@@ -123,21 +124,22 @@ def gerar_track(erratic, n):
     for _ in range(n):
         t += random.randint(80, 140)
         ang += random.gauss(0, 0.25 + erratic * 0.7)          # + erratic -> + entropia/flips
-        vel = max(40, random.gauss(280 + erratic * 90, 90 + erratic * 160))
+        vel = max(40, random.gauss((280 + erratic * 90) * ritmo, 90 + erratic * 160))
         passo = vel * 0.1
         x += passo * math.cos(ang); y += passo * math.sin(ang)
         track.append([t, round(x), round(y)])
     return track
 
 def _perfil_mouse(aluno, ef, z=0.8, imovel=False):
-    """(erratic, n) do trajeto BRUTO por estado — usado no baseline e na sessao."""
+    """(erratic, n, ritmo) do trajeto BRUTO por estado — usado no baseline e na sessao."""
     if ef == "muito_distraido":
-        return aluno["erratic_base"], random.randint(3, 10)
+        return aluno["erratic_base"], random.randint(3, 10), 1.0
     if imovel:
-        return aluno["erratic_base"], random.randint(4, 14)
+        return aluno["erratic_base"], random.randint(4, 14), 1.0
     if ef == "distraido":
-        return aluno["erratic_base"] + 0.32 * z, random.randint(30, 70)
-    return aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70)
+        # mente vagando: mais inversões, mas mouse mais LENTO (Dias da Silva 2018; igual em 2020)
+        return aluno["erratic_base"] + 0.32 * z, random.randint(30, 70), 1.0 - 0.17 * min(1.0, z)
+    return aluno["erratic_base"] + random.gauss(0, 0.1), random.randint(30, 70), 1.0
 
 
 def baseline_mouse(aluno):
@@ -147,8 +149,8 @@ def baseline_mouse(aluno):
     for _ in range(8):
         ef = random.choices(list(MISTURA_HISTORICO), weights=list(MISTURA_HISTORICO.values()))[0]
         imovel = ef != "muito_distraido" and random.random() < 0.15
-        er, n = _perfil_mouse(aluno, ef, imovel=imovel)
-        fs.append(features_mouse(gerar_track(max(0.05, er), n)))
+        er, n, ritmo = _perfil_mouse(aluno, ef, imovel=imovel)
+        fs.append(features_mouse(gerar_track(max(0.05, er), n, ritmo)))
     base = {}
     for k in MOUSE_KEYS:
         vals = [_esc(f[k]) for f in fs]
@@ -196,8 +198,14 @@ def gerar_sessao(estado, aluno, base_mouse):
     # internas relativas geradas direto (sigma); z faz co-variar
     for nome, m in DESVIO.items():
         val = m[ef] * z + random.gauss(0, 0.8)
+        # dificuldade explica lentidão legítima
+        # Dias da Silva et al.: dificuldade foi o preditor mais forte; a direção dificuldade→dispersão
+        # não está no que lemos, então aqui ela só atrasa quem está concentrado (hipótese). Medido:
+        # alarme falso no engajado fica 8–10% em todo nível, com ou sem a feature. Quem decide é o probe.
         if nome == "tempo_resposta_ms":
-            val += 0.30 * (dif - 3)               # dificuldade -> mais lento que o normal
+            val += 0.30 * (dif - 3)
+        elif nome in ("tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s"):
+            val += 0.25 * (dif - 3)
         f[nome] = round(val, 3)
 
     # PAPEL: resolve a conta no caderno/papel. Fica ocioso (mouse parado, aba visivel)
@@ -219,6 +227,13 @@ def gerar_sessao(estado, aluno, base_mouse):
         f["tempo_dwell_sem_responder_s"] = round(random.gauss(-1.1, 0.4), 3)
         f["tendencia_desempenho_sessao"] = round(random.gauss(-0.9, 0.4), 3)
 
+    # queda de acerto (DTS): acerto da sessão − últimas 3
+    # distribuições são hipótese nossa até o probe; o chute é a queda mais nítida
+    queda = {"engajado": 0.0, "distraido": 0.30, "muito_distraido": 0.15}[ef] * min(1.0, z)
+    if chute:
+        queda = 0.45
+    f["queda_acerto"] = round(max(-1.0, min(1.0, queda + random.gauss(0, 0.18))), 3)
+
     # contagens (Poisson), com efeito de dificuldade nos erros
     lam_l = CONTAGEM["contagem_lapsos_rt"][ef] * (0.6 + 0.4 * z) * fator
     if chute:
@@ -239,8 +254,8 @@ def gerar_sessao(estado, aluno, base_mouse):
         imovel = not chute and random.random() < 0.12   # mente vagando de olhar parado
     else:
         imovel = False
-    erratic, n = _perfil_mouse(aluno, ef, z, imovel)
-    mf = features_mouse(gerar_track(max(0.05, erratic), n))
+    erratic, n, ritmo = _perfil_mouse(aluno, ef, z, imovel)
+    mf = features_mouse(gerar_track(max(0.05, erratic), n, ritmo))
     for k in MOUSE_KEYS:
         mu, sd = base_mouse[k]
         f[k] = _sigma(_esc(mf[k]), mu, sd)
@@ -351,6 +366,8 @@ def treinar_e_salvar(X, y, grupos=None, X_real=None, y_real=None, peso_real=6.0)
 
     # acc + por classe + confusão + baseline + brier (calibração)
     rel = relatorio(yte, modelo.predict(Xte_s), ESTADOS, y_score=modelo.predict_proba(Xte_s))
+    if not n_real_teste:   # real já vem na proporção real; o sintético é balanceado
+        rel["na_proporcao_tipica"] = na_proporcao(yte, modelo.predict(Xte_s), ESTADOS, ESTUDO_TIPICO)
     acc = rel["acuracia"]
     cv = None
     if grupos is not None and X_real is None:              # CV agrupada só na base pura
@@ -381,6 +398,10 @@ if __name__ == "__main__":
     print(f"baseline (chute majoritario): {m['holdout']['baseline_majoritario']:.3f}")
     if "brier" in m["holdout"]:
         print(f"brier (calibracao; 0=perfeito, so vale no real): {m['holdout']['brier']:.3f}")
+    if "na_proporcao_tipica" in m["holdout"]:
+        print(f"na proporcao tipica {ESTUDO_TIPICO} (precisao = quanto do alarme e real):")
+        for c, v in m["holdout"]["na_proporcao_tipica"]["por_classe"].items():
+            print(f"  {c:16s} precisao {v['precision']:.3f}  recall {v['recall']:.3f}  f1 {v['f1-score']:.3f}")
     print("matriz de confusao (linha=real, col=previsto) ->", ESTADOS)
     for linha in m["holdout"]["matriz_confusao"]:
         print("  ", linha)

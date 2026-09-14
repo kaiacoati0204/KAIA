@@ -46,6 +46,22 @@ def relatorio(y_true, y_pred, classes, y_score=None):
     return d
 
 
+def na_proporcao(y_true, y_pred, classes, proporcao):
+    """Precisão/recall/F1 por classe como se o teste tivesse a proporção `proporcao`
+    ({classe: fração}), repesando cada exemplo. Base balanceada esconde o alarme falso:
+    com 9% de dispersão real, Dias da Silva et al. viram o RF com F1 0 na classe rara."""
+    y_true, y_pred = np.asarray(y_true), np.asarray(y_pred)
+    labels = list(range(len(classes)))
+    contagem = np.bincount(y_true, minlength=len(classes))
+    peso_classe = [proporcao[c] / contagem[i] if contagem[i] else 0.0 for i, c in enumerate(classes)]
+    pesos = np.array([peso_classe[t] for t in y_true])
+    rep = classification_report(y_true, y_pred, labels=labels, target_names=classes,
+                                sample_weight=pesos, output_dict=True, zero_division=0)
+    return {"proporcao": proporcao,
+            "por_classe": {c: {k: round(rep[c][k], 3) for k in ("precision", "recall", "f1-score")}
+                           for c in classes}}
+
+
 def cv_agrupada(X, y, grupos, treinar_fold, n_splits=5):
     """CV estratificada e AGRUPADA por aluno: cada fold testa em alunos que o
     modelo NÃO viu no treino. `treinar_fold(Xtr, ytr) -> (modelo, scaler)` treina

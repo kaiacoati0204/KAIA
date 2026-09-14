@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture(autouse=True)
 def _limpa_cache():
     app_mod._BASELINE_CACHE.clear()   # baseline por aluno é cacheado -> isola os testes
+    app_mod._POP_CACHE.clear()
     yield
 
 
@@ -22,9 +23,10 @@ class FakeConn:
     """Conn asyncpg falso: roteia a resposta por um trecho do SQL.
 
     Sem sessões passadas -> baseline em cold-start (internas = 0)."""
-    def __init__(self, session_row, eventos, abandono, passadas=None, estudo_min=0):
+    def __init__(self, session_row, eventos, abandono, passadas=None, estudo_min=0, populacao=None):
         self._s, self._ev, self._ab = session_row, eventos, abandono
         self._passadas, self._estudo = passadas or [], estudo_min
+        self._pop = populacao or []
         self.executed = []
 
     async def fetchrow(self, q, *a):
@@ -35,6 +37,8 @@ class FakeConn:
             # _inicio_janela pergunta os ts das ultimas respostas para esticar a janela.
             # Devolve poucos: a janela fica no tamanho nominal, sem esticar.
             return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=1)}]
+        if "user_id <>" in q:
+            return self._pop           # população: sessões de OUTROS alunos
         if "from sessions s" in q:
             return self._passadas      # baseline entre-sessões, filtrado por matéria
         if "session_events" in q:
@@ -154,6 +158,36 @@ def test_inclinacao():
     assert app_mod._inclinacao([2.0, 1.0, 0.0]) < 0            # caindo
 
 
+def test_queda_acerto_separa_quem_caiu_de_quem_sempre_foi_mal():
+    ia_bem_e_caiu = [{"acertou": a} for a in (True,) * 7 + (False,) * 3]
+    sempre_mal = [{"acertou": a} for a in (False, True, False) * 3 + (False,)]
+    assert app_mod._queda_acerto(ia_bem_e_caiu) == 0.7
+    assert abs(app_mod._queda_acerto(sempre_mal)) < 0.35
+    assert app_mod._queda_acerto([{"acertou": True}] * 3) == 0.0     # poucas respostas: neutro
+
+
+def test_peso_do_aluno_cresce_com_a_regua_dele():
+    assert app_mod._peso_pessoal(None) == 0.0
+    assert app_mod._peso_pessoal({"_n": app_mod.MISTURA_K}) == 0.5
+    assert app_mod._peso_pessoal({"_n": 3 * app_mod.MISTURA_K}) == 0.75
+
+
+def test_z_misturado_sem_referencia_devolve_none():
+    assert app_mod._z_misturado(4.0, [], []) is None
+
+
+def test_z_misturado_usa_so_a_populacao_quando_o_aluno_nao_tem_pausas():
+    pop = [3.0] * 40
+    assert app_mod._z_misturado(3.0, [], pop) == 0.0
+    assert app_mod._z_misturado(4.0, [], pop) > 3
+
+
+def test_andamento_aberto_so_vale_depois_da_ultima_resposta():
+    resp, anda = ("question_answer", {}), ("questao_andamento", {"maior_parado_s": 40})
+    assert app_mod._andamento_aberto([resp, anda]) == {"maior_parado_s": 40}
+    assert app_mod._andamento_aberto([anda, resp]) is None
+
+
 def test_internos_brutos_sem_resposta_none():
     assert app_mod._internos_brutos([("tab_change", {})]) is None
 
@@ -262,6 +296,16 @@ def test_baseline_na_sessao_precisa_de_acertos():
     assert app_mod._baseline_na_sessao(evs) is None
 
 
+def test_baseline_na_sessao_ignora_a_primeira_questao():
+    """questão 1 lenta (o aluno se situando) não pode inflar o espalhamento da régua"""
+    normais = (20000, 21000, 19000, 20500, 21000, 19500)
+    com_q1 = [("question_answer", _resp(True, rt)) for rt in (600000,) + normais]
+    sem_q1 = [("question_answer", _resp(True, rt)) for rt in (20000,) + normais]
+    _, sd_com = app_mod._baseline_na_sessao(com_q1)["tempo_resposta_ms"]
+    _, sd_sem = app_mod._baseline_na_sessao(sem_q1)["tempo_resposta_ms"]
+    assert abs(sd_com - sd_sem) < 1e-9
+
+
 def test_baseline_na_sessao_poucos_acertos_nao_forma_regua():
     """Com menos de BASE_SESSAO_BLOCOS blocos a mediana não tem o que descartar."""
     evs = [("question_answer", _resp(True, rt)) for rt in (18000, 20000, 22000, 21000)]
@@ -270,7 +314,7 @@ def test_baseline_na_sessao_poucos_acertos_nao_forma_regua():
 
 def test_baseline_na_sessao_forma_a_regua():
     evs = [("question_answer", _resp(True, rt))
-           for rt in (18000, 20000, 22000, 21000, 19000, 20000)]
+           for rt in (20000, 18000, 20000, 22000, 21000, 19000, 20000)]   # 1ª = questão 1, descartada
     base = app_mod._baseline_na_sessao(evs)
     assert base is not None
     mu, sd = base["tempo_resposta_ms"]
@@ -282,10 +326,47 @@ def test_baseline_na_sessao_ignora_bloco_fora_da_curva():
     """Uma questão de 400s não pode virar a régua: a mediana descarta o bloco inteiro.
     Era o papel do descarte de extremos, que só funcionava no tamanho fixo antigo."""
     evs = [("question_answer", _resp(True, rt))
-           for rt in (400000, 20000, 21000, 19000, 20000, 1000)]
+           for rt in (20000, 400000, 20000, 21000, 19000, 20000, 1000)]   # 1ª = questão 1, descartada
     base = app_mod._baseline_na_sessao(evs)
     mu, _ = base["tempo_resposta_ms"]
     assert 18000 < math.expm1(mu) < 23000
+
+
+async def test_populacao_da_leitura_desde_a_primeira_questao():
+    """sem régua do aluno (começo da sessão), as internas vêm da comparação com outros alunos"""
+    start = datetime.now(timezone.utc) - timedelta(minutes=5)
+    minha = [_ev("question_answer", {"tempo_resposta_ms": 60000, "acertou": False,
+                                     "nivel_dificuldade": 3, "mouse_track": []})]
+    outros = [_ev("question_answer", {"tempo_resposta_ms": rt, "acertou": True,
+                                      "nivel_dificuldade": 3, "mouse_track": []})
+              for rt in (20000, 20000, 21000, 19000, 20500, 21500, 20000)]
+
+    class ConnPop(FakeConn):
+        async def fetch(self, q, *a):
+            if "select ts from session_events" in q:
+                return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=1)}]
+            if "user_id <>" in q:
+                return [{"session_id": "outra"}]
+            if "from sessions s" in q:
+                return []
+            if "session_events" in q:
+                return outros if a and a[0] == "outra" else minha
+            return []
+
+    conn = ConnPop({"user_id": "u", "session_start_ts": start}, minha, {"abandonadas": 0, "total": 1})
+    f = await app_mod.montar_features_sessao(conn, "sid")
+    assert f["tempo_resposta_ms"] > 0
+
+
+async def test_pausa_ao_vivo_entra_no_maior_bloco():
+    """questão ainda aberta: a pausa mandada pelo front conta antes da resposta"""
+    start = datetime.now(timezone.utc) - timedelta(minutes=5)
+    evs = [_ev("question_answer", {"tempo_resposta_ms": 20000, "acertou": True,
+                                   "nivel_dificuldade": 3, "mouse_track": []}),
+           _ev("questao_andamento", {"maior_parado_s": 95.0, "parado_agora_s": 95.0})]
+    conn = FakeConn({"user_id": "u", "session_start_ts": start}, evs, {"abandonadas": 0, "total": 1})
+    f = await app_mod.montar_features_sessao(conn, "sid")
+    assert f["maior_bloco_parado_s"] >= 95.0
 
 
 # ================================================ travas do sigma
@@ -313,7 +394,7 @@ async def test_regua_da_sessao_tem_prioridade_sobre_o_historico():
     # 5 acertos ANTES da janela -> a régua da sessão se forma
     antes = [_ev("question_answer", {"tempo_resposta_ms": rt, "acertou": True,
                                      "nivel_dificuldade": 3, "mouse_track": []})
-             for rt in (20000, 21000, 19000, 20500, 21500, 20000)]
+             for rt in (20000, 20000, 21000, 19000, 20500, 21500, 20000)]   # 1ª = questão 1
     dentro = [_ev("question_answer", {"tempo_resposta_ms": 95000, "acertou": False,
                                       "nivel_dificuldade": 3, "mouse_track": []})]
 

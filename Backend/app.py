@@ -15,11 +15,11 @@ import asyncpg
 import pandas as pd
 import requests
 
-from statistics import mean, median, pstdev
+from statistics import mean, median, pstdev, stdev
 
 from thompson import ThompsonSampling, INTERVENCOES, PARAMS_PATH
 from auth import usuario_autenticado, usuario_identidade
-from mouse_features import features_mouse, blocos_parados
+from mouse_features import features_mouse, blocos_parados, LIMIAR_BLOCO_S
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
@@ -1672,6 +1672,10 @@ CORROB_SD_PISO = 0.14
 # conservative rather than been generous at detecting disengagement." Troca deteccao
 # perdida por alarme falso — de proposito.
 CORROB_ACERTO_GLOBAL_MIN = 0.5
+# mais lenta fora da régua
+# Um acerto demorado inflava o desvio e a regra ficava surda a sessão toda. Só tira com
+# >= 5 na régua; o mais rápido fica (tirar os dois dobrava o alarme falso na simulação).
+CORROB_DESCARTE_MIN = 5
 
 
 async def _corroboracao_objetiva(conn, session_id):
@@ -1729,11 +1733,15 @@ async def _corroboracao_objetiva(conn, session_id):
     # (Chen et al., 2021, p.5). Nos dados nossos a #1 foi mais lenta em 3 de 4 sessoes
     # (razao mediana 1,33x) — so 2 sao utilizaveis, entao e indicio, nao medicao.
     rts_base = [math.log(rt) for ok, rt in base[1:] if ok and rt and rt > 0]
+    if len(rts_base) >= CORROB_DESCARTE_MIN:
+        rts_base.remove(max(rts_base))
     ult = recentes[-1][1]
     if len(rts_base) < 2 or not ult or ult <= 0:
         return False, "sem base de tempo para comparar"
     mu = mean(rts_base)
-    sd = max(pstdev(rts_base), CORROB_SD_PISO)
+    # desvio amostral (n-1): com régua curta o populacional subestima a variação;
+    # na simulação o alarme falso caiu de 1,51% para 1,23% e a detecção ficou em 99%
+    sd = max(stdev(rts_base), CORROB_SD_PISO)
     z = (math.log(ult) - mu) / sd
     if abs(z) <= CORROB_RT_SIGMAS:
         return False, "tempo dentro do proprio ritmo"
@@ -1769,15 +1777,10 @@ async def rodar_intervencao(app, session_id):
         await resolver_rewards(conn, thompson, session_id)
 
         # ==== QUEM PODE DISPARAR ====
-        # DOIS caminhos, e NENHUM depende do modelo de atencao. Antes eram descritos como
-        # tres, e o comentario mentia em duas frentes: o caminho "medicao" lia
-        # res["estado"], que e modelo.predict(), e o "terceiro caminho" era ramo morto
-        # (fazia o mesmo que o else). Na pratica o RF era porta obrigatoria de tudo.
-        #
-        #   medicao — tempo_fora_foco_s e o que o NAVEGADOR reportou. Dado bruto, nao
-        #             inferencia. Sozinho, um corte nessa feature separa off-task em
-        #             ~93% na base — o modelo nunca foi necessario aqui.
-        #   regra   — queda de acerto ou tempo fora do proprio ritmo (criterio do DTS).
+        # três caminhos, nenhum depende do modelo de atenção
+        #   medicao    — o navegador mediu tempo fora da aba (dado, não inferência)
+        #   regra      — queda de acerto + tempo fora do ritmo (DTS); só vê respostas
+        #   ociosidade — parado na questão aberta de forma incomum (entre respostas)
         #
         # O modelo NAO dispara sozinho, de proposito: ele nao esta validado com dado real,
         # e falso positivo aqui interrompe quem estava concentrado — caro em qualquer
@@ -1799,7 +1802,12 @@ async def rodar_intervencao(app, session_id):
             estado_alvo = ("muito_distraido" if res["estado"] == "muito_distraido"
                            else "distraido")
         else:
-            return
+            parado, motivo = await _ociosidade_objetiva(conn, session_id)
+            if not parado:
+                return
+            gatilho = "ociosidade"
+            estado_alvo = ("muito_distraido" if res["estado"] == "muito_distraido"
+                           else "distraido")
         # Freio (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
         # Questões de vestibular são longas — a leitura inicial não pode virar "distração";
         # o timer segura caso a 1ª seja respondida rápido demais.
@@ -1864,7 +1872,7 @@ async def rodar_intervencao(app, session_id):
         if tipo != "controle_ab":
             print(f"[KaIA Intervenção] {session_id} estado={estado_alvo} "
                   f"gatilho={gatilho} -> {tipo}"
-                  + (f" ({motivo})" if gatilho == "regra" else ""))
+                  + (f" ({motivo})" if gatilho in ("regra", "ociosidade") else ""))
 
 
 async def reward_objetivo(conn, session_id, desde, ate):
@@ -1963,6 +1971,7 @@ FEATURE_ORDER = [
     "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
+    "queda_acerto",
     # externas (absolutas)
     "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
     "cliques_fora_area_estudo", "taxa_abandono_sessao",
@@ -2107,6 +2116,15 @@ async def _inicio_janela(conn, session_id, session_start):
     return ini, min(span, DURACAO_MAX_MIN)
 
 
+def _queda_acerto(respostas):
+    """Acerto da sessão − acerto das últimas CORROB_RECENTES. 0.0 com poucas respostas."""
+    if len(respostas) < CORROB_MIN_RESPOSTAS:
+        return 0.0
+    geral = sum(1 for p in respostas if p.get("acertou")) / len(respostas)
+    ultimas = sum(1 for p in respostas[-CORROB_RECENTES:] if p.get("acertou")) / CORROB_RECENTES
+    return round(geral - ultimas, 3)
+
+
 def _inclinacao(ys):
     """Inclinação (mínimos quadrados) de ys vs. índice — tendência ao longo da sessão."""
     n = len(ys)
@@ -2159,15 +2177,19 @@ def _internos_brutos(evs):
 _BASELINE_CACHE = {}   # user_id -> (baseline_dict|None, computed_at)
 
 
+async def _materia_da_sessao(conn, session_id):
+    return await conn.fetchval(
+        "select payload->>'materia' from session_events where session_id = $1::uuid "
+        "and event_type = 'session_start' order by ts limit 1", session_id)
+
+
 async def _baseline_aluno(conn, user_id, session_id):
     """Baseline ENTRE-SESSÕES do aluno NA MESMA MATÉRIA: (média, desvio) de cada interna
     sobre as sessões passadas encerradas, na escala de comparação (`_lg`).
     FALLBACK — a régua principal é a da própria sessão. < MIN_SESSOES_BASELINE -> None
     (cold-start: sem histórico não dá pra personalizar -> desvios 0). Cacheado
     (BASELINE_TTL_S), pois sessões passadas não mudam."""
-    chave = (str(user_id), await conn.fetchval(
-        "select payload->>'materia' from session_events where session_id = $1::uuid "
-        "and event_type = 'session_start' order by ts limit 1", session_id))
+    chave = (str(user_id), await _materia_da_sessao(conn, session_id))
     agora = datetime.now(timezone.utc)
     cache = _BASELINE_CACHE.get(chave)
     if cache and (agora - cache[1]).total_seconds() < BASELINE_TTL_S:
@@ -2199,20 +2221,10 @@ async def _baseline_aluno(conn, user_id, session_id):
     # amostras (sessoes passadas x esta sessao), nao em como as medem.
     amostras, rts_pool, n_sessoes = [], [], 0
     for r in rows:
-        evs = await _carregar_eventos(conn, r["session_id"])
-        corretas = [p for et, p in evs if et == "question_answer" and p.get("acertou")]
-        blocos = [corretas[i:i + BASE_SESSAO_BLOCO]
-                  for i in range(0, len(corretas), BASE_SESSAO_BLOCO)]
-        usou = False
-        for b in blocos:
-            if len(b) < BASE_SESSAO_BLOCO:
-                continue
-            raw = _internos_brutos([("question_answer", p) for p in b])
-            if raw:
-                amostras.append(raw)
-                rts_pool += raw["_rts"]
-                usou = True
-        n_sessoes += 1 if usou else 0
+        da_sessao = _blocos_corretos(await _carregar_eventos(conn, r["session_id"]))
+        amostras += da_sessao
+        rts_pool += [rt for a in da_sessao for rt in a["_rts"]]
+        n_sessoes += 1 if da_sessao else 0
 
     if n_sessoes < MIN_SESSOES_BASELINE or len(amostras) < BASE_SESSAO_BLOCOS:
         base = None
@@ -2279,6 +2291,7 @@ def _regua(amostras, rts):
         base[k] = (median(vs), pstdev(vs))
     logs = [_lg(rt) for rt in rts if rt and rt > 0]
     base["_rt"] = (median(logs), max(pstdev(logs), SIGMA_PISO)) if len(logs) > 1 else None
+    base["_n"] = len(amostras)
     return base
 
 
@@ -2287,17 +2300,162 @@ def _baseline_na_sessao(evs_antes):
 
     `evs_antes` sao os eventos ANTERIORES a janela de leitura — a regua nao pode ser
     calculada sobre a mesma janela que ela vai avaliar."""
-    corretas = [p for et, p in evs_antes if et == "question_answer" and p.get("acertou")]
-    blocos = [corretas[i:i + BASE_SESSAO_BLOCO]
-              for i in range(0, len(corretas), BASE_SESSAO_BLOCO)]
-    blocos = [b for b in blocos if len(b) == BASE_SESSAO_BLOCO]   # bloco incompleto nao conta
-    if len(blocos) < BASE_SESSAO_BLOCOS:
-        return None
-    amostras = [_internos_brutos([("question_answer", p) for p in b]) for b in blocos]
-    amostras = [a for a in amostras if a]
+    amostras = _blocos_corretos(evs_antes)
     if len(amostras) < BASE_SESSAO_BLOCOS:
         return None
     return _regua(amostras, [rt for a in amostras for rt in a["_rts"]])
+
+
+def _blocos_corretos(evs):
+    """Amostras de régua de UMA sessão: blocos de BASE_SESSAO_BLOCO corretas, sem a questão 1."""
+    # questão 1 fora: o aluno ainda está se situando, e ela inflava o espalhamento (~50x)
+    respostas = [p for et, p in evs if et == "question_answer"][1:]
+    corretas = [p for p in respostas if p.get("acertou")]
+    blocos = [corretas[i:i + BASE_SESSAO_BLOCO] for i in range(0, len(corretas), BASE_SESSAO_BLOCO)]
+    amostras = [_internos_brutos([("question_answer", p) for p in b])
+                for b in blocos if len(b) == BASE_SESSAO_BLOCO]
+    return [a for a in amostras if a]
+
+
+# ==== POPULAÇÃO (outros alunos) ====
+# comparar com os outros no geral, não por questão
+# Cetintas 2010 comparava com os outros no MESMO problema; no beta quase não haverá dado por
+# questão, então a referência é a matéria, e todas as matérias quando a matéria não basta.
+POP_SESSOES = 40             # sessões encerradas de outros alunos, mais recentes
+POP_PAUSAS_MIN = 30          # abaixo disso a referência de pausa não é confiável: não dispara
+POP_TTL_S = 600
+_POP_CACHE = {}              # (user_id, matéria) -> (população, calculada_em)
+
+# mistura aluno x população
+# Cetintas pesava pelo nº de dados de cada lado (N_pop/20). Com população GERAL esse N é enorme
+# e o aluno nunca pesaria; então o lado da população é fixo: régua do aluno com K amostras = 50%.
+MISTURA_K = 3
+
+
+def _peso_pessoal(base):
+    n = (base or {}).get("_n") or 0
+    return n / (n + MISTURA_K)
+
+
+async def _carregar_populacao(conn, user_id, materia):
+    rows = await conn.fetch(
+        """
+        select s.session_id from sessions s
+         where s.user_id <> $1::uuid and s.session_end_ts is not null
+           and ($2::text is null or exists (
+                 select 1 from session_events e
+                  where e.session_id = s.session_id and e.event_type = 'session_start'
+                    and e.payload->>'materia' = $2))
+         order by s.session_start_ts desc limit $3
+        """,
+        user_id, materia, POP_SESSOES,
+    )
+    amostras, pausas = [], []
+    for r in rows:
+        evs = await _carregar_eventos(conn, r["session_id"])
+        amostras += _blocos_corretos(evs)
+        for p in (p for et, p in evs if et == "question_answer"):
+            maior, _ = blocos_parados(p.get("mouse_track") or [], p.get("tempo_resposta_ms"))
+            if maior >= LIMIAR_BLOCO_S:
+                pausas.append(_lg(maior))
+    regua = (_regua(amostras, [rt for a in amostras for rt in a["_rts"]])
+             if len(amostras) >= BASE_SESSAO_BLOCOS else None)
+    return {"regua": regua, "pausas": pausas}
+
+
+async def _populacao(conn, user_id, session_id):
+    """Régua das internas e pausas (log) de OUTROS alunos: matéria primeiro, geral se faltar."""
+    materia = await _materia_da_sessao(conn, session_id)
+    chave = (str(user_id), materia)
+    agora = datetime.now(timezone.utc)
+    cache = _POP_CACHE.get(chave)
+    if cache and (agora - cache[1]).total_seconds() < POP_TTL_S:
+        return cache[0]
+    pop = await _carregar_populacao(conn, user_id, materia)
+    if materia is not None and (pop["regua"] is None or len(pop["pausas"]) < POP_PAUSAS_MIN):
+        geral = await _carregar_populacao(conn, user_id, None)
+        pop = {"regua": pop["regua"] or geral["regua"],
+               "pausas": pop["pausas"] if len(pop["pausas"]) >= POP_PAUSAS_MIN else geral["pausas"]}
+    _POP_CACHE[chave] = (pop, agora)
+    return pop
+
+
+def _z_misturado(valor, pessoais, populacao):
+    """z do valor (já em log) contra o aluno e contra a população, pesados. None sem referência."""
+    def z_contra(vs):
+        return (valor - median(vs)) / max(stdev(vs), SIGMA_PISO)
+    partes = []
+    if len(pessoais) >= 2:
+        partes.append(("aluno", z_contra(pessoais)))
+    if len(populacao) >= POP_PAUSAS_MIN:
+        partes.append(("pop", z_contra(populacao)))
+    if not partes:
+        return None
+    if len(partes) == 1:
+        return partes[0][1]
+    w = len(pessoais) / (len(pessoais) + MISTURA_K)
+    return w * partes[0][1] + (1 - w) * partes[1][1]
+
+
+def _andamento_aberto(evs):
+    """Último questao_andamento DEPOIS da última resposta (questão ainda aberta), ou None."""
+    aberto = None
+    for et, p in evs:
+        if et == "question_answer":
+            aberto = None
+        elif et == "questao_andamento":
+            aberto = p
+    return aberto
+
+
+# ==== OCIOSIDADE (entre respostas) ====
+# parado sem mexer, combinado com outro sinal
+# Tempo parado sozinho confunde com pausa legítima (Baker 2007). Exige as duas: passou do limite
+# calibrado da questão (tamanho do enunciado, matéria de cálculo) E a pausa é incomum contra o
+# próprio aluno e os outros alunos (Cetintas 2010). Sem referência suficiente, não dispara.
+OCIO_FRESCO_S = 45           # o front manda a cada 15 s; mais velho que isso = sinal parado
+
+
+async def _ociosidade_objetiva(conn, session_id):
+    """(bool, motivo) — o aluno está parado agora, numa questão aberta, de um jeito incomum?"""
+    ult = await conn.fetchrow(
+        "select ts, payload from session_events where session_id = $1::uuid "
+        "and event_type = 'questao_andamento' order by ts desc limit 1", session_id)
+    if ult is None:
+        return False, "sem questão em andamento"
+    respondida = await conn.fetchval(
+        "select max(ts) from session_events where session_id = $1::uuid "
+        "and event_type = 'question_answer'", session_id)
+    if respondida is not None and respondida >= ult["ts"]:
+        return False, "questão já respondida"
+    if (datetime.now(timezone.utc) - ult["ts"]).total_seconds() > OCIO_FRESCO_S:
+        return False, "sem sinal recente da questão"
+    p = ult["payload"]
+    p = json.loads(p) if isinstance(p, str) else p
+    if not p.get("aba_visivel"):
+        return False, "aba fora de foco (a medição cobre)"
+    if float(p.get("ocioso_s") or 0) < float(p.get("limite_ocioso_s") or 1e9):
+        return False, "parado menos que o limite da questão"
+
+    linhas = await conn.fetch(
+        "select payload from session_events where session_id = $1::uuid "
+        "and event_type = 'question_answer' order by ts", session_id)
+    pessoais = []
+    for r in linhas:
+        q = r["payload"]
+        q = json.loads(q) if isinstance(q, str) else q
+        maior, _ = blocos_parados(q.get("mouse_track") or [], q.get("tempo_resposta_ms"))
+        if maior >= LIMIAR_BLOCO_S:
+            pessoais.append(_lg(maior))
+    user_id = await conn.fetchval("select user_id from sessions where session_id = $1::uuid", session_id)
+    pop = await _populacao(conn, user_id, session_id)
+    agora_s = float(p.get("parado_agora_s") or 0)
+    z = _z_misturado(_lg(agora_s), pessoais, pop["pausas"])
+    if z is None:
+        return False, "sem referência de pausa (aluno e população)"
+    if z <= CORROB_RT_SIGMAS:
+        return False, f"pausa dentro do normal ({z:+.1f} sigma)"
+    return True, f"parado {agora_s:.0f}s na questão ({z:+.1f} sigma)"
 
 
 async def montar_features_sessao(conn, session_id):
@@ -2331,27 +2489,37 @@ async def montar_features_sessao(conn, session_id):
     # de haver acertos suficientes — e ai ele e mais estavel, por ter mais amostras.
     # O custo da regua da sessao e a suposicao do DTS: que o aluno comeca engajado. Se
     # ele ja entrou disperso, a regua nasce torta. Limitacao conhecida e declarada.
-    base = _baseline_na_sessao(await _carregar_eventos(conn, session_id, ate=inicio))
+    evs_antes = await _carregar_eventos(conn, session_id, ate=inicio)
+    base = _baseline_na_sessao(evs_antes)
     if base is None:
         base = await _baseline_aluno(conn, sess["user_id"], session_id)
 
+    # população entra desde a 1ª questão; o aluno ganha peso conforme a régua dele cresce
+    regua_pop = (await _populacao(conn, sess["user_id"], session_id))["regua"]
+    w = _peso_pessoal(base) if regua_pop is not None else 1.0
+
     f = {}
-    # internas relativas (desvio em sigma; cold-start ou sessão sem resposta -> 0)
+    # internas relativas (desvio em sigma; sem régua do aluno nem da população -> 0)
     for k in INTERNAS_RELATIVAS:
-        if brutos is None or base is None:
+        if brutos is None or (base is None and regua_pop is None):
             f[k] = 0.0
-        else:
-            mu, sd = base[k]
-            f[k] = _sigma(brutos[k], mu, sd)
+            continue
+        z_aluno = _sigma(brutos[k], *base[k]) if base is not None else 0.0
+        z_pop = _sigma(brutos[k], *regua_pop[k]) if regua_pop is not None else 0.0
+        f[k] = round(w * z_aluno + (1 - w) * z_pop, 3)
+    ref_rt = (base or regua_pop or {}).get("_rt")
     # contagens brutas (não relativizadas, como no gerador v2)
-    if brutos and base and base.get("_rt"):
+    if brutos and ref_rt:
         # +2σ em LOG: na escala crua a cauda inflava a média e o desvio, e o limiar
         # subia junto — o lapso passava a ser detectado só em casos extremos.
-        limite = math.expm1(base["_rt"][0] + 2 * base["_rt"][1])   # expm1 inverte _lg
+        limite = math.expm1(ref_rt[0] + 2 * ref_rt[1])   # expm1 inverte _lg
         f["contagem_lapsos_rt"] = sum(1 for rt in brutos["_rts"] if rt > limite)
     else:
         f["contagem_lapsos_rt"] = 0
     f["erros_sem_offtask"] = brutos["_erros"] if brutos else 0
+    # queda de acerto (DTS)
+    # sessão inteira, não só a janela: separa "ia bem e caiu" de "sempre foi mal"
+    f["queda_acerto"] = _queda_acerto([p for et, p in evs_antes + evs if et == "question_answer"])
 
     # externas absolutas, sobre a JANELA
     # Aba suspensa pelo navegador reporta tempo fora maior que a própria janela —
@@ -2371,6 +2539,10 @@ async def montar_features_sessao(conn, session_id):
         mb, nb = blocos_parados(p.get("mouse_track") or [], p.get("tempo_resposta_ms"))
         maior_bloco = max(maior_bloco, mb)
         n_blocos += nb
+    # questão ainda aberta: a pausa ao vivo do front entra antes da resposta chegar
+    aberto = _andamento_aberto(evs)
+    if aberto and float(aberto.get("maior_parado_s") or 0) >= LIMIAR_BLOCO_S:
+        maior_bloco = max(maior_bloco, float(aberto["maior_parado_s"]))
     f["maior_bloco_parado_s"] = round(maior_bloco, 1)
     f["n_blocos_parados"] = n_blocos
     ab = await conn.fetchrow(
@@ -2761,8 +2933,18 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
         if body.event_type == "probe_atencao":
             await _capturar_probe(conn, body.session_id, body.payload)
 
+        resposta = {"status": "ok", "event_id": str(ev["event_id"])}
+        # questão desengajada fora da nota
+        # a regra (DTS) avalia a resposta que acabou de chegar; o acerto numa questão
+        # desengajada não mede o que o aluno sabe, então o front tira da nota da rodada
+        if body.event_type == "question_answer":
+            try:
+                resposta["desengajada"], _ = await _corroboracao_objetiva(conn, body.session_id)
+            except Exception as e:
+                print("[KaIA] regra indisponível no /events:", e)
+
     print("[KaIA Event]", body.event_type, body.session_id)
-    return {"status": "ok", "event_id": str(ev["event_id"])}
+    return resposta
 
 
 async def _capturar_probe(conn, session_id, payload):

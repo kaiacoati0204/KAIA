@@ -4,6 +4,7 @@ agregação/intervenção (mock do banco), guardas 'sem banco' e happy-paths via
 httpx/ASGI. Sem rede e sem Supabase real.
 """
 import json
+import math
 from datetime import datetime, date, timezone, timedelta
 from types import SimpleNamespace
 
@@ -72,6 +73,7 @@ def _set_state(pool=None, thompson=None, modelo=None, scaler=None):
 
 @pytest.fixture(autouse=True)
 def _limpa_streak():
+    app_mod._POP_CACHE.clear()   # população é cacheada -> isola os testes
     yield
 
 
@@ -414,6 +416,19 @@ async def test_events_ok():
     assert r.status_code == 200 and r.json()["event_id"] == "e1"
 
 
+async def test_events_resposta_diz_se_a_regra_marcou_a_questao():
+    """o front tira da nota da rodada a questão que a regra marcar como desengajada"""
+    for fetch, esperado in ((_CORROBORA, True), (_NAO_CORROBORA, False)):
+        conn = FakeConn(fetchrow={"insert into session_events": {"event_id": "e1"}},
+                        fetchval={"user_id from sessions": "test-user"},
+                        fetch={"select payload": fetch})
+        _set_state(pool=FakePool(conn))
+        async with _client() as c:
+            r = await c.post("/events", json={"session_id": "s", "event_type": "question_answer",
+                                              "payload": {"acertou": False}})
+        assert r.status_code == 200 and r.json()["desengajada"] is esperado
+
+
 async def test_events_bloqueia_sessao_de_outro():
     # Evento numa sessão que pertence a OUTRO usuário -> 403 (ownership).
     conn = FakeConn(fetchval={"user_id from sessions": "outro-user"})
@@ -713,6 +728,67 @@ _CORROBORA = _respostas([(True, 20000)] * 5 + [(False, 21000), (False, 22000), (
 # Aluno acertando no proprio ritmo: comportamento NAO confirma.
 _NAO_CORROBORA = _respostas([(True, 20000), (True, 21000), (True, 19500),
                              (True, 20500), (True, 20000), (True, 21000)])
+
+
+def _conn_ocioso(payload, respondida_depois=False, pausas_pop=40):
+    from datetime import datetime, timezone
+    agora = datetime.now(timezone.utc)
+    anda = {"ts": agora, "payload": payload}
+    resposta = {"acertou": True, "tempo_resposta_ms": 21000, "mouse_track": [[0, 0, 0], [20000, 1, 1]]}
+
+    def fetch(q):
+        if "user_id <>" in q:
+            return [{"session_id": "outra"}]
+        if "select event_type, payload" in q:          # sessões da população (pausas de 20 s)
+            return [{"event_type": "question_answer", "payload": json.dumps(resposta)}
+                    for _ in range(pausas_pop)]
+        if "question_answer" in q and "select payload" in q:
+            return []                                  # esta sessão ainda sem pausas próprias
+        return []
+
+    return FakeConn(
+        fetchrow={"questao_andamento": anda, "from interventions": {"n": 0, "ultima": None}},
+        fetchval={"max(ts)": (agora if respondida_depois else None), "user_id from sessions": "u",
+                  "payload->>'materia'": "MAT", "question_answer": 5},
+        fetch=fetch)
+
+
+_PARADO = {"aba_visivel": True, "ocioso_s": 200, "limite_ocioso_s": 60,
+           "maior_parado_s": 200.0, "parado_agora_s": 200.0}
+
+
+async def test_ociosidade_dispara_parado_incomum_com_aba_em_foco():
+    ok, motivo = await app_mod._ociosidade_objetiva(_conn_ocioso(_PARADO), "sid")
+    assert ok is True, motivo
+
+
+async def test_ociosidade_nao_dispara_sem_as_duas_condicoes():
+    casos = [
+        dict(_PARADO, aba_visivel=False),                  # fora da aba: a medição cobre
+        dict(_PARADO, ocioso_s=40),                        # abaixo do limite calibrado da questão
+        dict(_PARADO, parado_agora_s=22.0),                # pausa comum contra os outros alunos
+    ]
+    for p in casos:
+        ok, motivo = await app_mod._ociosidade_objetiva(_conn_ocioso(p), "sid")
+        assert ok is False, (p, motivo)
+    ok, _ = await app_mod._ociosidade_objetiva(_conn_ocioso(_PARADO, respondida_depois=True), "sid")
+    assert ok is False                                     # questão já respondida
+    app_mod._POP_CACHE.clear()                             # população anterior ficou em cache
+    ok, _ = await app_mod._ociosidade_objetiva(_conn_ocioso(_PARADO, pausas_pop=5), "sid")
+    assert ok is False                                     # sem referência suficiente: não arrisca
+
+
+async def test_rodar_intervencao_dispara_por_ociosidade(monkeypatch):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = _conn_ocioso(_PARADO)
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    inserts = [a for q, a in conn.executed if "insert into interventions" in q]
+    assert inserts and "ociosidade" in inserts[0]
 
 
 async def test_rodar_intervencao_dispara(monkeypatch):
@@ -1088,6 +1164,23 @@ async def test_corroboracao_ignora_a_primeira_questao_na_regua():
     regs = [(True, 600000)] + [(True, 20000)] * 6 + [(False, 60000)] * 3
     ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
     assert ok is True, motivo
+
+
+async def test_corroboracao_acerto_lento_na_regua_nao_deixa_surda():
+    """Um acerto demorado na régua inflava o desvio e a regra parava de ver a dispersão."""
+    regs = ([(True, 30000)] + [(True, 20000)] * 2 + [(True, 120000)] + [(True, 20000)] * 3
+            + [(False, 60000)] * 3)
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is True, motivo
+
+
+async def test_corroboracao_usa_desvio_amostral():
+    """desvio amostral (n-1): com 2 valores na régua, o populacional dava z 3,5 e disparava"""
+    m = math.log(20000)
+    regs = [(True, 30000), (True, math.exp(m - 0.3)), (True, math.exp(m + 0.3)),
+            (False, 20000), (False, 20000), (False, math.exp(m + 1.05))]
+    ok, _ = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
+    assert ok is False
 
 
 async def test_corroboracao_exige_minimo_de_respostas():

@@ -3153,6 +3153,11 @@ body.kaia-reancorar .option-btn {
   font-size: 14px;
   font-weight: 600;
 }
+#kaia-probe .probe-nota {
+  margin: -6px 0 10px;
+  color: var(--tinta);
+  font-size: 12px;
+}
 #kaia-probe .probe-btns { display: flex; flex-direction: column; gap: 6px; }
 #kaia-probe button {
   padding: 8px 10px;

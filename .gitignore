@@ -29,6 +29,9 @@ ml/artifacts/thompson_params.json
 # v2 é regenerável pelo gerador (seed fixa) — versiona só o gerador, não os artefatos.
 ml/models/modelo_rf_v2.pkl
 ml/artifacts/metricas_v2.json
+# Saídas das medições de questões (verificar_cache, teste_impostor) — o impostor traz gabarito
+ml/artifacts/defeitos/
+ml/artifacts/impostor/
 # checkpoints do Jupyter
 .ipynb_checkpoints/
 

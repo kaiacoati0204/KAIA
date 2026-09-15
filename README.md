@@ -63,7 +63,6 @@ Backend/
 ml/
   gerar_base_v2.py      → gera a base sintética + treina o modelo v2 (seed fixa; .pkl NÃO versionado)
   treinar_com_probe.py  → valida/re-treina o modelo com os rótulos reais do probe
-sql/historico/          → migrations avulsas antigas, já contidas no snapshot — só referência, NÃO rodar
 supabase/
   migrations/           → schema versionado (snapshot de produção); ÚNICO SQL que o CI aplica
   README.md             → recriar o banco, regenerar o snapshot, criar migration nova

@@ -720,6 +720,43 @@ def _feats_ok():                                        # passa o warm-up (sess�
     return {"duracao_janela_min": 10.0}
 
 
+def _aba(fora_s, ha_min=1.0, interno=False):
+    """Um tab_change de `fora_s` segundos, registrado há `ha_min` minutos."""
+    return [{"ts": datetime.now(timezone.utc) - timedelta(minutes=ha_min),
+             "payload": {"tempo_fora_foco_s": fora_s, "interno": interno}}]
+
+
+async def _dispara_medicao(monkeypatch, abas, ultima=None):
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 1 if ultima else 0, "ultima": ultima}},
+                    fetchval={"max(triggered_at)": ultima, "question_answer": 5},
+                    fetch={"tab_change": abas})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
+    await app_mod.rodar_intervencao(SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn))), "sid")
+    return [a for q, a in conn.executed if "insert into interventions" in q]
+
+
+async def test_medicao_nao_repete_pela_mesma_ausencia(monkeypatch):
+    """a ausência de 5 min atrás já gerou a intervenção de 4 min atrás: passado o cooldown, não
+    pode disparar de novo só porque ela continua dentro da janela de 10 min"""
+    ultima = datetime.now(timezone.utc) - timedelta(minutes=4)
+    assert await _dispara_medicao(monkeypatch, _aba(90.0, ha_min=5), ultima) == []
+
+
+async def test_medicao_conta_ausencia_nova_depois_da_intervencao(monkeypatch):
+    ultima = datetime.now(timezone.utc) - timedelta(minutes=4)
+    inserts = await _dispara_medicao(monkeypatch, _aba(90.0, ha_min=1), ultima)
+    assert inserts and "medicao" in inserts[0]
+
+
+async def test_medicao_ignora_aba_da_propria_kaia(monkeypatch):
+    """ir para outra aba da KaIA (caderno, perfil) não é sair da tarefa"""
+    assert await _dispara_medicao(monkeypatch, _aba(90.0, interno=True)) == []
+
+
 def _respostas(regs):
     return [{"payload": {"acertou": ok, "tempo_resposta_ms": rt}} for ok, rt in regs]
 
@@ -864,11 +901,11 @@ async def test_muito_distraido_nao_exige_corroboracao(monkeypatch):
     """Sair da aba e MEDICAO, nao inferencia — dispara sozinho."""
     async def fake_pred(m, s, conn, sid):
         return {"estado": "muito_distraido", "score": 0.9,
-                "feats": dict(_feats_ok(), tempo_fora_foco_s=90.0), "confiavel": True}
+                "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5},
-                    fetch={"select payload": _NAO_CORROBORA})   # nao corrobora, e nao importa
+                    fetch={"tab_change": _aba(90.0), "select payload": _NAO_CORROBORA})   # nao corrobora, e nao importa
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
@@ -897,11 +934,11 @@ async def test_leitura_nao_confiavel_nao_bloqueia_o_disparo(monkeypatch):
     regra, janela de JANELA_MIN minutos na medicao)."""
     async def fake_pred(m, s, conn, sid):
         # cold-start: internas mudas -> o modelo diz engajado e a leitura nao e confiavel
-        feats = dict(_feats_ok(), tempo_fora_foco_s=300.0)      # o navegador mediu 5 min fora
-        return {"estado": "engajado", "score": 0.9, "feats": feats, "confiavel": False}
+        return {"estado": "engajado", "score": 0.9, "feats": _feats_ok(), "confiavel": False}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
-                    fetchval={"question_answer": 5})
+                    fetchval={"question_answer": 5},
+                    fetch={"tab_change": _aba(300.0)})          # o navegador mediu 5 min fora
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
@@ -1333,11 +1370,11 @@ async def test_regra_dispara_sem_o_modelo_de_atencao(monkeypatch):
 async def test_gatilho_medicao_para_muito_distraido(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "muito_distraido", "score": 0.9,
-                "feats": dict(_feats_ok(), tempo_fora_foco_s=90.0), "confiavel": True}
+                "feats": _feats_ok(), "confiavel": True}
     monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
     conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
                     fetchval={"question_answer": 5},
-                    fetch={"select payload": _NAO_CORROBORA})
+                    fetch={"tab_change": _aba(90.0), "select payload": _NAO_CORROBORA})
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
     fake_app = SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))

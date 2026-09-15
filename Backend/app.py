@@ -1694,6 +1694,25 @@ async def _corroboracao_objetiva(conn, session_id):
     return True, f"acerto recente {acerto:.0%} e tempo {lado} ({z:+.1f} sigma)"
 
 
+async def _fora_da_aba_desde_ultima(conn, session_id):
+    """Segundos fora da KaIA na janela, só com o que veio DEPOIS da última intervenção.
+    A janela é de 10 min e o cooldown de 3: sem isso, a mesma ausência disparava de novo aos 3 e
+    aos 6 min, com o aluno já de volta. Saída para outra aba da própria KaIA não conta."""
+    desde = await _agora_banco(conn) - timedelta(minutes=JANELA_MIN)
+    ultima = await conn.fetchval(
+        "select max(triggered_at) from interventions where session_id = $1::uuid", session_id)
+    rows = await conn.fetch(
+        "select ts, payload from session_events where session_id = $1::uuid "
+        "and event_type = 'tab_change' and ts >= $2", session_id, desde)
+    total = 0.0
+    for r in rows:
+        p = json.loads(r["payload"]) if isinstance(r["payload"], str) else r["payload"]
+        if p.get("interno") or (ultima and r["ts"] <= ultima):
+            continue
+        total += float(p.get("tempo_fora_foco_s") or 0)
+    return total
+
+
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
     Freios: warm-up (>=1 questão e sessão >= INTERV_WARMUP_MIN), cooldown por estado
@@ -1718,7 +1737,7 @@ async def rodar_intervencao(app, session_id):
         # navegador), regra (queda de acerto + ritmo fora do normal, DTS; só vê respostas) e
         # ociosidade (parado na questão aberta de forma incomum). O modelo so escolhe QUAL
         # intervencao: nao esta validado, e falso positivo pesa em TEA/TDAH.
-        fora_s = float(res["feats"].get("tempo_fora_foco_s") or 0)
+        fora_s = await _fora_da_aba_desde_ultima(conn, session_id)
         corrob, motivo = await _corroboracao_objetiva(conn, session_id)
         if fora_s >= AUSENCIA_MEDIDA_S:
             gatilho, estado_alvo = "medicao", "muito_distraido"
@@ -1946,7 +1965,8 @@ ESTADOS = ["engajado", "distraido", "muito_distraido"]  # 0, 1, 2
 INTERV_COOLDOWN_MIN = {"distraido": 3, "muito_distraido": 3}
 INTERV_MAX_POR_SESSAO = 5
 INTERV_WARMUP_MIN = 3          # freio: sessão >= isto (min) antes da 1ª intervenção (+ >=1 questão)
-# Ausencia MEDIDA (nao inferida): segundos fora da aba na janela que disparam sozinhos. 30s e
+# Ausencia MEDIDA (nao inferida): segundos fora da KaIA na janela, depois da ultima intervencao,
+# que disparam sozinhos (_fora_da_aba_desde_ultima). 30s e
 # mais conservador que o melhor corte de classificacao (~10s) porque aqui se decide interromper,
 # e troca de aba curta e banal. 30s esta acima do p90 das outras duas classes.
 AUSENCIA_MEDIDA_S = 30.0
@@ -2366,7 +2386,7 @@ async def montar_features_sessao(conn, session_id):
     inicio, duracao_min = await _inicio_janela(conn, session_id, sess["session_start_ts"])
 
     evs = await _carregar_eventos(conn, session_id, desde=inicio)
-    tab = [p for et, p in evs if et == "tab_change"]
+    tab = [p for et, p in evs if et == "tab_change" and not p.get("interno")]   # outra aba da KaIA não é sair
     cliques = [p for et, p in evs if et == "click_outside"]
     brutos = _internos_brutos(evs)
     # A regua da PROPRIA SESSAO vem primeiro: casa com o ritmo da materia atual por construcao

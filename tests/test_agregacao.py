@@ -88,6 +88,16 @@ async def test_externas_contadas_e_coldstart_zero():
     assert feats["nivel_dificuldade_atividade"] == 3
 
 
+async def test_features_de_aba_ignoram_a_propria_kaia():
+    start = datetime.now(timezone.utc) - timedelta(minutes=20)
+    eventos = [_ev("tab_change", {"tempo_fora_foco_s": 40.0, "interno": True}),
+               _ev("tab_change", {"tempo_fora_foco_s": 12.0, "interno": False})]
+    conn = FakeConn({"user_id": "u", "session_start_ts": start}, eventos, {"abandonadas": 0, "total": 1})
+    feats = await app_mod.montar_features_sessao(conn, "sid")
+    assert feats["mudancas_aba"] == 1 and feats["tempo_fora_foco_s"] == 12.0
+    assert feats["maior_ausencia_unica_s"] == 12.0
+
+
 async def test_sessao_sem_respostas_nao_quebra():
     start = datetime.now(timezone.utc)     # duração ~0 -> clamp evita divisão por zero
     conn = FakeConn({"user_id": "u", "session_start_ts": start}, [],

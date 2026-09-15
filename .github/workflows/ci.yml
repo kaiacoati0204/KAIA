@@ -38,7 +38,7 @@ jobs:
           python-version: '3.11'
 
       - name: Instala dependências
-        run: pip install -r Backend/requirements.txt
+        run: pip install -r Backend/requirements-dev.txt   # testes (pytest, cov, httpx) + as de produção
 
       - name: Roda os testes (pytest + cobertura > 70%)
         run: pytest tests/ -q --cov=app --cov=thompson --cov-fail-under=70
@@ -137,7 +137,7 @@ jobs:
           python-version: '3.11'
 
       - name: Instala dependências
-        run: pip install -r Backend/requirements.txt
+        run: pip install -r Backend/requirements-dev.txt   # testes (pytest, cov, httpx) + as de produção
 
       - name: Testes de integração (app real contra o Postgres migrado)
         env:

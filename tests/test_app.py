@@ -731,10 +731,10 @@ _NAO_CORROBORA = _respostas([(True, 20000), (True, 21000), (True, 19500),
                              (True, 20500), (True, 20000), (True, 21000)])
 
 
-def _conn_ocioso(payload, respondida_depois=False, pausas_pop=40):
+def _conn_ocioso(payload, respondida_depois=False, pausas_pop=40, idade_s=0, pausas_proprias=0):
     from datetime import datetime, timezone
     agora = datetime.now(timezone.utc)
-    anda = {"ts": agora, "payload": payload}
+    anda = {"ts": agora - timedelta(seconds=idade_s), "payload": payload}
     resposta = {"acertou": True, "tempo_resposta_ms": 21000, "mouse_track": [[0, 0, 0], [20000, 1, 1]]}
 
     def fetch(q):
@@ -744,7 +744,7 @@ def _conn_ocioso(payload, respondida_depois=False, pausas_pop=40):
             return [{"event_type": "question_answer", "payload": json.dumps(resposta)}
                     for _ in range(pausas_pop)]
         if "question_answer" in q and "select payload" in q:
-            return []                                  # esta sessão ainda sem pausas próprias
+            return [{"payload": json.dumps(resposta)} for _ in range(pausas_proprias)]
         return []
 
     return FakeConn(
@@ -777,6 +777,44 @@ async def test_ociosidade_nao_dispara_sem_as_duas_condicoes():
     app_mod._POP_CACHE.clear()                             # população anterior ficou em cache
     ok, _ = await app_mod._ociosidade_objetiva(_conn_ocioso(_PARADO, pausas_pop=5), "sid")
     assert ok is False                                     # sem referência suficiente: não arrisca
+
+
+async def test_ociosidade_ignora_sinal_velho():
+    """o front manda a cada 15 s; sinal com mais de 45 s é aba fechada ou front parado"""
+    ok, motivo = await app_mod._ociosidade_objetiva(_conn_ocioso(_PARADO, idade_s=120), "sid")
+    assert ok is False and "recente" in motivo
+
+
+async def test_ociosidade_usa_as_pausas_do_proprio_aluno():
+    """sem população suficiente, as pausas do próprio aluno bastam de referência"""
+    ok, motivo = await app_mod._ociosidade_objetiva(
+        _conn_ocioso(_PARADO, pausas_pop=5, pausas_proprias=4), "sid")
+    assert ok is True, motivo
+
+
+async def test_populacao_fica_em_cache():
+    conn = _conn_ocioso(_PARADO)
+    primeira = await app_mod._populacao(conn, "u", "sid")
+    conn.r_fetch = lambda q: (_ for _ in ()).throw(AssertionError("não devia consultar de novo"))
+    assert await app_mod._populacao(conn, "u", "sid") is primeira
+
+
+async def test_reportar_questao_tira_do_cache_e_registra():
+    conn = FakeConn(execute="DELETE 1")
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/questoes/reportar", json={
+            "session_id": "s", "enunciado": "Enunciado grande o bastante para valer", "motivo": "gabarito"})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert any("delete from questoes_cache" in q for q, _ in conn.executed)
+    assert any("questao_reportada" in a for q, a in conn.executed if "insert into session_events" in q)
+
+
+async def test_reportar_questao_recusa_enunciado_curto():
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.post("/questoes/reportar", json={"enunciado": "curto"})
+    assert r.status_code == 400
 
 
 async def test_rodar_intervencao_dispara_por_ociosidade(monkeypatch):

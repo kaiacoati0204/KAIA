@@ -184,6 +184,15 @@ def test_z_misturado_usa_so_a_populacao_quando_o_aluno_nao_tem_pausas():
     assert app_mod._z_misturado(4.0, [], pop) > 3
 
 
+def test_z_misturado_pesa_aluno_e_populacao():
+    pessoais, pop = [3.0, 3.1, 2.9], [4.0] * 40
+    z_aluno = app_mod._z_misturado(3.5, pessoais, [])
+    z_pop = app_mod._z_misturado(3.5, [], pop)
+    z = app_mod._z_misturado(3.5, pessoais, pop)
+    w = 3 / (3 + app_mod.MISTURA_K)
+    assert z == pytest.approx(w * z_aluno + (1 - w) * z_pop)
+
+
 def test_andamento_aberto_so_vale_depois_da_ultima_resposta():
     resp, anda = ("question_answer", {}), ("questao_andamento", {"maior_parado_s": 40})
     assert app_mod._andamento_aberto([resp, anda]) == {"maior_parado_s": 40}

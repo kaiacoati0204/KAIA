@@ -76,7 +76,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        # com pgvector: a migration do few-shot faz `create extension vector`, que o Supabase
+        # provê e a imagem postgres:17 pura não tem
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_PASSWORD: ci
         ports:

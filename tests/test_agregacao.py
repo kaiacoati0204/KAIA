@@ -146,6 +146,23 @@ async def test_capturar_probe_grava():
     assert any("insert into probe_labels" in q for q, _ in conn.executed)
 
 
+async def test_capturar_probe_grava_a_questao_respondida():
+    """Kam 2012: o episódio dura ~12 s — o rótulo vai também com a questão, não só a janela"""
+    start = datetime.now(timezone.utc) - timedelta(minutes=5)
+    resposta = {"tempo_resposta_ms": 30000, "limite_leitura_ms": 15, "acertou": False,
+                "nivel_dificuldade": 4, "questao_id": "q1",
+                "mouse_track": [[0, 0, 0], [100, 5, 5], [25000, 9, 9]]}
+    conn = FakeConn({"user_id": "u", "session_start_ts": start}, [_ev("question_answer", resposta)],
+                    {"abandonadas": 0, "total": 1})
+    await app_mod._capturar_probe(conn, "sid", {"estado": "distraido"})
+    registro = json.loads(next(a[3] for q, a in conn.executed if "insert into probe_labels" in q))
+    questao = registro["_questao"]
+    assert questao["questao_id"] == "q1" and questao["acertou"] is False
+    assert questao["tempo_relativo_leitura"] == pytest.approx(math.log(30000 / 15), abs=1e-6)
+    assert questao["maior_bloco_parado_s"] >= 24.0
+    assert set(app_mod.FEATURE_ORDER) <= set(registro)          # a janela continua lá
+
+
 async def test_capturar_probe_estado_invalido_ignora():
     conn = FakeConn({"user_id": "u", "session_start_ts": datetime.now(timezone.utc)}, [],
                     {"abandonadas": 0, "total": 1})

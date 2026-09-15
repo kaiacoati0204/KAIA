@@ -2811,6 +2811,20 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
     return resposta
 
 
+def _features_da_questao(payload):
+    """Internas brutas de UMA resposta + imobilidade, acerto e qual questão."""
+    p = json.loads(payload) if isinstance(payload, str) else payload
+    brutos = _internos_brutos([("question_answer", p)]) or {}
+    # variabilidade e tendência não existem numa questão só
+    q = {k: v for k, v in brutos.items()
+         if not k.startswith("_") and k not in ("variabilidade_tempo_resposta", "tendencia_desempenho_sessao")}
+    q["maior_bloco_parado_s"], q["n_blocos_parados"] = blocos_parados(
+        p.get("mouse_track") or [], p.get("tempo_resposta_ms"))
+    q.update(acertou=bool(p.get("acertou")), nivel_dificuldade=p.get("nivel_dificuldade"),
+             questao_id=p.get("questao_id"))
+    return q
+
+
 async def _capturar_probe(conn, session_id, payload):
     """Grava (features NO MOMENTO, rótulo declarado) em probe_labels — o dataset
     real que tira o modelo do 100% sintético. Best-effort: erro não propaga
@@ -2827,6 +2841,14 @@ async def _capturar_probe(conn, session_id, payload):
         # O rótulo vale sempre (é autorrelato); as FEATURES é que podem estar mudas.
         # Marca fora do FEATURE_ORDER — treinar_com_probe lê só as chaves do modelo.
         registro = dict(feats, _leitura_confiavel=leitura_confiavel(feats))
+        # a questão que acabou, além da janela
+        # Kam 2012: um episódio dura ~10-15 s e o rótulo vale para os segundos antes do relato; a
+        # janela de 10 min dilui isso. Brutas (escala log), para relativizar depois no treino.
+        ult = await conn.fetch(
+            "select payload from session_events where session_id = $1::uuid "
+            "and event_type = 'question_answer' order by ts desc limit 1", session_id)
+        if ult:
+            registro["_questao"] = _features_da_questao(ult[0]["payload"])
         await conn.execute(
             "insert into probe_labels (session_id, user_id, estado, features) "
             "values ($1::uuid, $2, $3, $4::jsonb)",

@@ -1210,6 +1210,27 @@ def _fc(regs):
         {"payload": {"acertou": ok, "tempo_resposta_ms": rt}} for ok, rt in regs]})
 
 
+def _fc_leitura(regs):
+    """(acertou, tempo_ms, limite_leitura) — o limite vem em segundos, apesar do nome."""
+    return FakeConn(fetch={"select payload": [
+        {"payload": {"acertou": ok, "tempo_resposta_ms": rt, "limite_leitura_ms": lim}}
+        for ok, rt, lim in regs]})
+
+
+async def test_corroboracao_nao_acusa_questao_longa_lida_devagar():
+    """Mills 2017: o normal é desacelerar no enunciado maior. 5x mais texto, 5x mais tempo."""
+    regs = [(True, 20000, 20)] * 6 + [(False, 20000, 20), (False, 20000, 20), (False, 100000, 100)]
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc_leitura(regs), "sid")
+    assert ok is False, motivo
+
+
+async def test_corroboracao_ainda_acusa_lentidao_fora_da_leitura():
+    """mesmo tamanho de enunciado e 5x mais tempo: continua sendo dispersão"""
+    regs = [(True, 20000, 20)] * 6 + [(False, 20000, 20), (False, 20000, 20), (False, 100000, 20)]
+    ok, motivo = await app_mod._corroboracao_objetiva(_fc_leitura(regs), "sid")
+    assert ok is True, motivo
+
+
 async def test_corroboracao_nao_se_envenena_com_a_propria_dispersao():
     """A regua da regra nao pode engolir as questoes dispersas que ela deveria detectar.
     Com todas as respostas na base, o sd inflava e o z caia de +7,1 para +2,6 na 15a

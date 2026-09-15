@@ -16,7 +16,7 @@ FEATS_VALIDAS = {
     "tempo_iniciacao_resposta_ms": 0.6, "tempo_dwell_sem_responder_s": 0.0, "tempo_ocioso_s": 0.9,
     "velocidade_mouse_media": -0.2, "variabilidade_velocidade_mouse": 0.3, "flips_cursor_xy": 0.4,
     "entropia_trajetoria_mouse": 0.5, "erros_sem_offtask": 1.0, "tendencia_desempenho_sessao": -0.4,
-    "queda_acerto": 0.5, "contagem_rapidas_rt": 1.0, "rapido_colado_lento": 0.0,
+    "queda_acerto": 0.5, "contagem_rapidas_rt": 1.0, "rapido_colado_lento": 0.0, "tempo_relativo_leitura": 0.5,
     "mudancas_aba": 1.0, "tempo_fora_foco_s": 6.0, "maior_ausencia_unica_s": 6.0,
     "cliques_fora_area_estudo": 1.0, "taxa_abandono_sessao": 0.3,
     "maior_bloco_parado_s": 40.0, "n_blocos_parados": 3,

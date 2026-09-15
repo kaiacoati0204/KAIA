@@ -1615,8 +1615,8 @@ CORROB_DESCARTE_MIN = 5
 
 def _regua_tempo(regs):
     """(média, desvio) do log do tempo nos ACERTOS, sem a questão 1 — a régua da regra.
-    regs = [(acertou, tempo_ms), ...] em ordem. None com menos de 2 acertos úteis."""
-    rts = [math.log(rt) for ok, rt in regs[1:] if ok and rt and rt > 0]
+    regs = _tempos_log(...) em ordem. None com menos de 2 acertos úteis."""
+    rts = [lt for ok, lt in regs[1:] if ok and lt is not None]
     if len(rts) >= CORROB_DESCARTE_MIN:
         rts.remove(max(rts))
     if len(rts) < 2:
@@ -1626,10 +1626,22 @@ def _regua_tempo(regs):
     return mean(rts), max(stdev(rts), CORROB_SD_PISO)
 
 
-def _registro_resposta(payload):
-    p = json.loads(payload) if isinstance(payload, str) else payload
-    rt = p.get("tempo_resposta_ms")
-    return bool(p.get("acertou")), float(rt) if rt else None
+# tempo relativo à leitura esperada
+# Mills 2017: engajado desacelera no enunciado maior; o sinal é não ajustar, não ser lento.
+# Sem isso, questão longa lida devagar parecia dispersão. Só quando TODAS as respostas trazem
+# limite_leitura_ms (que está em SEGUNDOS, apesar do nome): misturar escalas quebraria a régua.
+def _tempos_log(payloads):
+    """[(acertou, log do tempo ou None)], relativo à leitura quando dá."""
+    ps = [json.loads(p) if isinstance(p, str) else p for p in payloads]
+    relativo = all(p.get("limite_leitura_ms") for p in ps if p.get("tempo_resposta_ms"))
+    regs = []
+    for p in ps:
+        rt = p.get("tempo_resposta_ms")
+        lt = None
+        if rt and rt > 0:
+            lt = math.log(rt) - (math.log(p["limite_leitura_ms"]) if relativo else 0.0)
+        regs.append((bool(p.get("acertou")), lt))
+    return regs
 
 
 async def _corroboracao_objetiva(conn, session_id):
@@ -1645,7 +1657,7 @@ async def _corroboracao_objetiva(conn, session_id):
         "and event_type = 'question_answer' order by ts", session_id)
     if len(linhas) < CORROB_MIN_RESPOSTAS:
         return False, "poucas respostas para comparar"
-    regs = [_registro_resposta(r["payload"]) for r in linhas]
+    regs = _tempos_log([r["payload"] for r in linhas])
 
     recentes, base = regs[-CORROB_RECENTES:], regs[:-CORROB_RECENTES]
 
@@ -1669,10 +1681,10 @@ async def _corroboracao_objetiva(conn, session_id):
     # lenta em 3 de 4 sessoes, razao mediana 1,33x, so 2 utilizaveis: indicio, nao medicao).
     regua = _regua_tempo(base)
     ult = recentes[-1][1]
-    if regua is None or not ult or ult <= 0:
+    if regua is None or ult is None:
         return False, "sem base de tempo para comparar"
     mu, sd = regua
-    z = (math.log(ult) - mu) / sd
+    z = (ult - mu) / sd
     if abs(z) <= CORROB_RT_SIGMAS:
         return False, "tempo dentro do proprio ritmo"
 
@@ -1823,14 +1835,15 @@ async def reward_objetivo(conn, session_id, desde, ate):
         """,
         session_id, desde,
     )
-    regua = _regua_tempo([_registro_resposta(r["payload"]) for r in antes])
-    regs = [_registro_resposta(r["payload"]) for r in linhas]
+    todos = _tempos_log([r["payload"] for r in antes] + [r["payload"] for r in linhas])   # mesma escala
+    regua = _regua_tempo(todos[:len(antes)])
+    regs = todos[len(antes):]
 
-    def chute(ok, rt):
-        return (not ok and regua is not None and rt is not None and rt > 0
-                and (math.log(rt) - regua[0]) / regua[1] < -CORROB_RT_SIGMAS)
+    def chute(ok, lt):
+        return (not ok and regua is not None and lt is not None
+                and (lt - regua[0]) / regua[1] < -CORROB_RT_SIGMAS)
 
-    sem_chute = sum(1 for ok, rt in regs if not chute(ok, rt))
+    sem_chute = sum(1 for ok, lt in regs if not chute(ok, lt))
     acertos = sum(1 for ok, _ in regs if ok)
     return round(0.5 * sem_chute / len(regs) + 0.5 * acertos / len(regs), 3)
 
@@ -1884,7 +1897,7 @@ FEATURE_ORDER = [
     "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
-    "queda_acerto", "contagem_rapidas_rt", "rapido_colado_lento",
+    "queda_acerto", "contagem_rapidas_rt", "rapido_colado_lento", "tempo_relativo_leitura",
     # externas (absolutas)
     "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
     "cliques_fora_area_estudo", "taxa_abandono_sessao",
@@ -1901,7 +1914,7 @@ INTERNAS_RELATIVAS = (
     "variabilidade_tempo_resposta", "tempo_resposta_ms", "tempo_iniciacao_resposta_ms",
     "tempo_dwell_sem_responder_s", "tempo_ocioso_s", "tendencia_desempenho_sessao",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
-    "entropia_trajetoria_mouse",
+    "entropia_trajetoria_mouse", "tempo_relativo_leitura",
 )
 # ESCALA DA COMPARACAO: log em tudo que e tempo ou velocidade, A CADA QUESTAO e ANTES de media
 # ou desvio (log(media) nao e media(log): logar depois nao desfaz o outlier). Na escala crua a
@@ -2062,6 +2075,9 @@ def _internos_brutos(evs):
 
     acertos = [1.0 if p.get("acertou") else 0.0 for p in respostas]
     lrt = [_lg(v) for v in rts]
+    # tempo sobre a leitura esperada (Mills 2017; o decoupling do Dreamcatcher, com sinal)
+    rel = [math.log(p["tempo_resposta_ms"]) - math.log(p["limite_leitura_ms"]) for p in respostas
+           if (p.get("tempo_resposta_ms") or 0) > 0 and (p.get("limite_leitura_ms") or 0) > 0]
     return {
         # pstdev DOS LOGS = espalhamento relativo; em ms uma questao lenta domina tudo
         "variabilidade_tempo_resposta": pstdev(lrt) if len(lrt) > 1 else 0.0,
@@ -2074,6 +2090,7 @@ def _internos_brutos(evs):
         "variabilidade_velocidade_mouse": _mm("variabilidade_velocidade_mouse"),
         "flips_cursor_xy": _mm("flips_cursor_xy"),
         "entropia_trajetoria_mouse": _mm("entropia_trajetoria_mouse"),
+        "tempo_relativo_leitura": mean(rel) if rel else 0.0,
         "_rts": rts,
         "_erros": sum(1 for a in acertos if a == 0.0),   # erros_sem_offtask (contagem bruta)
         "_niveis": [int(p.get("nivel_dificuldade") or NIVEL_DIFICULDADE_PADRAO) for p in respostas],

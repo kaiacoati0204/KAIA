@@ -199,6 +199,21 @@ def test_andamento_aberto_so_vale_depois_da_ultima_resposta():
     assert app_mod._andamento_aberto([anda, resp]) is None
 
 
+def test_tempo_relativo_a_leitura_esperada():
+    """mesmo ritmo por palavra dá o mesmo valor, tamanho diferente de enunciado não pesa"""
+    curta = [("question_answer", {"tempo_resposta_ms": 20000, "limite_leitura_ms": 20})]
+    longa = [("question_answer", {"tempo_resposta_ms": 100000, "limite_leitura_ms": 100})]
+    lenta = [("question_answer", {"tempo_resposta_ms": 100000, "limite_leitura_ms": 20})]
+    r = lambda evs: app_mod._internos_brutos(evs)["tempo_relativo_leitura"]
+    assert r(curta) == pytest.approx(r(longa), abs=0.01)
+    assert r(lenta) > r(curta) + 1
+
+
+def test_tempo_relativo_sem_limite_fica_neutro():
+    evs = [("question_answer", {"tempo_resposta_ms": 20000})]
+    assert app_mod._internos_brutos(evs)["tempo_relativo_leitura"] == 0.0
+
+
 def test_contagens_de_ritmo_lentas_rapidas_e_coladas():
     ref = (app_mod._lg(20000), 0.2)                     # ritmo do aluno: ~20 s
     c = app_mod._contagens_ritmo([20000, 900, 90000, 20000, 900], ref)

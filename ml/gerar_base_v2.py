@@ -35,7 +35,7 @@ FEATURE_ORDER = [
     "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
-    "queda_acerto", "contagem_rapidas_rt", "rapido_colado_lento",
+    "queda_acerto", "contagem_rapidas_rt", "rapido_colado_lento", "tempo_relativo_leitura",
     # externas (absolutas)
     "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
     "cliques_fora_area_estudo", "taxa_abandono_sessao",
@@ -70,6 +70,9 @@ DESVIO = {
     "tempo_dwell_sem_responder_s":  {"engajado": 0, "distraido": 0.8, "muito_distraido": 0.3},
     "tempo_ocioso_s":               {"engajado": 0, "distraido": 1.0, "muito_distraido": -0.4},
     "tendencia_desempenho_sessao":  {"engajado": 0, "distraido": -0.45, "muito_distraido": -0.25},
+    # tempo sobre a leitura esperada: hipótese nossa. Desacoplar vai para os dois lados (Mills
+    # 2017); o sinal é sorteado no distraído, abaixo.
+    "tempo_relativo_leitura":       {"engajado": 0, "distraido": 0.8, "muito_distraido": 0.4},
 }
 CONTAGEM = {  # médias de contagens (Poisson) por estado
     "contagem_lapsos_rt": {"engajado": 0.3, "distraido": 1.8, "muito_distraido": 0.9},
@@ -178,6 +181,9 @@ def gerar_sessao(estado, aluno, base_mouse):
 
     f = {}
     # internas relativas geradas direto (sigma); z faz co-variar
+    # enunciado maior ou menor que o usual do aluno: atrasa o tempo BRUTO de qualquer estado,
+    # não o relativo à leitura — é o que ensina o modelo a não ler questão longa como dispersão
+    comprimento = random.gauss(0, 0.6)
     for nome, m in DESVIO.items():
         val = m[ef] * z + random.gauss(0, 0.8)
         # dificuldade explica lentidão legítima
@@ -185,10 +191,14 @@ def gerar_sessao(estado, aluno, base_mouse):
         # não está no que lemos, então aqui ela só atrasa quem está concentrado (hipótese). Medido:
         # alarme falso no engajado fica 8–10% em todo nível, com ou sem a feature. Quem decide é o probe.
         if nome == "tempo_resposta_ms":
-            val += 0.30 * (dif - 3)
+            val += 0.30 * (dif - 3) + comprimento
+        elif nome == "tempo_relativo_leitura":
+            val += 0.15 * (dif - 3)               # difícil pede mais tempo por palavra
         elif nome in ("tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s"):
             val += 0.25 * (dif - 3)
         f[nome] = round(val, 3)
+    if ef == "distraido" and random.random() < 0.4:   # desacoplado para o lado rápido (Dreamcatcher)
+        f["tempo_relativo_leitura"] = round(-f["tempo_relativo_leitura"], 3)
 
     # PAPEL: resolve a conta no caderno/papel. Fica ocioso (mouse parado, aba visivel)
     # E concentrado. Sem esse contraexemplo o engajado nunca nasce com ocioso alto, e
@@ -198,6 +208,7 @@ def gerar_sessao(estado, aluno, base_mouse):
         f["tempo_ocioso_s"] = round(random.gauss(1.1, 0.4), 3)
         f["tempo_dwell_sem_responder_s"] = round(random.gauss(0.5, 0.3), 3)
         f["tempo_resposta_ms"] = round(random.gauss(0.6, 0.4), 3)
+        f["tempo_relativo_leitura"] = round(random.gauss(0.6, 0.4), 3)
 
     # CHUTE RAPIDO: clicar qualquer coisa pra fechar a meta diaria. Responde MUITO
     # mais rapido que o normal E erra — desengajamento, nao concentracao. A tabela
@@ -205,6 +216,7 @@ def gerar_sessao(estado, aluno, base_mouse):
     chute = ef == "distraido" and random.random() < 0.15
     if chute:
         f["tempo_resposta_ms"] = round(random.gauss(-1.8, 0.5), 3)
+        f["tempo_relativo_leitura"] = round(random.gauss(-1.8, 0.5), 3)
         f["tempo_iniciacao_resposta_ms"] = round(random.gauss(-1.5, 0.5), 3)
         f["tempo_dwell_sem_responder_s"] = round(random.gauss(-1.1, 0.4), 3)
         f["tendencia_desempenho_sessao"] = round(random.gauss(-0.9, 0.4), 3)

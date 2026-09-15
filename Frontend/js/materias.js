@@ -1634,11 +1634,13 @@ function registrarSensores() {
     // --- cliques fora da área da questão ---
     // Overlays da própria KaIA (intervenção, probe, avisos — id^="kaia-") contam
     // como área de estudo: responder um feedback NÃO é "sair", é interagir com ela.
+    // Captura (true): checa ANTES do clique rodar. Em bolha, o "Próxima questão" já tinha
+    // saído do DOM e reativado a missão, e cada troca de questão virava um clique fora.
     document.addEventListener('click', (e) => {
         if (!isMissionActive || !quizView) return;
         if (quizView.contains(e.target) || e.target.closest('[id^="kaia-"]')) return;
         logEvent('click_outside', { x: e.clientX, y: e.clientY });
-    });
+    }, true);
 
     // --- copiar / colar ---
     ['copy', 'paste'].forEach(tipo => {

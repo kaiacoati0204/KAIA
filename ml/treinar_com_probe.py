@@ -32,7 +32,7 @@ sys.path.insert(0, str(BASE.parent / "Backend"))
 load_dotenv(BASE.parent / "Backend" / ".env")
 
 from gerar_base_v2 import (  # noqa: E402
-    construir_base, treinar_e_salvar, FEATURE_ORDER, ESTADOS, MODELO_PATH, SCALER_PATH)
+    construir_base, treinar_e_salvar, FEATURE_ORDER, ESTADOS, MODELO_PATH, SCALER_PATH, METRICAS_PATH)
 from avaliar import relatorio  # noqa: E402
 
 LIMIAR_RETREINO = 40   # abaixo disso: só valida (pouco dado real -> re-treinar overfita)
@@ -46,11 +46,12 @@ async def carregar_rotulos():
         return None
     conn = await asyncpg.connect(url, statement_cache_size=0)
     try:
-        rows = await conn.fetch("select estado, features from probe_labels")
+        rows = await conn.fetch("select estado, features, coalesce(user_id::text, session_id::text) as aluno "
+                                "from probe_labels")
     finally:
         await conn.close()
 
-    X, y = [], []
+    X, y, alunos = [], [], []
     for r in rows:
         feats = r["features"]
         if isinstance(feats, str):
@@ -58,9 +59,10 @@ async def carregar_rotulos():
         try:
             X.append([float(feats[k]) for k in FEATURE_ORDER])
             y.append(ESTADOS.index(r["estado"]))
+            alunos.append(r["aluno"])
         except (KeyError, ValueError, TypeError):
             continue   # ignora exemplos malformados
-    return pd.DataFrame(X, columns=FEATURE_ORDER, dtype=float), np.array(y)
+    return pd.DataFrame(X, columns=FEATURE_ORDER, dtype=float), np.array(y), np.array(alunos)
 
 
 def validar_modelo_atual(Xr, yr):
@@ -71,7 +73,14 @@ def validar_modelo_atual(Xr, yr):
     Xs = pd.DataFrame(scaler.transform(Xr), columns=FEATURE_ORDER)
     rel = relatorio(yr, modelo.predict(Xs), ESTADOS, y_score=modelo.predict_proba(Xs))
     print(f"\n== modelo ATUAL nos {len(yr)} rótulos reais ==")
+    if json.load(open(METRICAS_PATH, encoding="utf-8")).get("n_real"):
+        print("AVISO: o modelo atual já treinou com rótulos reais — esta medida está inflada.")
     print(f"acurácia real: {rel['acuracia']:.3f}   (baseline majoritário: {rel['baseline_majoritario']:.3f})")
+    if rel.get("kappa") is not None:
+        print(f"kappa: {rel['kappa']:.3f}   (barra da literatura, pessoas fora do treino: 0,15–0,45)")
+    for c in ESTADOS:
+        print(f"  {c:16s} precisão {rel['classification_report'][c]['precision']:.3f}  "
+              f"recall {rel['classification_report'][c]['recall']:.3f}")
     if "brier" in rel:
         print(f"calibração (brier, 0=perfeito): {rel['brier']:.3f}")
     print("matriz de confusão (linha=real, col=previsto) ->", ESTADOS)
@@ -84,7 +93,7 @@ def main():
     res = asyncio.run(carregar_rotulos())
     if res is None:
         return
-    Xr, yr = res
+    Xr, yr, alunos = res
     n = len(yr)
     print(f"rótulos reais coletados: {n}")
     if n == 0:
@@ -100,8 +109,8 @@ def main():
 
     print(f"\n>= {LIMIAR_RETREINO}: re-treinando HÍBRIDO (sintético + real up-weighted)...")
     Xb, yb, _ = construir_base()
-    _, acc, _, n_real_te = treinar_e_salvar(Xb, yb, X_real=Xr, y_real=yr)
-    alvo = " (real segregado)" if n_real_te else " (sintético)"
+    _, acc, _, n_real_te = treinar_e_salvar(Xb, yb, X_real=Xr, y_real=yr, grupos_real=alunos)
+    alvo = " (real, alunos fora do treino)" if n_real_te else " (sintético — menos de 3 alunos com probe)"
     print(f"novo modelo salvo. acurácia no teste{alvo}: {acc:.3f}")
 
 

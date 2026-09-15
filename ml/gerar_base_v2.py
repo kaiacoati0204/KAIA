@@ -27,7 +27,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BASE)                              # p/ importar avaliar (mesma pasta)
 sys.path.insert(0, os.path.join(BASE, "..", "Backend"))
 from mouse_features import features_mouse
-from avaliar import relatorio, cv_agrupada, na_proporcao
+from avaliar import relatorio, cv_agrupada, na_proporcao, separar_por_aluno
 
 random.seed(42); np.random.seed(42)
 
@@ -38,7 +38,7 @@ FEATURE_ORDER = [
     "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
-    "queda_acerto",
+    "queda_acerto", "contagem_rapidas_rt", "rapido_colado_lento",
     # externas (absolutas)
     "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
     "cliques_fora_area_estudo", "taxa_abandono_sessao",
@@ -77,6 +77,10 @@ DESVIO = {
 CONTAGEM = {  # médias de contagens (Poisson) por estado
     "contagem_lapsos_rt": {"engajado": 0.3, "distraido": 1.8, "muito_distraido": 0.9},
     "erros_sem_offtask":  {"engajado": 0.2, "distraido": 1.0, "muito_distraido": 0.4},
+    # hipótese nossa até o probe. Baker 2007: rápida colada a lenta é off-task VISÍVEL — volta
+    # de onde estava e responde correndo — então pesa mais no muito_distraído.
+    "contagem_rapidas_rt": {"engajado": 0.2, "distraido": 0.5, "muito_distraido": 0.5},
+    "rapido_colado_lento": {"engajado": 0.05, "distraido": 0.25, "muito_distraido": 0.6},
 }
 # ==== UNIDADE DE OBSERVACAO: JANELA, NAO SESSAO ==============================
 # Cada linha da base descreve uma JANELA de ~JANELA_MIN minutos num estado, nao uma
@@ -243,6 +247,14 @@ def gerar_sessao(estado, aluno, base_mouse):
     if chute:
         lam_e *= 4.0                             # e o erro e a assinatura do chute
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
+    lam_r = CONTAGEM["contagem_rapidas_rt"][ef] * (0.6 + 0.4 * z) * fator
+    if chute:
+        lam_r = 3.0 * fator                      # o chute É a resposta rápida demais
+    f["contagem_rapidas_rt"] = int(np.random.poisson(max(0.01, lam_r)))
+    lam_c = CONTAGEM["rapido_colado_lento"][ef] * (0.6 + 0.4 * z) * fator
+    # não há par sem uma rápida e uma lenta na janela
+    f["rapido_colado_lento"] = min(int(np.random.poisson(max(0.01, lam_c))),
+                                   f["contagem_rapidas_rt"], f["contagem_lapsos_rt"])
 
     # mouse: simula bruto -> features_mouse -> relativiza pelo baseline do aluno.
     # LEITURA DENSA: parte das sessoes presentes fica quase imovel (enunciado longo,
@@ -340,17 +352,19 @@ def _treinar_fold(Xtr, ytr):
     return m, sc
 
 
-def treinar_e_salvar(X, y, grupos=None, X_real=None, y_real=None, peso_real=6.0):
+def treinar_e_salvar(X, y, grupos=None, X_real=None, y_real=None, peso_real=6.0, grupos_real=None):
     """Treina o RF v2 e salva os artefatos. Rótulos REAIS (probe), se vierem,
-    entram no TREINO com peso maior e o TESTE passa a ser o real segregado.
+    entram no TREINO com peso maior e o TESTE passa a ser o real segregado POR ALUNO
+    (`grupos_real`); com menos de 3 alunos todo o real vai para o treino e o teste fica no sintético.
     `grupos` (id do aluno) liga a CV agrupada (só na base pura sintética).
     Retorna (modelo, acc, rep, n_real_teste)."""
     Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     peso, n_real_teste = None, 0
     if X_real is not None and len(X_real):
-        estratif = y_real if len(set(y_real)) > 1 and len(X_real) >= 6 else None
-        Xr_tr, Xr_te, yr_tr, yr_te = train_test_split(
-            X_real, y_real, test_size=0.3, random_state=42, stratify=estratif)
+        idx = separar_por_aluno(X_real, y_real, grupos_real) if grupos_real is not None else None
+        tr, te = idx if idx is not None else (np.arange(len(X_real)), np.arange(0))
+        Xr_tr, Xr_te = X_real.iloc[tr], X_real.iloc[te]
+        yr_tr, yr_te = y_real[tr], y_real[te]
         n_sint = len(Xtr)
         Xtr = pd.concat([Xtr, Xr_tr], ignore_index=True)
         ytr = np.concatenate([ytr, yr_tr])
@@ -396,6 +410,8 @@ if __name__ == "__main__":
         folds = [round(a, 3) for a in cv["por_fold"]]
         print(f"CV agrupada por aluno: {cv['media']:.3f} +/- {cv['desvio']:.3f}  folds={folds}")
     print(f"baseline (chute majoritario): {m['holdout']['baseline_majoritario']:.3f}")
+    if m["holdout"].get("kappa") is not None:
+        print(f"kappa: {m['holdout']['kappa']:.3f}  (sintetico; real em pessoas fora do treino: 0,15-0,45)")
     if "brier" in m["holdout"]:
         print(f"brier (calibracao; 0=perfeito, so vale no real): {m['holdout']['brier']:.3f}")
     if "na_proporcao_tipica" in m["holdout"]:

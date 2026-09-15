@@ -1678,6 +1678,25 @@ CORROB_ACERTO_GLOBAL_MIN = 0.5
 CORROB_DESCARTE_MIN = 5
 
 
+def _regua_tempo(regs):
+    """(média, desvio) do log do tempo nos ACERTOS, sem a questão 1 — a régua da regra.
+    regs = [(acertou, tempo_ms), ...] em ordem. None com menos de 2 acertos úteis."""
+    rts = [math.log(rt) for ok, rt in regs[1:] if ok and rt and rt > 0]
+    if len(rts) >= CORROB_DESCARTE_MIN:
+        rts.remove(max(rts))
+    if len(rts) < 2:
+        return None
+    # desvio amostral (n-1): com régua curta o populacional subestima a variação;
+    # na simulação o alarme falso caiu de 1,51% para 1,23% e a detecção ficou em 99%
+    return mean(rts), max(stdev(rts), CORROB_SD_PISO)
+
+
+def _registro_resposta(payload):
+    p = json.loads(payload) if isinstance(payload, str) else payload
+    rt = p.get("tempo_resposta_ms")
+    return bool(p.get("acertou")), float(rt) if rt else None
+
+
 async def _corroboracao_objetiva(conn, session_id):
     """(bool, motivo) — o comportamento recente confirma a queda de foco?
 
@@ -1697,12 +1716,7 @@ async def _corroboracao_objetiva(conn, session_id):
         "and event_type = 'question_answer' order by ts", session_id)
     if len(linhas) < CORROB_MIN_RESPOSTAS:
         return False, "poucas respostas para comparar"
-    regs = []
-    for r in linhas:
-        p = r["payload"]
-        p = json.loads(p) if isinstance(p, str) else p
-        rt = p.get("tempo_resposta_ms")
-        regs.append((bool(p.get("acertou")), float(rt) if rt else None))
+    regs = [_registro_resposta(r["payload"]) for r in linhas]
 
     recentes, base = regs[-CORROB_RECENTES:], regs[:-CORROB_RECENTES]
 
@@ -1732,16 +1746,11 @@ async def _corroboracao_objetiva(conn, session_id):
     # #1 FORA: "the users usually take extra time to read the text in the first question"
     # (Chen et al., 2021, p.5). Nos dados nossos a #1 foi mais lenta em 3 de 4 sessoes
     # (razao mediana 1,33x) — so 2 sao utilizaveis, entao e indicio, nao medicao.
-    rts_base = [math.log(rt) for ok, rt in base[1:] if ok and rt and rt > 0]
-    if len(rts_base) >= CORROB_DESCARTE_MIN:
-        rts_base.remove(max(rts_base))
+    regua = _regua_tempo(base)
     ult = recentes[-1][1]
-    if len(rts_base) < 2 or not ult or ult <= 0:
+    if regua is None or not ult or ult <= 0:
         return False, "sem base de tempo para comparar"
-    mu = mean(rts_base)
-    # desvio amostral (n-1): com régua curta o populacional subestima a variação;
-    # na simulação o alarme falso caiu de 1,51% para 1,23% e a detecção ficou em 99%
-    sd = max(stdev(rts_base), CORROB_SD_PISO)
+    mu, sd = regua
     z = (math.log(ult) - mu) / sd
     if abs(z) <= CORROB_RT_SIGMAS:
         return False, "tempo dentro do proprio ritmo"
@@ -1838,7 +1847,7 @@ async def rodar_intervencao(app, session_id):
         if n >= INTERV_MAX_POR_SESSAO:
             return
         if stats["ultima"] is not None:
-            desde_min = (datetime.now(timezone.utc) - stats["ultima"]).total_seconds() / 60.0
+            desde_min = (await _agora_banco(conn) - stats["ultima"]).total_seconds() / 60.0
             if desde_min < INTERV_COOLDOWN_MIN[estado_alvo]:     # freio: cooldown por estado
                 return
 
@@ -1886,10 +1895,11 @@ async def reward_objetivo(conn, session_id, desde, ate):
 
     Aqui o desfecho é comportamento observado:
         nenhuma questão respondida na janela -> 0.0   (não retomou)
-        retomou                              -> 0.5 + 0.5 * proporção de acertos
+        retomou                              -> 0.5 * fração sem chute + 0.5 * fração de acertos
 
-    Retomar já vale metade: voltar a responder é o efeito imediato que se espera de uma
-    intervenção de refoco. A outra metade mede se voltou rendendo.
+    Retomar vale metade, mas CHUTE não é retomar: errar rápido demais para o ritmo do aluno
+    (z < -3 na régua da regra). Pagar chute ensinaria o bandit que a intervenção que o aluno
+    fecha clicando qualquer coisa funcionou (Baker 2007). Sem régua antes do disparo, não julga.
 
     Devolve None se não houver como avaliar (sem evento na janela por falha de coleta)."""
     linhas = await conn.fetch(
@@ -1910,13 +1920,24 @@ async def reward_objetivo(conn, session_id, desde, ate):
         if fim is not None and fim <= ate:
             return None                             # sessão encerrada na janela: não avalia
         return 0.0                                  # continuou aberta e não respondeu nada
-    acertos = 0
-    for r in linhas:
-        p = r["payload"]
-        p = json.loads(p) if isinstance(p, str) else p
-        if p.get("acertou"):
-            acertos += 1
-    return round(0.5 + 0.5 * (acertos / len(linhas)), 3)
+    antes = await conn.fetch(
+        """
+        select payload from session_events
+         where session_id = $1::uuid and event_type = 'question_answer' and ts <= $2
+         order by ts
+        """,
+        session_id, desde,
+    )
+    regua = _regua_tempo([_registro_resposta(r["payload"]) for r in antes])
+    regs = [_registro_resposta(r["payload"]) for r in linhas]
+
+    def chute(ok, rt):
+        return (not ok and regua is not None and rt is not None and rt > 0
+                and (math.log(rt) - regua[0]) / regua[1] < -CORROB_RT_SIGMAS)
+
+    sem_chute = sum(1 for ok, rt in regs if not chute(ok, rt))
+    acertos = sum(1 for ok, _ in regs if ok)
+    return round(0.5 * sem_chute / len(regs) + 0.5 * acertos / len(regs), 3)
 
 
 async def resolver_rewards(conn, thompson, session_id):
@@ -1971,7 +1992,7 @@ FEATURE_ORDER = [
     "tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s",
     "velocidade_mouse_media", "variabilidade_velocidade_mouse", "flips_cursor_xy",
     "entropia_trajetoria_mouse", "erros_sem_offtask", "tendencia_desempenho_sessao",
-    "queda_acerto",
+    "queda_acerto", "contagem_rapidas_rt", "rapido_colado_lento",
     # externas (absolutas)
     "mudancas_aba", "tempo_fora_foco_s", "maior_ausencia_unica_s",
     "cliques_fora_area_estudo", "taxa_abandono_sessao",
@@ -1983,7 +2004,7 @@ FEATURE_ORDER = [
 ]
 
 # Internas expressas como DESVIO (sigma) do baseline do aluno; o resto é bruto.
-# contagem_lapsos_rt/erros_sem_offtask são contagens (brutas), não relativizadas.
+# contagem_lapsos_rt/contagem_rapidas_rt/rapido_colado_lento/erros_sem_offtask são contagens (brutas).
 INTERNAS_RELATIVAS = (
     "variabilidade_tempo_resposta", "tempo_resposta_ms", "tempo_iniciacao_resposta_ms",
     "tempo_dwell_sem_responder_s", "tempo_ocioso_s", "tendencia_desempenho_sessao",
@@ -2085,6 +2106,13 @@ async def _carregar_eventos(conn, session_id, desde=None, ate=None):
     return [(r["event_type"], json.loads(r["payload"])) for r in eventos]
 
 
+async def _agora_banco(conn):
+    """Relógio do BANCO, o mesmo que carimba os eventos (now() no insert).
+    Comparar ts do banco com o relógio do processo quebra se os dois divergem: num PC com
+    263 s de atraso, o warm-up segurou a medição por ~4 min e a ociosidade nunca via sinal fresco."""
+    return await conn.fetchval("select now()")
+
+
 async def _inicio_janela(conn, session_id, session_start):
     """Começo da janela de leitura, e o span dela em minutos.
 
@@ -2103,7 +2131,7 @@ async def _inicio_janela(conn, session_id, session_start):
     A janela ESTICA para trás quando não cabem respostas suficientes: questão de
     vestibular leva 50-100s, então 10 min podem conter poucas, e as internas precisam de
     pelo menos duas para ter variabilidade. Sem isso, 48,8% do modelo ficaria mudo."""
-    agora = datetime.now(timezone.utc)
+    agora = await _agora_banco(conn)
     ini = max(session_start, agora - timedelta(minutes=JANELA_MIN))
     ts = await conn.fetch(
         "select ts from session_events where session_id = $1::uuid "
@@ -2114,6 +2142,25 @@ async def _inicio_janela(conn, session_id, session_start):
     ini = max(ini, session_start)
     span = max((agora - ini).total_seconds() / 60.0, 1e-6)
     return ini, min(span, DURACAO_MAX_MIN)
+
+
+def _contagens_ritmo(rts, ref_rt):
+    """Na janela, contra o ritmo do aluno (log, ±2σ): lentas, rápidas e rápida colada a lenta."""
+    if not rts or not ref_rt:
+        return {"contagem_lapsos_rt": 0, "contagem_rapidas_rt": 0, "rapido_colado_lento": 0}
+    # +2σ em LOG: na escala crua a cauda inflava a média e o desvio, e o limiar
+    # subia junto — o lapso passava a ser detectado só em casos extremos.
+    lento = math.expm1(ref_rt[0] + 2 * ref_rt[1])       # expm1 inverte _lg
+    rapido = math.expm1(ref_rt[0] - 2 * ref_rt[1])
+    tipo = [1 if rt > lento else -1 if rt < rapido else 0 for rt in rts]
+    # rápida colada a lenta
+    # Baker 2007: o melhor sinal isolado de off-task (0,48), melhor que o corte de tempo.
+    # Lentidão constante pode ser cuidado; lenta logo antes ou depois de uma pressa, não.
+    return {
+        "contagem_lapsos_rt": tipo.count(1),
+        "contagem_rapidas_rt": tipo.count(-1),       # o lado do chute, que os lapsos não viam
+        "rapido_colado_lento": sum(1 for a, b in zip(tipo, tipo[1:]) if a * b == -1),
+    }
 
 
 def _queda_acerto(respostas):
@@ -2428,7 +2475,7 @@ async def _ociosidade_objetiva(conn, session_id):
         "and event_type = 'question_answer'", session_id)
     if respondida is not None and respondida >= ult["ts"]:
         return False, "questão já respondida"
-    if (datetime.now(timezone.utc) - ult["ts"]).total_seconds() > OCIO_FRESCO_S:
+    if (await _agora_banco(conn) - ult["ts"]).total_seconds() > OCIO_FRESCO_S:
         return False, "sem sinal recente da questão"
     p = ult["payload"]
     p = json.loads(p) if isinstance(p, str) else p
@@ -2509,13 +2556,7 @@ async def montar_features_sessao(conn, session_id):
         f[k] = round(w * z_aluno + (1 - w) * z_pop, 3)
     ref_rt = (base or regua_pop or {}).get("_rt")
     # contagens brutas (não relativizadas, como no gerador v2)
-    if brutos and ref_rt:
-        # +2σ em LOG: na escala crua a cauda inflava a média e o desvio, e o limiar
-        # subia junto — o lapso passava a ser detectado só em casos extremos.
-        limite = math.expm1(ref_rt[0] + 2 * ref_rt[1])   # expm1 inverte _lg
-        f["contagem_lapsos_rt"] = sum(1 for rt in brutos["_rts"] if rt > limite)
-    else:
-        f["contagem_lapsos_rt"] = 0
+    f.update(_contagens_ritmo(brutos["_rts"] if brutos else [], ref_rt))
     f["erros_sem_offtask"] = brutos["_erros"] if brutos else 0
     # queda de acerto (DTS)
     # sessão inteira, não só a janela: separa "ia bem e caiu" de "sempre foi mal"

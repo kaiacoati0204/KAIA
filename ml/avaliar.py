@@ -13,8 +13,8 @@ Métricas:
 """
 import numpy as np
 import pandas as pd
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.metrics import accuracy_score, classification_report, cohen_kappa_score, confusion_matrix
+from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
 
 
 def relatorio(y_true, y_pred, classes, y_score=None):
@@ -33,6 +33,9 @@ def relatorio(y_true, y_pred, classes, y_score=None):
         "n": int(len(y_true)),
         "acuracia": float(accuracy_score(y_true, y_pred)) if len(y_true) else 0.0,
         "baseline_majoritario": baseline,
+        # acerto descontada a sorte (0 = chutar, 1 = perfeito). Kuvar et al. 2023: detectores
+        # testados em pessoas fora do treino ficam em 0,15–0,45; log de interação ~0,36–0,38.
+        "kappa": float(cohen_kappa_score(y_true, y_pred, labels=labels)) if len(set(y_true)) > 1 else None,
         "matriz_confusao": confusion_matrix(y_true, y_pred, labels=labels).tolist(),
         "classification_report": classification_report(
             y_true, y_pred, labels=labels, target_names=classes,
@@ -60,6 +63,17 @@ def na_proporcao(y_true, y_pred, classes, proporcao):
     return {"proporcao": proporcao,
             "por_classe": {c: {k: round(rep[c][k], 3) for k in ("precision", "recall", "f1-score")}
                            for c in classes}}
+
+
+def separar_por_aluno(X, y, grupos, test_size=0.3, min_alunos=3):
+    """Treino/teste sem nenhum aluno dos dois lados (índices de linha). O mesmo aluno nos
+    dois infla a métrica: o modelo reconhece a pessoa, não o estado.
+    Devolve None se houver menos de `min_alunos` alunos — aí não dá para medir generalização."""
+    grupos = np.asarray(grupos)
+    if len(np.unique(grupos)) < min_alunos:
+        return None
+    gss = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=42)
+    return next(gss.split(X, y, grupos))
 
 
 def cv_agrupada(X, y, grupos, treinar_fold, n_splits=5):

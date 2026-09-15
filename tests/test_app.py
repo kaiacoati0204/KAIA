@@ -40,7 +40,10 @@ class FakeConn:
 
     async def fetchrow(self, q, *a): return _match(self.r_row, q)
     async def fetch(self, q, *a): return _match(self.r_fetch, q, [])
-    async def fetchval(self, q, *a): return _match(self.r_val, q, 0)
+    async def fetchval(self, q, *a):
+        if q == "select now()":
+            return datetime.now(timezone.utc)   # relógio do banco
+        return _match(self.r_val, q, 0)
 
     async def execute(self, q, *a):
         self.executed.append((q, a))
@@ -949,6 +952,38 @@ async def test_reward_objetivo(respostas, esperado):
                     fetchval={"session_end_ts": None})
     r = await app_mod.reward_objetivo(conn, "sid", "ini", "fim")
     assert r == esperado
+
+
+def _conn_reward(antes, janela):
+    """antes = respostas até o disparo (régua do aluno); janela = respostas depois dele."""
+    def fetch(q):
+        if "ts <= $2" in q:
+            return [{"payload": p} for p in antes]
+        if "select payload" in q:
+            return [{"payload": p} for p in janela]
+        return []
+    return FakeConn(fetch=fetch, fetchval={"session_end_ts": None})
+
+
+_RITMO = [{"acertou": True, "tempo_resposta_ms": 60000}] + \
+         [{"acertou": True, "tempo_resposta_ms": rt} for rt in (20000, 21000, 19000, 22000, 20500)]
+
+
+@pytest.mark.parametrize("janela, esperado", [
+    ([{"acertou": False, "tempo_resposta_ms": 900}] * 2, 0.0),                # só chutou
+    ([{"acertou": False, "tempo_resposta_ms": 900},
+      {"acertou": True, "tempo_resposta_ms": 20000}], 0.5),                   # metade chute
+    ([{"acertou": False, "tempo_resposta_ms": 20000}], 0.5),                  # errou no ritmo: retomou
+    ([{"acertou": True, "tempo_resposta_ms": 900}], 1.0),                     # rápido e certo não é chute
+])
+async def test_reward_nao_paga_chute(janela, esperado):
+    assert await app_mod.reward_objetivo(_conn_reward(_RITMO, janela), "sid", "ini", "fim") == esperado
+
+
+async def test_reward_sem_regua_nao_julga_chute():
+    """sem acertos antes do disparo não há ritmo do aluno: não dá para chamar de chute"""
+    janela = [{"acertou": False, "tempo_resposta_ms": 900}]
+    assert await app_mod.reward_objetivo(_conn_reward([], janela), "sid", "ini", "fim") == 0.5
 
 
 async def test_reward_objetivo_aceita_payload_em_texto():

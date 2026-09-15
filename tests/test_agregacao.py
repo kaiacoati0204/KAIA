@@ -46,6 +46,8 @@ class FakeConn:
         return self._passadas
 
     async def fetchval(self, q, *a):
+        if q == "select now()":
+            return getattr(self, "agora", None) or datetime.now(timezone.utc)   # relógio do banco
         if "payload->>'materia'" in q:
             return "MAT"               # matéria da sessão atual (filtro do baseline)
         if "extract(epoch" in q:
@@ -186,6 +188,19 @@ def test_andamento_aberto_so_vale_depois_da_ultima_resposta():
     resp, anda = ("question_answer", {}), ("questao_andamento", {"maior_parado_s": 40})
     assert app_mod._andamento_aberto([resp, anda]) == {"maior_parado_s": 40}
     assert app_mod._andamento_aberto([anda, resp]) is None
+
+
+def test_contagens_de_ritmo_lentas_rapidas_e_coladas():
+    ref = (app_mod._lg(20000), 0.2)                     # ritmo do aluno: ~20 s
+    c = app_mod._contagens_ritmo([20000, 900, 90000, 20000, 900], ref)
+    assert c["contagem_lapsos_rt"] == 1                 # 90 s
+    assert c["contagem_rapidas_rt"] == 2                # os dois de 0,9 s
+    assert c["rapido_colado_lento"] == 1                # só 0,9 s logo antes dos 90 s
+
+
+def test_contagens_de_ritmo_sem_regua_zeradas():
+    assert app_mod._contagens_ritmo([900, 90000], None) == {
+        "contagem_lapsos_rt": 0, "contagem_rapidas_rt": 0, "rapido_colado_lento": 0}
 
 
 def test_internos_brutos_sem_resposta_none():
@@ -367,6 +382,17 @@ async def test_pausa_ao_vivo_entra_no_maior_bloco():
     conn = FakeConn({"user_id": "u", "session_start_ts": start}, evs, {"abandonadas": 0, "total": 1})
     f = await app_mod.montar_features_sessao(conn, "sid")
     assert f["maior_bloco_parado_s"] >= 95.0
+
+
+async def test_duracao_da_janela_usa_o_relogio_do_banco():
+    """servidor com relógio atrasado (visto em teste: 263 s) não pode segurar o warm-up"""
+    start = datetime.now(timezone.utc) + timedelta(minutes=20)    # banco adiantado vs processo
+    evs = [_ev("question_answer", {"tempo_resposta_ms": 20000, "acertou": True,
+                                   "nivel_dificuldade": 3, "mouse_track": []})]
+    conn = FakeConn({"user_id": "u", "session_start_ts": start}, evs, {"abandonadas": 0, "total": 1})
+    conn.agora = start + timedelta(minutes=5)
+    f = await app_mod.montar_features_sessao(conn, "sid")
+    assert f["duracao_janela_min"] == pytest.approx(5.0, abs=0.01)
 
 
 # ================================================ travas do sigma

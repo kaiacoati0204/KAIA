@@ -2450,6 +2450,21 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
   color: var(--tinta);
   font-size: 13px;
 }
+/* "Eu já estava focado(a)": texto discreto, sem cor de status, para não competir com os 3 botões */
+.kaia-fb-wrap .kaia-fb-focado {
+  display: block;
+  margin: 6px auto 0;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--tinta);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.kaia-fb-wrap .kaia-fb-focado:disabled { opacity: 0.45; cursor: default; }
+.kaia-fb-wrap .kaia-fb-focado:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
 .kaia-fb-wrap .kaia-fb-obrigado {
   margin: 0;
   color: var(--tinta);
@@ -2949,6 +2964,16 @@ body.kaia-reancorar .option-btn {
   font-size: 12px;
 }
 #kaia-probe .probe-btns { display: flex; flex-direction: column; gap: 6px; }
+#kaia-probe .probe-pular {
+  display: block;
+  margin: 8px 0 0 auto;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--tinta);
+  font-size: 12px;
+  text-decoration: underline;
+}
 #kaia-probe button {
   padding: 8px 10px;
   border: 1px solid var(--border);

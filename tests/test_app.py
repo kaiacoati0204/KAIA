@@ -432,6 +432,18 @@ async def test_events_resposta_diz_se_a_regra_marcou_a_questao():
         assert r.status_code == 200 and r.json()["desengajada"] is esperado
 
 
+async def test_events_grava_o_desengajamento_da_regra():
+    """a questão marcada pela regra vira evento: é rótulo de perda de foco para os modelos"""
+    conn = FakeConn(fetchrow={"insert into session_events": {"event_id": "e1"}},
+                    fetchval={"user_id from sessions": "test-user"},
+                    fetch={"select payload": _CORROBORA})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        await c.post("/events", json={"session_id": "s", "event_type": "question_answer",
+                                      "payload": {"acertou": False}})
+    assert any("desengajamento_regra" in a for q, a in conn.executed if "insert into session_events" in q)
+
+
 async def test_events_bloqueia_sessao_de_outro():
     # Evento numa sessão que pertence a OUTRO usuário -> 403 (ownership).
     conn = FakeConn(fetchval={"user_id from sessions": "outro-user"})
@@ -529,6 +541,36 @@ async def test_intervencao_feedback_tipo_invalido():
         r = await c.post("/intervencao/feedback",
                          json={"session_id": "s", "intervention_type": "xxx", "reward": 1.0})
     assert r.status_code == 400
+
+
+async def test_feedback_estava_focado_nao_vira_reward():
+    """'Eu estava focado(a)': alarme falso do gatilho — fica gravado, mas não ensina o bandit"""
+    conn = FakeConn(fetchrow={"update interventions": {"intervention_id": "iv1",
+                                                      "estado_antes": "distraido"}},
+                    fetchval={"user_id from sessions": "test-user"})
+    up = []
+    _set_state(pool=FakePool(conn), thompson=SimpleNamespace(update=lambda e, t, r: up.append(r)))
+    async with _client() as c:
+        r = await c.post("/intervencao/feedback", json={
+            "session_id": "s", "intervention_type": "checkpoint", "reward": None,
+            "feedback_usuario": "estava_focado"})
+    assert r.status_code == 200 and r.json()["reward"] is None
+    assert up == []
+
+
+async def test_feedback_sem_reward_e_sem_motivo_e_recusado():
+    _set_state(pool=FakePool(FakeConn(fetchval={"user_id from sessions": "test-user"})))
+    async with _client() as c:
+        r = await c.post("/intervencao/feedback",
+                         json={"session_id": "s", "intervention_type": "checkpoint", "reward": None})
+    assert r.status_code == 400
+
+
+async def test_reward_automatico_pula_intervencao_marcada_como_foco():
+    consultas = []
+    conn = FakeConn(fetch=lambda q: consultas.append(q) or [])
+    await app_mod.resolver_rewards(conn, SimpleNamespace(update=lambda *a: None), "sid")
+    assert any("estava_focado" in q for q in consultas)
 
 
 async def test_intervencao_feedback_ok():
@@ -736,7 +778,41 @@ async def _dispara_medicao(monkeypatch, abas, ultima=None):
     thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
     await app_mod.rodar_intervencao(SimpleNamespace(state=SimpleNamespace(
         thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn))), "sid")
+    _dispara_medicao.conn = conn
     return [a for q, a in conn.executed if "insert into interventions" in q]
+
+
+@pytest.mark.parametrize("abas, maior_bloco, esperado", [
+    ([], 20.0, "distraido"),                    # sem evidência externa: não afirma "muito"
+    (_aba(15.0), 20.0, "muito_distraido"),      # saiu da aba (abaixo do corte da medição)
+    ([], 200.0, "muito_distraido"),             # parado mais de 3 min: saiu da frente
+])
+async def test_regra_classifica_por_eliminacao(monkeypatch, abas, maior_bloco, esperado):
+    """o modelo sintético dizendo muito_distraido não decide mais: só evidência externa"""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "muito_distraido", "score": 0.9, "confiavel": True,
+                "feats": dict(_feats_ok(), maior_bloco_parado_s=maior_bloco)}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 8},
+                    fetch={"tab_change": abas, "select payload": _CORROBORA})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    await app_mod.rodar_intervencao(SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn))), "sid")
+    inserts = [a for q, a in conn.executed if "insert into interventions" in q]
+    assert inserts and inserts[0][2] == esperado
+
+
+async def test_decisao_de_intervencao_fica_registrada(monkeypatch):
+    """base para treinar sem vazamento: grupo, probabilidade, gatilho e o que o modelo diria"""
+    ultima = datetime.now(timezone.utc) - timedelta(minutes=4)
+    await _dispara_medicao(monkeypatch, _aba(90.0, ha_min=1), ultima)
+    decisoes = [json.loads(a[1]) for q, a in _dispara_medicao.conn.executed
+                if "insert into session_events" in q and "decisao_intervencao" in q]
+    assert decisoes, "a decisão não foi registrada"
+    d = decisoes[0]
+    assert d["gatilho"] == "medicao" and d["estado_alvo"] == "muito_distraido"
+    assert d["estado_modelo"] == "distraido" and "prob_controle" in d and "controle" in d
 
 
 async def test_medicao_nao_repete_pela_mesma_ausencia(monkeypatch):

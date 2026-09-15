@@ -280,6 +280,28 @@ function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
             strip.appendChild(b);
         });
     wrap.appendChild(strip);
+
+    // "eu estava focado(a)"
+    // Alarme falso do gatilho, não opinião sobre a intervenção: vai sem reward, para medir a precisão
+    // de cada gatilho. Discreto (texto sublinhado), para não competir com os 3 botões.
+    const focado = document.createElement('button');
+    focado.type = 'button';
+    focado.className = 'kaia-fb-focado';
+    focado.textContent = 'Eu já estava focado(a)';
+    focado.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        enviarFeedbackIntervencao(tipo, null, mostradaEm, 'estava_focado');
+        if (agradecer) {
+            wrap.textContent = '';
+            const ok = document.createElement('p');
+            ok.className = 'kaia-fb-obrigado';
+            ok.textContent = 'Anotado, obrigado!';
+            wrap.appendChild(ok);
+        }
+        if (onResposta) onResposta(null);
+    });
+    wrap.appendChild(focado);
     return wrap;
 }
 
@@ -323,7 +345,8 @@ let _fbCardTimer = null;
 function _travarFeedbackDoCard(alvo) {
     const strip = alvo.querySelector('.kaia-fb');
     if (!strip) return;
-    const botoes = [...strip.querySelectorAll('button')];
+    const focado = alvo.querySelector('.kaia-fb-focado');   // fora do strip, mas também leva a trava
+    const botoes = [...strip.querySelectorAll('button'), ...(focado ? [focado] : [])];
     strip.classList.add('kaia-fb-travado');
     // `disabled` e não só pointer-events: trava o teclado também e o leitor de
     // tela anuncia que ainda não dá para responder.
@@ -394,7 +417,7 @@ function esconderIntervencao() {
     liberarPolling();
 }
 
-async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoMostradaEm) {
+async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoMostradaEm, feedback = null) {
     if (!tipo) return;
     // (gatilho de teste) — REMOVER junto com o bloco do gatilho.
     // Intervenção que a Bia disparou para ver o design não pode virar recompensa
@@ -407,7 +430,7 @@ async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoM
     try {
         await postJSON('/intervencao/feedback', {
             session_id: sessionId, intervention_type: tipo,
-            reward, tempo_ate_aceitar_s: tempo
+            reward, tempo_ate_aceitar_s: tempo, feedback_usuario: feedback
         });
         console.log('[KaIA] feedback enviado:', tipo, reward);
     } catch (e) { console.warn('[KaIA] falha no feedback:', e); }
@@ -2194,17 +2217,16 @@ async function reportarQuestao() {
 //        PROBE DE ATENÇÃO (self-report — rótulo real p/ o ML)
 // ============================================================
 // Pergunta discreta ("sua mente estava na questão?") pareada com o momento.
-// 3 opções = as 3 classes do modelo. Vira evento 'probe_atencao' no /events.
+// 4 opções mapeadas nas 3 classes do modelo. Vira evento 'probe_atencao' no /events.
 //
 // ============================================================
 //   COMO EDITAR AS PERGUNTAS (é só mexer no PERGUNTAS_PROBE abaixo)
 // ============================================================
 // Adicionar = colar mais um objeto. Não é texto de tela, é o rótulo que treina o modelo, daí
-// duas regras: (1) SEMPRE três opções nesta ordem [engajado, distraido, muito_distraido] — 2ª
-// "vagou mas continuei aqui", 3ª "saí pra outra coisa"; inverter não muda a tela e corrompe o
-// dataset calado (_validarPergunta descarta malformada). (2) O `id` é ESTÁVEL e nunca
-// reaproveitado: vai no evento no lugar do índice, senão inserir no meio reescreve o dado já
-// coletado. Nenhuma opção pode soar "certa": autorrelato que premia foco enviesa o modelo.
+// duas regras: (1) cada opção DECLARA seu `estado` (uma das 3 classes do modelo) e sua `resposta`
+// (o detalhe que vai no evento); _validarPergunta descarta opção sem os dois. (2) O `id` é ESTÁVEL
+// e nunca reaproveitado: separa o que foi colhido com qual régua. Nenhuma opção pode soar
+// "certa": autorrelato que premia foco enviesa o modelo.
 const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 
 // UMA pergunta fixa (eram oito sorteadas). Medida: formulações diferentes deslocam a distribuição
@@ -2215,13 +2237,20 @@ const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 // aviso de que é normal + antes do resultado
 // Dias da Silva et al.: vergonha de admitir e o resultado visto logo antes enviesam o
 // autorrelato. Por isso a `nota` e o probe antes do acertou/errou — régua nova, id novo.
+// 4 opções
+// Robison 2019: com poucas opções o "vagando" infla (38% com 2 → 19% com 5). "Preocupado com a
+// questão/nota" separa isso (conta como engajado) e "algo em volta" junta a distração externa que
+// o navegador não vê. Mais que 4 pesa em TEA/TDAH. Pular existe: pergunta imposta vira interrupção.
 const PERGUNTAS_PROBE = [
-    { id: 'onde-estava-atencao-2',
+    { id: 'onde-estava-atencao-3',
       pergunta: 'Onde estava sua atenção agora?',
       nota: 'É normal a mente vagar. Não tem resposta certa.',
-      opcoes: ['Na questão',
-               'Vagando — continuei aqui, mas a cabeça foi longe',
-               'Fora daqui — fui ver outra coisa'] },
+      opcoes: [
+          { rotulo: 'Na questão', estado: 'engajado', resposta: 'na_questao' },
+          { rotulo: 'Preocupado com a questão ou com a nota', estado: 'engajado', resposta: 'preocupado' },
+          { rotulo: 'Vagando — continuei aqui, mas a cabeça foi longe', estado: 'distraido', resposta: 'vagando' },
+          { rotulo: 'Fora — algo em volta ou fui ver outra coisa', estado: 'muito_distraido', resposta: 'fora' },
+      ] },
 ];
 
 // ---- JANELAS DE TAMANHOS VARIADOS ---------------------------------------
@@ -2245,12 +2274,13 @@ let probeTimeout = null;
 let probeAtual   = null;   // { id, tamanho } do que está na tela — vai no evento
 let _probeUltimoId = null; // evita repetir a mesma frase em dois disparos seguidos
 
-// Descarta entrada malformada em vez de gravar rótulo errado: com menos (ou
-// mais) de três opções, o pareamento opção→estado sairia deslocado e o erro só
-// apareceria meses depois, no dataset.
+// Descarta entrada malformada em vez de gravar rótulo errado: opção sem estado válido ou sem
+// resposta só apareceria meses depois, no dataset.
 const _validarPergunta = (p) =>
     !!p && typeof p.id === 'string' && typeof p.pergunta === 'string'
-    && Array.isArray(p.opcoes) && p.opcoes.length === ESTADOS_PROBE.length;
+    && Array.isArray(p.opcoes) && p.opcoes.length >= 2
+    && p.opcoes.every(o => o && ESTADOS_PROBE.includes(o.estado)
+                          && typeof o.resposta === 'string' && typeof o.rotulo === 'string');
 
 // PENDENTE (Bia + Vitor): sorteio ou rotação fixa? Por ora sorteia evitando
 // repetir a frase anterior — variedade sem virar previsível.
@@ -2289,15 +2319,22 @@ function _montarCardProbe(pergunta, tamanho) {
 
     const caixa = document.createElement('div');
     caixa.className = 'probe-btns';
-    pergunta.opcoes.forEach((rotulo, i) => {
+    pergunta.opcoes.forEach(({ rotulo, estado, resposta }) => {
         const b = document.createElement('button');
         b.type = 'button';
-        b.dataset.estado = ESTADOS_PROBE[i];   // a ORDEM é o contrato (ver acima)
+        b.dataset.estado = estado;
         b.textContent = rotulo;
-        b.addEventListener('click', () => responderProbe(b.dataset.estado));
+        b.addEventListener('click', () => responderProbe(estado, resposta));
         caixa.appendChild(b);
     });
     card.appendChild(caixa);
+
+    const pular = document.createElement('button');
+    pular.type = 'button';
+    pular.className = 'probe-pular';
+    pular.textContent = 'Pular';
+    pular.addEventListener('click', pularProbe);
+    card.appendChild(pular);
     return card;
 }
 
@@ -2327,12 +2364,21 @@ function esconderProbe() {
     aoFechar?.();
 }
 
-function responderProbe(estado) {
+// pular também é dado: pergunta pulada demais mostra que o probe está cansando
+function pularProbe() {
+    logEvent('probe_pulado', {
+        pergunta_id: probeAtual?.id ?? null,
+        latencia_ms: probeAtual?.mostradoEm ? Math.round(performance.now() - probeAtual.mostradoEm) : null,
+    });
+    esconderProbe();
+}
+
+function responderProbe(estado, resposta) {
     logEvent('probe_atencao', {
         estado,
-        // QUAL frase e janela geraram o rótulo — vai no payload jsonb (sem migration); probe_labels
-        // segue só com estado + as 20 features. PENDENTE (Bia + Vitor): se treinar_com_probe.py
-        // precisar deles em probe_labels, aí é migration.
+        resposta,
+        // QUAL frase e janela geraram o rótulo — vai no payload jsonb (sem migration); em
+        // probe_labels só entram estado, resposta e as features.
         pergunta_id: probeAtual?.id ?? null,
         tamanho: probeAtual?.tamanho ?? null,
         questao_na_rodada: questoesNaRodada,

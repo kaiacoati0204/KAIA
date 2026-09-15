@@ -173,6 +173,17 @@ async def test_capturar_probe_grava_a_questao_respondida():
     assert set(app_mod.FEATURE_ORDER) <= set(registro)          # a janela continua lá
 
 
+async def test_capturar_probe_guarda_a_resposta_detalhada():
+    """4 opções no probe: 'preocupado com a nota' vira engajado, mas a resposta fica guardada"""
+    start = datetime.now(timezone.utc) - timedelta(minutes=5)
+    conn = FakeConn({"user_id": "u", "session_start_ts": start},
+                    [_ev("question_answer", {"tempo_resposta_ms": 6000, "acertou": True})],
+                    {"abandonadas": 0, "total": 1})
+    await app_mod._capturar_probe(conn, "sid", {"estado": "engajado", "resposta": "preocupado"})
+    registro = json.loads(next(a[3] for q, a in conn.executed if "insert into probe_labels" in q))
+    assert registro["_resposta"] == "preocupado"
+
+
 async def test_capturar_probe_estado_invalido_ignora():
     conn = FakeConn({"user_id": "u", "session_start_ts": datetime.now(timezone.utc)}, [],
                     {"abandonadas": 0, "total": 1})

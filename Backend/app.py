@@ -1713,6 +1713,21 @@ async def _fora_da_aba_desde_ultima(conn, session_id):
     return total
 
 
+# classificação por eliminação
+# Distração externa e mente vagando não se distinguem pelo desempenho (Stawarczyk 2011), então
+# o modelo sintético não decide. "muito" só com evidência EXTERNA medida; o resto não é afirmado
+# mente vagando — é distraído sem causa externa detectada (o probe mede a mistura).
+# Cortes são hipótese nossa, a calibrar no beta: saída curta pode ser consulta (Wilcox 2019).
+EXTERNO_FORA_S = 10.0          # saiu da KaIA desde a última intervenção (abaixo do corte da medição)
+EXTERNO_PARADO_S = 180.0       # maior bloco sem mexer na janela: saiu da frente do computador
+
+
+def _estado_por_eliminacao(fora_s, feats):
+    externo = (fora_s >= EXTERNO_FORA_S
+               or float(feats.get("maior_bloco_parado_s") or 0) >= EXTERNO_PARADO_S)
+    return "muito_distraido" if externo else "distraido"
+
+
 async def rodar_intervencao(app, session_id):
     """Após a agregação, decide via Thompson Sampling se dispara uma intervenção.
     Freios: warm-up (>=1 questão e sessão >= INTERV_WARMUP_MIN), cooldown por estado
@@ -1735,26 +1750,21 @@ async def rodar_intervencao(app, session_id):
         # ==== QUEM PODE DISPARAR ====
         # Três caminhos, nenhum depende do modelo: medicao (tempo fora da aba, dado do
         # navegador), regra (queda de acerto + ritmo fora do normal, DTS; só vê respostas) e
-        # ociosidade (parado na questão aberta de forma incomum). O modelo so escolhe QUAL
-        # intervencao: nao esta validado, e falso positivo pesa em TEA/TDAH.
+        # ociosidade (parado na questão aberta de forma incomum). Nenhum depende do modelo:
+        # ele nao esta validado, e falso positivo pesa em TEA/TDAH.
         fora_s = await _fora_da_aba_desde_ultima(conn, session_id)
         corrob, motivo = await _corroboracao_objetiva(conn, session_id)
         if fora_s >= AUSENCIA_MEDIDA_S:
             gatilho, estado_alvo = "medicao", "muito_distraido"
-        elif corrob:
-            # A regra diz QUE caiu, nao qual estado. O modelo separa, confiavel sem baseline
-            # so nesse corte (`muito_distraido` usa features absolutas: 0,894 com ou sem
-            # historico; `distraido` cai para 0,379). Outra resposta vai ao conjunto mais leve.
-            gatilho = "regra"
-            estado_alvo = ("muito_distraido" if res["estado"] == "muito_distraido"
-                           else "distraido")
         else:
-            parado, motivo = await _ociosidade_objetiva(conn, session_id)
-            if not parado:
-                return
-            gatilho = "ociosidade"
-            estado_alvo = ("muito_distraido" if res["estado"] == "muito_distraido"
-                           else "distraido")
+            if corrob:
+                gatilho = "regra"
+            else:
+                parado, motivo = await _ociosidade_objetiva(conn, session_id)
+                if not parado:
+                    return
+                gatilho = "ociosidade"
+            estado_alvo = _estado_por_eliminacao(fora_s, res["feats"])
         # Freio (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
         # Questões de vestibular são longas — a leitura inicial não pode virar "distração";
         # o timer segura caso a 1ª seja respondida rápido demais.
@@ -1813,6 +1823,20 @@ async def rodar_intervencao(app, session_id):
             # bandit usou; gravar o do modelo mandaria o reward a um braco inexistente em params.
             session_id, tipo, estado_alvo, gatilho,
         )
+        # registro da decisão
+        # Base para treinar sem vazamento (van Geloven 2020): o modelo de risco só aprende com o
+        # controle, e o efeito só se estima sabendo a probabilidade de cada braço. Vai no jsonb do
+        # evento, sem migration. estado_modelo = o que o RF diria (pesquisa, não decide).
+        await conn.execute(
+            "insert into session_events (session_id, event_type, payload, ts) "
+            "values ($1::uuid, 'decisao_intervencao', $2::jsonb, now())",
+            session_id, json.dumps({
+                "gatilho": gatilho, "estado_alvo": estado_alvo, "estado_modelo": res["estado"],
+                "tipo": tipo, "controle": tipo == "controle_ab",
+                "prob_controle": 0.5 if AB_TESTE_ATIVO else 0.0,
+                "fora_s": round(fora_s, 1),
+                "maior_bloco_parado_s": res["feats"].get("maior_bloco_parado_s"),
+            }))
         if tipo != "controle_ab":
             print(f"[KaIA Intervenção] {session_id} estado={estado_alvo} "
                   f"gatilho={gatilho} -> {tipo}"
@@ -1879,6 +1903,7 @@ async def resolver_rewards(conn, thompson, session_id):
               from interventions
              where session_id = $1::uuid
                and reward is null
+               and coalesce(feedback_usuario, '') <> 'estava_focado'   -- alarme falso: não ensina o bandit
                and triggered_at <= now() - make_interval(mins => $2::int)
             """,
             session_id, INTERV_JANELA_REWARD_MIN,
@@ -2550,7 +2575,7 @@ async def diagnose(request: Request, session_id: str,
 class FeedbackIn(BaseModel):
     session_id: str
     intervention_type: str
-    reward: float                              # 0.0, 0.5 ou 1.0
+    reward: Optional[float] = None             # 0.0, 0.5 ou 1.0; None só com feedback_usuario
     tempo_ate_aceitar_s: Optional[float] = None
     feedback_usuario: Optional[str] = None
 
@@ -2607,7 +2632,12 @@ async def intervencao_feedback(body: FeedbackIn, request: Request,
         return _SEM_BANCO
     if body.intervention_type not in INTERVENCOES:
         return JSONResponse({"erro": "intervention_type inválido."}, status_code=400)
-    reward = min(max(float(body.reward), 0.0), 1.0)
+    # "eu estava focado(a)"
+    # É alarme falso do GATILHO, não resposta sobre a intervenção: grava à parte e não vira reward
+    # (nem o explícito, nem o automático — resolver_rewards pula), para medir a precisão de cada gatilho.
+    if body.reward is None and not body.feedback_usuario:
+        return JSONResponse({"erro": "reward ou feedback_usuario obrigatório."}, status_code=400)
+    reward = None if body.reward is None else min(max(float(body.reward), 0.0), 1.0)
 
     intervention_id = None
     estado_antes = None
@@ -2619,8 +2649,9 @@ async def intervencao_feedback(body: FeedbackIn, request: Request,
             row = await conn.fetchrow(
                 """
                 update interventions
-                   set reward = $3,
-                       reward_origem = 'explicito',
+                   set reward = $3::double precision,
+                       reward_origem = case when $3::double precision is null
+                                            then reward_origem else 'explicito' end,
                        tempo_ate_aceitar_s = coalesce($4::double precision, tempo_ate_aceitar_s),
                        feedback_usuario    = coalesce($5::text, feedback_usuario)
                  where intervention_id = (
@@ -2645,7 +2676,7 @@ async def intervencao_feedback(body: FeedbackIn, request: Request,
     # parametros sao por (estado, braco). Sem a linha correspondente, nao ha contexto e
     # o feedback fica sem efeito no bandit (a linha ja guardou o reward).
     thompson = request.app.state.thompson
-    if thompson is not None and estado_antes:
+    if thompson is not None and estado_antes and reward is not None:
         thompson.update(estado_antes, body.intervention_type, reward)
 
     return {
@@ -2823,7 +2854,12 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
         # desengajada não mede o que o aluno sabe, então o front tira da nota da rodada
         if body.event_type == "question_answer":
             try:
-                resposta["desengajada"], _ = await _corroboracao_objetiva(conn, body.session_id)
+                resposta["desengajada"], motivo = await _corroboracao_objetiva(conn, body.session_id)
+                if resposta["desengajada"]:   # vira evento: rótulo de perda de foco para os modelos
+                    await conn.execute(
+                        "insert into session_events (session_id, event_type, payload, ts) "
+                        "values ($1::uuid, $2, $3::jsonb, now())",
+                        body.session_id, "desengajamento_regra", json.dumps({"motivo": motivo}))
             except Exception as e:
                 print("[KaIA] regra indisponível no /events:", e)
 
@@ -2861,6 +2897,8 @@ async def _capturar_probe(conn, session_id, payload):
         # O rótulo vale sempre (é autorrelato); as FEATURES é que podem estar mudas.
         # Marca fora do FEATURE_ORDER — treinar_com_probe lê só as chaves do modelo.
         registro = dict(feats, _leitura_confiavel=leitura_confiavel(feats))
+        # a opção marcada no probe de 4 opções (ex.: "preocupado" conta como engajado, mas fica guardada)
+        registro["_resposta"] = (payload or {}).get("resposta")
         # a questão que acabou, além da janela
         # Kam 2012: um episódio dura ~10-15 s e o rótulo vale para os segundos antes do relato; a
         # janela de 10 min dilui isso. Brutas (escala log), para relativizar depois no treino.

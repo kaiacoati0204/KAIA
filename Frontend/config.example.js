@@ -5,11 +5,9 @@
 //   1. copie este arquivo para config.js
 //   2. preencha os valores (Supabase → Settings → API)
 //
-// CHAVE: use a ANON (JWT, começa com eyJ...) — Settings → API → Project API keys → anon public.
-//   - É pública por design (o RLS protege os dados); pode ficar no browser.
-//   - NÃO use a sb_publishable_...: o supabase-js @2 carregado via CDN NÃO a envia
-//     como apikey, e o login quebra com 400 "No API key found" (já testado a duras penas).
-//   - NÃO use a service_role: é segredo (ignora RLS) e nunca vai no frontend.
+// CHAVE: use a ANON (JWT, eyJ...) — Settings → API → Project API keys → anon public; é pública (o RLS
+// protege). NÃO a sb_publishable_...: o supabase-js @2 via CDN não a envia como apikey e o login quebra
+// com 400 "No API key found". NÃO a service_role: é segredo (ignora RLS) e nunca vai no frontend.
 const KAIA_CONFIG = {
     API_URL: 'http://127.0.0.1:5000',
 

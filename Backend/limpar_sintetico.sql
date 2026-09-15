@@ -1,13 +1,9 @@
 -- ============================================================
 --  KaIA — apaga TODOS os dados sintéticos do dashboard
 -- ============================================================
--- Tudo que o seed cria fica carimbado com sessions.app_version = 'seed-sintetico'.
--- As 34 sessões reais (app_version='mvp-0.1') NÃO são tocadas.
---
--- As FKs de session_features/session_events -> sessions NÃO têm ON DELETE CASCADE,
--- então apagamos os FILHOS antes do PAI. Idempotente: rode quantas vezes quiser.
---
--- Rode no Supabase → SQL Editor quando entrarem alunos reais (ou para regerar).
+-- Apaga só sessions.app_version = 'seed-sintetico'; as reais ('mvp-0.1') ficam.
+-- FKs de session_features/session_events não têm ON DELETE CASCADE, então filhos
+-- saem antes do pai. Idempotente. Rode no SQL Editor do Supabase.
 
 begin;
 

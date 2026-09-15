@@ -27,8 +27,8 @@
 </script>
 </head>
 
-<!-- class="dashboard-page" ATIVA o CSS/JS do dashboard (ver style.css e script.js)
-     data-rail: o script.js injeta a barra lateral estática -->
+<!-- class="dashboard-page" ATIVA o CSS/JS do dashboard (ver style.css e dashboard.js)
+     data-rail: o comum.js injeta a barra lateral estática -->
 <body class="dashboard-page" data-rail>
 
 <div class="shell">
@@ -87,11 +87,9 @@
         <div class="ch">
           <div class="ct"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>ALUNOS POR ESCOLA</div>
         </div>
-        <!-- NOTA DE CONCEITO: este slot já foi "perfil de comportamento do aluno"
-             (persona da base sintética). O schema real não tem persona, então
-             passou a mostrar distribuição administrativa: alunos por escola
-             (bloco "planos", agora vindo de perfis). Reverter se um dia houver
-             persona de aluno no banco. -->
+        <!-- Era "perfil de comportamento" (persona da base sintética); o schema real
+             não tem persona, então mostra alunos por escola (bloco "planos", de
+             perfis). Reverter se um dia houver persona no banco. -->
         <div class="lg" id="lg-planos"></div>
         <div class="cw" style="height:200px"><canvas id="c2" role="img" aria-label="Distribuição de perfis de aluno">Distribuição de perfis.</canvas></div>
       </div>
@@ -166,7 +164,7 @@
   <!-- ========================= FINANCEIRO ========================= -->
   <div id="v-fin" class="view">
     <!-- ATENÇÃO: a base sintética NÃO possui dados financeiros.
-         Esta aba inteira usa os valores de DEMONSTRAÇÃO do script.js. -->
+         Esta aba inteira usa os valores de DEMONSTRAÇÃO do dashboard.js. -->
     <div class="card" style="border-left:3px solid var(--gravata-kinrou)">
       <div class="ct">⚠ PROJEÇÃO — não vem da base sintética (dados de demonstração)</div>
     </div>
@@ -198,7 +196,7 @@
 </div><!-- /frame -->
 </div><!-- /shell -->
 
-<!-- JS COMPARTILHADO (a seção "DASHBOARD INTERNO" vive no final do script.js) -->
+<!-- JS: comum.js (compartilhado) + dashboard.js (só desta página) -->
 <script src="../js/comum.js"></script>
 <script src="../js/dashboard.js"></script>
 </body>

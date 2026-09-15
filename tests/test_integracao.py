@@ -1,13 +1,9 @@
 """Testes de INTEGRAÇÃO contra um Postgres REAL (não FakeConn).
 
-Opt-in: só rodam se KAIA_TEST_DATABASE_URL apontar para um Postgres com a migration
-já aplicada (o CI faz isso; localmente, aponte para um banco de teste). Sem a
-variável, são PULADOS — a suíte unitária continua rodando normal.
-
-Valor: exercitam autorização REAL entre usuários e o fluxo real de dados
-(sessão -> evento -> ownership -> isolamento por token), pegando bugs de
-integração que os mocks escondem — como o 403 de ownership que quebrava a
-cadeia de intervenção.
+Opt-in: só rodam com KAIA_TEST_DATABASE_URL apontando para um Postgres com a
+migration aplicada (o CI faz isso); sem a variável, são pulados. Exercitam
+ownership e isolamento por token de verdade, que os mocks escondem (ex.: o 403
+de ownership que quebrava a cadeia de intervenção).
 """
 import os
 

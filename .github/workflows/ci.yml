@@ -1,6 +1,5 @@
 name: CI
 
-# Roda a cada push na main
 on:
   push:
     branches: [main]

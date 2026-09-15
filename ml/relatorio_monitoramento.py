@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Monitoramento contínuo do modelo — lê os rótulos do probe (probe_labels) ao longo
-do tempo e mostra a acurácia do modelo ATUAL por SEMANA, pra pegar se o desempenho
-derrapa (drift). Análogo do relatorio_bandit, mas pro modelo. Fica PRONTO — hoje
-vazio até haver probes.
+Monitoramento contínuo do modelo — acurácia do modelo ATUAL por SEMANA nos rótulos do
+probe (probe_labels), pra pegar drift. Análogo do relatorio_bandit; vazio até haver probes.
 
 Offline. Precisa de DATABASE_URL (Backend/.env). Rodar na raiz:
     python ml/relatorio_monitoramento.py

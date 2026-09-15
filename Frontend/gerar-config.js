@@ -1,16 +1,13 @@
 // ============================================================
 //  Gera o Frontend/config.js a partir de variáveis de ambiente
 // ============================================================
-// O config.js não vai para o git (está no .gitignore), então o Render clona o
-// repositório SEM ele — e sem ele o front quebra inteiro: API_URL cai no fallback
-// 127.0.0.1:5000 (o PC do aluno) e window.supabaseClient fica null, matando o login
-// nas 9 páginas. Este script é o build command do Static Site.
+// config.js não vai pro git, então o Render clona sem ele e o front quebra (API_URL cai em
+// 127.0.0.1:5000 e supabaseClient fica null, sem login). Este script é o build command do Static Site.
 //
 // Uso:
 //   KAIA_API_URL=... KAIA_SUPABASE_URL=... KAIA_SUPABASE_ANON_KEY=... node Frontend/gerar-config.js
 //
-// Recusa rodar sem as três variáveis — assim um `node` sem querer na sua máquina
-// não sobrescreve o config.js local de desenvolvimento.
+// Recusa rodar sem as três variáveis, para não sobrescrever o config.js local de desenvolvimento.
 
 import fs from 'node:fs';
 import path from 'node:path';

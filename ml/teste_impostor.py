@@ -2,20 +2,11 @@
 """
 Teste do impostor — as questões geradas passam por questões de vestibular?
 
-Mistura questões GERADAS pelo pipeline de produção com questões REAIS do banco
-(questoes_reais) e produz uma página para um avaliador humano separar as duas.
-
-Por que assim, e não "dê uma nota de 1 a 5":
-  - julgamento binário é mais confiável entre avaliadores diferentes;
-  - existe gabarito (sabemos quais são reais), então dá para medir acerto e não só
-    colher opinião;
-  - a régua é a certa: o alvo não é "questão boa em abstrato", é "passa por prova".
-
-O avaliador ideal é um PROFESSOR da matéria — independente (não construiu o
-sistema) e capaz de ver erro de conteúdo, não só de estilo.
-
-Gera SEM explicação e SEM gabarito: a questão real do banco não tem esses campos, e
-mostrá-los só nas geradas entregaria o jogo.
+Mistura GERADAS pelo pipeline de produção com REAIS (questoes_reais) para um avaliador
+humano separar. Binário, não nota 1-5: mais confiável entre avaliadores, tem gabarito (mede
+acerto, não opinião) e a régua é "passa por prova". Avaliador ideal: PROFESSOR da matéria
+(independente e vê erro de conteúdo, não só estilo). Sai SEM explicação e SEM gabarito: a
+real não tem esses campos, e mostrá-los só nas geradas entregaria o jogo.
 
 Uso (na raiz do projeto):
     python ml/teste_impostor.py                 # todos os blocos

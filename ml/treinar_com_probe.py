@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 Usa os rótulos REAIS do probe (tabela probe_labels) para VALIDAR e RE-TREINAR o v2.
-
-- SEMPRE: mede a acurácia do modelo ATUAL nos rótulos reais (o número honesto —
-  é o que diz se o modelo sintético funciona no mundo real).
-- Se houver >= LIMIAR_RETREINO rótulos: re-treina HÍBRIDO (base sintética + real,
-  com o real em peso maior) e salva. Conforme o real cresce, ele domina.
+SEMPRE mede o modelo ATUAL no real (o número honesto); com >= LIMIAR_RETREINO rótulos
+re-treina HÍBRIDO (sintético + real com peso maior) e salva — o real domina ao crescer.
 
 Offline/manual. Precisa de DATABASE_URL (mesmo banco do backend). Rode na raiz:
     python ml/treinar_com_probe.py
 
-A tabela `probe_labels` já faz parte do schema versionado
-(supabase/migrations/*_remote_schema.sql) — não precisa rodar nada à mão.
+`probe_labels` já está no schema versionado (supabase/migrations/*_remote_schema.sql).
 """
 import os
 import sys
@@ -61,7 +57,7 @@ async def carregar_rotulos():
             y.append(ESTADOS.index(r["estado"]))
             alunos.append(r["aluno"])
         except (KeyError, ValueError, TypeError):
-            continue   # ignora exemplos malformados
+            continue
     return pd.DataFrame(X, columns=FEATURE_ORDER, dtype=float), np.array(y), np.array(alunos)
 
 

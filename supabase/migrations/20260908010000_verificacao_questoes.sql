@@ -1,17 +1,12 @@
 -- ============================================================
 --  Verificação de questões geradas — funil antes de chegar ao aluno
 -- ============================================================
--- A avaliação com professores expôs questões geradas com gabarito errado ou sem
--- resposta certa entre as alternativas. O filtro estrutural (Backend/app.py) pega
--- o malformado; estas colunas sustentam as duas camadas seguintes:
---
---   veredito NULL       -> ainda não verificada (fica em QUARENTENA: só é servida
---                          enquanto poucos alunos a viram)
---   veredito 'ok'       -> verificador independente concordou com o gabarito
---   veredito 'suspeita' -> divergiu, ou disse que NENHUMA alternativa é correta;
---                          deixa de ser servida
---
--- Aditiva e idempotente: pode rodar mais de uma vez.
+-- Professores acharam questões com gabarito errado ou sem alternativa certa. O
+-- filtro estrutural (Backend/app.py) pega o malformado; estas colunas sustentam a
+-- verificação: veredito NULL = não verificada (QUARENTENA, servida só enquanto
+-- poucos alunos a viram); 'ok' = verificador independente concordou com o
+-- gabarito; 'suspeita' = divergiu ou disse que NENHUMA é correta, deixa de ser servida.
+-- Aditiva e idempotente.
 
 alter table if exists public.questoes_cache
   add column if not exists veredito           text,

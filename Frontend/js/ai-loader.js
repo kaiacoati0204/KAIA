@@ -1,25 +1,15 @@
 // ============================================================
 //  KaIA — ai-loader.js: ilha React do AI Loader
 // ============================================================
-// Porte do componente "AI Loader" do 21st.dev (@beratberkayg), adaptado: texto
-// em pt-BR, paleta do Coati e apresentação INLINE (o original é overlay de tela
-// cheia; aqui ele ocupa só o lugar da mensagem de espera, dentro da área da
-// questão). A ANIMAÇÃO é CSS — os keyframes .kaia-ail* no style.css são portados
-// 1:1 do original (mesma geometria de box-shadow, mesmos 5s/3s). O React faz aqui
-// o mesmo que fazia lá: quebrar a palavra em letras e aplicar o animation-delay
-// em cascata. Por isso NÃO há Framer Motion: o componente original também não usa.
+// Porte do "AI Loader" do 21st.dev (@beratberkayg) em pt-BR, paleta do Coati e INLINE (o original é
+// overlay). A animação é CSS (.kaia-ail* no style.css, 1:1 do original, 5s/3s); o React só quebra a
+// palavra em letras com animation-delay em cascata — sem Framer Motion, como o original.
 //
-// ISOLAMENTO (regra do projeto) — esta ilha é SÓ visual:
-//  - Monta num <div> próprio, criado aqui, que é inserido no container ESTÁVEL
-//    passado em `alvo` (.question-wrapper ou #temas-view). Nunca dentro de
-//    #question-display / #temas-display / #options-display: esses são limpos com
-//    `innerHTML = ''` (renderBotoes) ou sobrescritos com innerText, o que
-//    arrancaria a raiz React sem desmontar — vaza listeners e quebra o render
-//    seguinte. O nó é movido entre alvos com appendChild; a raiz continua válida
-//    porque o elemento-container é sempre o mesmo.
-//  - Se o CDN do React não carregar, mostrar() devolve false e o materias.js
-//    mantém o texto simples de sempre.
-//  - Nunca toca em sessão, dados ou lógica de questões.
+// ISOLAMENTO — ilha SÓ visual, nunca toca em sessão, dados ou questões. Monta num <div> próprio dentro
+// do container ESTÁVEL `alvo` (.question-wrapper ou #temas-view), nunca em #question-display /
+// #temas-display / #options-display: eles levam innerHTML = '' ou innerText, o que arrancaria a raiz
+// React sem desmontar (vaza listeners, quebra o render seguinte). Sem o CDN do React, mostrar()
+// devolve false e o materias.js mantém o texto simples.
 (function () {
     'use strict';
 

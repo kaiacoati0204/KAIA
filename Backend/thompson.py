@@ -1,14 +1,9 @@
 """
-Thompson Sampling para seleção de intervenções do KaIA (Sprint 3, Tarefa 3).
+Thompson Sampling para seleção de intervenções do KaIA.
 
-Multi-armed bandit Beta-Bernoulli: cada uma das 9 intervenções é um "braço"
-com uma distribuição Beta(alpha, beta). A cada decisão, amostramos uma vez de
-cada braço ELEGÍVEL (filtrado pelo estado do aluno) e escolhemos o de maior
-amostra — equilibra exploração e explotação. O reward do feedback do aluno
-(0.0, 0.5 ou 1.0) atualiza alpha/beta.
-
-Módulo isolado (não depende do app.py). Persistência em
-ml/artifacts/thompson_params.json.
+Bandit Beta-Bernoulli: cada uma das 7 intervenções é um braço Beta(alpha, beta);
+amostra os elegíveis pelo estado e escolhe a maior. Reward do aluno (0.0, 0.5 ou
+1.0) atualiza alpha/beta. Isolado do app.py; persiste em ml/artifacts/thompson_params.json.
 """
 import json
 from pathlib import Path
@@ -17,13 +12,8 @@ import numpy as np
 
 RANDOM_STATE = 42
 
-# Braços do bandit (após poda: badge_foco e comparacao_social saíram — inertes/
-# desaconselhados p/ TEA-TDAH; pausa_pomodoro fica reservada, o timer automático
-# 25/5 já cobre e pode virar "antecipar pausa" depois).
-# Conjunto-alvo: 7 braços, todos com respaldo em pesquisa. Aposentados na limpeza
-# (nudge_refoco, mensagem_motivacional, microlearning, pausa_pomodoro, badge_foco,
-# comparacao_social). resolver_rewards tolera tipos antigos em voo (try/except),
-# então removê-los daqui é seguro.
+# 7 braços com respaldo em pesquisa. badge_foco e comparacao_social saíram por serem
+# desaconselhados p/ TEA-TDAH; resolver_rewards tolera tipos antigos em voo.
 INTERVENCOES = [
     "auto_monitoramento", "micro_refoco", "checkpoint", "reancoragem",
     "troca_atividade", "pausa_ativa", "alerta_fadiga",
@@ -43,7 +33,6 @@ MIN_ESTUDO_ALERTA_FADIGA_MIN = 90
 # (não repetir o mesmo card seguido -> combate a habituação, à la Duolingo).
 PENALIDADE_RECENCIA = 0.5
 
-# Caminho padrão dos parâmetros persistidos.
 PARAMS_PATH = Path(__file__).resolve().parent.parent / "ml" / "artifacts" / "thompson_params.json"
 
 
@@ -53,11 +42,8 @@ class ThompsonSampling:
     def __init__(self, params_path=PARAMS_PATH, seed=RANDOM_STATE):
         self.params_path = Path(params_path)
         self.rng = np.random.default_rng(seed)  # random_state=42 (reprodutível)
-        # params[(estado, tipo)] — NAO params[tipo]. `alerta_fadiga` e elegivel nos dois
-        # estados, e as taxas-base de reward sao muito diferentes entre eles: quem saiu da
-        # aba responde menos nos 3 min seguintes por definicao. Com posterior unico, o
-        # braco carregava evidencia de um contexto para o outro e apareceria pior do que e
-        # ao competir no grupo do `distraido`. Um posterior por contexto resolve.
+        # params[(estado, tipo)], nao params[tipo]: alerta_fadiga vale nos dois estados e a
+        # taxa-base de reward muda muito entre eles, entao um posterior unico misturaria contextos.
         self.params = {(e, t): {"alpha": 1.0, "beta": 1.0}
                        for e, ts in ELEGIVEIS_POR_ESTADO.items() for t in ts}
         self.carregar()
@@ -113,19 +99,12 @@ class ThompsonSampling:
 
     # ------------------------------------------------------------- reconstrucao
     def reconstruir(self, somas):
-        """Recalcula alpha/beta a partir dos rewards ja gravados no banco.
+        """Recalcula alpha/beta a partir dos rewards ja gravados em `interventions`.
 
-        O JSON em disco nunca foi o dado original — cada reward esta em
-        `interventions`. Isso importa porque o disco do plano gratuito do Render e
-        efemero: some a cada hibernacao, e um bandit zerado e Beta(1,1), que e a
-        distribuicao UNIFORME — ou seja, escolhe a intervencao no sorteio, jogando
-        fora tudo que ja tinha aprendido.
-
-        `somas` = {(estado, tipo): (soma_dos_rewards, quantos_rewards)}. Beta-Bernoulli com
-        prior Beta(1,1): alpha = 1 + sucessos, beta = 1 + fracassos. Reward fracionario
-        (0.5) entra como sucesso parcial, que e como o update() ja o trata.
-
-        NAO persiste: o banco e a fonte da verdade, o arquivo e so cache do processo.
+        O disco do Render gratuito some a cada hibernacao, e bandit zerado e Beta(1,1)
+        (sorteio uniforme). `somas` = {(estado, tipo): (soma_rewards, n)}: alpha = 1 +
+        soma, beta = 1 + (n - soma); reward 0.5 e sucesso parcial, como no update().
+        NAO persiste: o banco e a fonte da verdade, o arquivo e so cache.
         """
         for chave, (soma, n) in (somas or {}).items():
             if chave not in self.params:

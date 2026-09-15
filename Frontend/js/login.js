@@ -4,10 +4,7 @@
 // Depende de comum.js (apiFetch, $, lerPerfil, gravarPerfil) e do config.js
 // (window.supabaseClient), carregados ANTES deste arquivo.
 
-// Botão "Entrar" do login.html.
-// Autentica no Supabase Auth (email + senha) e, com o user.id do Auth, busca o
-// perfil (nome/role/hobbies) no backend. O cadastro é feito manualmente no
-// painel do Supabase — aqui o aluno só ENTRA.
+// Destino pós-login por role (o aluno tem regra própria em finalizarLogin).
 const ROTA_POR_ROLE = {
     professor:   'responsaveis.html',
     coordenador: 'responsaveis.html',
@@ -15,12 +12,7 @@ const ROTA_POR_ROLE = {
 };
 
 // ---- Rede fora do ar NÃO é credencial errada -------------------------------
-// O signInWithPassword/signUp devolve `error` para QUALQUER falha, inclusive
-// quando o servidor de auth não respondeu. O código tratava tudo como senha
-// errada — e isso custou uma investigação inteira: o projeto do Supabase parou
-// de resolver (NXDOMAIN) e a tela continuou dizendo "Email ou senha incorretos",
-// apontando a suspeita para o código do login em vez da infraestrutura.
-// As duas assinaturas são bem distintas:
+// signIn/signUp devolvem `error` pra qualquer falha; tratar tudo como senha errada esconde queda do Supabase.
 //   rede ....... AuthRetryableFetchError · status 0   · "Failed to fetch"
 //   credencial . AuthApiError            · status 400 · "Invalid login credentials"
 function _authForaDoAr(error) {
@@ -32,13 +24,9 @@ const MSG_AUTH_FORA = 'Não foi possível falar com o servidor de login. '
     + 'Verifique sua conexão — o Supabase '
     + 'pode estar pausado ou fora do ar.';
 
-// Passos comuns ao login e ao cadastro: com o usuário já autenticado no Auth,
-// busca o perfil no backend (por id; fallback por email), guarda a sessão do
-// app e redireciona por role.
-// `lembrar` (Fase 3): o padrão do app é sessionStorage — a identidade morre com
-// a aba. Com "lembre de mim" existe TAMBÉM uma cópia em localStorage + a flag
-// kaia_lembrar, que é o que restaurarSessao() lê ao voltar. Ver lerUsuario() no
-// comum.js, que consulta os dois na ordem certa.
+// Login e cadastro, já autenticados: busca o perfil (id; fallback email), guarda a sessão e redireciona por role.
+// `lembrar` (Fase 3): o padrão é sessionStorage (morre com a aba); "lembre de mim" grava também cópia em
+// localStorage + flag kaia_lembrar, lida por restaurarSessao(). lerUsuario() (comum.js) lê os dois na ordem certa.
 async function finalizarLogin(authUser, falhar, lembrar = false) {
     let r = await apiFetch(`/perfil?user_id=${encodeURIComponent(authUser.id)}`);
     if (r.status === 404 && authUser.email) {
@@ -80,6 +68,7 @@ async function finalizarLogin(authUser, falhar, lembrar = false) {
     }
 }
 
+// Botão "Entrar" do login.html: autentica no Supabase Auth e busca o perfil no backend.
 async function salvarLogin(event) {
     if (event) event.preventDefault();
 
@@ -110,10 +99,8 @@ async function salvarLogin(event) {
     }
 }
 
-// Cadastro (auto-signup do aluno). Cria a conta no Supabase Auth com o nome no
-// metadata — o trigger no banco usa isso para preencher perfis.nome. Com a
-// confirmação de email DESLIGADA, o signUp já devolve sessão e entra direto; se
-// estiver LIGADA, avisa para confirmar por email antes de logar.
+// Cadastro (auto-signup do aluno): nome vai no metadata, que o trigger do banco usa para preencher perfis.nome.
+// Confirmação de email DESLIGADA → signUp já devolve sessão e entra; LIGADA → avisa para confirmar antes.
 async function criarConta(event) {
     if (event) event.preventDefault();
 
@@ -147,10 +134,8 @@ async function criarConta(event) {
             // Confirmação de email desligada → já entra. Sem "lembrar": o
             // cadastro não tem a caixa (fica no escopo do login, Fase 3).
             await finalizarLogin(data.user, falhar, false);
-            // Registra o aceite no perfil. Ate agora ele so existia como checkbox no
-            // navegador — nao havia como responder depois quem aceitou, quando e qual
-            // versao. Publico menor de idade e coleta de comportamento; nao se
-            // reconstroi retroativamente. O backend grava o PRIMEIRO e nao sobrescreve.
+            // Registra o aceite (quem, quando, qual versão): público menor de idade + coleta de
+            // comportamento, e isso não se reconstrói depois. O backend grava o PRIMEIRO e não sobrescreve.
             try {
                 await postJSON('/perfil', { user_id: data.user.id, versao_termos: KAIA_VERSAO_TERMOS });
             } catch (e) {
@@ -169,15 +154,9 @@ async function criarConta(event) {
 // ============================================================
 //        "LEMBRE DE MIM" — restauração de sessão (Fase 3)
 // ============================================================
-// Roda ao abrir o login. O token do Supabase SEMPRE persistiu em localStorage
-// (persistSession é o default do createClient) — o que faltava era o app
-// reconhecer isso, porque a identidade (kaia_usuario) morria com a aba. São dois
-// caminhos, e o segundo é o que dá sentido à caixa desmarcada:
-//   com a flag  → refaz finalizarLogin a partir da sessão viva e entra direto;
-//   sem a flag  → signOut(), derrubando token residual. Sem isso, "não lembrar"
-//                 não significaria nada: a sessão do Supabase seguiria válida.
-// Falha silenciosa de propósito: qualquer problema aqui só deixa o formulário
-// normal na tela — nunca trava a entrada.
+// Roda ao abrir o login. O token do Supabase sempre persiste em localStorage (persistSession default).
+// Com a flag kaia_lembrar refaz finalizarLogin e entra direto; sem ela faz signOut() do token residual,
+// senão "não lembrar" não significaria nada. Falha silenciosa de propósito: nunca trava a entrada.
 async function restaurarSessao() {
     const cliente = window.supabaseClient;
     if (!cliente) return;
@@ -232,10 +211,8 @@ function registrarLuz() {
 // ============================================================
 //        OLHO DA SENHA — mostrar/ocultar
 // ============================================================
-// Visível SEMPRE que o campo tem texto, reavaliado a cada digitação e a cada
-// foco. O olho nativo do Edge seguia outra regra (some ao sair do campo e não
-// volta para aquele valor), então quem errou a senha e voltou para reescrever
-// ficava sem ele. Serve login e cadastro: os dois carregam este arquivo.
+// Visível SEMPRE que o campo tem texto (reavaliado a cada digitação/foco): o olho nativo do Edge
+// some ao sair do campo e não volta, e quem errou a senha ficava sem ele. Serve login e cadastro.
 function registrarOlhoSenha() {
     document.querySelectorAll('.campo-senha').forEach((campo) => {
         const input = campo.querySelector('input');
@@ -268,14 +245,9 @@ function registrarOlhoSenha() {
 // ============================================================
 //        PRELOADER — garantia de saída
 // ============================================================
-// O visual (degradê + fades das saudações) é 100% CSS: #kaia-preloader no
-// style.css. Este JS NÃO anima nada — ele só garante que o overlay saia, porque
-// ele cobre o formulário e não pode prender o acesso em nenhum cenário: CSS que
-// não carregou, animação que não rodou, aba aberta em segundo plano.
-// Também deixa pular a abertura com um clique ou uma tecla — quem já viu não
-// precisa esperar de novo.
-// Acoplado ao CSS: precisa ficar DEPOIS do fim da animação (#kaia-preloader sai em
-// 3,5s + 0,45s de fade = 3,95s). Se mudar o ritmo no style.css, ajuste aqui também.
+// A animação é 100% CSS (#kaia-preloader no style.css); este JS só garante que o overlay saia, pois ele
+// cobre o formulário (CSS que não carregou, aba em segundo plano), e deixa pular com clique ou tecla.
+// Acoplado ao CSS: PRE_MS fica DEPOIS do fim (3,5s + 0,45s de fade = 3,95s). Mudou lá, ajuste aqui.
 const PRE_MS = 4250;
 
 function registrarPreloader() {

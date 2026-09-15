@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Gera questões em lote direto no cache, pelo mesmo caminho da produção.
+Gera questões em lote direto no cache, pelo mesmo caminho da produção — para repor
+aposentadas (regras antigas do prompt) ou encher o cache antes de um beta (sem geração ao vivo).
 
-Serve para duas coisas:
-  - repor o que foi aposentado (questão gerada sob regras antigas do prompt);
-  - encher o cache antes de um beta, para que o aluno receba do cache em vez de
-    esperar geração ao vivo.
-
-Gera GENÉRICAS por padrão (hobbie NULL). Questão com hobbie só é servida a quem tem
-aquele hobbie — em cache pequeno isso fragmenta e a maior parte nunca é aproveitada.
-O serving já busca primeiro com hobbie e cai para a genérica, então a genérica serve
-todo mundo.
-
-Verifica em lote logo após gerar, em vez de deixar para o job: assim o lote já nasce
-com veredito e não entra em quarentena.
+GENÉRICAS por padrão (hobbie NULL): questão com hobbie só serve a quem tem o hobbie e
+fragmenta cache pequeno; o serving tenta com hobbie e cai para a genérica. Verifica em
+lote logo após gerar (não deixa pro job), para o lote nascer com veredito e fora da quarentena.
 
 Uso (na raiz do projeto):
     python -u ml/gerar_lote.py --repor-calculo        # repõe MAT/FIS/QUI aposentadas

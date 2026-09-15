@@ -16,16 +16,14 @@
 
 <body>
 
-    <!-- Preloader de entrada: fica no HTML (não injetado por JS) para aparecer já
-         no primeiro paint, sem piscar a tela de login antes. Sai sozinho pela
-         animação; o registrarPreloader do login.js garante a remoção e permite
-         pular com um clique ou tecla. -->
+    <!-- Preloader no HTML (não via JS) para estar no 1º paint, sem piscar o login.
+         Sai pela animação; registrarPreloader (login.js) garante a remoção e deixa
+         pular com clique ou tecla. -->
     <div id="kaia-preloader" aria-hidden="true">
         <div class="kaia-pre-saudacoes">
-            <!-- A MESMA esfera da espera da IA (.kaia-ail__esfera): reaproveitada
-                 aqui em variante clara, via .kaia-pre-esfera no style.css. É só
-                 CSS — sem React, porque esta tela precisa aparecer no primeiro
-                 paint e não carrega a ilha do ai-loader.js. -->
+            <!-- Mesma esfera da espera da IA (.kaia-ail__esfera), variante clara via
+                 .kaia-pre-esfera. Só CSS, sem React: precisa do 1º paint e esta tela
+                 não carrega o ai-loader.js. -->
             <div class="kaia-pre-esfera kaia-ail__esfera"></div>
             <p class="kaia-pre-item">Olá</p>
             <p class="kaia-pre-item" lang="ja">こんにちは</p>
@@ -41,7 +39,7 @@
     </div>
 
     <div class="tela-login">
-        <!-- A luz foge do mouse e fica ATRÁS da caixa (ver registrarLuz no script.js) -->
+        <!-- A luz foge do mouse e fica ATRÁS da caixa (ver registrarLuz no login.js) -->
         <div class="luz-fundo" id="luzFundo"></div>
 
         <form class="caixa-login" onsubmit="salvarLogin(event)">

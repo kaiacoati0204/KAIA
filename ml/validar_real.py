@@ -2,11 +2,9 @@
 """
 Confere a leitura de atenção contra evidência que NÃO depende de introspecção.
 
-O probe (autorrelato) é o rótulo real, mas é ruidoso por natureza: mind-wandering
-é justamente o estado em que o aluno não está se monitorando, e ainda tem o viés
-de responder o que soa certo. Este script cerca o probe com três análises que não
-perguntam nada ao aluno. A força está na CONVERGÊNCIA: se as três apontarem junto,
-a leitura é real; se o probe discordar das outras duas, o problema é o probe.
+O probe (autorrelato) é ruidoso: mind-wandering é justo quando o aluno não se monitora,
+e há viés de responder o que soa certo. Três análises sem perguntar nada ao aluno valem
+pela CONVERGÊNCIA — se o probe discordar das outras duas, o problema é o probe.
 
   1. TESTE A/B      — a leitura SERVE? (causal; precisa de KAIA_AB_TESTE=1)
   2. VALIDADE PRED. — a leitura SIGNIFICA algo? (custo zero, só análise)
@@ -15,8 +13,7 @@ a leitura é real; se o probe discordar das outras duas, o problema é o probe.
 Offline/manual. Precisa de DATABASE_URL (mesmo banco do backend). Rode na raiz:
     python ml/validar_real.py
 
-Nenhuma análise inventa dado: onde faltar amostra, o script diz que faltou em vez
-de imprimir um número que não se sustenta.
+Onde faltar amostra, o script diz que faltou em vez de inventar número.
 """
 import os
 import sys

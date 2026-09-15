@@ -1,9 +1,8 @@
 """
-Validação do JWT do Supabase Auth (Sprint — gestão de sessão segura).
+Validação do JWT do Supabase Auth.
 
-Os tokens do Supabase são assinados com ES256 (chave assimétrica) e as chaves
-públicas ficam no JWKS do projeto. Aqui verificamos assinatura + expiração +
-audience + issuer usando o JWKS (sem precisar de segredo no servidor).
+Tokens ES256 verificados pelo JWKS público do projeto (assinatura + exp + aud +
+iss), sem segredo no servidor.
 
 Uso como dependência FastAPI:
     @app.get("/rota")

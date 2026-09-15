@@ -2,15 +2,10 @@
 """
 Verifica em lote as questões do cache que ainda não têm veredito.
 
-Faz duas coisas de uma vez, e por isso substitui a medição em separado:
-
-  PROTEGE  — questão com gabarito errado sai de circulação antes de chegar ao aluno.
-  MEDE     — como são questões REAIS do cache (as que os alunos receberiam), a taxa
-             de divergência é a taxa de defeito de produção, sobre uma amostra bem
-             maior do que gerar algumas dezenas descartáveis.
-
-O job do backend faz o mesmo, 12 a cada 2 min. Este script existe para o caso em que
-há um estoque acumulado e você quer resolver de uma vez, sem depender do backend ligado.
+PROTEGE (gabarito errado sai de circulação antes do aluno) e MEDE: por serem questões
+REAIS do cache, a divergência é a taxa de defeito de produção numa amostra bem maior —
+por isso substitui a medição separada. O job do backend faz o mesmo (12 a cada 2 min);
+este é para zerar estoque acumulado de uma vez, sem depender do backend ligado.
 
 Uso (na raiz do projeto):
     python -u ml/verificar_cache.py                 # tudo que está sem veredito

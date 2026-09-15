@@ -158,7 +158,11 @@ def gerar_aluno():
 
 def gerar_sessao(estado, aluno, base_mouse):
     z = random.uniform(0.1, 1.5)                 # intensidade latente; perto de 0 = episódio fraco (parece engajado)
-    dif = random.randint(1, 5)
+    # dificuldade × mente vagando em U, mais no difícil
+    # Dias da Silva 2020: conjunto médio 4,82 focado → 5,46 disperso, relação em U (Mills & D'Mello
+    # 2015 citam o mesmo). Só no distraído, que é o que eles mediram; pesos modestos, hipótese nossa.
+    dif = random.choices([1, 2, 3, 4, 5],
+                         weights=[1.2, 0.9, 0.8, 1.0, 1.4] if estado == "distraido" else [1] * 5)[0]
     # Fronteira distraído↔muito borrada nos dois sentidos (8% e 5%), pra nada dar 100%:
     # ef gera as features, o rótulo continua sendo `estado`.
     ef = estado

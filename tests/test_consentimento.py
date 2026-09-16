@@ -59,3 +59,13 @@ def test_aceite_so_vale_com_nome_cpf_e_parentesco():
 def test_token_do_link_e_imprevisivel():
     tokens = {c.novo_token() for _ in range(50)}
     assert len(tokens) == 50 and all(len(t) >= 32 for t in tokens)
+
+
+def test_cpf_e_opcional_mas_se_vier_tem_que_ser_valido():
+    """LGPD art. 14 pede esforço razoável de verificação, não CPF — e menos dado de terceiro
+    é a direção mais segura. Mas CPF digitado errado num registro de prova é pior que vazio."""
+    assert c.validar_aceite("Maria Souza", None, "mãe") == (True, None)
+    assert c.validar_aceite("Maria Souza", "", "mãe") == (True, None)
+    assert c.validar_aceite("Maria Souza", "529.982.247-25", "mãe") == (True, None)
+    assert c.validar_aceite("Maria Souza", "111.111.111-11", "mãe")[0] is False
+    assert c.validar_aceite("Maria Souza", None, None)[0] is False      # parentesco continua obrigatório

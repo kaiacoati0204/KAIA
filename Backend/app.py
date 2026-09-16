@@ -3176,7 +3176,8 @@ async def consentimento_aceitar(token: str, body: AceiteIn, request: Request):
                 "update consentimentos set status = 'aprovado', responsavel_nome = $2, "
                 "responsavel_cpf_hash = $3, responsavel_parentesco = $4, aceite_ts = now(), "
                 "aceite_ip = $5 where id = $1",
-                linha["id"], body.responsavel_nome.strip(), consent.hash_cpf(body.cpf),
+                linha["id"], body.responsavel_nome.strip(),
+                consent.hash_cpf(body.cpf) if (body.cpf or "").strip() else None,
                 body.parentesco, _ip_do_pedido(request))
             await conn.execute("update perfis set consentimento_status = 'aprovado' "
                                "where user_id = $1::uuid", linha["aluno_id"])

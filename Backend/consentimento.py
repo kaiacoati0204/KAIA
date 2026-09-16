@@ -83,13 +83,21 @@ def coleta_permitida(data_nascimento, status, estrito=False, hoje=None):
 
 
 def validar_aceite(nome, cpf, parentesco):
-    """(ok, erro). O aceite é prova legal: nome e CPF do responsável têm que fazer sentido."""
+    """(ok, erro). O aceite é prova legal, então nome e parentesco são obrigatórios.
+
+    CPF é OPCIONAL: a LGPD (art. 14) pede "esforços razoáveis" para verificar que quem
+    consentiu é o responsável, e não exige CPF. Nome + parentesco + declaração sob as penas
+    da lei + data, hora e IP já formam registro. Quem informa o CPF reforça a identificação;
+    quem não informa coleta menos dado de terceiro — que é a direção mais segura em
+    minimização. Se vier, tem que ser válido (erro de digitação num registro de prova é pior
+    que campo vazio).
+    """
     if not (nome or "").strip() or len((nome or "").strip()) < 5:
         return False, "Informe o nome completo do responsável."
-    if not cpf_valido(cpf):
-        return False, "CPF inválido."
     if parentesco not in PARENTESCOS:
         return False, "Informe o parentesco."
+    if (cpf or "").strip() and not cpf_valido(cpf):
+        return False, "CPF inválido."
     return True, None
 
 

@@ -3257,14 +3257,16 @@ async function pedirApoioDaPausa() {
     if (!sessionId) return;
     try {
         const d = await postJSON('/prevencao/pausa', { session_id: sessionId });
-        if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx);
+        if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx, d.plano);
         else if (d?.apoio === 'pausa_curta') mostrarOfertaDePausa(cx);
     } catch (_) { /* apoio é opcional: falhou, o aluno segue sem nada */ }
 }
 
-// Meta antes da rodada + devolução do autorrelato. As duas têm respaldo com TDAH
-// (Harris 2005; Estrapala 2022) e nenhuma depende de acertar o estado do aluno.
-function mostrarPacoteFoco(cx) {
+// Plano se-então + devolução do autorrelato. O plano NÃO é uma meta ("vou fazer 10"): é
+// "se acontecer Y, então faço X", dito antes. Meta comum morre na hora de agir; o plano
+// se-então automatiza a resposta no gatilho (d = 0,65). O servidor escolhe QUAL plano a
+// partir do que está pesando mais para este aluno agora.
+function mostrarPacoteFoco(cx, plano) {
     // Devolução: fala do ATO de se observar, não de uma nota. Com TEA/TDAH, um placar baixo
     // pode virar vergonha em vez de consciência — por isso a frase final quando foi pouco.
     const devolucao = probesRespondidos
@@ -3273,24 +3275,28 @@ function mostrarPacoteFoco(cx) {
            hoje, e em <strong>${probesNaQuestao}</strong> estava na questão.
            ${probesNaQuestao * 2 < probesRespondidos ? 'Reparar nisso já ajuda.' : ''}</p>`
         : '';
+    const texto = plano?.texto || 'Se eu pensar em pegar o celular, então termino a questão aberta primeiro.';
+    _planoAtual = plano?.id || 'celular';
     cx.innerHTML = `
         ${devolucao}
-        <p class="apoio-pergunta">Quer combinar uma meta para a próxima rodada?</p>
+        <p class="apoio-pergunta">Um plano para a próxima rodada:</p>
+        <p class="apoio-plano">“${texto}”</p>
         <div class="apoio-botoes">
-            <button type="button" onclick="escolherMeta(10)">10 seguidas</button>
-            <button type="button" onclick="escolherMeta(5)">5 com calma</button>
-            <button type="button" class="apoio-pular" onclick="escolherMeta(null)">Agora não</button>
+            <button type="button" onclick="escolherPlano(true)">Combinado</button>
+            <button type="button" class="apoio-pular" onclick="escolherPlano(false)">Agora não</button>
         </div>`;
     cx.hidden = false;
 }
 
-function escolherMeta(meta) {
-    logEvent('meta_rodada', { meta });
+let _planoAtual = null;
+
+function escolherPlano(aceitou) {
+    // `meta` mantém o nome antigo do campo para o relatório continuar lendo a aceitação
+    logEvent('meta_rodada', { meta: aceitou ? 1 : null, plano: _planoAtual, aceitou });
     const cx = $('resumo-apoio');
     if (!cx) return;
-    if (meta === null) { cx.hidden = true; return; }
-    cx.innerHTML = `<p class="apoio-devolucao">Combinado: <strong>${meta} questões</strong>.
-                    Boa rodada!</p>`;
+    if (!aceitou) { cx.hidden = true; return; }
+    cx.innerHTML = '<p class="apoio-devolucao">Combinado. Boa rodada!</p>';
 }
 
 // A pausa já existe (pomodoro). Aqui ela é OFERECIDA, não imposta — quem decide é o aluno.

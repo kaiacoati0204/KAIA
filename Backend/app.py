@@ -65,6 +65,11 @@ PREVENCAO_LIMIAR_RISCO = float(os.getenv("KAIA_PREVENCAO_LIMIAR", "0.4"))
 # calcula, registra e nao afeta ninguem. Assim da para comparar os dois no dado real sem expor
 # o aluno a um modelo ainda nao validado. "modelo": so depois de ele vencer a regra no real.
 PREVENCAO_GATILHO = os.getenv("KAIA_PREVENCAO_GATILHO", "regra")
+# "fixo": oferece SEMPRE o pacote_foco, sem modelo e sem sorteio. E o modo da fase 1 do beta —
+# a pergunta que decide tudo e "o aluno aceita?", e ela nao precisa de IA nenhuma para ser
+# respondida. Esperar a fase 2 para descobrir aceitacao ruim seria descobrir tarde demais.
+# "bandit": o sorteio normal entre nada / pacote_foco / pausa_curta.
+PREVENCAO_MODO = os.getenv("KAIA_PREVENCAO_MODO", "bandit")
 
 # Sigla → nome da matéria. O frontend manda a SIGLA (chave do temas_cache e da sessão) e
 # os prompts usam o NOME por extenso, senão o Gemini teria que adivinhar a sigla.
@@ -2870,6 +2875,42 @@ class PausaIn(BaseModel):
     session_id: str
 
 
+# ==== PLANOS SE-ENTAO (precorrecao) ====
+# Nao e uma meta ("vou fazer 10"): e um plano "se acontecer Y, entao faco X", dito ANTES.
+# A diferenca nao e de estilo - especificar a situacao-gatilho de antemao faz a resposta sair
+# automatica na hora, que e justamente quando a forca de vontade ja acabou. Meta comum tem
+# efeito pequeno; plano se-entao tem d = 0,65 (Gollwitzer & Sheeran, 94 testes).
+# Qual plano mostrar sai de uma REGRA sobre a feature dominante, nao do modelo: com ~20
+# observacoes por braco, variar o texto dentro do braco so somaria ruido.
+PLANOS = {
+    "dificuldade": ("dificuldade_recente", 0.5,
+                    "Se vier uma questão difícil, então leio o enunciado de novo antes de escolher."),
+    "pressa": ("frac_rapidas_recentes", 0.4,
+               "Se eu me pegar respondendo rápido demais, então releio a pergunta antes de marcar."),
+    "cansaco": ("minutos_sessao", 25.0,
+                "Se eu sentir cansaço, então faço mais 3 questões e paro por hoje."),
+    "erros": ("queda_acerto_recente", 0.3,
+              "Se eu errar duas seguidas, então leio a explicação com calma antes de seguir."),
+}
+PLANO_PADRAO = ("celular",
+                "Se eu pensar em pegar o celular, então termino a questão aberta primeiro.")
+
+
+def _plano_do_momento(feats):
+    """(id, texto) do plano que fala do que está pesando MAIS para este aluno agora.
+
+    Plano genérico é mais fraco que plano ancorado na situação real de quem vai usá-lo — e o
+    megaestudo do PNAS mostrou que mensagem que referencia dados da própria pessoa rende mais
+    que a genérica. Sem nenhuma feature acima do corte, vai o plano padrão.
+    """
+    melhor, razao = None, 1.0
+    for pid, (feat, corte, texto) in PLANOS.items():
+        r = float(feats.get(feat, 0) or 0) / corte
+        if r >= razao:
+            melhor, razao = (pid, texto), r
+    return melhor or PLANO_PADRAO
+
+
 async def _log_evento(conn, session_id, tipo, payload):
     await conn.execute(
         "insert into session_events (session_id, event_type, payload, ts) "
@@ -2929,6 +2970,14 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
         elif risco.evento_objetivo(r["event_type"], pay):
             eventos += 1
 
+    if p.get("modo") == "fixo":
+        # fase sem sorteio: a rodada vale como dado descritivo, mas alimentar o bandit com ela
+        # enviesaria o aprendizado (o braco foi imposto, nao sorteado).
+        await _log_evento(conn, session_id, "recompensa_prevencao",
+                          {"braco": braco, "prob": None, "modo": "fixo",
+                           "recompensa": recompensa_rodada(eventos, respondidas, False),
+                           "respondidas": respondidas, "eventos_objetivos": eventos})
+        return None
     if fim_de_sessao and respondidas == 0:
         # parou EXATAMENTE na pausa, sem responder nada: acabou o tempo de estudo, não é
         # reação ao apoio. Dar 0 aqui encheria todos os braços de zeros (a maioria das sessões
@@ -2974,6 +3023,18 @@ async def prevencao_pausa(body: PausaIn, request: Request,
             "select session_start_ts from sessions where session_id = $1::uuid", body.session_id)
         if inicio is None:
             return {"apoio": None, "motivo": "sem_sessao"}
+        if PREVENCAO_MODO == "fixo":
+            # prob=None de proposito: sem sorteio nao ha IPW, e o relatorio exclui essas rodadas
+            # da estimativa de efeito em vez de misturar com a fase sorteada.
+            feats_fixo = risco.features_do_momento(
+                await _eventos_da_sessao(conn, body.session_id), inicio,
+                await conn.fetchval("select now()"), await _estudo_dia_min(conn, sub))
+            pid, texto = _plano_do_momento(feats_fixo)
+            await _log_evento(conn, body.session_id, "decisao_prevencao",
+                              {"braco": "pacote_foco", "acionou": True, "modo": "fixo",
+                               "plano": pid, "prob": None})
+            return {"apoio": "pacote_foco", "braco": "pacote_foco",
+                    "plano": {"id": pid, "texto": texto}, "modo": "fixo"}
         agora = await conn.fetchval("select now()")
         feats = risco.features_do_momento(
             await _eventos_da_sessao(conn, body.session_id), inicio, agora,
@@ -2995,10 +3056,12 @@ async def prevencao_pausa(body: PausaIn, request: Request,
             return {"apoio": None, "motivo": "risco_baixo", "risco": round(r, 3)}
 
         braco, prob = bandit.escolher()
+        pid, texto = _plano_do_momento(feats)
         await _log_evento(conn, body.session_id, "decisao_prevencao",
                           dict(sombra, risco=round(r, 3), braco=braco, prob=round(prob, 3),
-                               acionou=True, limiar=PREVENCAO_LIMIAR_RISCO))
-    return {"apoio": None if braco == "nada" else braco, "braco": braco, "risco": round(r, 3)}
+                               acionou=True, limiar=PREVENCAO_LIMIAR_RISCO, plano=pid))
+    return {"apoio": None if braco == "nada" else braco, "braco": braco, "risco": round(r, 3),
+            "plano": {"id": pid, "texto": texto}}
 
 
 # ==== CONSENTIMENTO DO RESPONSÁVEL (LGPD art. 14) ====

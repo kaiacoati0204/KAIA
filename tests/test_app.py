@@ -1678,3 +1678,26 @@ async def test_parar_na_propria_pausa_nao_vira_nota_zero():
         fetchval=0,
     )
     assert await app_mod._fechar_recompensa_prevencao(conn, "s", fim_de_sessao=True) is None
+
+
+# ================================================ plano se-então (precorreção)
+def test_plano_fala_do_que_esta_pesando_mais_agora():
+    """plano genérico é mais fraco que plano ancorado na situação real (Gollwitzer; PNAS)"""
+    base = dict.fromkeys(app_mod.risco.FEATURES_RISCO, 0.0)
+    assert app_mod._plano_do_momento(dict(base, dificuldade_recente=1.5))[0] == "dificuldade"
+    assert app_mod._plano_do_momento(dict(base, frac_rapidas_recentes=0.9))[0] == "pressa"
+    assert app_mod._plano_do_momento(dict(base, minutos_sessao=60))[0] == "cansaco"
+    assert app_mod._plano_do_momento(dict(base, queda_acerto_recente=0.6))[0] == "erros"
+
+
+def test_sem_nada_pesando_vai_o_plano_padrao():
+    base = dict.fromkeys(app_mod.risco.FEATURES_RISCO, 0.0)
+    pid, texto = app_mod._plano_do_momento(base)
+    assert pid == "celular" and texto.startswith("Se eu")
+
+
+def test_todo_plano_e_um_se_entao_de_verdade():
+    """se virar 'vou fazer 10 questões' perdeu o mecanismo: o gatilho tem que estar dito"""
+    textos = [t for _, _, t in app_mod.PLANOS.values()] + [app_mod.PLANO_PADRAO[1]]
+    for t in textos:
+        assert t.startswith("Se ") and ", então " in t

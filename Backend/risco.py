@@ -113,11 +113,13 @@ def rotulo_futuro(eventos, agora, horizonte=HORIZONTE_QUESTOES):
 # Cada ponto é um fator com respaldo: tempo na tarefa (Farley 2013; meta-análise Zanesco 2025),
 # cansaço no dia, rápidas demais (Mills 2014), queda de acerto (DTS) e evento recente.
 def risco_por_regras(f):
-    pontos = ((f["minutos_sessao"] >= 25)
-              + (f["estudo_dia_min"] >= 90)
-              + (f["frac_rapidas_recentes"] >= 0.4)
-              + (f["queda_acerto_recente"] >= 0.3)
-              + (f["eventos_na_sessao"] >= 1 and f["min_desde_ultimo_evento"] <= 10))
+    # int() em cada condicao: com valores vindos do numpy, True + True da True (soma de bool
+    # no numpy e OU logico) e o escore ficava preso em 0 ou 0,2.
+    pontos = (int(f["minutos_sessao"] >= 25)
+              + int(f["estudo_dia_min"] >= 90)
+              + int(f["frac_rapidas_recentes"] >= 0.4)
+              + int(f["queda_acerto_recente"] >= 0.3)
+              + int(f["eventos_na_sessao"] >= 1 and f["min_desde_ultimo_evento"] <= 10))
     return pontos / 5.0
 
 

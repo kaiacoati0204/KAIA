@@ -1,6 +1,8 @@
 """Modelo 1 — features sem vazamento, rótulo, regras de reserva e fallback."""
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 import risco
 
 T0 = datetime(2026, 9, 15, 14, 0, tzinfo=timezone.utc)
@@ -71,3 +73,14 @@ def test_sem_modelo_as_regras_decidem(tmp_path):
     f = dict.fromkeys(risco.FEATURES_RISCO, 0.0)
     f["minutos_sessao"] = 30
     assert risco.prever_risco(f, None) == (0.2, "regras")
+
+
+def test_regras_somam_pontos_mesmo_com_valores_numpy():
+    """numpy: True + True == True (OU logico). Sem int(), o escore ficava preso em 0 ou 0,2
+    e as regras pareciam muito piores do que sao na comparacao contra o modelo."""
+    np = pytest.importorskip("numpy")
+    cheio = dict.fromkeys(risco.FEATURES_RISCO, np.float64(0.0))
+    cheio.update(minutos_sessao=np.float64(40), estudo_dia_min=np.float64(120),
+                 frac_rapidas_recentes=np.float64(0.6), queda_acerto_recente=np.float64(0.4),
+                 eventos_na_sessao=np.float64(2), min_desde_ultimo_evento=np.float64(5))
+    assert risco.risco_por_regras(cheio) == 1.0

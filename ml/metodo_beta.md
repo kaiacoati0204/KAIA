@@ -1,0 +1,84 @@
+# Método do beta — atenção e foco
+
+Como o sistema de atenção vai ser testado, e **quando desistir de cada parte**. Os números estão
+aqui antes de existir dado real: é o histórico do git que prova que não foram escolhidos depois
+para justificar o resultado. Foi a falta disso que fez meio ano ser gasto numa ideia que não dava
+para provar.
+
+Contexto do sistema: `Backend/risco.py` (Modelo 1), `Backend/bandit_prevencao.py` (Modelo 2),
+`ml/gerar_risco.py`, `ml/simular_bandit_prevencao.py`, `ml/medir_dano_probe.py`.
+
+---
+
+## 1. Antes de coletar qualquer coisa
+
+Bloqueia tudo. Nenhum evento de atenção é coletado de um aluno sem:
+
+- **Consentimento do responsável registrado** — quem consentiu, quando, e para quê. O beta é com
+  menores; isto não é formalidade, é condição.
+- **Recusa possível sem perder a plataforma.** Quem não consente usa a KaIA sem a parte de
+  atenção: sem probe, sem intervenção, e os eventos de foco não são gravados.
+- **Minimização.** Só os eventos da lista: resposta de questão (tempo, acerto, nível), saída da
+  aba (duração, se foi para outra aba da KaIA), abandono, ociosidade, probe, e a decisão de
+  intervenção. **Não** coletamos conteúdo de tela, câmera, microfone, nem o que é digitado fora
+  das respostas.
+- **Prazo de deleção definido** e um caminho para apagar os dados de um aluno a pedido.
+- **Texto honesto** no consentimento: a KaIA faz *leitura de atenção/foco* a partir de
+  comportamento na plataforma. Não é avaliação clínica e não diagnostica nada.
+
+Painéis de responsável seguem ocultos no beta, então nada disso vira relatório sobre o aluno para
+terceiros ainda.
+
+## 2. O primeiro teste é humano, não de modelo (3 semanas)
+
+Antes de ligar Modelo 1 ou Modelo 2. Com **10 a 15 alunos** com consentimento, ~3 sessões cada,
+usando só a instrumentação que já existe.
+
+Uma pergunta: **os alunos engajam, e o probe não faz mal?**
+
+O que registrar: probe respondido x pulado; quantas vezes "eu já estava focado" é apertado;
+eventos objetivos por aluno-sessão; e `python ml/medir_dano_probe.py`.
+
+Se o comportamento humano que sustenta o resto não estiver lá, nada abaixo importa — e isso custa
+3 semanas descobrir, não 6 meses.
+
+## 3. Como o efeito é medido — o controle é o braço "nada"
+
+**Não** há grupo de alunos que passa o beta sem apoio. O braço `nada` do bandit é o controle, com
+piso de 10% de chance por pausa. Assim a comparação é dentro do mesmo aluno e **sorteada por
+pausa**, o cansaço de fim de sessão cai igual nos dois lados, e ninguém fica sem ajuda o beta
+inteiro.
+
+Por que não pré/pós (rodada N-1 contra N): a rodada N é sempre mais tarde, e a atenção cai com o
+tempo na tarefa (Farley 2013). O apoio pareceria pior do que é, por um viés sistemático.
+
+Por que não A/B 50/50 por aluno: num beta pequeno não tem poder (precisaria de centenas de alunos
+por meses) e deixar metade dos alunos TEA/TDAH sem apoio é feio.
+
+A média bruta por braço **não** vale como resultado: o bandit escolhe mais quem vai bem. Comparar
+sempre contra `nada`, pesando pela probabilidade registrada em cada escolha.
+
+## 4. Critérios de abandono
+
+Cada critério tem um **piso de N**: abaixo dele o número não é lido, nem para matar nem para
+salvar. Sem isso o critério vira leitura de borra de café.
+
+| peça | mata quando | piso de N | o que fica no lugar |
+|---|---|---|---|
+| Probe como rótulo/recompensa | > 50% dos probes pulados | 40 probes | rótulo só por evento objetivo; probe vira opcional |
+| Gatilhos de reação | "já estava focado" em > 40% das intervenções | 30 intervenções | subir os cortes (30 s → 60 s) ou desligar a reação |
+| Modelo 1 | AUC < 0,65 no dado real do braço `nada` | 200 momentos e 40 eventos | as regras de reserva decidem (já é o padrão) |
+| Modelo 1 (versão fraca) | não superar as regras em 0,03 de AUC | idem | as regras — mais simples ganha empate |
+| Modelo 2 | intervalo de 90% do melhor braço ainda cobre o de `nada` | 200 rodadas avaliadas | fixar o apoio mais barato; prevenção = não provada |
+| Parte reativa | < 1 evento objetivo por aluno-sessão | 30 aluno-sessões | só prevenção; não há o que reagir |
+| Probe (dano) | acerto depois do probe pior em > 10 pontos | 20 sessões | frequência do probe pela metade; se persistir, só voluntário |
+| Personalização por aluno | — | — | já está fora do beta: o bandit aprende a média do grupo (Schmucker 2025) |
+
+## 5. O que nunca pode ser dito como resultado
+
+- Número de dado sintético (AUC do `gerar_risco.py`, qualquer saída do `simular_bandit_prevencao.py`).
+- Média bruta de braço do bandit sem comparar com `nada`.
+- Métrica de momento em que houve intervenção, usada para validar o Modelo 1 — validação só nos
+  momentos do braço `nada` (van Geloven 2020).
+- Qualquer coisa que soe como "a KaIA detecta distração" ou "diagnostica". O que ela faz é reagir a
+  comportamento medido e testar qual apoio ajuda.

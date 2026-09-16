@@ -41,7 +41,7 @@ jobs:
         run: pip install -r Backend/requirements-dev.txt   # testes (pytest, cov, httpx) + as de produção
 
       - name: Roda os testes (pytest + cobertura > 70%)
-        run: pytest tests/ -q --cov=app --cov=thompson --cov-fail-under=70
+        run: pytest tests/ -q --cov=app --cov=thompson --cov=risco --cov=bandit_prevencao --cov=consentimento --cov-fail-under=70
 
       - name: Sobe o FastAPI e confirma que /docs responde 200
         working-directory: Backend

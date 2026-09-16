@@ -84,3 +84,14 @@ def test_regras_somam_pontos_mesmo_com_valores_numpy():
                  frac_rapidas_recentes=np.float64(0.6), queda_acerto_recente=np.float64(0.4),
                  eventos_na_sessao=np.float64(2), min_desde_ultimo_evento=np.float64(5))
     assert risco.risco_por_regras(cheio) == 1.0
+
+
+def test_regra_por_lentidao_so_pega_o_lado_lento():
+    """o plano pede para ir devagar; se o lado lento contasse na recompensa, pacote_foco
+    seria punido por ter sido obedecido"""
+    lento = ("desengajamento_regra", {"motivo": "acerto recente 20% e tempo lento demais (+3.1 sigma)"})
+    rapido = ("desengajamento_regra", {"motivo": "acerto recente 20% e tempo rapido demais (-3.1 sigma)"})
+    assert risco.regra_por_lentidao(*lento) and not risco.regra_por_lentidao(*rapido)
+    # nos dois casos continua sendo evento para o RÓTULO do Modelo 1
+    assert risco.evento_objetivo(*lento) and risco.evento_objetivo(*rapido)
+    assert not risco.regra_por_lentidao("tab_change", {"tempo_fora_foco_s": 60})

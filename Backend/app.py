@@ -2974,13 +2974,16 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
             "and event_type = 'recompensa_prevencao' and ts > $2", session_id, dec["ts"]):
         return None                                  # já fechada
 
-    respondidas, eventos = 0, 0
+    respondidas, acertos, eventos, lentidao_ignorada = 0, 0, 0, 0
     for r in await conn.fetch(
             "select event_type, payload from session_events "
             "where session_id = $1::uuid and ts > $2", session_id, dec["ts"]):
         pay = json.loads(r["payload"]) if isinstance(r["payload"], str) else (r["payload"] or {})
         if r["event_type"] == "question_answer":
             respondidas += 1
+            acertos += 1 if pay.get("acertou") else 0
+        elif risco.regra_por_lentidao(r["event_type"], pay):
+            lentidao_ignorada += 1        # o plano pediu para ir devagar: nao pode contar contra
         elif risco.evento_objetivo(r["event_type"], pay):
             eventos += 1
 
@@ -3002,10 +3005,14 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
     rec = recompensa_rodada(eventos, respondidas, abandonou)
     if rec is None:
         return None                                  # rodada curta demais: não avalia
+    # alem da recompensa (que e o que o bandit otimiza), grava os desfechos separados: se o
+    # bandit "melhorar" a recompensa sem mexer em acerto ou conclusao, era proxy errado.
     await _log_evento(conn, session_id, "recompensa_prevencao",
                       {"braco": braco, "prob": p.get("prob"), "recompensa": rec,
                        "respondidas": respondidas, "eventos_objetivos": eventos,
-                       "abandonou": abandonou})
+                       "abandonou": abandonou, "acertos": acertos,
+                       "completou_rodada": respondidas >= MIN_RESPONDIDAS and not abandonou,
+                       "lentidao_ignorada": lentidao_ignorada})
     return braco, rec, str(dono_aluno) if dono_aluno else None
 
 

@@ -42,6 +42,18 @@ def evento_objetivo(tipo, payload):
     return tipo in ("desengajamento_regra", "question_abandon")
 
 
+def regra_por_lentidao(tipo, payload):
+    """A regra DTS disparou pelo lado LENTO?
+
+    Ela marca tempo fora do ritmo nos dois sentidos: rápido demais (chute) e lento demais.
+    O plano se-então pede ao aluno, de propósito, que vá mais devagar ("releio antes de
+    marcar") — então o braço pacote_foco empurra o aluno justo para o lado que a regra pune,
+    e seria penalizado por ter sido obedecido. Na RECOMPENSA do bandit isso não pode contar.
+    No rótulo do Modelo 1 continua contando: lá não existe braço para enviesar.
+    """
+    return tipo == "desengajamento_regra" and "lento" in str(payload.get("motivo", ""))
+
+
 def evento_autorrelato(tipo, payload):
     """O aluno DISSE que estava vagando/fora. Serve de rótulo do Modelo 1, nunca de recompensa."""
     return tipo == "probe_atencao" and payload.get("estado") in ("distraido", "muito_distraido")

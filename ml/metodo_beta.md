@@ -119,6 +119,27 @@ E o gatilho: **quem decide se oferece é a REGRA** (`KAIA_PREVENCAO_GATILHO=regr
 roda em modo sombra — calcula, registra, não afeta ninguém. Dizer que "a IA decide quando" é
 falso hoje; o que a IA faz e nenhuma regra faz é **descobrir qual apoio funciona**.
 
+## 5.1 O que ESTE beta valida — e o que não valida
+
+Escrito em destaque porque é a armadilha mais provável, e ela não é estatística: é de expectativa.
+
+> **Este beta valida que o sistema funciona de ponta a ponta. Ele NÃO valida que a intervenção
+> funciona.** Com 6 a 12 alunos e algumas centenas de pausas, nenhuma comparação entre braços
+> terá poder estatístico — nem com todos os ajustes de desenho.
+
+O risco não é a equipe não saber disso. É alguém de fora (banca, investidor, ou a própria equipe
+sob pressão de prazo) pegar um número que saiu do bandit e tratar como conclusão.
+
+## 5.2 Confundimentos conhecidos, e o que foi feito
+
+| confundimento | situação |
+|---|---|
+| **regra pune lentidão, e o plano pede lentidão** | **corrigido**: eventos da regra pelo lado "lento" não contam na recompensa (contam no rótulo do Modelo 1, onde não há braço para enviesar) |
+| **`pausa_curta` tem imunidade a saída de aba** (o sensor é suspenso durante a pausa) | **aberto** — é uma vantagem artificial do braço; soma-se à evidência fraca dele (d = −0,09 em tarefa cognitiva) e é o principal argumento para tirá-lo do beta |
+| **carryover entre pausas consecutivas** | derivável do log: todos os eventos têm sessão, aluno e horário, então "braço anterior" e "rodadas desde a última oferta" se reconstroem na análise |
+| **abandono logo após a oferta vale 0** | o evento `motivo_saida` ("bati minha meta" vs "cansei") permite separar depois quem parou satisfeito de quem largou |
+| **proxy da recompensa** | o evento de recompensa grava também acertos, respondidas e conclusão da rodada — se o bandit melhorar a recompensa sem mexer nesses, era proxy errado |
+
 ## 6. O que nunca pode ser dito como resultado
 
 - Número de dado sintético (AUC do `gerar_risco.py`, qualquer saída do `simular_bandit_prevencao.py`).

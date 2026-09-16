@@ -240,8 +240,18 @@ async def lifespan(app: FastAPI):
                     "from session_events where event_type = 'recompensa_prevencao' "
                     "and payload->>'braco' is not null group by 1")
             _somas = {r["b"]: (float(r["soma"] or 0), int(r["n"])) for r in _l}
+            async with app.state.pool.acquire() as _c:
+                _la = await _c.fetch(
+                    "select s.user_id::text u, e.payload->>'braco' b, "
+                    "sum((e.payload->>'recompensa')::double precision) soma, count(*) n "
+                    "from session_events e join sessions s on s.session_id = e.session_id "
+                    "where e.event_type = 'recompensa_prevencao' "
+                    "and e.payload->>'braco' is not null group by 1, 2")
+            _por_aluno = {}
+            for r in _la:
+                _por_aluno.setdefault(r["u"], {})[r["b"]] = (float(r["soma"] or 0), int(r["n"]))
             if _somas:
-                app.state.bandit_prev.reconstruir(_somas)
+                app.state.bandit_prev.reconstruir(_somas, _por_aluno)
                 print(f"[KaIA] bandit de prevenção reconstruído: "
                       f"{sum(n for _, n in _somas.values())} rodadas.")
         print(f"[KaIA] Prevenção {'ATIVA' if PREVENCAO_ATIVA else 'desligada'} "
@@ -2948,6 +2958,8 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
     braço que faz o aluno largar o estudo nunca receberia nota — ele simplesmente não teria
     rodada seguinte, e sumir pareceria neutro em vez de péssimo.
     """
+    dono_aluno = await conn.fetchval(
+        "select user_id from sessions where session_id = $1::uuid", session_id)
     dec = await conn.fetchrow(
         "select ts, payload from session_events where session_id = $1::uuid "
         "and event_type = 'decisao_prevencao' order by ts desc limit 1", session_id)
@@ -2994,7 +3006,7 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
                       {"braco": braco, "prob": p.get("prob"), "recompensa": rec,
                        "respondidas": respondidas, "eventos_objetivos": eventos,
                        "abandonou": abandonou})
-    return braco, rec
+    return braco, rec, str(dono_aluno) if dono_aluno else None
 
 
 @app.post("/prevencao/pausa")
@@ -3057,7 +3069,7 @@ async def prevencao_pausa(body: PausaIn, request: Request,
                                    limiar=PREVENCAO_LIMIAR_RISCO))
             return {"apoio": None, "motivo": "risco_baixo", "risco": round(r, 3)}
 
-        braco, prob = bandit.escolher()
+        braco, prob = bandit.escolher(aluno=sub)
         pid, texto = _plano_do_momento(feats)
         await _log_evento(conn, body.session_id, "decisao_prevencao",
                           dict(sombra, risco=round(r, 3), braco=braco, prob=round(prob, 3),

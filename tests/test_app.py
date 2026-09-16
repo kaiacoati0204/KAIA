@@ -1632,7 +1632,7 @@ async def test_recompensa_conta_so_evento_objetivo_e_nao_o_probe():
         fetch={"where session_id = $1::uuid and ts > $2": posteriores},
         fetchval=0,
     )
-    braco, rec = await app_mod._fechar_recompensa_prevencao(conn, "sess-1")
+    braco, rec, _aluno = await app_mod._fechar_recompensa_prevencao(conn, "sess-1")
     assert braco == "pacote_foco"
     assert rec == 0.8                      # 10 respondidas, 1 evento objetivo -> (10-2)/10
     reg = [a for (q, a) in conn.executed if "recompensa_prevencao" in str(a)][0][2]
@@ -1649,7 +1649,8 @@ async def test_largar_o_estudo_logo_apos_a_oferta_vale_zero():
                [{"event_type": "question_answer", "payload": {}}]},
         fetchval=0,
     )
-    assert await app_mod._fechar_recompensa_prevencao(conn, "s", fim_de_sessao=True) == ("pausa_curta", 0.0)
+    fechou = await app_mod._fechar_recompensa_prevencao(conn, "s", fim_de_sessao=True)
+    assert fechou[:2] == ("pausa_curta", 0.0)
     # a MESMA rodada curta, sem fim de sessão, não avalia nada (None em vez de 0)
     conn2 = FakeConn(
         fetchrow={"decisao_prevencao": {"ts": decisao, "payload": {"braco": "pausa_curta"}}},

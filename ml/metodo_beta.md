@@ -88,6 +88,20 @@ Escolher o corte é escolher entre alcance e precisão:
 No beta o recurso escasso é **dado**: 0,6 daria ~10 ofertas no total, insuficiente para comparar
 qualquer coisa. Por isso o padrão é **0,4** (`KAIA_PREVENCAO_LIMIAR`). Com mais alunos, subir.
 
+## 4.2 Tamanhos de efeito esperados — corrigidos para a nossa idade
+
+Números gerais de meta-análise costumam vir de adultos. Para o nosso público eles encolhem:
+
+| ingrediente | número citado | número para a nossa idade |
+|---|---|---|
+| plano se-então | d = 0,65 (adultos, 94 testes) | **g = 0,31** (crianças, 42 estudos, N = 12.957, idade média 10,7) — adolescente entre os dois |
+| micro-pausa | d = 0,16 em desempenho (ns) | **d = −0,09 em tarefas cognitivas** (ns) — questão de ENEM é tarefa cognitiva |
+| mindfulness | g = 0,77 em sintomas | 7 estudos, I² = 82%, viés de publicação, follow-up g = 0,34 com IC incluindo zero |
+
+Consequências: **não prometa d = 0,65** para o plano; e **não espere que `pausa_curta` melhore o
+que medimos** — a evidência dela é de fadiga e vigor, e em tarefa cognitiva o efeito de
+desempenho chega a ser levemente negativo.
+
 ## 5. Como falar do que foi medido — as frases exatas
 
 Três afirmações que parecem inofensivas e não sobrevivem a uma pergunta cética:

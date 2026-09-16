@@ -2878,8 +2878,10 @@ class PausaIn(BaseModel):
 # ==== PLANOS SE-ENTAO (precorrecao) ====
 # Nao e uma meta ("vou fazer 10"): e um plano "se acontecer Y, entao faco X", dito ANTES.
 # A diferenca nao e de estilo - especificar a situacao-gatilho de antemao faz a resposta sair
-# automatica na hora, que e justamente quando a forca de vontade ja acabou. Meta comum tem
-# efeito pequeno; plano se-entao tem d = 0,65 (Gollwitzer & Sheeran, 94 testes).
+# automatica na hora, que e justamente quando a forca de vontade ja acabou.
+# TAMANHO ESPERADO, sem inflar: d = 0,65 e o geral (Gollwitzer & Sheeran, 94 testes, adultos).
+# Em CRIANCAS a meta-analise de 2026 da g = 0,31 (42 estudos, N=12.957, idade media 10,7), com
+# efeito MAIOR nos mais novos. Adolescente fica entre os dois - espere ~0,3, nao 0,65.
 # Qual plano mostrar sai de uma REGRA sobre a feature dominante, nao do modelo: com ~20
 # observacoes por braco, variar o texto dentro do braco so somaria ruido.
 PLANOS = {

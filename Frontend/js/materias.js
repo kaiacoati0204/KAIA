@@ -3265,9 +3265,13 @@ async function pedirApoioDaPausa() {
 // Meta antes da rodada + devolução do autorrelato. As duas têm respaldo com TDAH
 // (Harris 2005; Estrapala 2022) e nenhuma depende de acertar o estado do aluno.
 function mostrarPacoteFoco(cx) {
+    // Devolução: fala do ATO de se observar, não de uma nota. Com TEA/TDAH, um placar baixo
+    // pode virar vergonha em vez de consciência — por isso a frase final quando foi pouco.
     const devolucao = probesRespondidos
-        ? `<p class="apoio-devolucao">Hoje você disse que estava na questão
-           <strong>${probesNaQuestao} de ${probesRespondidos}</strong> vezes.</p>`
+        ? `<p class="apoio-devolucao">Você se observou
+           <strong>${probesRespondidos}</strong> ${probesRespondidos === 1 ? 'vez' : 'vezes'}
+           hoje, e em <strong>${probesNaQuestao}</strong> estava na questão.
+           ${probesNaQuestao * 2 < probesRespondidos ? 'Reparar nisso já ajuda.' : ''}</p>`
         : '';
     cx.innerHTML = `
         ${devolucao}

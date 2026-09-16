@@ -27,21 +27,41 @@ PARAMS_PREVENCAO_PATH = (Path(__file__).resolve().parent.parent
 
 BRACOS = ["nada", "pacote_foco", "pausa_curta"]
 PROB_MIN, PROB_MAX = 0.1, 0.8
+# O "nada" e o grupo de comparacao: com piso de 10% sobrariam ~7 pausas de controle num beta
+# pequeno, e nada seria comparavel. Piso maior troca velocidade de aprendizado por poder de
+# medicao - no beta, medir vale mais que convergir.
+PISO_CONTROLE = 0.30
+BRACO_CONTROLE = "nada"
 AMOSTRAS_PROB = 2000          # sorteios para estimar a chance de cada braço ser o escolhido
 MIN_RESPONDIDAS = 3           # rodada com menos respostas que isso não diz nada
 META_QUESTOES = 10            # rodada completa; acima disso a recompensa não sobe mais
 PESO_EVENTO = 2               # cada perda de foco custa 2 questões
 
 
+def _pisos(bracos):
+    """Piso de probabilidade por braco - o controle tem piso maior que os demais."""
+    return np.array([PISO_CONTROLE if b == BRACO_CONTROLE else PROB_MIN for b in bracos])
+
+
 def _travar(p, lo=PROB_MIN, hi=PROB_MAX, rodadas=20):
-    """Leva as probabilidades para [lo, hi] mantendo a soma 1 (ajuste iterativo)."""
+    """Leva as probabilidades para [lo, hi] mantendo a soma 1. `lo` pode ser vetor (piso por braco).
+
+    Renormalizar dividindo pela soma empurra os pisos para baixo de novo e converge devagar.
+    Aqui o excesso sai SO de quem tem folga acima do proprio piso — os pisos ficam exatos.
+    """
     p = np.asarray(p, dtype=float)
+    lo = np.broadcast_to(np.asarray(lo, dtype=float), p.shape).astype(float)
     for _ in range(rodadas):
-        p = np.clip(p, lo, hi)
-        p = p / p.sum()
-        if p.min() >= lo - 1e-9 and p.max() <= hi + 1e-9:
+        p = np.minimum(np.maximum(p, lo), hi)
+        excesso = p.sum() - 1.0
+        if abs(excesso) < 1e-12:
             break
-    return p
+        folga = (p - lo) if excesso > 0 else (hi - p)   # quem pode ceder / receber
+        total = folga.sum()
+        if total <= 0:
+            break
+        p = p - excesso * folga / total
+    return np.minimum(np.maximum(p, lo), hi)
 
 
 class BanditPrevencao:
@@ -85,7 +105,7 @@ class BanditPrevencao:
         """Chance de cada braço sair no Thompson, já travada. Vetor na ordem de self.bracos."""
         amostras = np.column_stack([self.rng.beta(*self.params[b], AMOSTRAS_PROB) for b in self.bracos])
         vencedores = np.bincount(amostras.argmax(axis=1), minlength=len(self.bracos))
-        return _travar(vencedores / AMOSTRAS_PROB)
+        return _travar(vencedores / AMOSTRAS_PROB, _pisos(self.bracos))
 
     def escolher(self):
         """(braço, probabilidade com que foi escolhido) — a probabilidade vai para o registro."""

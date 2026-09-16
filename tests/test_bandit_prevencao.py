@@ -60,3 +60,16 @@ def test_reconstroi_do_banco_quando_o_disco_some(tmp_path):
     assert b.params["pacote_foco"] == [9.0, 3.0]              # 1+8 e 1+(10-8)
     assert b.params["nada"] == [4.0, 8.0]
     assert b.params["pausa_curta"] == [1.0, 1.0]              # sem dado, segue na priori
+
+
+def test_controle_tem_piso_maior_para_sobrar_comparacao():
+    """com piso de 10% sobrariam ~7 pausas de controle num beta pequeno e nada seria comparável"""
+    b = bp.BanditPrevencao(semente=4)
+    for _ in range(300):                       # pacote_foco domina de longe
+        b.atualizar("pacote_foco", 1.0)
+        b.atualizar("nada", 0.0)
+    p = b.probabilidades()
+    i_nada = bp.BRACOS.index("nada")
+    assert p[i_nada] >= bp.PISO_CONTROLE - 1e-9      # o controle não some
+    assert p[bp.BRACOS.index("pacote_foco")] <= bp.PROB_MAX + 1e-9
+    assert abs(p.sum() - 1) < 1e-9

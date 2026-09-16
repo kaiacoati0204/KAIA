@@ -74,7 +74,38 @@ salvar. Sem isso o critério vira leitura de borra de café.
 | Probe (dano) | acerto depois do probe pior em > 10 pontos | 20 sessões | frequência do probe pela metade; se persistir, só voluntário |
 | Personalização por aluno | — | — | já está fora do beta: o bandit aprende a média do grupo (Schmucker 2025) |
 
-## 5. O que nunca pode ser dito como resultado
+## 4.1 Limiar do gatilho — medido, não chutado
+
+No sintético, o escore das regras separa bem: 0,0 → 18% de eventos; 0,4 → 50%; 0,6 → 68%; 0,8 → 80%.
+Escolher o corte é escolher entre alcance e precisão:
+
+| limiar | dispara em | eventos no grupo disparado |
+|---|---|---|
+| 0,2 | 64% das pausas | 44% |
+| **0,4** | **32%** | **59%** |
+| 0,6 | 14% | 71% |
+
+No beta o recurso escasso é **dado**: 0,6 daria ~10 ofertas no total, insuficiente para comparar
+qualquer coisa. Por isso o padrão é **0,4** (`KAIA_PREVENCAO_LIMIAR`). Com mais alunos, subir.
+
+## 5. Como falar do que foi medido — as frases exatas
+
+Três afirmações que parecem inofensivas e não sobrevivem a uma pergunta cética:
+
+| não diga | diga |
+|---|---|
+| "personaliza para cada aluno" | "aprende o que funciona para o grupo, e personaliza conforme o uso cresce" |
+| "grupo controle" | "pausas em que nada foi oferecido, sorteadas, no mesmo aluno" |
+| "nossa IA tem AUC 0,78" | "no dado sintético o modelo fica acima das regras; no real, ainda não sabemos" |
+
+O braço `nada` **não é "nada"**: o aluno continua com o modal de rodada, o probe e a camada
+reativa. É "sem apoio preventivo", e é assim que deve ser descrito.
+
+E o gatilho: **quem decide se oferece é a REGRA** (`KAIA_PREVENCAO_GATILHO=regra`). O Modelo 1
+roda em modo sombra — calcula, registra, não afeta ninguém. Dizer que "a IA decide quando" é
+falso hoje; o que a IA faz e nenhuma regra faz é **descobrir qual apoio funciona**.
+
+## 6. O que nunca pode ser dito como resultado
 
 - Número de dado sintético (AUC do `gerar_risco.py`, qualquer saída do `simular_bandit_prevencao.py`).
 - Média bruta de braço do bandit sem comparar com `nada`.

@@ -57,7 +57,14 @@ CONSENTIMENTO_ESTRITO = os.getenv("KAIA_CONSENTIMENTO_ESTRITO", "0") == "1"
 # nenhum — mede se o aluno engaja, sem misturar erro de modelo com desinteresse. Ligue com
 # KAIA_PREVENCAO_ATIVA=1 quando esse teste passar. Abaixo do limiar a pausa fica em paz.
 PREVENCAO_ATIVA = os.getenv("KAIA_PREVENCAO_ATIVA", "0") == "1"
-PREVENCAO_LIMIAR_RISCO = float(os.getenv("KAIA_PREVENCAO_LIMIAR", "0.5"))
+# Limiar medido no sintetico: 0,6 dispara em 13,6% das pausas (~10 ofertas num beta pequeno,
+# pouco demais para comparar), 0,4 em 32% com taxa de evento 59% contra 35% da base. No beta o
+# recurso escasso e DADO, entao 0,4.
+PREVENCAO_LIMIAR_RISCO = float(os.getenv("KAIA_PREVENCAO_LIMIAR", "0.4"))
+# Quem decide SE oferece. "regra": o escore de regras decide e o Modelo 1 roda em MODO SOMBRA -
+# calcula, registra e nao afeta ninguem. Assim da para comparar os dois no dado real sem expor
+# o aluno a um modelo ainda nao validado. "modelo": so depois de ele vencer a regra no real.
+PREVENCAO_GATILHO = os.getenv("KAIA_PREVENCAO_GATILHO", "regra")
 
 # Sigla → nome da matéria. O frontend manda a SIGLA (chave do temas_cache e da sessão) e
 # os prompts usam o NOME por extenso, senão o Gemini teria que adivinhar a sigla.
@@ -2971,21 +2978,26 @@ async def prevencao_pausa(body: PausaIn, request: Request,
         feats = risco.features_do_momento(
             await _eventos_da_sessao(conn, body.session_id), inicio, agora,
             await _estudo_dia_min(conn, sub))
-        r, fonte = risco.prever_risco(feats, getattr(request.app.state, "risco_art", None))
+        r_regra = risco.risco_por_regras(feats)
+        r_modelo, fonte = risco.prever_risco(feats, getattr(request.app.state, "risco_art", None))
+        # modo sombra: a regra decide, o modelo so e registrado. Os dois veem o MESMO momento,
+        # entao no fim do beta da para comparar os dois com dado real.
+        r = r_modelo if PREVENCAO_GATILHO == "modelo" else r_regra
+        sombra = {"risco_regra": round(r_regra, 3), "risco_modelo": round(r_modelo, 3),
+                  "gatilho": PREVENCAO_GATILHO, "fonte_modelo": fonte}
 
         if r < PREVENCAO_LIMIAR_RISCO:
             # registra mesmo sem agir: sem o denominador não dá para dizer quantas pausas
             # existiram nem comparar nada depois
             await _log_evento(conn, body.session_id, "decisao_prevencao",
-                              {"risco": round(r, 3), "fonte": fonte, "braco": None,
-                               "acionou": False, "limiar": PREVENCAO_LIMIAR_RISCO})
+                              dict(sombra, risco=round(r, 3), braco=None, acionou=False,
+                                   limiar=PREVENCAO_LIMIAR_RISCO))
             return {"apoio": None, "motivo": "risco_baixo", "risco": round(r, 3)}
 
         braco, prob = bandit.escolher()
         await _log_evento(conn, body.session_id, "decisao_prevencao",
-                          {"risco": round(r, 3), "fonte": fonte, "braco": braco,
-                           "prob": round(prob, 3), "acionou": True,
-                           "limiar": PREVENCAO_LIMIAR_RISCO})
+                          dict(sombra, risco=round(r, 3), braco=braco, prob=round(prob, 3),
+                               acionou=True, limiar=PREVENCAO_LIMIAR_RISCO))
     return {"apoio": None if braco == "nada" else braco, "braco": braco, "risco": round(r, 3)}
 
 

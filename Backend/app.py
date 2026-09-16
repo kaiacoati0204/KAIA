@@ -2922,7 +2922,12 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
         elif risco.evento_objetivo(r["event_type"], pay):
             eventos += 1
 
-    # largou logo depois da oferta = abandono; parar após um bom trecho é fim de estudo normal
+    if fim_de_sessao and respondidas == 0:
+        # parou EXATAMENTE na pausa, sem responder nada: acabou o tempo de estudo, não é
+        # reação ao apoio. Dar 0 aqui encheria todos os braços de zeros (a maioria das sessões
+        # termina numa pausa) e afogaria a diferença entre eles.
+        return None
+    # começou a rodada e largou no meio = abandono; parar após um bom trecho é estudo normal
     abandonou = fim_de_sessao and respondidas < MIN_RESPONDIDAS
     rec = recompensa_rodada(eventos, respondidas, abandonou)
     if rec is None:

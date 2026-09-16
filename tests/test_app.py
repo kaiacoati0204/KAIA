@@ -1667,3 +1667,14 @@ async def test_decisao_ja_fechada_nao_conta_duas_vezes():
         fetchval=1,                        # já existe recompensa depois da decisão
     )
     assert await app_mod._fechar_recompensa_prevencao(conn, "s") is None
+
+
+async def test_parar_na_propria_pausa_nao_vira_nota_zero():
+    """a maioria das sessões acaba numa pausa; dar 0 a todas afogaria a diferença entre braços"""
+    conn = FakeConn(
+        fetchrow={"decisao_prevencao": {"ts": datetime.now(timezone.utc),
+                                        "payload": {"braco": "pacote_foco"}}},
+        fetch={"where session_id = $1::uuid and ts > $2": []},   # não respondeu nada depois
+        fetchval=0,
+    )
+    assert await app_mod._fechar_recompensa_prevencao(conn, "s", fim_de_sessao=True) is None

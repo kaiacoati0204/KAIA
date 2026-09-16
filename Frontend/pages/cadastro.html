@@ -65,6 +65,13 @@
                 </div>
             </div>
 
+            <!-- Data de nascimento: é ela que diz se o cadastro precisa da autorização de um
+                 responsável (LGPD art. 14). Sem ela não dá para saber, e o beta coleta comportamento. -->
+            <div class="grupo-input">
+                <label for="cad-nascimento">Data de nascimento</label>
+                <input id="cad-nascimento" type="date" autocomplete="bday">
+            </div>
+
             <div class="grupo-termos">
                 <input id="cad-termos" type="checkbox">
                 <label for="cad-termos">Li e aceito os
@@ -79,6 +86,21 @@
             <button type="submit" class="botao-login">Criar conta</button>
             <a href="login.html" class="link-secundario">Já tem conta? Entrar</a>
         </form>
+
+        <!-- Menor de idade: em vez de entrar direto, mostra o link para o responsável autorizar.
+             Preenchido por criarConta(). -->
+        <div class="caixa-login" id="cad-responsavel" hidden>
+            <h1>Falta a autorização</h1>
+            <p>Sua conta foi criada. Como você tem menos de 18 anos, um responsável precisa
+                autorizar antes da plataforma registrar seus dados de estudo.</p>
+            <p>Envie este link para sua mãe, seu pai ou seu responsável:</p>
+            <div class="grupo-input">
+                <label for="cad-link">Link da autorização</label>
+                <input id="cad-link" type="text" readonly>
+            </div>
+            <button type="button" class="botao-login" id="cad-copiar">Copiar link</button>
+            <a href="materias.html" class="link-secundario">Entrar assim mesmo (sem registrar dados)</a>
+        </div>
     </div>
 
     <script src="../js/comum.js"></script>

@@ -107,12 +107,15 @@ async function criarConta(event) {
     const nome  = $('cad-nome')?.value.trim() || '';
     const email = $('cad-email')?.value.trim() || '';
     const senha = $('cad-senha')?.value || '';
+    const nasc  = $('cad-nascimento')?.value || '';
     const erro  = $('cad-erro');
     const okmsg = $('cad-ok');
     const falhar = (msg) => { if (erro) erro.textContent = msg; if (okmsg) okmsg.textContent = ''; };
 
     falhar('');
     if (!nome || !email || !senha) return falhar('Preencha nome, email e senha.');
+    if (!nasc) return falhar('Informe sua data de nascimento.');
+    if (!idadeValida(nasc)) return falhar('Confira a data de nascimento.');
     if (!$('cad-termos')?.checked) return falhar('É preciso aceitar os termos para criar a conta.');
     if (senha.length < 6) return falhar('A senha precisa ter ao menos 6 caracteres.');
     if (!window.supabaseClient) return falhar('Cadastro indisponível (config.js sem Supabase).');
@@ -137,10 +140,14 @@ async function criarConta(event) {
             // Registra o aceite (quem, quando, qual versão): público menor de idade + coleta de
             // comportamento, e isso não se reconstrói depois. O backend grava o PRIMEIRO e não sobrescreve.
             try {
-                await postJSON('/perfil', { user_id: data.user.id, versao_termos: KAIA_VERSAO_TERMOS });
+                await postJSON('/perfil', { user_id: data.user.id, versao_termos: KAIA_VERSAO_TERMOS,
+                                            data_nascimento: nasc });
             } catch (e) {
                 console.warn('[KaIA] aceite dos termos não registrado:', e);
             }
+            // Menor de idade: NÃO redireciona. Mostra o link do responsável — sem o aceite dele
+            // o backend não grava nada do estudo, então entrar direto só daria a impressão errada.
+            if (ehMenor(nasc) && await mostrarLinkResponsavel()) return;
         } else if (okmsg) {
             // Confirmação ligada → precisa confirmar por email antes de logar.
             okmsg.textContent = 'Conta criada! Confirme pelo email e depois faça login.';
@@ -267,3 +274,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Só no login: o cadastro carrega este mesmo arquivo e não deve pular etapa.
     if ($('login-lembrar')) restaurarSessao();
 });
+
+
+// ==== CONSENTIMENTO DO RESPONSÁVEL (LGPD art. 14) ====
+
+// Data plausível: nem no futuro, nem de alguém com mais de 120 anos.
+function idadeValida(iso) {
+    const d = new Date(`${iso}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return false;
+    const anos = (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
+    return anos > 5 && anos < 120;
+}
+
+function ehMenor(iso) {
+    const d = new Date(`${iso}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return false;
+    const hoje = new Date();
+    let anos = hoje.getFullYear() - d.getFullYear();
+    const aniversarioPassou = (hoje.getMonth() > d.getMonth())
+        || (hoje.getMonth() === d.getMonth() && hoje.getDate() >= d.getDate());
+    if (!aniversarioPassou) anos -= 1;
+    return anos < 18;
+}
+
+// Pede o link ao backend e mostra na tela. Devolve false se não deu (aí o cadastro segue
+// normal: travar o aluno por causa de uma falha de rede seria pior que deixar entrar).
+async function mostrarLinkResponsavel() {
+    try {
+        const d = await postJSON('/consentimento/solicitar', {});
+        if (!d?.token) return false;
+        const url = `${location.origin}${location.pathname.replace('cadastro.html', 'consentimento.html')}?t=${d.token}`;
+        $('cad-link').value = url;
+        document.querySelector('form.caixa-login').hidden = true;
+        $('cad-responsavel').hidden = false;
+        $('cad-copiar')?.addEventListener('click', () => {
+            navigator.clipboard?.writeText(url);
+            $('cad-copiar').textContent = 'Link copiado!';
+        });
+        return true;
+    } catch (e) {
+        console.warn('[KaIA] link de consentimento não gerado:', e);
+        return false;
+    }
+}

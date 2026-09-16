@@ -62,7 +62,7 @@ const KAIA_VERSAO = 'beta-1.0.0';
 
 // Versão dos termos/privacidade em vigor. SOBE sempre que o texto mudar — é o que
 // diz, depois, a QUAL texto cada aluno consentiu.
-const KAIA_VERSAO_TERMOS = '2026-09-08';
+const KAIA_VERSAO_TERMOS = '2026-09-15';
 
 // POST em JSON, já com o token anexado. Quem chama decide se trata o erro.
 async function postJSON(rota, corpo, keepalive = false) {

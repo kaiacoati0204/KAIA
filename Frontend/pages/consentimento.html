@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA | Autorização do responsável</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+    <article class="pagina-legal">
+        <h1>Autorização do responsável</h1>
+
+        <!-- Estados da página: carregando → formulário → resultado. Só um visível por vez. -->
+        <p id="cons-carregando" role="status">Carregando…</p>
+
+        <div id="cons-invalido" hidden>
+            <p id="cons-invalido-msg">Este link não é válido.</p>
+            <p>Peça ao estudante para gerar um link novo dentro da plataforma.</p>
+        </div>
+
+        <form id="cons-form" hidden autocomplete="on">
+            <p>
+                <strong id="cons-aluno">O estudante</strong> criou uma conta na KaIA, uma
+                plataforma de estudos para o ENEM. Como ele é menor de 18 anos, a lei exige a
+                autorização de um responsável legal antes de qualquer coleta de dados.
+            </p>
+
+            <h2>O que a KaIA coleta</h2>
+            <ul>
+                <li>Cadastro: nome, e-mail e data de nascimento.</li>
+                <li>Estudo: questões respondidas, acertos, tempo de resposta e matérias.</li>
+                <li>Foco durante o estudo: quando a aba é trocada, quanto tempo fica parado,
+                    movimento do mouse na questão e o que o próprio estudante responde quando a
+                    plataforma pergunta como estava a atenção dele.</li>
+            </ul>
+            <p>A KaIA <strong>não</strong> acessa câmera, microfone, arquivos, nem o que é feito
+                fora da plataforma. Os dados <strong>não são vendidos</strong>.</p>
+
+            <h2>Para que serve</h2>
+            <p>Para adaptar a dificuldade das questões e oferecer apoio de foco em pausas — como
+                sugerir uma meta ou uma pausa curta. A KaIA faz uma <em>leitura de atenção e
+                foco</em> a partir do uso da plataforma: <strong>não é avaliação clínica e não
+                diagnostica nada</strong>. Durante o beta, a plataforma testa apoios diferentes
+                para descobrir qual ajuda mais, e às vezes não oferece nenhum — é assim que dá
+                para saber se o apoio funciona de verdade.</p>
+
+            <p>Leia também a <a href="privacidade.html" target="_blank" rel="noopener">Política de
+                Privacidade</a> e os <a href="termos.html" target="_blank" rel="noopener">Termos de
+                Uso</a>. Você pode retirar esta autorização quando quiser pelo e-mail
+                <a href="mailto:privacidade@kaia.com.br">privacidade@kaia.com.br</a>.</p>
+
+            <h2>Sua identificação</h2>
+            <div class="grupo-input">
+                <label for="cons-nome">Nome completo do responsável</label>
+                <input id="cons-nome" type="text" autocomplete="name" placeholder="Nome completo">
+            </div>
+            <div class="grupo-input">
+                <label for="cons-cpf">CPF</label>
+                <input id="cons-cpf" type="text" inputmode="numeric" placeholder="000.000.000-00">
+            </div>
+            <div class="grupo-input">
+                <label for="cons-parentesco">Parentesco</label>
+                <select id="cons-parentesco">
+                    <option value="">Selecione…</option>
+                    <option value="mãe">Mãe</option>
+                    <option value="pai">Pai</option>
+                    <option value="responsável legal">Responsável legal</option>
+                </select>
+            </div>
+            <p class="aviso-placeholder">O CPF é guardado apenas de forma cifrada, para comprovar
+                quem autorizou. Registramos também a data, a hora e o endereço de IP do aceite.</p>
+
+            <div class="grupo-termos">
+                <input id="cons-declaro" type="checkbox">
+                <label for="cons-declaro">Declaro, sob as penas da lei, ser o responsável legal
+                    por este estudante e autorizo o tratamento dos dados descritos acima.</label>
+            </div>
+
+            <p id="cons-erro" class="erro-login" role="alert" aria-live="polite"></p>
+            <button id="cons-aceitar" type="submit" class="botao-login">Autorizar</button>
+            <button id="cons-recusar" type="button" class="link-secundario">Não autorizar</button>
+        </form>
+
+        <div id="cons-pronto" hidden>
+            <h2 id="cons-pronto-titulo">Autorização registrada</h2>
+            <p id="cons-pronto-msg"></p>
+        </div>
+    </article>
+
+    <script src="../js/comum.js"></script>
+    <script src="../js/consentimento.js"></script>
+</body>
+
+</html>

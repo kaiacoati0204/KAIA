@@ -2424,8 +2424,9 @@ function abrirModalRodada() {
         acertos_na_rodada: acertosNaRodada,
         questoes_na_sessao: questoesRespondidas,
         acertos_na_sessao: acertosSessao,
-    });
-    pedirApoioDaPausa();
+    }).finally(pedirApoioDaPausa);   // ORDEM IMPORTA: o rodada_fim fecha a recompensa da oferta
+    // ANTERIOR e o /prevencao/pausa cria a PRÓXIMA. Se a nova chegasse primeiro, ela viraria
+    // "a última decisão" e a anterior nunca seria avaliada — perda silenciosa de recompensa.
     // Fecha o nível da rodada (nota move o centro em ±1) e ADIANTA a próxima rodada no
     // centro novo, em background, enquanto o aluno lê o resultado -> sem loader ao continuar.
     if (fecharNivelDaRodada()) devolverFila();   // centro mudou -> buffer do centro antigo não serve

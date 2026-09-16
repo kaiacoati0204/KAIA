@@ -135,7 +135,7 @@ sob pressão de prazo) pegar um número que saiu do bandit e tratar como conclus
 | confundimento | situação |
 |---|---|
 | **regra pune lentidão, e o plano pede lentidão** | **corrigido**: eventos da regra pelo lado "lento" não contam na recompensa (contam no rótulo do Modelo 1, onde não há braço para enviesar) |
-| **`pausa_curta` tem imunidade a saída de aba** (o sensor é suspenso durante a pausa) | **aberto** — é uma vantagem artificial do braço; soma-se à evidência fraca dele (d = −0,09 em tarefa cognitiva) e é o principal argumento para tirá-lo do beta |
+| **`pausa_curta` tem imunidade a saída de aba** (o sensor é suspenso durante a pausa) | **resolvido tirando o braço do beta** — o número dele seria ilegível nos dois sentidos: imune ao evento mais pesado de um lado, invisível em desempenho do outro (d = −0,09 em tarefa cognitiva). A pausa segue existindo no pomodoro; saiu só do sorteio. O beta compara `nada` × `pacote_foco`, com ~50% mais observações em cada |
 | **carryover entre pausas consecutivas** | derivável do log: todos os eventos têm sessão, aluno e horário, então "braço anterior" e "rodadas desde a última oferta" se reconstroem na análise |
 | **abandono logo após a oferta vale 0** | o evento `motivo_saida` ("bati minha meta" vs "cansei") permite separar depois quem parou satisfeito de quem largou |
 | **proxy da recompensa** | o evento de recompensa grava também acertos, respondidas e conclusão da rodada — se o bandit melhorar a recompensa sem mexer nesses, era proxy errado |

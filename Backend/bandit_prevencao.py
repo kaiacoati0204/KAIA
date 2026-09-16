@@ -25,7 +25,14 @@ import numpy as np
 PARAMS_PREVENCAO_PATH = (Path(__file__).resolve().parent.parent
                          / "ml" / "artifacts" / "bandit_prevencao_params.json")
 
-BRACOS = ["nada", "pacote_foco", "pausa_curta"]
+# `pausa_curta` SAIU do beta (2026-09-15) — e nao por ser ruim, mas por ser ILEGIVEL com a
+# nossa regua: (1) a meta-analise de micro-pausas da d = -0,09 em tarefa COGNITIVA, entao ela
+# ajudaria fadiga/vigor sem aparecer no que medimos; (2) durante a pausa o sensor de troca de
+# aba fica suspenso, e ela fica imune ao evento mais pesado da recompensa. Vantagem falsa num
+# eixo, desvantagem falsa no outro, e nao da para saber qual domina. Somado a isso, 3 bracos
+# dividem as mesmas pausas escassas. A pausa continua existindo no pomodoro; so saiu do sorteio.
+BRACOS = ["nada", "pacote_foco"]
+BRACOS_COM_PAUSA = ["nada", "pacote_foco", "pausa_curta"]   # simulacao e testes do desenho
 PROB_MIN, PROB_MAX = 0.1, 0.8
 # O "nada" e o grupo de comparacao: com piso de 10% sobrariam ~7 pausas de controle num beta
 # pequeno, e nada seria comparavel. Piso maior troca velocidade de aprendizado por poder de

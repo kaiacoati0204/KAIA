@@ -18,7 +18,8 @@ import numpy as np
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE, "..", "Backend"))
-from bandit_prevencao import BRACOS, BanditPrevencao, recompensa_rodada  # noqa: E402
+from bandit_prevencao import (BRACOS_COM_PAUSA as BRACOS,  # noqa: E402
+                              BanditPrevencao, recompensa_rodada)
 
 RODADAS = 400            # ordem de grandeza de um beta pequeno
 QUESTOES_RODADA = 10
@@ -49,7 +50,7 @@ def rodada(mundo, braco, rng):
 
 
 def simular(mundo, rng):
-    b = BanditPrevencao(semente=int(rng.integers(1e9)))
+    b = BanditPrevencao(BRACOS, semente=int(rng.integers(1e9)))
     escolhas, registros = [], []
     for _ in range(RODADAS):
         braco, prob = b.escolher()

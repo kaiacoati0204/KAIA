@@ -5,7 +5,7 @@ import bandit_prevencao as bp
 
 
 def test_probabilidades_ficam_travadas_mesmo_com_braco_dominante():
-    b = bp.BanditPrevencao(semente=1)
+    b = bp.BanditPrevencao(bp.BRACOS_COM_PAUSA, semente=1)
     for _ in range(200):
         b.atualizar("pacote_foco", 1.0)
         b.atualizar("nada", 0.0)
@@ -57,7 +57,7 @@ def test_arquivo_corrompido_nao_derruba_o_app(tmp_path):
 
 def test_reconstroi_do_banco_quando_o_disco_some(tmp_path):
     """no plano grátis do Render o disco some na hibernação; a verdade são os eventos"""
-    b = bp.BanditPrevencao(semente=1)
+    b = bp.BanditPrevencao(bp.BRACOS_COM_PAUSA, semente=1)
     b.reconstruir({"pacote_foco": (8.0, 10), "nada": (3.0, 10)})
     assert b.params["pacote_foco"] == [9.0, 3.0]              # 1+8 e 1+(10-8)
     assert b.params["nada"] == [4.0, 8.0]
@@ -115,8 +115,17 @@ def test_no_primeiro_dia_nao_finge_confianca_que_nao_existe():
 
 def test_personalizacao_sobrevive_ao_reinicio(tmp_path):
     caminho = tmp_path / "p.json"
-    b = bp.BanditPrevencao(semente=10, params_path=caminho)
+    b = bp.BanditPrevencao(bp.BRACOS_COM_PAUSA, semente=10, params_path=caminho)
     b.atualizar("pausa_curta", 1.0, aluno="ana")
-    novo = bp.BanditPrevencao(params_path=caminho)
+    novo = bp.BanditPrevencao(bp.BRACOS_COM_PAUSA, params_path=caminho)
     assert novo.params_aluno["ana"]["pausa_curta"] == [2.0, 1.0]
     assert novo.params["pausa_curta"] == [2.0, 1.0]
+
+
+def test_beta_roda_com_dois_bracos():
+    """pausa_curta saiu do sorteio: com a nossa régua o número dela seria ilegível
+    (imune ao sensor de aba de um lado, invisível em desempenho do outro)"""
+    assert bp.BRACOS == ["nada", "pacote_foco"]
+    p = bp.BanditPrevencao(semente=1).probabilidades()
+    assert len(p) == 2 and abs(p.sum() - 1) < 1e-9
+    assert p[bp.BRACOS.index("nada")] >= bp.PISO_CONTROLE - 1e-9

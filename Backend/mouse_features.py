@@ -69,13 +69,10 @@ def features_mouse(track):
 
 
 # ==== RITMO DA IMOBILIDADE ====
-def blocos_parados(track, dur_ms, limiar_s=LIMIAR_BLOCO_S):
-    """Blocos de imobilidade de UMA questão a partir dos buracos do trajeto.
-    O listener só amostra em mousemove: o vão entre duas amostras JA E o tempo
-    parado. Conta tambem da abertura ate a 1a amostra e da ultima ate a resposta.
-    Retorna (maior_bloco_s, n_blocos) contando so os >= limiar_s."""
-    if dur_ms is None or dur_ms <= 0:
-        return (0.0, 0)
+def _lacunas(track, dur_ms):
+    """Vaos entre amostras de mousemove, em ms, dentro de [0, dur_ms].
+    O listener so amostra em mousemove: o vao entre duas amostras JA E o tempo parado.
+    Conta tambem da abertura ate a 1a amostra e da ultima ate a resposta."""
     marcos = [0.0]
     for a in (track or []):
         if a and a[0] is not None:
@@ -84,6 +81,42 @@ def blocos_parados(track, dur_ms, limiar_s=LIMIAR_BLOCO_S):
                 marcos.append(t)
     marcos.append(float(dur_ms))
     marcos.sort()
-    blocos = [(b - a) / 1000.0 for a, b in zip(marcos, marcos[1:]) if (b - a) / 1000.0 >= limiar_s]
+    return list(zip(marcos, marcos[1:]))
+
+
+def blocos_parados(track, dur_ms, limiar_s=LIMIAR_BLOCO_S):
+    """Blocos de imobilidade de UMA questão.
+    Retorna (maior_bloco_s, n_blocos) contando so os >= limiar_s."""
+    if dur_ms is None or dur_ms <= 0:
+        return (0.0, 0)
+    blocos = [(b - a) / 1000.0 for a, b in _lacunas(track, dur_ms)
+              if (b - a) / 1000.0 >= limiar_s]
     return (round(max(blocos), 1) if blocos else 0.0, len(blocos))
+
+
+def parado_apos_leitura(track, dur_ms, limite_leitura_s, limiar_s=LIMIAR_BLOCO_S):
+    """Imobilidade que sobrou DEPOIS do tempo esperado de leitura daquele enunciado.
+
+    Mouse parado significa coisas opostas conforme QUANDO acontece: nos primeiros segundos
+    e leitura (on-task); muito depois do texto ter acabado, e suspeito. O corte fixo de
+    LIMIAR_BLOCO_S nao sabe o tamanho do enunciado - este sabe.
+    Mills & D'Mello 2015 detectaram mente vagando SEM sensor usando tempo de leitura +
+    dificuldade do texto (kappa 0,207): e a melhor via sem sensor conhecida.
+
+    limite_leitura_s vem em SEGUNDOS (o campo do front chama-se limite_leitura_ms mas
+    guarda segundos: palavras/3,3 + 5).
+    Retorna (segundos parados apos a janela, fracao do tempo pos-janela que ficou parado).
+    """
+    if not dur_ms or dur_ms <= 0 or not limite_leitura_s or limite_leitura_s <= 0:
+        return (0.0, 0.0)
+    janela_ms = float(limite_leitura_s) * 1000.0
+    pos_ms = float(dur_ms) - janela_ms
+    if pos_ms <= 0:                      # respondeu antes de terminar a leitura esperada
+        return (0.0, 0.0)
+    parado_ms = 0.0
+    for a, b in _lacunas(track, dur_ms):
+        if (b - a) / 1000.0 < limiar_s:  # vao curto e pausa normal, nao imobilidade
+            continue
+        parado_ms += max(0.0, b - max(a, janela_ms))
+    return (round(parado_ms / 1000.0, 1), round(min(1.0, parado_ms / pos_ms), 3))
 

@@ -2374,6 +2374,8 @@ function pularProbe() {
 }
 
 function responderProbe(estado, resposta) {
+    probesRespondidos++;
+    if (resposta === 'na_questao') probesNaQuestao++;
     logEvent('probe_atencao', {
         estado,
         resposta,
@@ -2413,6 +2415,17 @@ function preencherResumo() {
 
 // Ao completar a rodada de 10: modal SEM título — só o resumo rápido + escolha.
 function abrirModalRodada() {
+    // Fim de rodada = a PAUSA NATURAL do estudo. É o único momento em que a prevenção pode
+    // agir sem interromper questão, e o marco que fecha a conta de uma rodada. Não dá para
+    // reconstruir depois a partir das respostas (rodada abandonada no meio não tem fim), então
+    // o evento é gravado agora. Se continuou ou parou se deduz: veio outra resposta ou não.
+    logEvent('rodada_fim', {
+        questoes_na_rodada: questoesNaRodada,
+        acertos_na_rodada: acertosNaRodada,
+        questoes_na_sessao: questoesRespondidas,
+        acertos_na_sessao: acertosSessao,
+    });
+    pedirApoioDaPausa();
     // Fecha o nível da rodada (nota move o centro em ±1) e ADIANTA a próxima rodada no
     // centro novo, em background, enquanto o aluno lê o resultado -> sem loader ao continuar.
     if (fecharNivelDaRodada()) devolverFila();   // centro mudou -> buffer do centro antigo não serve
@@ -3226,3 +3239,72 @@ document.addEventListener('DOMContentLoaded', () => {
     mostrarMetaDiariaMenu();       // "faltam X para a meta de hoje" na tela de matérias
     console.log('[KaIA] Página pronta. Session ID:', sessionId);
 });
+
+
+// ==== APOIO DA PAUSA (Fluxo 1: prevenção) ====
+// Só aqui, na pausa entre rodadas — nunca no meio de uma questão. O servidor decide SE e O QUÊ
+// (Modelo 1 + bandit); o front só desenha. Quando não vem apoio, o modal fica como sempre foi.
+
+let probesRespondidos = 0;   // devolução do automonitoramento: o que o ALUNO relatou, de volta
+let probesNaQuestao   = 0;   // pra ele (Harris 2005). Não é medição nossa, é a fala dele.
+
+async function pedirApoioDaPausa() {
+    const cx = $('resumo-apoio');
+    if (!cx) return;
+    cx.hidden = true;
+    cx.innerHTML = '';
+    if (!sessionId) return;
+    try {
+        const d = await postJSON('/prevencao/pausa', { session_id: sessionId });
+        if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx);
+        else if (d?.apoio === 'pausa_curta') mostrarOfertaDePausa(cx);
+    } catch (_) { /* apoio é opcional: falhou, o aluno segue sem nada */ }
+}
+
+// Meta antes da rodada + devolução do autorrelato. As duas têm respaldo com TDAH
+// (Harris 2005; Estrapala 2022) e nenhuma depende de acertar o estado do aluno.
+function mostrarPacoteFoco(cx) {
+    const devolucao = probesRespondidos
+        ? `<p class="apoio-devolucao">Hoje você disse que estava na questão
+           <strong>${probesNaQuestao} de ${probesRespondidos}</strong> vezes.</p>`
+        : '';
+    cx.innerHTML = `
+        ${devolucao}
+        <p class="apoio-pergunta">Quer combinar uma meta para a próxima rodada?</p>
+        <div class="apoio-botoes">
+            <button type="button" onclick="escolherMeta(10)">10 seguidas</button>
+            <button type="button" onclick="escolherMeta(5)">5 com calma</button>
+            <button type="button" class="apoio-pular" onclick="escolherMeta(null)">Agora não</button>
+        </div>`;
+    cx.hidden = false;
+}
+
+function escolherMeta(meta) {
+    logEvent('meta_rodada', { meta });
+    const cx = $('resumo-apoio');
+    if (!cx) return;
+    if (meta === null) { cx.hidden = true; return; }
+    cx.innerHTML = `<p class="apoio-devolucao">Combinado: <strong>${meta} questões</strong>.
+                    Boa rodada!</p>`;
+}
+
+// A pausa já existe (pomodoro). Aqui ela é OFERECIDA, não imposta — quem decide é o aluno.
+function mostrarOfertaDePausa(cx) {
+    cx.innerHTML = `
+        <p class="apoio-pergunta">Que tal uma pausa curta antes de seguir?</p>
+        <div class="apoio-botoes">
+            <button type="button" onclick="aceitarPausaDaOferta()">Pausar um pouco</button>
+            <button type="button" class="apoio-pular" onclick="$('resumo-apoio').hidden = true">
+                Prefiro continuar</button>
+        </div>`;
+    cx.hidden = false;
+}
+
+function aceitarPausaDaOferta() {
+    $('resumo-apoio').hidden = true;
+    $('resumo-overlay').hidden = true;
+    questoesNaRodada = 0;
+    sortearAlvoProbe();
+    atualizarContador();
+    _entrarPausa();
+}

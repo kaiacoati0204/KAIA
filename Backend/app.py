@@ -19,7 +19,11 @@ from statistics import mean, median, pstdev, stdev
 
 from thompson import ThompsonSampling, INTERVENCOES, PARAMS_PATH
 from auth import usuario_autenticado, usuario_identidade
-from mouse_features import features_mouse, blocos_parados, LIMIAR_BLOCO_S
+import consentimento as consent
+import risco
+from bandit_prevencao import (BanditPrevencao, recompensa_rodada,
+                              PARAMS_PREVENCAO_PATH, MIN_RESPONDIDAS)
+from mouse_features import features_mouse, blocos_parados, parado_apos_leitura, LIMIAR_BLOCO_S
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
@@ -43,6 +47,17 @@ DB_SCHEMA = os.getenv("KAIA_DB_SCHEMA", "public")
 STALE_SESSAO_MIN = int(os.getenv("STALE_SESSAO_MIN", "15"))
 
 ANON_USER = "00000000-0000-0000-0000-000000000000"
+
+# Consentimento do responsável: sem data de nascimento não dá para saber se é menor. Em
+# dev/contas antigas isso passa; no beta com alunos reais ligue KAIA_CONSENTIMENTO_ESTRITO=1
+# para que perfil sem data também fique sem coleta de comportamento.
+CONSENTIMENTO_ESTRITO = os.getenv("KAIA_CONSENTIMENTO_ESTRITO", "0") == "1"
+
+# Fluxo 1 (prevenção nas pausas). DESLIGADO por padrão: o primeiro teste do beta é sem modelo
+# nenhum — mede se o aluno engaja, sem misturar erro de modelo com desinteresse. Ligue com
+# KAIA_PREVENCAO_ATIVA=1 quando esse teste passar. Abaixo do limiar a pausa fica em paz.
+PREVENCAO_ATIVA = os.getenv("KAIA_PREVENCAO_ATIVA", "0") == "1"
+PREVENCAO_LIMIAR_RISCO = float(os.getenv("KAIA_PREVENCAO_LIMIAR", "0.5"))
 
 # Sigla → nome da matéria. O frontend manda a SIGLA (chave do temas_cache e da sessão) e
 # os prompts usam o NOME por extenso, senão o Gemini teria que adivinhar a sigla.
@@ -197,6 +212,31 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         app.state.thompson = None
         print("[KaIA] AVISO: não foi possível iniciar Thompson Sampling:", e)
+
+    # Prevenção (Fluxo 1): Modelo 1 (risco) + Modelo 2 (bandit dos apoios). Sem modelo de risco
+    # treinado, risco.prever_risco cai nas regras de reserva e nada quebra.
+    app.state.risco_art = risco.carregar_modelo()
+    try:
+        _pp = (PARAMS_PREVENCAO_PATH if DB_SCHEMA == "public"
+               else PARAMS_PREVENCAO_PATH.with_name(f"bandit_prevencao_params_{DB_SCHEMA}.json"))
+        app.state.bandit_prev = BanditPrevencao(params_path=_pp)
+        if app.state.pool is not None:
+            async with app.state.pool.acquire() as _c:
+                _l = await _c.fetch(
+                    "select payload->>'braco' b, "
+                    "sum((payload->>'recompensa')::double precision) soma, count(*) n "
+                    "from session_events where event_type = 'recompensa_prevencao' "
+                    "and payload->>'braco' is not null group by 1")
+            _somas = {r["b"]: (float(r["soma"] or 0), int(r["n"])) for r in _l}
+            if _somas:
+                app.state.bandit_prev.reconstruir(_somas)
+                print(f"[KaIA] bandit de prevenção reconstruído: "
+                      f"{sum(n for _, n in _somas.values())} rodadas.")
+        print(f"[KaIA] Prevenção {'ATIVA' if PREVENCAO_ATIVA else 'desligada'} "
+              f"(modelo de risco: {(app.state.risco_art or {}).get('fonte', 'regras')}).")
+    except Exception as e:
+        app.state.bandit_prev = None
+        print("[KaIA] AVISO: bandit de prevenção não iniciado:", e)
 
     # Scheduler: agrega features das sessões ativas a cada 30s.
     # Só inicia se houver banco — o job de agregação depende do pool.
@@ -2754,6 +2794,16 @@ async def encerrar_sessao(session_id: str, request: Request):
     if row is None:
         # sessão inexistente ou já encerrada — não é erro
         return {"status": "ignorado"}
+    # oferta sem rodada seguinte: fecha aqui, senão largar o estudo depois do apoio ficaria
+    # sem nota nenhuma e o bandit nunca aprenderia que aquele braço espanta o aluno
+    if getattr(request.app.state, "bandit_prev", None):
+        try:
+            async with pool.acquire() as conn:
+                fechou = await _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=True)
+            if fechou:
+                request.app.state.bandit_prev.atualizar(*fechou)
+        except Exception as e:
+            print("[KaIA] recompensa de prevenção não fechou no fim da sessão:", e)
     dur = (row["session_end_ts"] - row["session_start_ts"]).total_seconds()
     print("[KaIA Sessão encerrada]", session_id, f"{dur:.0f}s")
     return {"status": "ok", "session_id": session_id, "duracao_s": round(dur, 1)}
@@ -2803,6 +2853,254 @@ async def reportar_questao(body: ReporteIn, request: Request,
     return {"ok": True}
 
 
+# ==== PREVENÇÃO NAS PAUSAS (Fluxo 1) ====
+# Na pausa entre rodadas: o Modelo 1 diz SE o momento merece apoio (risco de perda de foco nas
+# próximas questões) e o Modelo 2 diz O QUÊ oferecer. O braço "nada" é o CONTROLE — sorteado
+# como os outros, com piso de probabilidade. Assim a comparação é dentro do mesmo aluno e
+# ninguém fica sem apoio o beta inteiro (ver ml/metodo_beta.md).
+
+class PausaIn(BaseModel):
+    session_id: str
+
+
+async def _log_evento(conn, session_id, tipo, payload):
+    await conn.execute(
+        "insert into session_events (session_id, event_type, payload, ts) "
+        "values ($1::uuid, $2, $3::jsonb, now())",
+        session_id, tipo, json.dumps(payload, ensure_ascii=False))
+
+
+async def _eventos_da_sessao(conn, session_id):
+    """[(ts, tipo, payload)] no formato que risco.features_do_momento espera."""
+    linhas = await conn.fetch(
+        "select ts, event_type, payload from session_events "
+        "where session_id = $1::uuid order by ts", session_id)
+    return [(r["ts"], r["event_type"],
+             json.loads(r["payload"]) if isinstance(r["payload"], str) else (r["payload"] or {}))
+            for r in linhas]
+
+
+async def _estudo_dia_min(conn, user_id):
+    """Minutos estudados hoje, somando as sessões do aluno. Sessão aberta conta até agora."""
+    v = await conn.fetchval(
+        "select coalesce(sum(extract(epoch from "
+        "(coalesce(session_end_ts, now()) - session_start_ts))) / 60.0, 0) "
+        "from sessions where user_id = $1::uuid and session_start_ts::date = current_date",
+        user_id)
+    return float(v or 0)
+
+
+async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
+    """Fecha a última decisão de prevenção com o que aconteceu na rodada seguinte.
+
+    Conta SÓ evento objetivo (risco.evento_objetivo): premiar o bandit por autorrelato faria o
+    aprendizado depender do que não sabemos medir. E fecha também no fim da sessão: sem isso, o
+    braço que faz o aluno largar o estudo nunca receberia nota — ele simplesmente não teria
+    rodada seguinte, e sumir pareceria neutro em vez de péssimo.
+    """
+    dec = await conn.fetchrow(
+        "select ts, payload from session_events where session_id = $1::uuid "
+        "and event_type = 'decisao_prevencao' order by ts desc limit 1", session_id)
+    if dec is None:
+        return None
+    p = json.loads(dec["payload"]) if isinstance(dec["payload"], str) else (dec["payload"] or {})
+    braco = p.get("braco")
+    if not braco:
+        return None                                  # decisão de não agir: não há o que avaliar
+    if await conn.fetchval(
+            "select count(*) from session_events where session_id = $1::uuid "
+            "and event_type = 'recompensa_prevencao' and ts > $2", session_id, dec["ts"]):
+        return None                                  # já fechada
+
+    respondidas, eventos = 0, 0
+    for r in await conn.fetch(
+            "select event_type, payload from session_events "
+            "where session_id = $1::uuid and ts > $2", session_id, dec["ts"]):
+        pay = json.loads(r["payload"]) if isinstance(r["payload"], str) else (r["payload"] or {})
+        if r["event_type"] == "question_answer":
+            respondidas += 1
+        elif risco.evento_objetivo(r["event_type"], pay):
+            eventos += 1
+
+    # largou logo depois da oferta = abandono; parar após um bom trecho é fim de estudo normal
+    abandonou = fim_de_sessao and respondidas < MIN_RESPONDIDAS
+    rec = recompensa_rodada(eventos, respondidas, abandonou)
+    if rec is None:
+        return None                                  # rodada curta demais: não avalia
+    await _log_evento(conn, session_id, "recompensa_prevencao",
+                      {"braco": braco, "prob": p.get("prob"), "recompensa": rec,
+                       "respondidas": respondidas, "eventos_objetivos": eventos,
+                       "abandonou": abandonou})
+    return braco, rec
+
+
+@app.post("/prevencao/pausa")
+async def prevencao_pausa(body: PausaIn, request: Request,
+                          ident: dict = Depends(usuario_identidade)):
+    """Decide o apoio da pausa. Devolve apoio=None quando não é hora de oferecer nada."""
+    if not PREVENCAO_ATIVA:
+        return {"apoio": None, "motivo": "desligada"}
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    bandit = getattr(request.app.state, "bandit_prev", None)
+    if bandit is None:
+        return {"apoio": None, "motivo": "indisponivel"}
+    sub = ident.get("sub")
+    async with pool.acquire() as conn:
+        dono = await _dono_sessao(conn, body.session_id)
+        if dono is not None and str(dono) != str(sub):
+            return JSONResponse({"erro": "Sessão não pertence ao usuário."}, status_code=403)
+        perfil = await conn.fetchrow(
+            "select data_nascimento, consentimento_status from perfis where user_id = $1::uuid", sub)
+        if not consent.coleta_permitida(perfil["data_nascimento"] if perfil else None,
+                                        perfil["consentimento_status"] if perfil else None,
+                                        CONSENTIMENTO_ESTRITO):
+            return {"apoio": None, "motivo": "sem_consentimento"}
+
+        inicio = await conn.fetchval(
+            "select session_start_ts from sessions where session_id = $1::uuid", body.session_id)
+        if inicio is None:
+            return {"apoio": None, "motivo": "sem_sessao"}
+        agora = await conn.fetchval("select now()")
+        feats = risco.features_do_momento(
+            await _eventos_da_sessao(conn, body.session_id), inicio, agora,
+            await _estudo_dia_min(conn, sub))
+        r, fonte = risco.prever_risco(feats, getattr(request.app.state, "risco_art", None))
+
+        if r < PREVENCAO_LIMIAR_RISCO:
+            # registra mesmo sem agir: sem o denominador não dá para dizer quantas pausas
+            # existiram nem comparar nada depois
+            await _log_evento(conn, body.session_id, "decisao_prevencao",
+                              {"risco": round(r, 3), "fonte": fonte, "braco": None,
+                               "acionou": False, "limiar": PREVENCAO_LIMIAR_RISCO})
+            return {"apoio": None, "motivo": "risco_baixo", "risco": round(r, 3)}
+
+        braco, prob = bandit.escolher()
+        await _log_evento(conn, body.session_id, "decisao_prevencao",
+                          {"risco": round(r, 3), "fonte": fonte, "braco": braco,
+                           "prob": round(prob, 3), "acionou": True,
+                           "limiar": PREVENCAO_LIMIAR_RISCO})
+    return {"apoio": None if braco == "nada" else braco, "braco": braco, "risco": round(r, 3)}
+
+
+# ==== CONSENTIMENTO DO RESPONSÁVEL (LGPD art. 14) ====
+# A KaIA não tem servidor de e-mail, então o double opt-in por e-mail do fluxo original não
+# existe: o cadastro gera um LINK com token, o aluno ou a escola entrega ao responsável, e o
+# aceite acontece na página. O registro guarda quem, quando, de onde e qual versão — é ele
+# que prova a autorização depois, não o checkbox do navegador.
+
+class AceiteIn(BaseModel):
+    responsavel_nome: Optional[str] = None
+    cpf: Optional[str] = None
+    parentesco: Optional[str] = None
+    aceito: bool = True
+
+
+def _ip_do_pedido(request):
+    """IP do aceite. Atrás de proxy o IP real vem no X-Forwarded-For, não em client.host."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
+@app.post("/consentimento/solicitar")
+async def consentimento_solicitar(request: Request, uid: str = Depends(usuario_autenticado)):
+    """Cria (ou reaproveita) o pedido pendente do aluno e devolve o token do link."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            "select token, expira_em from consentimentos where aluno_id = $1::uuid "
+            "and status = 'pendente' and expira_em > now() order by criado_em desc limit 1", uid)
+        if linha is None:
+            linha = await conn.fetchrow(
+                "insert into consentimentos (aluno_id, token, documento_versao, expira_em) "
+                "values ($1::uuid, $2, $3, $4) returning token, expira_em",
+                uid, consent.novo_token(), consent.VERSAO_DOCUMENTO,
+                consent.expira_em(datetime.now(timezone.utc)))
+        await conn.execute(
+            "update perfis set consentimento_status = coalesce(consentimento_status, 'pendente') "
+            "where user_id = $1::uuid", uid)
+    return {"token": linha["token"], "expira_em": linha["expira_em"].isoformat(),
+            "versao": consent.VERSAO_DOCUMENTO}
+
+
+@app.get("/consentimento/status")
+async def consentimento_status(request: Request, uid: str = Depends(usuario_autenticado)):
+    """O aluno precisa de consentimento? Já tem? (rota antes da /{token}: a ordem importa)"""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        p = await conn.fetchrow(
+            "select data_nascimento, consentimento_status from perfis where user_id = $1::uuid", uid)
+    nasc = p["data_nascimento"] if p else None
+    status = p["consentimento_status"] if p else None
+    return {"menor": consent.e_menor(nasc), "status": status,
+            "coleta_liberada": consent.coleta_permitida(nasc, status, CONSENTIMENTO_ESTRITO)}
+
+
+@app.get("/consentimento/{token}")
+async def consentimento_ver(token: str, request: Request):
+    """Página do responsável (pública — o token É a credencial). Devolve só o PRIMEIRO nome
+    do aluno: quem abre o link não precisa do nome completo de um menor."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            "select c.status, c.expira_em, c.documento_versao, p.nome "
+            "from consentimentos c join perfis p on p.user_id = c.aluno_id where c.token = $1", token)
+    if linha is None:
+        return JSONResponse({"erro": "Link inválido."}, status_code=404)
+    expirado = linha["expira_em"] < datetime.now(timezone.utc)
+    return {"aluno": (linha["nome"] or "").split(" ")[0], "status": linha["status"],
+            "expirado": expirado, "versao": linha["documento_versao"]}
+
+
+@app.post("/consentimento/{token}")
+async def consentimento_aceitar(token: str, body: AceiteIn, request: Request):
+    """Aceite ou recusa do responsável. Grava nome, HMAC do CPF, parentesco, data/hora e IP."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            "select id, aluno_id, status, expira_em from consentimentos where token = $1", token)
+        if linha is None:
+            return JSONResponse({"erro": "Link inválido."}, status_code=404)
+        if linha["status"] != "pendente":
+            return JSONResponse({"erro": "Este link já foi usado."}, status_code=409)
+        if linha["expira_em"] < datetime.now(timezone.utc):
+            await conn.execute("update consentimentos set status = 'expirado' where id = $1", linha["id"])
+            return JSONResponse({"erro": "Este link expirou."}, status_code=410)
+
+        if not body.aceito:
+            async with conn.transaction():
+                await conn.execute("update consentimentos set status = 'recusado', aceite_ts = now(), "
+                                   "aceite_ip = $2 where id = $1", linha["id"], _ip_do_pedido(request))
+                await conn.execute("update perfis set consentimento_status = 'recusado' "
+                                   "where user_id = $1::uuid", linha["aluno_id"])
+            return {"status": "recusado"}
+
+        ok, erro = consent.validar_aceite(body.responsavel_nome, body.cpf, body.parentesco)
+        if not ok:
+            return JSONResponse({"erro": erro}, status_code=400)
+        async with conn.transaction():
+            await conn.execute(
+                "update consentimentos set status = 'aprovado', responsavel_nome = $2, "
+                "responsavel_cpf_hash = $3, responsavel_parentesco = $4, aceite_ts = now(), "
+                "aceite_ip = $5 where id = $1",
+                linha["id"], body.responsavel_nome.strip(), consent.hash_cpf(body.cpf),
+                body.parentesco, _ip_do_pedido(request))
+            await conn.execute("update perfis set consentimento_status = 'aprovado' "
+                               "where user_id = $1::uuid", linha["aluno_id"])
+    return {"status": "aprovado"}
+
+
 @app.post("/events")
 async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(usuario_identidade)):
     pool = request.app.state.pool
@@ -2812,6 +3110,14 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
     sub = ident.get("sub")
 
     async with pool.acquire() as conn:
+        # LGPD art. 14: sem aceite do responsável, comportamento de menor não é gravado.
+        # Não é erro do aluno — devolve ok e o front segue normal, só sem coleta.
+        perfil_lgpd = await conn.fetchrow(
+            "select data_nascimento, consentimento_status from perfis where user_id = $1::uuid", sub)
+        if not consent.coleta_permitida(perfil_lgpd["data_nascimento"] if perfil_lgpd else None,
+                                        perfil_lgpd["consentimento_status"] if perfil_lgpd else None,
+                                        CONSENTIMENTO_ESTRITO):
+            return {"status": "sem_consentimento"}
         async with conn.transaction():
             # Garante perfil + sessão pai do usuário AUTENTICADO (não mais anônimo).
             # No fluxo normal o /sessions já criou a sessão; este é o fallback se o
@@ -2863,6 +3169,15 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
             except Exception as e:
                 print("[KaIA] regra indisponível no /events:", e)
 
+        # fim de rodada = a rodada seguinte à oferta terminou: hora de dar a nota ao bandit
+        if body.event_type == "rodada_fim" and getattr(request.app.state, "bandit_prev", None):
+            try:
+                fechou = await _fechar_recompensa_prevencao(conn, body.session_id)
+                if fechou:
+                    request.app.state.bandit_prev.atualizar(*fechou)
+            except Exception as e:
+                print("[KaIA] recompensa de prevenção não fechou:", e)
+
     print("[KaIA Event]", body.event_type, body.session_id)
     return resposta
 
@@ -2876,6 +3191,11 @@ def _features_da_questao(payload):
          if not k.startswith("_") and k not in ("variabilidade_tempo_resposta", "tendencia_desempenho_sessao")}
     q["maior_bloco_parado_s"], q["n_blocos_parados"] = blocos_parados(
         p.get("mouse_track") or [], p.get("tempo_resposta_ms"))
+    # Mesma imobilidade, agora sabendo QUANDO: parado durante a leitura esperada e on-task;
+    # parado muito depois dela, nao. So entra no rotulo do probe (pesquisa) - nenhuma
+    # decisao que o aluno ve depende disto. limite_leitura_ms guarda SEGUNDOS.
+    q["parado_pos_leitura_s"], q["frac_parado_pos_leitura"] = parado_apos_leitura(
+        p.get("mouse_track") or [], p.get("tempo_resposta_ms"), p.get("limite_leitura_ms"))
     q.update(acertou=bool(p.get("acertou")), nivel_dificuldade=p.get("nivel_dificuldade"),
              questao_id=p.get("questao_id"))
     return q
@@ -2941,6 +3261,9 @@ async def perfil(request: Request, dados: dict = Body(default={}),
     # sobrescrever. Publico menor de idade e coleta de comportamento (mouse, ocioso,
     # autorrelato): so checkbox no navegador nao permite reconstruir isso depois.
     versao_termos = (p.get("versao_termos") or dados.get("versao_termos") or None)
+    # Data de nascimento: e o que diz se precisa do aceite de um responsavel (LGPD art. 14).
+    # Nunca sobrescreve a que ja existe - mudar idade depois nao pode driblar o consentimento.
+    data_nasc = _to_date(p.get("data_nascimento") or dados.get("data_nascimento"))
 
     # ultima_sessao_ts vem como epoch em ms → timestamptz
     ult_ts = None
@@ -2960,9 +3283,9 @@ async def perfil(request: Request, dados: dict = Body(default={}),
                 """
                 insert into perfis (user_id, email, hobbies, data_prova, ambiente_dispositivo,
                     sequencia_dias_estudo, sessoes_no_dia, ultimo_dia_estudo, ultima_sessao_ts,
-                    versao_termos, aceite_termos_em, updated_at)
+                    versao_termos, aceite_termos_em, data_nascimento, updated_at)
                 values ($1::uuid, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10,
-                        case when $10::text is not null then now() end, now())
+                        case when $10::text is not null then now() end, $11, now())
                 on conflict (user_id) do update set
                     email                 = coalesce(excluded.email, perfis.email),
                     hobbies               = excluded.hobbies,
@@ -2976,11 +3299,12 @@ async def perfil(request: Request, dados: dict = Body(default={}),
                     -- que vale; um novo aceite so entra se ainda nao houver nenhum)
                     versao_termos         = coalesce(perfis.versao_termos, excluded.versao_termos),
                     aceite_termos_em      = coalesce(perfis.aceite_termos_em, excluded.aceite_termos_em),
+                    data_nascimento       = coalesce(perfis.data_nascimento, excluded.data_nascimento),
                     updated_at            = now()
                 """,
                 user_id, email, json.dumps(hobbies, ensure_ascii=False),
                 _to_date(p.get("data_prova")), ambiente, seq, sess_dia,
-                _to_date(p.get("ultimo_dia_estudo")), ult_ts, versao_termos,
+                _to_date(p.get("ultimo_dia_estudo")), ult_ts, versao_termos, data_nasc,
             )
     except Exception as e:
         print("[KaIA] Erro ao gravar perfil:", e)

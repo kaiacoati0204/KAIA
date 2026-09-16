@@ -176,6 +176,9 @@
                     <option value="outro">Outro motivo</option>
                 </select>
             </div>
+            <!-- Apoio da pausa (Fluxo 1). Preenchido por pedirApoioDaPausa(); fica escondido
+                 quando o modelo decide que a pausa não precisa de nada. -->
+            <div id="resumo-apoio" class="resumo-apoio" hidden></div>
             <div class="resumo-acoes">
                 <button type="button" class="botao-proxima" id="btn-continuar" onclick="continuarRodada()">Continuar estudando</button>
                 <button type="button" class="botao-encerrar-modal" id="btn-encerrar" onclick="encerrarSessaoComResumo()">Encerrar sessão</button>

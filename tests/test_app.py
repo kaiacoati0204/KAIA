@@ -1482,3 +1482,188 @@ async def test_aluno_que_ia_bem_e_caiu_e_interrompido():
     regs = ([(True, 20000)] * 7 + [(False, 21000), (False, 22000), (False, 400000)])
     ok, motivo = await app_mod._corroboracao_objetiva(_fc(regs), "sid")
     assert ok is True and "acerto" in motivo and "tempo" in motivo
+
+
+# ================================================ consentimento do responsável (LGPD art. 14)
+FUTURO = datetime.now(timezone.utc) + timedelta(days=7)
+CPF_OK = "529.982.247-25"
+
+
+async def test_consentimento_link_invalido_404():
+    _set_state(pool=FakePool(FakeConn(fetchrow=None)))
+    async with _client() as c:
+        r = await c.get("/consentimento/nao-existe")
+    assert r.status_code == 404
+
+
+async def test_consentimento_ver_mostra_so_o_primeiro_nome():
+    """quem abre o link não precisa do nome completo de um menor"""
+    conn = FakeConn(fetchrow={"from consentimentos c join perfis p": {
+        "status": "pendente", "expira_em": FUTURO, "documento_versao": "1.4",
+        "nome": "Ana Clara Souza Lima"}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.get("/consentimento/tok123")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["aluno"] == "Ana" and d["status"] == "pendente" and d["expirado"] is False
+
+
+async def test_consentimento_recusa_cpf_invalido():
+    conn = FakeConn(fetchrow={"select id, aluno_id, status, expira_em": {
+        "id": "c1", "aluno_id": "aluno-1", "status": "pendente", "expira_em": FUTURO}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/consentimento/tok123", json={
+            "responsavel_nome": "Maria Souza", "cpf": "111.111.111-11", "parentesco": "mãe"})
+    assert r.status_code == 400
+    assert not [q for (q, _) in conn.executed if "aprovado" in q]
+
+
+async def test_consentimento_aceite_grava_hash_e_libera_o_aluno(monkeypatch):
+    monkeypatch.setenv("KAIA_CPF_PEPPER", "segredo-de-teste")
+    conn = FakeConn(fetchrow={"select id, aluno_id, status, expira_em": {
+        "id": "c1", "aluno_id": "aluno-1", "status": "pendente", "expira_em": FUTURO}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/consentimento/tok123", json={
+            "responsavel_nome": "Maria Souza", "cpf": CPF_OK, "parentesco": "mãe"})
+    assert r.status_code == 200 and r.json()["status"] == "aprovado"
+    gravados = [a for (q, a) in conn.executed if "update consentimentos set status = 'aprovado'" in q]
+    assert gravados and CPF_OK not in str(gravados[0])          # CPF nunca em claro
+    assert len(gravados[0][2]) == 64                            # é o HMAC
+    assert [q for (q, _) in conn.executed if "consentimento_status = 'aprovado'" in q]
+
+
+async def test_consentimento_link_ja_usado_409():
+    conn = FakeConn(fetchrow={"select id, aluno_id, status, expira_em": {
+        "id": "c1", "aluno_id": "aluno-1", "status": "aprovado", "expira_em": FUTURO}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/consentimento/tok123", json={"aceito": False})
+    assert r.status_code == 409
+
+
+async def test_evento_de_menor_sem_autorizacao_nao_e_gravado():
+    """o coração do art. 14: sem aceite do responsável, nada do uso entra no banco"""
+    conn = FakeConn(fetchrow={"select data_nascimento, consentimento_status": {
+        "data_nascimento": date(2011, 5, 20), "consentimento_status": "pendente"}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/events", json={"session_id": "11111111-1111-1111-1111-111111111111",
+                                          "event_type": "question_answer", "payload": {}})
+    assert r.status_code == 200 and r.json() == {"status": "sem_consentimento"}
+    assert not [q for (q, _) in conn.executed if "insert into session_events" in q]
+
+
+# ================================================ prevenção na pausa (Fluxo 1)
+from bandit_prevencao import BRACOS, BanditPrevencao   # noqa: E402
+
+T_INICIO = datetime.now(timezone.utc) - timedelta(minutes=40)
+
+
+def _conn_pausa(eventos=None, perfil=None):
+    """FakeConn com o que a rota /prevencao/pausa consulta."""
+    return FakeConn(
+        fetchrow={"data_nascimento, consentimento_status":
+                  perfil or {"data_nascimento": None, "consentimento_status": None}},
+        fetch={"select ts, event_type, payload from session_events": eventos or []},
+        fetchval={"select user_id from sessions": "test-user",
+                  "select session_start_ts from sessions": T_INICIO,
+                  "coalesce(sum(extract": 120.0},
+    )
+
+
+async def _pausa(conn):
+    _set_state(pool=FakePool(conn))
+    app_mod.app.state.bandit_prev = BanditPrevencao(semente=3)
+    async with _client() as c:
+        return await c.post("/prevencao/pausa",
+                            json={"session_id": "11111111-1111-1111-1111-111111111111"})
+
+
+async def test_prevencao_desligada_nao_faz_nada():
+    """padrão do beta: o primeiro teste é sem modelo nenhum"""
+    r = await _pausa(_conn_pausa())
+    assert r.json() == {"apoio": None, "motivo": "desligada"}
+
+
+async def test_prevencao_risco_baixo_deixa_a_pausa_em_paz(monkeypatch):
+    monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_LIMIAR_RISCO", 0.95)
+    conn = _conn_pausa()
+    r = await _pausa(conn)
+    assert r.json()["apoio"] is None and r.json()["motivo"] == "risco_baixo"
+    # registra mesmo sem agir: sem denominador não dá para comparar nada depois
+    decisoes = [a for (q, a) in conn.executed if "decisao_prevencao" in str(a)]
+    assert decisoes and '"acionou": false' in decisoes[0][2]
+
+
+async def test_prevencao_escolhe_um_braco_e_registra_a_probabilidade(monkeypatch):
+    monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_LIMIAR_RISCO", 0.0)
+    conn = _conn_pausa()
+    r = await _pausa(conn)
+    d = r.json()
+    assert d["braco"] in BRACOS
+    assert d["apoio"] is None if d["braco"] == "nada" else d["apoio"] == d["braco"]
+    reg = [a for (q, a) in conn.executed if "decisao_prevencao" in str(a)][0][2]
+    assert '"prob"' in reg and '"acionou": true' in reg
+
+
+async def test_prevencao_sem_consentimento_nao_oferece_nem_registra(monkeypatch):
+    monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    conn = _conn_pausa(perfil={"data_nascimento": date(2011, 4, 1),
+                               "consentimento_status": "pendente"})
+    r = await _pausa(conn)
+    assert r.json()["motivo"] == "sem_consentimento"
+    assert not [q for (q, _) in conn.executed if "decisao_prevencao" in q]
+
+
+async def test_recompensa_conta_so_evento_objetivo_e_nao_o_probe():
+    """se o probe entrasse na conta, o bandit aprenderia pelo que o aluno DIZ"""
+    decisao = datetime.now(timezone.utc) - timedelta(minutes=10)
+    posteriores = ([{"event_type": "question_answer", "payload": {}}] * 10
+                   + [{"event_type": "tab_change", "payload": {"tempo_fora_foco_s": 60}}]
+                   + [{"event_type": "probe_atencao", "payload": {"estado": "distraido"}}])
+    conn = FakeConn(
+        fetchrow={"decisao_prevencao": {"ts": decisao,
+                                        "payload": {"braco": "pacote_foco", "prob": 0.4}}},
+        fetch={"where session_id = $1::uuid and ts > $2": posteriores},
+        fetchval=0,
+    )
+    braco, rec = await app_mod._fechar_recompensa_prevencao(conn, "sess-1")
+    assert braco == "pacote_foco"
+    assert rec == 0.8                      # 10 respondidas, 1 evento objetivo -> (10-2)/10
+    reg = [a for (q, a) in conn.executed if "recompensa_prevencao" in str(a)][0][2]
+    assert '"eventos_objetivos": 1' in reg
+
+
+async def test_largar_o_estudo_logo_apos_a_oferta_vale_zero():
+    """sem isto o braço que espanta o aluno ficaria sem nota, e sumir pareceria neutro"""
+    decisao = datetime.now(timezone.utc) - timedelta(minutes=2)
+    conn = FakeConn(
+        fetchrow={"decisao_prevencao": {"ts": decisao,
+                                        "payload": {"braco": "pausa_curta", "prob": 0.3}}},
+        fetch={"where session_id = $1::uuid and ts > $2":
+               [{"event_type": "question_answer", "payload": {}}]},
+        fetchval=0,
+    )
+    assert await app_mod._fechar_recompensa_prevencao(conn, "s", fim_de_sessao=True) == ("pausa_curta", 0.0)
+    # a MESMA rodada curta, sem fim de sessão, não avalia nada (None em vez de 0)
+    conn2 = FakeConn(
+        fetchrow={"decisao_prevencao": {"ts": decisao, "payload": {"braco": "pausa_curta"}}},
+        fetch={"where session_id = $1::uuid and ts > $2":
+               [{"event_type": "question_answer", "payload": {}}]},
+        fetchval=0,
+    )
+    assert await app_mod._fechar_recompensa_prevencao(conn2, "s") is None
+
+
+async def test_decisao_ja_fechada_nao_conta_duas_vezes():
+    conn = FakeConn(
+        fetchrow={"decisao_prevencao": {"ts": datetime.now(timezone.utc),
+                                        "payload": {"braco": "nada"}}},
+        fetchval=1,                        # já existe recompensa depois da decisão
+    )
+    assert await app_mod._fechar_recompensa_prevencao(conn, "s") is None

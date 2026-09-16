@@ -4887,3 +4887,58 @@ body.mc-page .railnav {
   .mc-moldura, .mc-moldura-dica, .mc-aba, .mc-item, .mc-btn { transition: none; }
   .mc-btn:hover:not(:disabled) { transform: none; }
 }
+
+/* ==== APOIO DA PAUSA (prevenção) ==== */
+/* Dentro do modal de rodada. Discreto de proposito: publico neurodivergente, e isto aparece
+   quando o aluno ja esta num momento de decisao (continuar ou parar). Sem animacao, sem cor
+   forte, sem nada piscando. */
+.resumo-apoio {
+    margin: 14px 0 4px;
+    padding: 12px 14px;
+    border: 1px solid rgba(43, 42, 38, .12);
+    border-radius: 12px;
+    background: var(--marfim);
+    text-align: left;
+}
+
+.resumo-apoio .apoio-devolucao {
+    margin: 0 0 8px;
+    color: var(--tinta);
+    font-size: .95rem;
+    line-height: 1.45;
+}
+
+.resumo-apoio .apoio-pergunta {
+    margin: 0 0 10px;
+    color: var(--profundo);
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.resumo-apoio .apoio-botoes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.resumo-apoio .apoio-botoes button {
+    padding: 8px 14px;
+    border: 1px solid var(--profundo);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--profundo);
+    font: inherit;
+    font-size: .9rem;
+    cursor: pointer;
+}
+
+.resumo-apoio .apoio-botoes button:hover {
+    border-color: var(--gravata-kinrou);
+}
+
+.resumo-apoio .apoio-botoes .apoio-pular {
+    border-color: transparent;
+    background: none;
+    color: var(--tinta);
+    text-decoration: underline;
+}

@@ -24,6 +24,11 @@ Duas camadas, dois padrões de evidência, dois momentos:
 Ação cara exige fato; ação barata admite previsão. É por isso que o gatilho reativo **não usa
 modelo** — ele age sobre o que o navegador registrou.
 
+**Como as duas conversam:** se a camada reativa agiu nos últimos 5 minutos, a pausa seguinte
+passa em branco — duas telas em poucos minutos cansam, e a ação da reativa mexe no desfecho que
+vira recompensa da preventiva. Quando alguma escapa, o evento de recompensa registra quantas
+reativas caíram na janela, para a análise separar depois.
+
 ---
 
 ## 2. O problema é real e medido

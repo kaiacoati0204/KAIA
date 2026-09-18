@@ -1568,7 +1568,8 @@ def _conn_pausa(eventos=None, perfil=None):
         fetchrow={"data_nascimento, consentimento_status":
                   perfil or {"data_nascimento": None, "consentimento_status": None}},
         fetch={"select ts, event_type, payload from session_events": eventos or []},
-        fetchval={"select user_id from sessions": "test-user",
+        fetchval={"extract(epoch from (now() - max(ts)))": None,   # nenhuma reativa recente
+                  "select user_id from sessions": "test-user",
                   "select session_start_ts from sessions": T_INICIO,
                   "coalesce(sum(extract": 120.0},
     )
@@ -1702,3 +1703,14 @@ def test_todo_plano_e_um_se_entao_de_verdade():
     textos = [t for _, _, t in app_mod.PLANOS.values()] + [app_mod.PLANO_PADRAO[1]]
     for t in textos:
         assert t.startswith("Se ") and ", então " in t
+
+
+async def test_prevencao_nao_empilha_em_cima_da_reativa(monkeypatch):
+    """duas telas em poucos minutos cansam — e a reativa mexe no desfecho que vira recompensa"""
+    monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    conn = _conn_pausa()
+    conn.r_val = dict(conn.r_val, **{"extract(epoch from (now() - max(ts)))": 2.0})
+    r = await _pausa(conn)
+    assert r.json() == {"apoio": None, "motivo": "reativa_recente"}
+    reg = [a for (q, a) in conn.executed if "decisao_prevencao" in str(a)][0][2]
+    assert '"acionou": false' in reg and "reativa_recente" in reg

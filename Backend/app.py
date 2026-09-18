@@ -70,6 +70,10 @@ PREVENCAO_GATILHO = os.getenv("KAIA_PREVENCAO_GATILHO", "regra")
 # respondida. Esperar a fase 2 para descobrir aceitacao ruim seria descobrir tarde demais.
 # "bandit": o sorteio normal entre nada / pacote_foco / pausa_curta.
 PREVENCAO_MODO = os.getenv("KAIA_PREVENCAO_MODO", "bandit")
+# As DUAS camadas podem cair perto uma da outra: reativa no meio da rodada, preventiva na pausa
+# logo depois. Duas telas em poucos minutos cansam e, pior, a reativa mexe no desfecho que vira
+# recompensa da preventiva. Se a reativa agiu ha pouco, a pausa passa em branco.
+PREVENCAO_APOS_REATIVA_MIN = 5.0
 
 # Sigla → nome da matéria. O frontend manda a SIGLA (chave do temas_cache e da sessão) e
 # os prompts usam o NOME por extenso, senão o Gemini teria que adivinhar a sigla.
@@ -2974,7 +2978,7 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
             "and event_type = 'recompensa_prevencao' and ts > $2", session_id, dec["ts"]):
         return None                                  # já fechada
 
-    respondidas, acertos, eventos, lentidao_ignorada = 0, 0, 0, 0
+    respondidas, acertos, eventos, lentidao_ignorada, reativas = 0, 0, 0, 0, 0
     for r in await conn.fetch(
             "select event_type, payload from session_events "
             "where session_id = $1::uuid and ts > $2", session_id, dec["ts"]):
@@ -2982,6 +2986,8 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
         if r["event_type"] == "question_answer":
             respondidas += 1
             acertos += 1 if pay.get("acertou") else 0
+        elif r["event_type"] == "decisao_intervencao":
+            reativas += 1                 # a outra camada agiu nesta janela: separavel depois
         elif risco.regra_por_lentidao(r["event_type"], pay):
             lentidao_ignorada += 1        # o plano pediu para ir devagar: nao pode contar contra
         elif risco.evento_objetivo(r["event_type"], pay):
@@ -3012,7 +3018,7 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
                        "respondidas": respondidas, "eventos_objetivos": eventos,
                        "abandonou": abandonou, "acertos": acertos,
                        "completou_rodada": respondidas >= MIN_RESPONDIDAS and not abandonou,
-                       "lentidao_ignorada": lentidao_ignorada})
+                       "lentidao_ignorada": lentidao_ignorada, "reativas_na_janela": reativas})
     return braco, rec, str(dono_aluno) if dono_aluno else None
 
 
@@ -3044,6 +3050,15 @@ async def prevencao_pausa(body: PausaIn, request: Request,
             "select session_start_ts from sessions where session_id = $1::uuid", body.session_id)
         if inicio is None:
             return {"apoio": None, "motivo": "sem_sessao"}
+        reativa_min = await conn.fetchval(
+            "select extract(epoch from (now() - max(ts))) / 60.0 from session_events "
+            "where session_id = $1::uuid and event_type = 'decisao_intervencao'", body.session_id)
+        if reativa_min is not None and float(reativa_min) < PREVENCAO_APOS_REATIVA_MIN:
+            await _log_evento(conn, body.session_id, "decisao_prevencao",
+                              {"braco": None, "acionou": False, "motivo": "reativa_recente",
+                               "min_desde_reativa": round(float(reativa_min), 1)})
+            return {"apoio": None, "motivo": "reativa_recente"}
+
         if PREVENCAO_MODO == "fixo":
             # prob=None de proposito: sem sorteio nao ha IPW, e o relatorio exclui essas rodadas
             # da estimativa de efeito em vez de misturar com a fase sorteada.

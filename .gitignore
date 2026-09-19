@@ -26,6 +26,10 @@ server.log
 ml/artifacts/*.pkl
 # Estado de runtime do Thompson Sampling (alpha/beta mutáveis)
 ml/artifacts/thompson_params.json
+# estado dos bandits por schema (sandbox): thompson_params_teste.json,
+# bandit_prevencao_params_teste.json. Sao dado local, nao codigo.
+ml/artifacts/thompson_params_*.json
+ml/artifacts/bandit_prevencao_params*.json
 # v2 é regenerável pelo gerador (seed fixa) — versiona só o gerador, não os artefatos.
 ml/models/modelo_rf_v2.pkl
 ml/artifacts/metricas_v2.json

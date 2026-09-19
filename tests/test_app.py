@@ -1714,3 +1714,46 @@ async def test_prevencao_nao_empilha_em_cima_da_reativa(monkeypatch):
     assert r.json() == {"apoio": None, "motivo": "reativa_recente"}
     reg = [a for (q, a) in conn.executed if "decisao_prevencao" in str(a)][0][2]
     assert '"acionou": false' in reg and "reativa_recente" in reg
+
+
+# ==== CORROBORAÇÃO DO AUTORRELATO (o fato confere a declaração do probe) ====
+def _fc_probe(payload, eventos=None):
+    """FakeConn com a última question_answer e os eventos da janela dela."""
+    return FakeConn(
+        fetchrow={"select ts, payload": {"ts": datetime.now(timezone.utc), "payload": payload}},
+        fetch={"select event_type": eventos or []})
+
+
+async def test_quem_estava_mesmo_na_questao_nao_e_contradito():
+    """sem evento e sem imobilidade, "eu estava na questão" fica de pé — o fato não acusa
+    ninguém por padrão, senão a revisão viraria insistência"""
+    track = [[t * 1000.0] for t in range(30)]          # mexendo o tempo todo
+    conn = _fc_probe({"tempo_resposta_ms": 30000, "mouse_track": track})
+    assert await app_mod._contradiz_autorrelato(conn, "sid") is None
+
+
+async def test_saida_da_aba_contradiz_quem_disse_que_estava_na_questao():
+    conn = _fc_probe(
+        {"tempo_resposta_ms": 90000, "mouse_track": [[1000.0]]},
+        [{"event_type": "tab_change", "payload": {"interno": False, "tempo_fora_foco_s": 45.0}}])
+    r = await app_mod._contradiz_autorrelato(conn, "sid")
+    assert r["motivo"] == "saida" and "45 segundos" in r["texto"]
+
+
+async def test_imobilidade_longa_contradiz():
+    """a mão parada é fato físico; o texto fala disso, nunca do sensor"""
+    conn = _fc_probe({"tempo_resposta_ms": 120000, "mouse_track": [[500.0]]})
+    r = await app_mod._contradiz_autorrelato(conn, "sid")
+    assert r["motivo"] == "parado"
+    assert "mouse" not in r["texto"].lower()      # comportamento, não sensor (ensina a burlar)
+
+
+async def test_sem_resposta_ainda_nao_ha_janela_para_conferir():
+    assert await app_mod._contradiz_autorrelato(
+        FakeConn(fetchrow={"select ts, payload": None}), "sid") is None
+
+
+async def test_pausa_de_leitura_normal_nao_contradiz():
+    """55 s parado num enunciado de vestibular ainda é ler; o corte é 60 s"""
+    conn = _fc_probe({"tempo_resposta_ms": 56000, "mouse_track": [[500.0]]})
+    assert await app_mod._contradiz_autorrelato(conn, "sid") is None

@@ -2416,6 +2416,9 @@ def _andamento_aberto(evs):
 # Tempo parado sozinho confunde com pausa legítima (Baker 2007). Exige as duas: passou do limite
 # calibrado da questão (tamanho do enunciado, matéria de cálculo) E a pausa é incomum contra o
 # próprio aluno e os outros alunos (Cetintas 2010). Sem referência suficiente, não dispara.
+# Imobilidade que contradiz "eu estava na questao". 60 s e o mesmo piso do overlay do front:
+# abaixo disso ainda e pausa de leitura plausivel num enunciado de vestibular.
+OCIO_CONTRADIZ_S = 60.0
 OCIO_FRESCO_S = 45           # o front manda a cada 15 s; mais velho que isso = sinal parado
 
 
@@ -3268,10 +3271,19 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
             )
         # Probe = rótulo REAL do aluno -> vira exemplo supervisionado (fora da
         # transação: falhar aqui não pode derrubar a ingestão do evento).
+        contra_probe = None
         if body.event_type == "probe_atencao":
-            await _capturar_probe(conn, body.session_id, body.payload)
+            contra_probe = await _capturar_probe(conn, body.session_id, body.payload)
 
         resposta = {"status": "ok", "event_id": str(ev["event_id"])}
+        # devolve o fato para o front poder PERGUNTAR de novo (nunca para corrigir sozinho):
+        # a resposta original e a que treina; a revisao e medida à parte.
+        if contra_probe:
+            resposta["probe_sinal"] = contra_probe["texto"]
+            # o MOTIVO vai junto porque a taxa de revisao POR motivo separa as duas leituras:
+            # mudar muito diante de um fato duro ("saiu 45 s") e atualizar; mudar igual diante
+            # de qualquer sinal, inclusive o fraco, e deferencia ao sistema (vies de automacao).
+            resposta["probe_sinal_motivo"] = contra_probe["motivo"]
         # questão desengajada fora da nota
         # a regra (DTS) avalia a resposta que acabou de chegar; o acerto numa questão
         # desengajada não mede o que o aluno sabe, então o front tira da nota da rodada
@@ -3318,13 +3330,64 @@ def _features_da_questao(payload):
     return q
 
 
+async def _contradiz_autorrelato(conn, session_id):
+    """O aluno disse que estava na questão — o comportamento na janela dela diz outra coisa?
+
+    Bixler & D'Mello: o teto do rotulo nao e o modelo, e a regua. Quem vaga sem meta-consciencia
+    responde "engajado" de boa-fe, e o erro fica concentrado num lado so (viés, nao ruído: nao
+    lava com mais dado). Aqui o fato checa a declaracao. Nao corrige o rotulo — MEDE o quanto
+    ele erra, que e a unica coisa honesta a fazer com uma regua mole.
+
+    Devolve {motivo, texto} ou None. `texto` fala do COMPORTAMENTO, nunca do sensor: revelar
+    quais sinais disparam o que ensina a burlar (gaming, Baker) e soa vigilancia.
+    """
+    ult = await conn.fetchrow(
+        "select ts, payload from session_events where session_id = $1::uuid "
+        "and event_type = 'question_answer' order by ts desc limit 1", session_id)
+    if ult is None:
+        return None
+    pay = ult["payload"]
+    pay = json.loads(pay) if isinstance(pay, str) else pay
+    dur_ms = float(pay.get("tempo_resposta_ms") or 0)
+    if dur_ms <= 0:
+        return None
+    # janela = a questao que acabou de ser respondida (é sobre ela que o probe pergunta)
+    linhas = await conn.fetch(
+        "select event_type, payload from session_events where session_id = $1::uuid "
+        "and ts >= $2::timestamptz - ($3 || ' milliseconds')::interval and ts <= $2::timestamptz",
+        session_id, ult["ts"], str(int(dur_ms)))
+    for r in linhas:
+        pl = r["payload"]
+        pl = json.loads(pl) if isinstance(pl, str) else pl
+        # mesmo criterio do rotulo dos modelos: risco.evento_objetivo, nao um corte paralelo
+        if risco.evento_objetivo(r["event_type"], pl):
+            fora = round(float(pl.get("tempo_fora_foco_s") or 0))
+            if fora:
+                return {"motivo": "saida", "segundos": fora,
+                        "texto": f"Nessa questão você saiu da KaIA por {fora} segundos."}
+            return {"motivo": "evento", "segundos": None,
+                    "texto": "Nessa questão o seu ritmo mudou bastante."}
+    maior, _ = blocos_parados(pay.get("mouse_track") or [], dur_ms)
+    if maior >= OCIO_CONTRADIZ_S:
+        return {"motivo": "parado", "segundos": round(maior),
+                "texto": f"Nessa questão você ficou {round(maior)} segundos sem mexer em nada."}
+    return None
+
+
 async def _capturar_probe(conn, session_id, payload):
     """Grava (features NO MOMENTO, rótulo declarado) em probe_labels — o dataset
     real que tira o modelo do 100% sintético. Best-effort: erro não propaga
     (tabela pode não existir ainda, sessão sem respostas etc.)."""
     estado = (payload or {}).get("estado")
     if estado not in ESTADOS:
-        return
+        return None
+    contra = None
+    try:
+        # so faz sentido contradizer quem declarou foco: "vagando"/"fora" ja admitiu
+        if estado == "engajado":
+            contra = await _contradiz_autorrelato(conn, session_id)
+    except Exception as e:
+        print("[KaIA] corroboracao do probe indisponivel:", e)
     try:
         feats = await montar_features_sessao(conn, session_id)
         if feats is None:
@@ -3336,6 +3399,7 @@ async def _capturar_probe(conn, session_id, payload):
         registro = dict(feats, _leitura_confiavel=leitura_confiavel(feats))
         # a opção marcada no probe de 4 opções (ex.: "preocupado" conta como engajado, mas fica guardada)
         registro["_resposta"] = (payload or {}).get("resposta")
+        registro["_contradito"] = contra["motivo"] if contra else None
         # a questão que acabou, além da janela
         # Kam 2012: um episódio dura ~10-15 s e o rótulo vale para os segundos antes do relato; a
         # janela de 10 min dilui isso. Brutas (escala log), para relativizar depois no treino.
@@ -3351,6 +3415,7 @@ async def _capturar_probe(conn, session_id, payload):
         )
     except Exception as e:
         print("[KaIA] erro ao capturar probe:", e)
+    return contra
 
 
 # ================== API: PERFIL (login + hobbies, upsert em `perfis`) ========

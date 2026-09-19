@@ -2924,8 +2924,11 @@ body.kaia-reancorar .option-btn {
 }
 
 /* ---- probe de atenção (autorrelato) -------------------------------------
-   NÃO é uma das 7: é a pergunta de autorrelato que gera o rótulo real do modelo. */
-#kaia-probe {
+   NÃO é uma das 7: é a pergunta de autorrelato que gera o rótulo real do modelo.
+   #kaia-probe-revisao é a segunda pergunta (com o fato na mão) e divide o visual: mesmo
+   momento, mesma caixa — mudar de aparência no meio faria parecer outra coisa. */
+#kaia-probe,
+#kaia-probe-revisao {
   position: fixed;
   left: 50%;
   bottom: 24px;
@@ -2952,18 +2955,21 @@ body.kaia-reancorar .option-btn {
 #kaia-probe.probe-medio   { max-width: 340px; }
 #kaia-probe.probe-grande  { max-width: 460px; }
 
-#kaia-probe .probe-q {
+#kaia-probe .probe-q,
+#kaia-probe-revisao .probe-q {
   margin: 0 0 10px;
   color: var(--profundo);
   font-size: 14px;
   font-weight: 600;
 }
-#kaia-probe .probe-nota {
+#kaia-probe .probe-nota,
+#kaia-probe-revisao .probe-nota {
   margin: -6px 0 10px;
   color: var(--tinta);
   font-size: 12px;
 }
-#kaia-probe .probe-btns { display: flex; flex-direction: column; gap: 6px; }
+#kaia-probe .probe-btns,
+#kaia-probe-revisao .probe-btns { display: flex; flex-direction: column; gap: 6px; }
 #kaia-probe .probe-pular {
   display: block;
   margin: 8px 0 0 auto;
@@ -2974,7 +2980,8 @@ body.kaia-reancorar .option-btn {
   font-size: 12px;
   text-decoration: underline;
 }
-#kaia-probe button {
+#kaia-probe button,
+#kaia-probe-revisao button {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -2985,7 +2992,8 @@ body.kaia-reancorar .option-btn {
   text-align: left;
   cursor: pointer;
 }
-#kaia-probe button:hover { border-color: var(--profundo); }
+#kaia-probe button:hover,
+#kaia-probe-revisao button:hover { border-color: var(--profundo); }
 
 /* Aviso gentil ao bater a meta do dia — fade suave, some sozinho. */
 .meta-toast {

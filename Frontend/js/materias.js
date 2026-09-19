@@ -2376,7 +2376,7 @@ function pularProbe() {
 function responderProbe(estado, resposta) {
     probesRespondidos++;
     if (resposta === 'na_questao') probesNaQuestao++;
-    logEvent('probe_atencao', {
+    const envio = logEvent('probe_atencao', {
         estado,
         resposta,
         // QUAL frase e janela geraram o rótulo — vai no payload jsonb (sem migration); em
@@ -2389,7 +2389,79 @@ function responderProbe(estado, resposta) {
         // é introspecção). Só se recupera capturando na hora — não dá pra derivar depois.
         latencia_ms: probeAtual?.mostradoEm ? Math.round(performance.now() - probeAtual.mostradoEm) : null,
     });
+    // o backend devolve `probe_sinal` quando o comportamento contradiz "eu estava na questão".
+    // Segura o aoFechar (o resultado da questão) até a revisão resolver: ver o acerto antes
+    // enviesaria a segunda resposta igual enviesaria a primeira (Dias da Silva).
+    const aoFechar = _probeAoFechar;
+    _probeAoFechar = null;
     esconderProbe();
+    let resolvido = false;
+    const seguir = () => { if (!resolvido) { resolvido = true; aoFechar?.(); } };
+    setTimeout(seguir, 2500);                       // rede lenta não pode travar a questão
+    envio.then((r) => {
+        if (resolvido || !r?.probe_sinal) return seguir();
+        resolvido = true;
+        mostrarRevisaoProbe(r.probe_sinal, { estado, resposta, motivo: r.probe_sinal_motivo },
+                            aoFechar);
+    }).catch(seguir);
+}
+
+// ==== REVISÃO DO AUTORRELATO (segunda chance com o fato na mão) ====
+// Quem vaga sem meta-consciência responde "estava na questão" de boa-fé — e é justamente esse
+// erro que trava o rótulo. Mostrar o COMPORTAMENTO e perguntar de novo devolve a informação que
+// faltava. Três regras: (1) nunca sobrescrever — a 1ª resposta é a que treina, a revisão é
+// medida à parte (mudar por deferência ao sistema é indistinguível de lembrar de verdade);
+// (2) fala do comportamento, nunca do sensor — dizer quais sinais disparam ensina a burlar;
+// (3) é também devolução de automonitoramento, que é a intervenção com melhor evidência
+// no ensino médio (I-Connect).
+function mostrarRevisaoProbe(texto, original, aoFechar) {
+    let card = $('kaia-probe-revisao');
+    if (!card) {
+        card = document.createElement('div');
+        card.id = 'kaia-probe-revisao';
+        document.body.appendChild(card);
+    }
+    card.replaceChildren();
+    const mostradoEm = performance.now();
+
+    const fato = document.createElement('p');
+    fato.className = 'probe-q';
+    fato.textContent = texto;
+    card.appendChild(fato);
+
+    const q = document.createElement('p');
+    q.className = 'probe-nota';
+    q.textContent = 'Ainda diria que sua atenção estava na questão?';
+    card.appendChild(q);
+
+    let fechado = false;
+    const fechar = (mudou) => {
+        if (fechado) return;
+        fechado = true;
+        clearTimeout(card._t);
+        card.style.display = 'none';
+        logEvent('probe_revisao', {
+            estado_original: original.estado, resposta_original: original.resposta,
+            motivo: original.motivo ?? null,         // qual fato foi mostrado
+            mudou,                                   // null = ignorou
+            latencia_ms: Math.round(performance.now() - mostradoEm),
+        });
+        aoFechar?.();
+    };
+
+    const caixa = document.createElement('div');
+    caixa.className = 'probe-btns';
+    [['Sim, estava', false], ['Na verdade, não', true]].forEach(([rotulo, mudou]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = rotulo;
+        b.addEventListener('click', () => fechar(mudou));
+        caixa.appendChild(b);
+    });
+    card.appendChild(caixa);
+
+    card.style.display = 'block';
+    card._t = setTimeout(() => fechar(null), 15000);   // ignorar também é resposta
 }
 
 // ==== MODAL DE RODADA / RESUMO (meta = limite sugerido) ====

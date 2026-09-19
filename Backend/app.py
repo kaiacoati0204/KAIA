@@ -72,7 +72,8 @@ PREVENCAO_GATILHO = os.getenv("KAIA_PREVENCAO_GATILHO", "regra")
 PREVENCAO_MODO = os.getenv("KAIA_PREVENCAO_MODO", "bandit")
 # As DUAS camadas podem cair perto uma da outra: reativa no meio da rodada, preventiva na pausa
 # logo depois. Duas telas em poucos minutos cansam e, pior, a reativa mexe no desfecho que vira
-# recompensa da preventiva. Se a reativa agiu ha pouco, a pausa passa em branco.
+# recompensa da preventiva. Se uma reativa de `muito_distraido` agiu ha pouco, a pausa passa em
+# branco (so essas: ver o filtro em /prevencao/pausa).
 PREVENCAO_APOS_REATIVA_MIN = 5.0
 
 # Sigla → nome da matéria. O frontend manda a SIGLA (chave do temas_cache e da sessão) e
@@ -3056,9 +3057,14 @@ async def prevencao_pausa(body: PausaIn, request: Request,
             "select session_start_ts from sessions where session_id = $1::uuid", body.session_id)
         if inicio is None:
             return {"apoio": None, "motivo": "sem_sessao"}
+        # So as reativas de `muito_distraido` bloqueiam a pausa. Elas assumem que o aluno saiu e
+        # mandam parar/trocar — voltar, responder uma questao e levar outra tela e demais. As de
+        # `distraido` sao leves, e passar a pausa em branco por causa delas custa a oferta, que e
+        # o que o beta mede.
         reativa_min = await conn.fetchval(
             "select extract(epoch from (now() - max(ts))) / 60.0 from session_events "
-            "where session_id = $1::uuid and event_type = 'decisao_intervencao'", body.session_id)
+            "where session_id = $1::uuid and event_type = 'decisao_intervencao' "
+            "and payload->>'estado_alvo' = 'muito_distraido'", body.session_id)
         if reativa_min is not None and float(reativa_min) < PREVENCAO_APOS_REATIVA_MIN:
             await _log_evento(conn, body.session_id, "decisao_prevencao",
                               {"braco": None, "acionou": False, "motivo": "reativa_recente",

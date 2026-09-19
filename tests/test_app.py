@@ -31,6 +31,7 @@ class FakeConn:
     def __init__(self, fetchrow=None, fetch=None, fetchval=None, execute="OK"):
         self.r_row, self.r_fetch, self.r_val, self.r_exec = fetchrow, fetch, fetchval, execute
         self.executed = []
+        self.consultado = []        # SQL de fetchval: dá para checar filtro no WHERE
 
     def transaction(self):
         class _Tx:
@@ -41,6 +42,7 @@ class FakeConn:
     async def fetchrow(self, q, *a): return _match(self.r_row, q)
     async def fetch(self, q, *a): return _match(self.r_fetch, q, [])
     async def fetchval(self, q, *a):
+        self.consultado.append(q)
         if q == "select now()":
             return datetime.now(timezone.utc)   # relógio do banco
         return _match(self.r_val, q, 0)
@@ -1583,14 +1585,16 @@ async def _pausa(conn):
                             json={"session_id": "11111111-1111-1111-1111-111111111111"})
 
 
-async def test_prevencao_desligada_nao_faz_nada():
+async def test_prevencao_desligada_nao_faz_nada(monkeypatch):
     """padrão do beta: o primeiro teste é sem modelo nenhum"""
+    monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", False)
     r = await _pausa(_conn_pausa())
     assert r.json() == {"apoio": None, "motivo": "desligada"}
 
 
 async def test_prevencao_risco_baixo_deixa_a_pausa_em_paz(monkeypatch):
     monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_MODO", "bandit")
     monkeypatch.setattr(app_mod, "PREVENCAO_LIMIAR_RISCO", 0.95)
     conn = _conn_pausa()
     r = await _pausa(conn)
@@ -1602,6 +1606,7 @@ async def test_prevencao_risco_baixo_deixa_a_pausa_em_paz(monkeypatch):
 
 async def test_prevencao_escolhe_um_braco_e_registra_a_probabilidade(monkeypatch):
     monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_MODO", "bandit")
     monkeypatch.setattr(app_mod, "PREVENCAO_LIMIAR_RISCO", 0.0)
     conn = _conn_pausa()
     r = await _pausa(conn)
@@ -1614,6 +1619,7 @@ async def test_prevencao_escolhe_um_braco_e_registra_a_probabilidade(monkeypatch
 
 async def test_prevencao_sem_consentimento_nao_oferece_nem_registra(monkeypatch):
     monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_MODO", "bandit")
     conn = _conn_pausa(perfil={"data_nascimento": date(2011, 4, 1),
                                "consentimento_status": "pendente"})
     r = await _pausa(conn)
@@ -1708,12 +1714,25 @@ def test_todo_plano_e_um_se_entao_de_verdade():
 async def test_prevencao_nao_empilha_em_cima_da_reativa(monkeypatch):
     """duas telas em poucos minutos cansam — e a reativa mexe no desfecho que vira recompensa"""
     monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_MODO", "bandit")
     conn = _conn_pausa()
     conn.r_val = dict(conn.r_val, **{"extract(epoch from (now() - max(ts)))": 2.0})
     r = await _pausa(conn)
     assert r.json() == {"apoio": None, "motivo": "reativa_recente"}
     reg = [a for (q, a) in conn.executed if "decisao_prevencao" in str(a)][0][2]
     assert '"acionou": false' in reg and "reativa_recente" in reg
+
+
+async def test_so_a_reativa_de_muito_distraido_bloqueia_a_pausa(monkeypatch):
+    """a de muito_distraido manda parar/trocar: voltar e levar outra tela e demais. A de
+    distraido e leve, e bloquear por causa dela custaria a oferta — que e o que o beta mede."""
+    monkeypatch.setattr(app_mod, "PREVENCAO_ATIVA", True)
+    monkeypatch.setattr(app_mod, "PREVENCAO_MODO", "bandit")
+    conn = _conn_pausa()
+    await _pausa(conn)
+    consulta = [q for q in conn.consultado if "decisao_intervencao" in q]
+    assert consulta, "a pausa nem consultou a reativa recente"
+    assert "muito_distraido" in consulta[0]     # o filtro vive no WHERE
 
 
 # ==== CORROBORAÇÃO DO AUTORRELATO (o fato confere a declaração do probe) ====

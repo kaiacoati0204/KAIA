@@ -2242,6 +2242,27 @@ const ESTADOS_PROBE = ['engajado', 'distraido', 'muito_distraido'];
 // questão/nota" separa isso (conta como engajado) e "algo em volta" junta a distração externa que
 // o navegador não vê. Mais que 4 pesa em TEA/TDAH. Pular existe: pergunta imposta vira interrupção.
 const PERGUNTAS_PROBE = [
+    // pergunta direta (beta 2026-09): com amigos avisados, entender a pergunta vale mais que a
+    // neutralidade da anterior. Custo assumido: "voce se distraiu?" tem resposta socialmente
+    // certa ("nao") e tende a SUB-relatar; e 3 opcoes inflam o "vagando" contra 4 (Robison 2019:
+    // 38% com 2 -> 19% com 5). Os dois efeitos empurram para lados opostos e se cancelam em
+    // parte, mas o saldo e desconhecido — por isso o `id` novo: o que for colhido com esta
+    // regua nao se mistura com o que vier de outra.
+    { id: 'se-distraiu-1',
+      pergunta: 'Você se distraiu nessa questão?',
+      nota: 'É normal a mente vagar. Não tem resposta certa.',
+      opcoes: [
+          { rotulo: 'Não, estava na questão', estado: 'engajado', resposta: 'na_questao' },
+          { rotulo: 'Sim — fiquei pensando em outra coisa', estado: 'distraido', resposta: 'vagando' },
+          { rotulo: 'Sim — estava mexendo em outra coisa', estado: 'muito_distraido', resposta: 'fora' },
+      ] },
+];
+
+// Régua anterior, guardada. Não entra no sorteio: um instrumento, uma régua — e `onde-estava-
+// atencao-3` separava "preocupado com a questão/nota" como ENGAJADO (Robison 2019), coisa que a
+// direta não faz. Quem estiver ansioso com a nota agora marca "pensando em outra coisa" e entra
+// como distraído. Para voltar atrás, mova de volta para PERGUNTAS_PROBE mantendo o id.
+const PERGUNTAS_PROBE_APOSENTADAS = [
     { id: 'onde-estava-atencao-3',
       pergunta: 'Onde estava sua atenção agora?',
       nota: 'É normal a mente vagar. Não tem resposta certa.',

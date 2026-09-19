@@ -4,7 +4,7 @@
 
 # KaIA
 
-_Refúgio inteligente contra a dispersão digital — monitoramento de atenção + questões geradas por IA para o Ensino Médio._
+_Refúgio inteligente contra a dispersão digital — apoio ao foco + questões geradas por IA para o Ensino Médio._
 
 <img alt="Python" src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white">
 <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
@@ -24,7 +24,12 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 - **Caderno de anotações**: canvas livre por tema (texto no Supabase, imagens só no dispositivo).
 - **Perfil com estatísticas**: desempenho semanal + sinais da última sessão + análise por regras.
 - **Painéis internos**: dashboard da equipe (acesso restrito por `role`) e painel de responsáveis.
-- **Monitoramento de foco (modelo v2)**: sensores no front (troca de aba, tempo fora de foco, trajetória do mouse, ociosidade, dwell nas alternativas, tempo de resposta) alimentam um Random Forest que estima o estado de atenção — `engajado`, `distraído` (mind-wandering interno) ou `muito_distraído` (off-task externo). Um **probe de autorrelato** (o aluno declara o próprio estado, 1×/rodada) coleta o **rótulo real** que valida e treina o modelo. Sinais de foco/atenção — **não é diagnóstico**.
+- **Apoio ao foco, em duas camadas** (o core, definido em 17/09/2026):
+  - **Reativa** — sensores no front (troca de aba, ociosidade, trajetória do mouse, tempo de resposta) detectam desengajamento por **evidência medida**: saída da KaIA ≥ 30 s, regra DTS (bom na sessão + acerto caiu + tempo fora do próprio ritmo) ou pausa incomum na questão aberta. Um bandit Thompson escolhe qual das 7 intervenções mostrar. O gatilho **nunca** depende de modelo.
+  - **Preventiva** — na pausa entre rodadas de 10, o sistema estima o **risco** de perda de foco nas próximas questões e oferece um plano "se-então" antes que ela aconteça. Um segundo bandit aprende qual apoio ajuda, com o braço `nada` como controle.
+  - Um **probe de autorrelato** (o aluno declara o próprio estado, 1×/rodada) coleta rótulo real e é devolvido a ele. Sinais de foco/atenção — **não é diagnóstico**.
+
+  > O core anterior (detectar mente vagando e intervir em tempo real) foi abandonado em 15/09/2026 — o alvo não tem gabarito. O Random Forest v2 segue no repositório como **pesquisa**: não decide nada. Por quê e o que não reabrir: [`docs/CONTEXTO.md`](docs/CONTEXTO.md).
 
 ---
 
@@ -36,7 +41,7 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 | Backend | Python + **FastAPI** (uvicorn) |
 | Banco | **Supabase** (PostgreSQL), via `asyncpg` |
 | IA | Google Gemini (`gemini-3.5-flash-lite`; configurável por `GEMINI_MODEL`) |
-| ML | scikit-learn (Random Forest v2 de atenção, 20 features) + pandas/numpy |
+| ML | scikit-learn (regressão logística de risco; Random Forest v2 de pesquisa) + Thompson Sampling autoral + pandas/numpy |
 | Agendamento | APScheduler (agregação + encerramento de sessões ociosas) |
 
 ---
@@ -54,6 +59,10 @@ Frontend/
 Backend/
   app.py                → backend FastAPI (IA, sessões, /events, /diagnose, painéis)
   auth.py               → validação do JWT do Supabase Auth (JWKS)
+  risco.py              → Modelo 1: features e regras de risco de perda de foco (camada preventiva)
+  bandit_prevencao.py   → Modelo 2: Thompson Sampling autoral do apoio da pausa (hierárquico)
+  thompson.py           → bandit das 7 intervenções reativas
+  consentimento.py      → tokens, validação e hash do aceite do responsável (LGPD art. 14)
   mouse_features.py     → mouse_track bruto → features de mouse do modelo v2
   requirements.txt      → dependências Python
   seed_contas_teste.py  → cria as contas @teste.kaia (senha teste1234)
@@ -62,7 +71,17 @@ Backend/
   .env                  → variáveis de ambiente (NÃO vai pro Git — veja "2. Configuração")
 ml/
   gerar_base_v2.py      → gera a base sintética + treina o modelo v2 (seed fixa; .pkl NÃO versionado)
-  treinar_com_probe.py  → valida/re-treina o modelo com os rótulos reais do probe
+  gerar_risco.py        → gera a base sintética + treina o Modelo 1 (só salva se vencer as regras)
+  treinar_com_probe.py  → valida/re-treina o modelo v2 com os rótulos reais do probe
+  simular_bandit_prevencao.py → confere o mecanismo do Modelo 2 antes do beta (não mede efeito)
+  relatorio_prevencao.py      → leitura do beta: IPW vs `nada`, aceitação, habituação
+  medir_dano_probe.py         → o probe atrapalha a questão seguinte? (descritivo)
+  core_e_evidencias.md  → o core com a fonte ao lado de cada afirmação
+  metodo_beta.md        → método do beta, protocolo-piloto e critérios de abandono (datados)
+docs/
+  CONTEXTO.md           → por que as coisas são assim; decisões fechadas; armadilhas. LEIA ANTES
+  ARQUITETURA_COMPLETA.md → passeio linha a linha pelo código
+  pesquisas-uteis.md    → literatura que sustenta as decisões
 supabase/
   migrations/           → schema versionado (snapshot de produção); ÚNICO SQL que o CI aplica
   README.md             → recriar o banco, regenerar o snapshot, criar migration nova
@@ -117,6 +136,22 @@ STALE_SESSAO_MIN=15
 # Opcional — few-shot dinâmico (questões reais via pgvector) + Program-of-Thought
 # nas questões de cálculo. Ligue para testar a geração baseada em reais.
 KAIA_FEWSHOT_DINAMICO=1
+
+# Camada preventiva (Fluxo B). ATIVA=0 desliga tudo. MODO: `fixo` oferece sempre (mede
+# aceitação sem misturar com erro de modelo) e `bandit` sorteia entre `nada` e `pacote_foco`.
+# GATILHO: `regra` decide (padrão) e `modelo` promove o Modelo 1 — só depois que ele vencer
+# as regras no dado real. Escada: fixo → regra → modelo.
+KAIA_PREVENCAO_ATIVA=1
+KAIA_PREVENCAO_MODO=fixo
+KAIA_PREVENCAO_GATILHO=regra
+KAIA_PREVENCAO_LIMIAR=0.4
+
+# OBRIGATÓRIA se houver aluno menor: segredo do HMAC do CPF do responsável. Só no BACKEND —
+# nunca no config.js. Sem ela, /consentimento recusa o aceite com CPF.
+KAIA_CPF_PEPPER=
+
+# Opcional — exige consentimento também de quem não informou data de nascimento.
+KAIA_CONSENTIMENTO_ESTRITO=0
 
 # Opcional — SANDBOX: aponta o backend para o schema isolado `teste` (mesmo projeto
 # Supabase), sem tocar em produção nem nos modelos. Deixe FORA em produção.
@@ -229,7 +264,10 @@ e `python Backend/limpar_contas_teste.py --commit`.
 | `/sessions`, `/sessions/{id}/end` | POST | Abre e encerra sessões de estudo |
 | `/events` | POST | Registra os eventos de foco dos sensores (e captura o rótulo do probe) |
 | `/diagnose` | GET | Estima o estado de atenção da sessão (modelo v2) |
-| `/intervencao/pendente`, `/intervencao/feedback` | GET/POST | Intervenções de atenção |
+| `/intervencao/pendente`, `/intervencao/feedback` | GET/POST | Intervenções reativas (Fluxo A) |
+| `/prevencao/pausa` | POST | Decide o apoio da pausa entre rodadas (Fluxo B) |
+| `/consentimento/solicitar`, `/consentimento/status` | POST/GET | Gera e consulta o link de autorização do responsável |
+| `/consentimento/{token}` | GET/POST | Página do responsável: lê o pedido e registra o aceite |
 | `/dashboard/dados` | GET | Dados do dashboard interno (acesso restrito por `role`) |
 | `/responsavel/aluno`, `/responsavel/painel` | GET | Painel de responsáveis |
 
@@ -258,7 +296,9 @@ Dois detalhes que quebram o deploy se passarem despercebidos:
 ### Variáveis no painel
 
 **API** — `DATABASE_URL`, `API_KEY`, `SUPABASE_URL`, `KAIA_CORS_ORIGINS` (a URL do
-site), `KAIA_DB_SCHEMA=public`. **Deixe `KAIA_SEED_ATIVO` de fora.**
+site), `KAIA_DB_SCHEMA=public`, `KAIA_CPF_PEPPER` (se houver aluno menor) e, para ligar a
+camada preventiva no beta, `KAIA_PREVENCAO_ATIVA=1` + `KAIA_PREVENCAO_MODO=fixo` +
+`KAIA_AB_TESTE=0`. **Deixe `KAIA_SEED_ATIVO` de fora.**
 
 **Site** — `KAIA_API_URL` (a URL da API), `KAIA_SUPABASE_URL`,
 `KAIA_SUPABASE_ANON_KEY` (a anon `eyJ...`, nunca a `service_role`).
@@ -289,5 +329,7 @@ para preencher.
 > **Autenticação: Supabase Auth (e-mail + senha).** O backend valida o **JWT** nas rotas de dados (`Backend/auth.py`); o front envia o token via `apiFetch`. O controle de acesso continua no `role` do banco, verificado no backend.
 
 - [ ] Estender a proteção por JWT às rotas ainda abertas (baixa sensibilidade) e revisar o gate `X-Kaia-User` do dashboard.
-- [ ] **Validar o modelo v2 com dado real**: hoje é 100% sintético (hipótese). Coletar probes → rodar `python ml/treinar_com_probe.py` (dá a acurácia real e re-treina híbrido).
+- [ ] **Validar o modelo v2 com dado real**: hoje é 100% sintético (hipótese). Coletar probes → rodar `python ml/treinar_com_probe.py` (dá a acurácia real e re-treina híbrido). Vale como pesquisa: o v2 não decide nada.
+- [ ] **Rodar o beta do Fluxo B** com `KAIA_PREVENCAO_MODO=fixo` e medir a aceitação do plano. Só então ligar o `bandit`, e só depois promover o Modelo 1 de sombra para gatilho.
+- [ ] **Teto de intervenções reativas é por sessão inteira** (5, sem reset por rodada): em sessão longa as últimas questões ficam sem a camada reativa. Medir quantos batem no teto antes de trocar por uma janela de tempo.
 - [ ] Versionar o schema base do banco (`pg_dump --schema-only`) — hoje só existe no projeto Supabase.

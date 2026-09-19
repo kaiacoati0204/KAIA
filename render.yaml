@@ -15,9 +15,10 @@ services:
     runtime: python
     plan: free
     region: oregon
-    # gerar_base_v2.py refaz o modelo (~3s, seed fixa): o .pkl não vai para o git,
-    # e sem ele o /diagnose responde 503.
-    buildCommand: pip install -r Backend/requirements.txt && python ml/gerar_base_v2.py
+    # Os dois .pkl não vão para o git, então o build refaz: gerar_base_v2.py (RF v2, ~3s,
+    # seed fixa — sem ele /diagnose responde 503) e gerar_risco.py (Modelo 1 — sem ele
+    # prever_risco cai nas regras e a sombra vira cópia da regra, sem nada a comparar).
+    buildCommand: pip install -r Backend/requirements.txt && python ml/gerar_base_v2.py && python ml/gerar_risco.py
     startCommand: uvicorn app:app --app-dir Backend --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:

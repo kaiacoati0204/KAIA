@@ -1902,6 +1902,9 @@ async def rodar_intervencao(app, session_id):
                 "prob_controle": 0.5 if AB_TESTE_ATIVO else 0.0,
                 "fora_s": round(fora_s, 1),
                 "maior_bloco_parado_s": res["feats"].get("maior_bloco_parado_s"),
+                # foto das features do momento: e o que permite avaliar o RF depois contra o
+                # que de fato aconteceu, em vez de so guardar o veredito dele.
+                "feats": {k: v for k, v in res["feats"].items() if isinstance(v, (int, float))},
             }))
         if tipo != "controle_ab":
             print(f"[KaIA Intervenção] {session_id} estado={estado_alvo} "
@@ -3069,9 +3072,17 @@ async def prevencao_pausa(body: PausaIn, request: Request,
                 await _eventos_da_sessao(conn, body.session_id), inicio,
                 await conn.fetchval("select now()"), await _estudo_dia_min(conn, sub))
             pid, texto = _plano_do_momento(feats_fixo)
+            # nao decide nada aqui (fixo oferece sempre) — mas sem gravar os dois numeros a
+            # fase `fixo` nao produziria dado para comparar Modelo 1 com a regra depois.
+            r_regra_f = risco.risco_por_regras(feats_fixo)
+            r_modelo_f, fonte_f = risco.prever_risco(
+                feats_fixo, getattr(request.app.state, "risco_art", None))
             await _log_evento(conn, body.session_id, "decisao_prevencao",
                               {"braco": "pacote_foco", "acionou": True, "modo": "fixo",
-                               "plano": pid, "prob": None})
+                               "plano": pid, "prob": None,
+                               "risco_regra": round(r_regra_f, 3),
+                               "risco_modelo": round(r_modelo_f, 3),
+                               "fonte_modelo": fonte_f, "limiar": PREVENCAO_LIMIAR_RISCO})
             return {"apoio": "pacote_foco", "braco": "pacote_foco",
                     "plano": {"id": pid, "texto": texto}, "modo": "fixo"}
         agora = await conn.fetchval("select now()")

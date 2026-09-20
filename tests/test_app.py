@@ -1807,3 +1807,27 @@ def test_duracao_em_texto_que_o_aluno_reconhece():
     assert app_mod._dur(45) == "45 segundos"
     assert app_mod._dur(108) == "1min48"
     assert app_mod._dur(120.4) == "2min00"
+
+
+# ==== GATILHO BARRADO POR FREIO (o grupo de comparação não tratado) ====
+async def test_gatilho_barrado_pelo_teto_fica_gravado(monkeypatch):
+    """detectou e NÃO interveio: é o único momento não tratado que o beta produz de graça.
+    Sem gravar, van Geloven não tem com o que comparar a intervenção."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "distraido", "score": 0.9, "feats": _feats_ok(), "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(
+        fetchrow={"from interventions": {"n": app_mod.INTERV_MAX_POR_SESSAO, "ultima": None}},
+        fetchval={"question_answer": 8},
+        fetch={"tab_change": _aba(60.0)})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "pausa_ativa")
+    await app_mod.rodar_intervencao(SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn))), "sid")
+
+    assert not [a for q, a in conn.executed if "insert into interventions" in q]  # não interveio
+    barrados = [a for q, a in conn.executed if "gatilho_bloqueado" in q]
+    assert barrados and '"motivo": "teto"' in barrados[0][1]
+    assert '"gatilho": "medicao"' in barrados[0][1]
+    # NUNCA como decisao_intervencao: aquele evento faz a pausa preventiva passar em branco,
+    # e aqui nenhuma tela apareceu para o aluno
+    assert not [a for q, a in conn.executed if "'decisao_intervencao'" in str(q)]

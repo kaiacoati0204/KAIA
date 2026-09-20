@@ -1835,6 +1835,14 @@ async def rodar_intervencao(app, session_id):
         # Freio (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
         # Questões de vestibular são longas — a leitura inicial não pode virar "distração";
         # o timer segura caso a 1ª seja respondida rápido demais.
+        async def _barrado(motivo, **extra):
+            await conn.execute(
+                "insert into session_events (session_id, event_type, payload, ts) "
+                "values ($1::uuid, 'gatilho_bloqueado', $2::jsonb, now())",
+                session_id, json.dumps(dict(
+                    {"gatilho": gatilho, "estado_alvo": estado_alvo, "motivo": motivo,
+                     "estado_modelo": res["estado"]}, **extra)))
+
         respondidas = await conn.fetchval(
             "select count(*) from session_events where session_id = $1::uuid "
             "and event_type = 'question_answer'", session_id) or 0
@@ -1842,6 +1850,7 @@ async def rodar_intervencao(app, session_id):
         # min(duracao_da_sessao, JANELA_MIN) — o que mantem o warm-up funcionando.
         duracao_min = float(res["feats"].get("duracao_janela_min") or 0)
         if respondidas < 1 or duracao_min < INTERV_WARMUP_MIN:
+            await _barrado("warmup", respondidas=respondidas, duracao_min=round(duracao_min, 1))
             return
 
         try:
@@ -1860,10 +1869,12 @@ async def rodar_intervencao(app, session_id):
 
         n = stats["n"] or 0
         if n >= INTERV_MAX_POR_SESSAO:
+            await _barrado("teto", n_na_sessao=n)
             return
         if stats["ultima"] is not None:
             desde_min = (await _agora_banco(conn) - stats["ultima"]).total_seconds() / 60.0
             if desde_min < INTERV_COOLDOWN_MIN[estado_alvo]:     # freio: cooldown por estado
+                await _barrado("cooldown", min_desde_ultima=round(desde_min, 1))
                 return
 
         tempo_estudo_min = float(res["feats"].get("tempo_estudo_acumulado_dia_min") or 0)

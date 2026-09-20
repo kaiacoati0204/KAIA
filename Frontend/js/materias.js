@@ -1912,7 +1912,6 @@ async function carregarQuestao(subject, tema) {
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
     questionShownAt = performance.now();
-    _mostrarFeedbackPendente();   // "ajudou?" da intervenção anterior, agora que dá para julgar
     firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
     mouseSamples = [];
     tempoOciosoMs = 0;
@@ -2176,6 +2175,11 @@ function mostrarExplicacao(escolha, acertou) {
         btn.addEventListener('click', proximaQuestao);
     }
     fb.appendChild(btn);
+    // Feedback da intervenção anterior aqui, e não na abertura da próxima questão: aqui o aluno
+    // TERMINOU uma tarefa e não começou outra — está revisando, não resolvendo. Abrir junto com
+    // um enunciado novo ainda seria interromper um começo (Bailey & Konstan 2006: o custo é de
+    // interromper DURANTE, e um começo já é durante).
+    _mostrarFeedbackPendente();
     fb.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 

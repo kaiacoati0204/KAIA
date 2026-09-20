@@ -106,10 +106,46 @@ alunos) achou que mensagens referenciando dados específicos da pessoa rendiam m
 **A arquitetura prever-e-intervir tem efeito moderado em educação** — meta-análise de intervenções
 baseadas em análise de aprendizagem (2025): melhora clara em aquisição de conhecimento.
 
-**E o formato do produto já é a intervenção de atenção mais forte que existe.** Testes intercalados
-durante o estudo cortam a mente vagando **pela metade** (Szpunar, Kahn & Schacter, PNAS) — e a KaIA
-é uma sequência de questões com feedback imediato, por construção. A prevenção age **em cima** de
-uma base já favorável.
+**E o formato do produto já é, por construção, uma intervenção de atenção.** Testes intercalados
+durante o estudo reduzem a mente vagando (Szpunar, Kahn & Schacter, PNAS) — e a KaIA é uma
+sequência de questões com feedback imediato. A prevenção age **em cima** de uma base já favorável.
+
+> **Correção (20/09/2026):** este item já foi escrito aqui como "corta pela metade" e "a mais forte
+> que existe". A replicação de 2022 (*Interpolated testing and content pretesting as interventions
+> to reduce task-unrelated thoughts during a video lecture*, PMID 35348931) achou redução
+> **significativa mas de efeito pequeno, e sem apoio de fator de Bayes**. Continua positivo;
+> não é o efeito grande que a primeira leitura sugeria. **Não dizer "pela metade".**
+
+### E a PREVISÃO em si — o que sustenta prever, não prevenir
+
+A camada preventiva tem duas afirmações separadas: que **o apoio ajuda** (acima) e que **dá para
+prever**. Esta é a segunda.
+
+**Lapso de atenção é previsível a partir do ritmo do próprio sujeito.** Paradigma de laboratório
+em malha fechada: o sistema acompanha os tempos de resposta, calcula limites **intrasujeito**,
+dispara uma sondagem quando o padrão entra na assinatura de lapso — e a pessoa confirma acima do
+acaso. É o mesmo mecanismo da nossa régua em σ. Ressalva: tarefa monótona, estímulos de segundos.
+
+**A assinatura é responder rápido e regular demais** (piloto automático), não lento. Bate com o que
+medimos no ASSISTments: nas janelas de pior acerto o que sobe é a **% de rápidas** (1,27 → 2,19),
+não a de lentas.
+
+**A diferença de tempo entre respostas VIZINHAS prevê**, com aumento abrupto de variabilidade
+durando 2,5–10 s antes do relato. Nomeia duas features nossas de uma vez: a estrutura sequencial e
+`variabilidade_tempo_resposta`.
+
+**Tem hora para começar.** O próprio DTS (Chen et al., 2021 — de onde vem a nossa regra) reporta que
+em lição de 20 questões a mente começa a vagar entre a **11ª e a 15ª**. Nossas rodadas têm 10, e a
+pausa cai na borda. *(Conferir a frase no PDF antes de citar em banca — veio de resumo.)*
+
+**Reduzir dispersão proativamente é categoria existente**, não invenção nossa: *proactive mind
+wandering reduction* (PALE 2014). Lá o método é outro — ajustar dificuldade e aposta do texto por
+traços medidos do aluno, sem mostrar nada a ele. Mais perto da nossa dificuldade adaptativa que do
+plano se-então.
+
+**O que NÃO existe:** prever evento observável de desengajamento **3 questões à frente, por log de
+interação, em app de estudo**. Lapso previsível por ritmo é laboratório; prever desengajamento por
+log e intervir é educação em horizonte de semanas. Nossa combinação fica no vão entre os dois.
 
 ### Propriedades do desenho (não precisam de validação)
 
@@ -117,6 +153,13 @@ uma base já favorável.
 não há raciocínio em curso. O que é validado é o outro lado: o **custo de quebrar** — atraso de
 retomada, omissões e erros de sequência, com o mecanismo sendo dano à **memória de onde se estava**,
 não aos recursos de atenção.
+
+**Fronteira não é só o fim da rodada.** O custo medido do Bailey & Konstan (2006) é de interromper
+**durante** a tarefa: 2x mais erros, 3–27% mais tempo, até 106% mais irritação. Entre duas tarefas
+quaisquer o custo cai — e o intervalo entre responder uma questão e abrir a próxima é fronteira.
+Por isso card nenhum abre no meio de uma questão, nem no instante em que a próxima aparece (começar
+já é "durante"): o lugar é **depois da explicação da resposta**, com a tarefa encerrada e a seguinte
+ainda não iniciada.
 
 **Resolve a tensão da receptividade.** A tensão é documentada: carga cognitiva alta aumenta a
 necessidade de apoio e **reduz a receptividade ao mesmo tempo**. Agir na fronteira desfaz isso.
@@ -150,6 +193,27 @@ mostrando transferência de um plano feito num app para uma prova. Hipótese, n�
 fatal — alvo sem gabarito — sobrou apenas no RF de mente vagando, que está fora do caminho crítico.
 
 ---
+
+## 5.1 Candidatos para depois do beta
+
+**Pré-teste — o mais promissor.** Perguntar sobre o conteúdo **antes** de estudá-lo reduz a
+dispersão **e** melhora o aprendizado do que foi pré-testado (Pan, Sana, Schmidt & Bjork 2020;
+replicado em 2022 no mesmo estudo que enfraqueceu o teste intercalado). Funciona intercalado ou
+todo no começo. Na KaIA: uma questão do tema antes da rodada, marcada como pré-teste e fora da
+nota. **Custo de interrupção zero** — não é tela, é a própria tarefa. Encaixa na regra do core sem
+tensão nenhuma.
+
+**Precorreção no meio da rodada.** O plano se-então numa fronteira entre questões, quando o risco
+dispara, em vez de só na pausa das 10. Exige o gatilho promovido de `fixo` para `regra` — sem corte
+de risco ele apareceria 10 vezes por rodada.
+
+**Anotação ligada ao estudo.** Reduz dispersão, mas **só** para quem tem pouco conhecimento prévio
+e anota bem; não deu efeito no nível do grupo. O caderno existe e está solto do estudo. Pouco
+retorno para o trabalho.
+
+**Devolução do automonitoramento no momento certo.** Hoje ela agrega a sessão e aparece na pausa;
+no I-Connect a devolução é imediata, logo após cada autoobservação. A nossa é uma versão mais fraca
+do mecanismo com melhor evidência no ensino médio.
 
 ## 6. O que NÃO faz parte do core
 

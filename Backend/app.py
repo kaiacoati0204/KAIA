@@ -2142,22 +2142,45 @@ async def _inicio_janela(conn, session_id, session_start):
     return ini, min(span, DURACAO_MAX_MIN)
 
 
+# corte próprio, mais frouxo, para a rápida-colada-a-lenta
+# Ela é CONJUNÇÃO de dois eventos raros em janela curta, então herdar os 2σ das outras a
+# apagava. Medido em 70.882 janelas de 7 respostas reais (ASSISTments, 4.097 alunos):
+#
+#   corte    % de janelas com o evento    queda no acerto da janela
+#   ±2,0σ              0,14%                      -0,241
+#   ±1,25σ             4,33%                      -0,125
+#   ±1,0σ             10,01%                      -0,108
+#   "tem lenta" a 2σ  10,83%                      -0,048   <- o sinal alternativo
+#
+# A 2σ ela quase nunca dispara (1 caso em 660 sessões: nada a aprender). A 1σ dispara em 10%
+# e ainda é DUAS VEZES mais reveladora que o corte simples de tempo — que é exatamente o que
+# Baker 2007 afirmou, aqui reproduzido em dado real. 1,0 é o meio da faixa onde a medida é
+# estável; abaixo disso vira variação normal. Mudar aqui exige mexer no gerador junto.
+CORTE_COLADO_SIGMA = 1.0
+
+
 def _contagens_ritmo(rts, ref_rt):
-    """Na janela, contra o ritmo do aluno (log, ±2σ): lentas, rápidas e rápida colada a lenta."""
+    """Na janela, contra o ritmo do aluno (log): lentas e rápidas a ±2σ; a rápida colada a
+    lenta tem corte próprio (CORTE_COLADO_SIGMA), por ser conjunção."""
     if not rts or not ref_rt:
         return {"contagem_lapsos_rt": 0, "contagem_rapidas_rt": 0, "rapido_colado_lento": 0}
     # +2σ em LOG: na escala crua a cauda inflava a média e o desvio, e o limiar
     # subia junto — o lapso passava a ser detectado só em casos extremos.
-    lento = math.expm1(ref_rt[0] + 2 * ref_rt[1])       # expm1 inverte _lg
-    rapido = math.expm1(ref_rt[0] - 2 * ref_rt[1])
-    tipo = [1 if rt > lento else -1 if rt < rapido else 0 for rt in rts]
+    def _tipos(k):
+        lento = math.expm1(ref_rt[0] + k * ref_rt[1])       # expm1 inverte _lg
+        rapido = math.expm1(ref_rt[0] - k * ref_rt[1])
+        return [1 if rt > lento else -1 if rt < rapido else 0 for rt in rts]
+
+    tipo = _tipos(2.0)
     # rápida colada a lenta
     # Baker 2007: o melhor sinal isolado de off-task (0,48), melhor que o corte de tempo.
     # Lentidão constante pode ser cuidado; lenta logo antes ou depois de uma pressa, não.
+    tipo_colado = _tipos(CORTE_COLADO_SIGMA)
     return {
         "contagem_lapsos_rt": tipo.count(1),
         "contagem_rapidas_rt": tipo.count(-1),       # o lado do chute, que os lapsos não viam
-        "rapido_colado_lento": sum(1 for a, b in zip(tipo, tipo[1:]) if a * b == -1),
+        "rapido_colado_lento": sum(1 for a, b in zip(tipo_colado, tipo_colado[1:])
+                                   if a * b == -1),
     }
 
 

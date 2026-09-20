@@ -156,6 +156,57 @@ def gerar_aluno():
             # poucos abandonam muito. uniform(0,1) dava media 0,47 — implausivel.
             "distraibilidade": random.betavariate(1.6, 4.0)}
 
+# Questoes numa janela de DUR_REF min. Vestibular: enunciado longo, ~1,5 min por questao.
+N_QUESTOES_REF = 7
+# Quanto o ritmo de uma questao puxa o da seguinte. Quem esta lento fica lento mais um pouco;
+# quem chuta, chuta em rajada. MEDIDO: autocorrelacao lag-1 do log do tempo em 504 mil
+# respostas reais (ASSISTments) = 0,32. Antes era 0,25, chutado.
+AR_RITMO = 0.32
+# Espalhamento da sequencia dentro da janela. CALIBRADO para que a fracao de respostas fora
+# de +-2 sigma bata com a real (2,6% lentas / 1,3% rapidas). Com o valor anterior (1,0 + 0,35x
+# variabilidade) dava 14% e 8,4% — o gerador fazia extremo ser cinco vezes mais comum que a
+# realidade, e o modelo aprendia a contar lapso que nao existe.
+SD_RITMO = 0.55
+# Limiares do serving (app.py::_contagens_ritmo). A sequencia JA esta em sigma da regua do
+# aluno, entao os cortes sao literais. O colado tem corte proprio e mais frouxo por ser
+# CONJUNCAO — ver a tabela medida no comentario de CORTE_COLADO_SIGMA em app.py.
+CORTE_SIGMA = 2.0
+CORTE_COLADO = 1.0
+# Quanto uma sessao inteira se desloca do ritmo normal do aluno. MEDIDO em 70.882 janelas
+# reais: sd 0,699 (p90 de |deslocamento| = 1,13). O gerador dava 1,16 — 65% demais, e nao era
+# mix de classes (com a mistura natural dava 1,16 igual). Como o valor esta em sigma da regua
+# DO PROPRIO ALUNO, ele e comparavel entre populacoes diferentes. Nao se aplica ao `chute`:
+# ali o deslocamento extremo e o fenomeno, nao ruido de calibracao.
+ESCALA_DESLOCAMENTO_RT = 0.60
+
+
+def _sequencia_rt(media_sigma, variabilidade_sigma, n):
+    """n tempos de resposta EM ORDEM, em sigma da regua do proprio aluno.
+
+    A media e o espalhamento vem das features que ja existiam (que continuam com a mesma
+    distribuicao de antes); o que e novo e existir uma ORDEM, com um pouco de inercia.
+    """
+    sd = max(0.2, SD_RITMO * (1.0 + 0.35 * variabilidade_sigma))
+    seq, ant = [], media_sigma
+    for _ in range(n):
+        ant = media_sigma + AR_RITMO * (ant - media_sigma) + random.gauss(0, sd)
+        seq.append(ant)
+    return seq
+
+
+def _contagens_da_sequencia(seq):
+    """Mesmo criterio do serving, inclusive o corte proprio do colado."""
+    def _tipos(k):
+        return [1 if v > k else -1 if v < -k else 0 for v in seq]
+
+    tipo, colado = _tipos(CORTE_SIGMA), _tipos(CORTE_COLADO)
+    return {
+        "contagem_lapsos_rt": tipo.count(1),
+        "contagem_rapidas_rt": tipo.count(-1),
+        "rapido_colado_lento": sum(1 for a, b in zip(colado, colado[1:]) if a * b == -1),
+    }
+
+
 def gerar_sessao(estado, aluno, base_mouse):
     z = random.uniform(0.1, 1.5)                 # intensidade latente; perto de 0 = episódio fraco (parece engajado)
     # dificuldade × mente vagando em U, mais no difícil
@@ -200,6 +251,8 @@ def gerar_sessao(estado, aluno, base_mouse):
             val += 0.15 * (dif - 3)               # difícil pede mais tempo por palavra
         elif nome in ("tempo_iniciacao_resposta_ms", "tempo_dwell_sem_responder_s", "tempo_ocioso_s"):
             val += 0.25 * (dif - 3)
+        if nome == "tempo_resposta_ms":
+            val *= ESCALA_DESLOCAMENTO_RT
         f[nome] = round(val, 3)
     if ef == "distraido" and random.random() < 0.4:   # desacoplado para o lado rápido (Dreamcatcher)
         f["tempo_relativo_leitura"] = round(-f["tempo_relativo_leitura"], 3)
@@ -232,23 +285,20 @@ def gerar_sessao(estado, aluno, base_mouse):
         queda = 0.45
     f["queda_acerto"] = round(max(-1.0, min(1.0, queda + random.gauss(0, 0.18))), 3)
 
-    # contagens (Poisson), com efeito de dificuldade nos erros
-    lam_l = CONTAGEM["contagem_lapsos_rt"][ef] * (0.6 + 0.4 * z) * fator
-    if chute:
-        lam_l *= 0.15                            # nao ha lapso: ele nem para pra pensar
-    f["contagem_lapsos_rt"] = int(np.random.poisson(max(0.01, lam_l)))
+    # contagens de ritmo: DERIVADAS de uma sequencia, nao sorteadas
+    # Antes as tres eram Poissons independentes. Duas consequencias: (1) rapido_colado_lento
+    # e propriedade de PARES VIZINHOS e nao existe fora de uma sequencia — sorteado, ficava zero
+    # em 94-99% dos casos e o modelo nao aprendia nada com ele; (2) o serving
+    # (_contagens_ritmo em app.py) deriva as tres dos tempos reais em ordem, entao gerador e
+    # producao discordavam sobre o que a feature E. Aqui a sequencia e gerada e as tres saem
+    # dela com o MESMO criterio do serving (+-2 sigma da regua do aluno, pares vizinhos).
+    f.update(_contagens_da_sequencia(_sequencia_rt(f["tempo_resposta_ms"],
+                                                   f["variabilidade_tempo_resposta"],
+                                                   max(3, int(round(N_QUESTOES_REF * fator))))))
     lam_e = CONTAGEM["erros_sem_offtask"][ef] * (0.7 + 0.15 * (dif - 3)) * fator
     if chute:
         lam_e *= 4.0                             # e o erro e a assinatura do chute
     f["erros_sem_offtask"] = int(np.random.poisson(max(0.01, lam_e)))
-    lam_r = CONTAGEM["contagem_rapidas_rt"][ef] * (0.6 + 0.4 * z) * fator
-    if chute:
-        lam_r = 3.0 * fator                      # o chute É a resposta rápida demais
-    f["contagem_rapidas_rt"] = int(np.random.poisson(max(0.01, lam_r)))
-    lam_c = CONTAGEM["rapido_colado_lento"][ef] * (0.6 + 0.4 * z) * fator
-    # não há par sem uma rápida e uma lenta na janela
-    f["rapido_colado_lento"] = min(int(np.random.poisson(max(0.01, lam_c))),
-                                   f["contagem_rapidas_rt"], f["contagem_lapsos_rt"])
 
     # mouse: bruto -> features_mouse -> relativiza pelo baseline do aluno. LEITURA DENSA:
     # parte das presentes fica quase imovel (enunciado longo, hiperfoco); sem esse contraexemplo

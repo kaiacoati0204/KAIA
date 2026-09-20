@@ -64,3 +64,7 @@ docs/
 # Resultados do council — análise pessoal da dona do projeto, não versionar
 council-report-*.html
 council-transcript-*.md
+
+# base de terceiro: nao vai para o repositorio
+ml/dados_externos/
+skill_builder_data.csv

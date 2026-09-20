@@ -3301,6 +3301,7 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
             # mudar muito diante de um fato duro ("saiu 45 s") e atualizar; mudar igual diante
             # de qualquer sinal, inclusive o fraco, e deferencia ao sistema (vies de automacao).
             resposta["probe_sinal_motivo"] = contra_probe["motivo"]
+            resposta["probe_sinais"] = contra_probe.get("sinais") or []
         # questão desengajada fora da nota
         # a regra (DTS) avalia a resposta que acabou de chegar; o acerto numa questão
         # desengajada não mede o que o aluno sabe, então o front tira da nota da rodada
@@ -3347,6 +3348,12 @@ def _features_da_questao(payload):
     return q
 
 
+def _dur(segundos):
+    """'45 segundos' / '1min48' — numero que o aluno reconhece, sem casa decimal."""
+    s = int(round(float(segundos)))
+    return f"{s} segundos" if s < 90 else f"{s // 60}min{s % 60:02d}"
+
+
 async def _contradiz_autorrelato(conn, session_id):
     """O aluno disse que estava na questão — o comportamento na janela dela diz outra coisa?
 
@@ -3373,22 +3380,53 @@ async def _contradiz_autorrelato(conn, session_id):
         "select event_type, payload from session_events where session_id = $1::uuid "
         "and ts >= $2::timestamptz - ($3 || ' milliseconds')::interval and ts <= $2::timestamptz",
         session_id, ult["ts"], str(int(dur_ms)))
+    # Ordem: sinal INTERNO primeiro, externo por ultimo. Quem saiu da aba 45 s ja sabe que
+    # saiu — esse sinal nao devolve informacao nenhuma. O caso que a caixa existe para atender e
+    # quem FICOU na tela e derivou por dentro, e para esse so servem ritmo e imobilidade.
+    achados = []          # (prioridade, motivo, texto)
+
+    # ritmo fora do proprio normal, para os dois lados: lento demais e ausencia, rapido demais e
+    # clicar sem ler (Baker 2007: rapido colado em lento e o melhor sinal isolado). A regua sao
+    # os acertos da propria sessao, a mesma do DTS — sem regua util o sinal nao entra, porque
+    # inventar referencia seria pior que faltar.
+    try:
+        regua = _regua_tempo(_tempos_log([json.loads(x["payload"]) if isinstance(x["payload"], str)
+                                          else x["payload"] for x in await conn.fetch(
+            "select payload from session_events where session_id = $1::uuid "
+            "and event_type = 'question_answer' order by ts", session_id)]))
+    except Exception:
+        regua = None
+    if regua:
+        mu, sd = regua
+        z = (math.log(max(dur_ms, 1.0) / 1000.0) - mu) / sd
+        normal = _dur(math.exp(mu))
+        if z >= CORROB_RT_SIGMAS:
+            achados.append((0, "lento", f"levou {_dur(dur_ms / 1000.0)} para responder — "
+                                        f"o seu normal é perto de {normal}"))
+        elif z <= -CORROB_RT_SIGMAS:
+            achados.append((0, "rapido", f"respondeu em {_dur(dur_ms / 1000.0)} — "
+                                         f"o seu normal é perto de {normal}"))
+
+    maior, _ = blocos_parados(pay.get("mouse_track") or [], dur_ms)
+    if maior >= OCIO_CONTRADIZ_S:
+        achados.append((1, "parado", f"ficou {_dur(maior)} sem mexer em nada"))
+
     for r in linhas:
         pl = r["payload"]
         pl = json.loads(pl) if isinstance(pl, str) else pl
         # mesmo criterio do rotulo dos modelos: risco.evento_objetivo, nao um corte paralelo
         if risco.evento_objetivo(r["event_type"], pl):
             fora = round(float(pl.get("tempo_fora_foco_s") or 0))
-            if fora:
-                return {"motivo": "saida", "segundos": fora,
-                        "texto": f"Nessa questão você saiu da KaIA por {fora} segundos."}
-            return {"motivo": "evento", "segundos": None,
-                    "texto": "Nessa questão o seu ritmo mudou bastante."}
-    maior, _ = blocos_parados(pay.get("mouse_track") or [], dur_ms)
-    if maior >= OCIO_CONTRADIZ_S:
-        return {"motivo": "parado", "segundos": round(maior),
-                "texto": f"Nessa questão você ficou {round(maior)} segundos sem mexer em nada."}
-    return None
+            if fora and not any(m == "saida" for _, m, _ in achados):
+                achados.append((2, "saida", f"você saiu da KaIA por {_dur(fora)}"))
+
+    if not achados:
+        return None
+    achados.sort(key=lambda a: a[0])
+    motivos = [m for _, m, _ in achados]
+    sinais = [t for _, _, t in achados][:3]      # tres bastam; mais vira parede de texto
+    return {"motivo": motivos[0], "motivos": motivos, "sinais": sinais,
+            "texto": "Nessa questão " + sinais[0] + "."}
 
 
 async def _capturar_probe(conn, session_id, payload):
@@ -3417,6 +3455,7 @@ async def _capturar_probe(conn, session_id, payload):
         # a opção marcada no probe de 4 opções (ex.: "preocupado" conta como engajado, mas fica guardada)
         registro["_resposta"] = (payload or {}).get("resposta")
         registro["_contradito"] = contra["motivo"] if contra else None
+        registro["_contraditos"] = (contra or {}).get("motivos") or None
         # a questão que acabou, além da janela
         # Kam 2012: um episódio dura ~10-15 s e o rótulo vale para os segundos antes do relato; a
         # janela de 10 min dilui isso. Brutas (escala log), para relativizar depois no treino.

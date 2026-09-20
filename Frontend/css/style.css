@@ -2320,11 +2320,6 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
    caso mais apertado dos dois. */
 #kaia-notificacoes.pos-alta { --notif-baixo: 200px; }
 
-/* Portão: botões inertes por CARD_GATE_MS (0,9s, menos que ler a frase). O
-   clique-reflexo acha botão morto e o olhar volta ao card. Sem contagem
-   visível (seria estímulo pulsando); o fade de opacidade é o aviso. */
-.kaia-fb.kaia-fb-travado button { opacity: 0.45; cursor: default; }
-
 /* ============================================================
    INTERVENÇÕES — o visual das 7 que o aluno vê
    ============================================================
@@ -2951,6 +2946,17 @@ body.kaia-reancorar .option-btn {
    Quem escolhe é o _escolherTamanhoProbe (materias.js), hoje sempre 'medio',
    que repete os 340px de propósito. PENDENTE (Bia + Vitor): 260/460 são ponto
    de partida, não decisão; mudar aqui não pede nada do JS. */
+/* a revisao carrega uma lista de sinais, entao cabe mais larga que o probe */
+#kaia-probe-revisao { max-width: 420px; }
+#kaia-probe-revisao .probe-sinais {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--tinta);
+  font-size: 13px;
+  line-height: 1.5;
+}
+#kaia-probe-revisao .probe-sinais li { margin-bottom: 3px; }
+
 #kaia-probe.probe-pequeno { max-width: 260px; }
 #kaia-probe.probe-medio   { max-width: 340px; }
 #kaia-probe.probe-grande  { max-width: 460px; }

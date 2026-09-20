@@ -1752,11 +1752,25 @@ async def test_quem_estava_mesmo_na_questao_nao_e_contradito():
 
 
 async def test_saida_da_aba_contradiz_quem_disse_que_estava_na_questao():
+    """sozinha ela vale: é fato, e o aluno disse o contrário"""
+    track = [[t * 1000.0] for t in range(90)]        # mexendo sempre: sem imobilidade
     conn = _fc_probe(
-        {"tempo_resposta_ms": 90000, "mouse_track": [[1000.0]]},
+        {"tempo_resposta_ms": 90000, "mouse_track": track},
         [{"event_type": "tab_change", "payload": {"interno": False, "tempo_fora_foco_s": 45.0}}])
     r = await app_mod._contradiz_autorrelato(conn, "sid")
     assert r["motivo"] == "saida" and "45 segundos" in r["texto"]
+
+
+async def test_o_sinal_interno_vem_antes_do_externo():
+    """quem saiu da aba 45 s JA SABE que saiu — o que ele nao viu foi ter ficado parado.
+    A caixa existe para quem derivou sem perceber, entao o interno e que lidera."""
+    conn = _fc_probe(
+        {"tempo_resposta_ms": 90000, "mouse_track": [[1000.0]]},   # 89 s imovel
+        [{"event_type": "tab_change", "payload": {"interno": False, "tempo_fora_foco_s": 45.0}}])
+    r = await app_mod._contradiz_autorrelato(conn, "sid")
+    assert r["motivos"][0] == "parado"           # interno lidera
+    assert "saida" in r["motivos"]               # o externo continua registrado
+    assert r["sinais"][0].startswith("ficou")
 
 
 async def test_imobilidade_longa_contradiz():
@@ -1776,3 +1790,20 @@ async def test_pausa_de_leitura_normal_nao_contradiz():
     """55 s parado num enunciado de vestibular ainda é ler; o corte é 60 s"""
     conn = _fc_probe({"tempo_resposta_ms": 56000, "mouse_track": [[500.0]]})
     assert await app_mod._contradiz_autorrelato(conn, "sid") is None
+
+
+async def test_a_revisao_mostra_todos_os_sinais_nao_o_primeiro():
+    """um sinal solto soa como acusação; o conjunto é o que devolve o que a pessoa não viu"""
+    conn = _fc_probe(
+        {"tempo_resposta_ms": 120000, "mouse_track": [[500.0]]},
+        [{"event_type": "tab_change", "payload": {"interno": False, "tempo_fora_foco_s": 45.0}}])
+    r = await app_mod._contradiz_autorrelato(conn, "sid")
+    assert len(r["sinais"]) >= 2                       # saída E imobilidade
+    assert set(r["motivos"]) >= {"saida", "parado"}
+    assert all("mouse" not in s.lower() for s in r["sinais"])   # comportamento, não sensor
+
+
+def test_duracao_em_texto_que_o_aluno_reconhece():
+    assert app_mod._dur(45) == "45 segundos"
+    assert app_mod._dur(108) == "1min48"
+    assert app_mod._dur(120.4) == "2min00"

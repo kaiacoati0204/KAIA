@@ -24,14 +24,14 @@ const MSG_AUTH_FORA = 'Não foi possível falar com o servidor de login. '
     + 'Verifique sua conexão — o Supabase '
     + 'pode estar pausado ou fora do ar.';
 
-// Login e cadastro, já autenticados: busca o perfil (id; fallback email), guarda a sessão e redireciona por role.
+// Login e cadastro, já autenticados: busca o perfil, guarda a sessão e redireciona por role.
+// Sem query param: a identidade vem do TOKEN (o backend ignora ?user_id/?email de propósito), e o
+// fallback por email ja acontece la dentro. Repetir a chamada com parametro so gerava um 404 a
+// mais no console e punha o email na URL — em log de servidor e historico do navegador.
 // `lembrar` (Fase 3): o padrão é sessionStorage (morre com a aba); "lembre de mim" grava também cópia em
 // localStorage + flag kaia_lembrar, lida por restaurarSessao(). lerUsuario() (comum.js) lê os dois na ordem certa.
-async function finalizarLogin(authUser, falhar, lembrar = false) {
-    let r = await apiFetch(`/perfil?user_id=${encodeURIComponent(authUser.id)}`);
-    if (r.status === 404 && authUser.email) {
-        r = await apiFetch(`/perfil?email=${encodeURIComponent(authUser.email)}`);
-    }
+async function finalizarLogin(falhar, lembrar = false) {
+    const r = await apiFetch('/perfil');
     if (!r.ok) return falhar('Login feito, mas seu perfil não foi encontrado. Fale com o suporte.');
     const u = await r.json();
 
@@ -92,7 +92,7 @@ async function salvarLogin(event) {
             }
             return falhar('Email ou senha incorretos');
         }
-        await finalizarLogin(data.user, falhar, lembrar);
+        await finalizarLogin(falhar, lembrar);
     } catch (e) {
         console.error('[KaIA] falha no login:', e);
         falhar('Não foi possível conectar. Tente novamente.');
@@ -136,7 +136,7 @@ async function criarConta(event) {
         if (data.session) {
             // Confirmação de email desligada → já entra. Sem "lembrar": o
             // cadastro não tem a caixa (fica no escopo do login, Fase 3).
-            await finalizarLogin(data.user, falhar, false);
+            await finalizarLogin(falhar, false);
             // Registra o aceite (quem, quando, qual versão): público menor de idade + coleta de
             // comportamento, e isso não se reconstrói depois. O backend grava o PRIMEIRO e não sobrescreve.
             try {
@@ -182,7 +182,7 @@ async function restaurarSessao() {
     // Refaz o /perfil em vez de confiar na cópia local: nome/role/turma podem ter
     // mudado desde o último login. Se falhar, cai no formulário sem alarde.
     try {
-        await finalizarLogin(sessao.user, () => {}, true);
+        await finalizarLogin(() => {}, true);
     } catch (e) {
         console.warn('[KaIA] não deu para restaurar a sessão:', e);
     }

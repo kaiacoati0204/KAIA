@@ -336,27 +336,6 @@ function _posicionarPilhaNotif() {
     pilha.classList.add('pos-dir');            // SEMPRE canto inferior direito
 }
 
-// Portão antes do feedback aceitar clique, em TODO card (não só o 1º): o reflexo vem das
-// sessões anteriores, e dois comportamentos pro mesmo visual atrapalham TEA/TDAH.
-const CARD_GATE_MS = T(350, 900);   // TODO: ajustar tempo pra produção
-const FB_APOS_MS = T(3000, 4500);   // feedback aparece só APÓS a intervenção (não junto)
-let _fbCardTimer = null;
-
-function _travarFeedbackDoCard(alvo) {
-    const strip = alvo.querySelector('.kaia-fb');
-    if (!strip) return;
-    const focado = alvo.querySelector('.kaia-fb-focado');   // fora do strip, mas também leva a trava
-    const botoes = [...strip.querySelectorAll('button'), ...(focado ? [focado] : [])];
-    strip.classList.add('kaia-fb-travado');
-    // `disabled` e não só pointer-events: trava o teclado também e o leitor de
-    // tela anuncia que ainda não dá para responder.
-    botoes.forEach(b => b.disabled = true);
-    setTimeout(() => {
-        strip.classList.remove('kaia-fb-travado');
-        botoes.forEach(b => b.disabled = false);
-    }, CARD_GATE_MS);
-}
-
 // Card do polling: casca fixa (o strip é remontado a cada disparo em
 // mostrarIntervencao, porque o tipo muda e o elemento é reaproveitado).
 function _garantirCardIntervencao() {
@@ -366,6 +345,14 @@ function _garantirCardIntervencao() {
     card.className = 'kaia-card-notif';
     card.innerHTML = `<h4 id="kaia-int-titulo"></h4><p id="kaia-int-texto"></p>
       <div id="kaia-int-fb"></div>`;
+    // O card fechava só respondendo o feedback. Com o feedback na questão seguinte, ele
+    // precisa de saída própria — e poder dispensar sem ser cobrado de uma nota é melhor.
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'kaia-fb-focado';
+    ok.textContent = 'Ok';
+    ok.addEventListener('click', esconderIntervencao);
+    card.appendChild(ok);
     _pilhaNotif().appendChild(card);
 }
 
@@ -390,16 +377,9 @@ function mostrarIntervencao(intv) {
     tit.innerHTML = _iconeHTML(intv.intervention_type);
     tit.append(' ' + _um(info.titulo));
     $('kaia-int-texto').innerText  = _um(info.texto);
-    const fb = $('kaia-int-fb');
-    fb.textContent = '';
-    fb.hidden = true;                           // feedback só DEPOIS, não junto da intervenção
-    fb.appendChild(_stripFeedback(intv.intervention_type, {
-        mostradaEm: intervencaoMostradaEm, onResposta: esconderIntervencao,
-    }));
+    _pendurarFeedback(intv.intervention_type, intervencaoMostradaEm);
     _posicionarPilhaNotif();
     $('kaia-intervencao').style.display = 'block';
-    clearTimeout(_fbCardTimer);
-    _fbCardTimer = setTimeout(() => { fb.hidden = false; _travarFeedbackDoCard(fb); }, FB_APOS_MS);
 }
 
 // Esconder o card e liberar o polling eram a MESMA coisa; separá-los é o que
@@ -436,9 +416,35 @@ async function enviarFeedbackIntervencao(tipo, reward, mostradaEm = intervencaoM
     } catch (e) { console.warn('[KaIA] falha no feedback:', e); }
 }
 
-// Feedback ATRASADO: pergunta "ajudou?" um tempo DEPOIS, quando o aluno já pôde
-// sentir o efeito (caso da troca de tema). Card próprio — o #kaia-intervencao é do
-// polling e pode já estar ocupado por outra intervenção quando este disparar.
+// ==== FEEDBACK NA QUESTÃO SEGUINTE ====
+// Perguntar "ajudou?" junto da intervenção mede o quanto ela INCOMODOU, não o quanto ajudou: o
+// aluno ainda não teve tempo de usar nada e responde para a tela sumir — e esse clique é o
+// reward que treina o Thompson, que passaria a escolher a intervenção menos chata. Fica
+// pendurado e aparece quando a PRÓXIMA questão abre: fronteira entre tarefas, onde interromper
+// é barato (Bailey & Konstan 2006) e o aluno já tentou trabalhar com o que recebeu.
+// `tempo_ate_aceitar_s` cresce junto, de propósito — passa a medir intervenção→julgamento.
+let _fbPendente = null;   // { tipo, mostradaEm, titulo, pergunta }
+
+function _pendurarFeedback(tipo, mostradaEm, { titulo, pergunta, icone } = {}) {
+    _fbPendente = { tipo, mostradaEm, titulo, pergunta, icone };
+}
+
+function _mostrarFeedbackPendente() {
+    // sessao fechada descarta: a intervencao era de outra sessao, e `mostradaEm` vem de um
+    // performance.now() que pode ate ser de antes de um reload — o tempo sairia lixo.
+    if (_fbPendente && !sessaoDeEstudoAberta) _fbPendente = null;
+    if (!_fbPendente || !sessionId) return;
+    const p = _fbPendente;
+    _fbPendente = null;
+    _feedbackTardio(p.tipo, {
+        titulo: p.titulo || 'Sobre a dica de agora há pouco',
+        pergunta: p.pergunta || 'Ajudou a voltar para a questão?',
+        icone: p.icone || null, atrasoMs: 0, mostradaEm: p.mostradaEm,
+    });
+}
+
+// Monta o card do feedback na pilha. Card próprio — o #kaia-intervencao é do polling e pode
+// já estar ocupado por outra intervenção quando este aparecer.
 let _fbTardioTimer = null;
 
 function _feedbackTardio(tipo, { titulo, pergunta, atrasoMs, mostradaEm, vidaMs = 45000,
@@ -778,12 +784,8 @@ function _pedirFeedbackSeq() {
     $('kaia-seq-passo').style.display = 'none';
     $('kaia-seq').querySelector('.kaia-seq-seg').style.display = 'none';
     $('kaia-seq-voltar').textContent = 'Voltar à questão';
-    const alvo = $('kaia-seq-fb');
-    alvo.textContent = '';
-    alvo.appendChild(_stripFeedback(_seqFeedbackTipo, {
-        mostradaEm: _seqMostradaEm, agradecer: true,
-        onResposta: () => setTimeout(_fecharSeq, 1200),
-    }));
+    $('kaia-seq-fb').textContent = '';
+    _pendurarFeedback(_seqFeedbackTipo, _seqMostradaEm);
     setTimeout(() => { if (_seqFeedbackAberto) _fecharSeq(); }, SEQ_FEEDBACK_MS);
 }
 
@@ -952,16 +954,12 @@ function encerrarMicroRefoco() {
     if (isMissionActive) setEstado('ESTUDANDO');
     liberarPolling();
     _mrFeedbackAberto = true;
-    $('kaia-mr-msg').innerText = 'Ajudou a reancorar?';
+    $('kaia-mr-msg').innerText = 'Pronto — de volta para a questão.';
     $('kaia-mr-frase').style.display = 'none';   // a frase acalma a respiração, não a pergunta
     $('kaia-mr').querySelector('.kaia-mr-track').style.display = 'none';
     $('kaia-mr-pular').textContent = 'Fechar';
-    const alvo = $('kaia-mr-fb');
-    alvo.textContent = '';
-    alvo.appendChild(_stripFeedback('micro_refoco', {
-        compacto: true, mostradaEm: _mrMostradaEm, agradecer: true,
-        onResposta: () => setTimeout(_fecharMicroRefoco, 1200),
-    }));
+    $('kaia-mr-fb').textContent = '';
+    _pendurarFeedback('micro_refoco', _mrMostradaEm);
     _medirBarraMicroRefoco();                   // encolheu: sem a frase e sem a barra
     setTimeout(() => { if (_mrFeedbackAberto) _fecharMicroRefoco(); }, MR_FEEDBACK_MS);
 }
@@ -1000,11 +998,12 @@ function _garantirCardTroca() {
 const TROCA_FEEDBACK_MS = T(8000, 45000);   // TODO: ajustar tempo pra produção
 
 function _perguntarDepoisDaTroca() {
-    _feedbackTardio('troca_atividade', {
+    // mesma hora que os outros braços (próxima questão): se cada braço fosse perguntado num
+    // momento diferente, as notas não seriam comparáveis — e o bandit compara justamente elas.
+    _pendurarFeedback('troca_atividade', _trocaMostradaEm, {
         titulo: 'Sobre a troca de tema',
         icone: 'troca_atividade',
         pergunta: 'A sugestão de trocar de tema ajudou seu foco?',
-        atrasoMs: T(1500, 2500), mostradaEm: _trocaMostradaEm,   // pouco depois da resposta no tema novo
     });
 }
 
@@ -1169,12 +1168,8 @@ function _responderCheckpoint(escolhido, correta) {
         }
     });
     // Feedback só depois de responder (Fase 2): antes disso competiria com a questão.
-    const card = $('kaia-cp');
-    if (card && !card.querySelector('.kaia-fb-wrap')) {
-        card.insertBefore(_stripFeedback('checkpoint', {
-            rotulo: _variar(CHECKPOINT_ROTULO_FB), mostradaEm: _cpMostradaEm, agradecer: true,
-        }), $('kaia-cp-voltar'));
-    }
+    _pendurarFeedback('checkpoint', _cpMostradaEm,
+                      { pergunta: _variar(CHECKPOINT_ROTULO_FB) });
     $('kaia-cp-voltar').style.display = 'inline-block';
 }
 
@@ -1296,12 +1291,9 @@ function _responderReancora(escolhido) {
             b.style.background = 'var(--erro-bg)'; b.style.color = 'var(--erro-tx)'; b.style.borderColor = 'var(--erro-tx)';
         }
     });
+    _pendurarFeedback('reancoragem', _reMostradaEm,
+                      { pergunta: _variar(REANCORA_ROTULO_FB) });
     const card = $('kaia-re');
-    if (card && !card.querySelector('.kaia-fb-wrap')) {
-        card.appendChild(_stripFeedback('reancoragem', {
-            rotulo: _variar(REANCORA_ROTULO_FB), mostradaEm: _reMostradaEm, agradecer: true,
-        }));
-    }
     let voltar = $('kaia-re-voltar');
     if (!voltar) {
         voltar = document.createElement('button');
@@ -1920,6 +1912,7 @@ async function carregarQuestao(subject, tema) {
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
     questionShownAt = performance.now();
+    _mostrarFeedbackPendente();   // "ajudou?" da intervenção anterior, agora que dá para julgar
     firstInteractionAt = 0;   // zera timing/trajeto para a nova questão
     mouseSamples = [];
     tempoOciosoMs = 0;
@@ -2422,8 +2415,8 @@ function responderProbe(estado, resposta) {
     envio.then((r) => {
         if (resolvido || !r?.probe_sinal) return seguir();
         resolvido = true;
-        mostrarRevisaoProbe(r.probe_sinal, { estado, resposta, motivo: r.probe_sinal_motivo },
-                            aoFechar);
+        mostrarRevisaoProbe(r.probe_sinais?.length ? r.probe_sinais : [r.probe_sinal],
+                            { estado, resposta, motivo: r.probe_sinal_motivo }, aoFechar);
     }).catch(seguir);
 }
 
@@ -2435,7 +2428,7 @@ function responderProbe(estado, resposta) {
 // (2) fala do comportamento, nunca do sensor — dizer quais sinais disparam ensina a burlar;
 // (3) é também devolução de automonitoramento, que é a intervenção com melhor evidência
 // no ensino médio (I-Connect).
-function mostrarRevisaoProbe(texto, original, aoFechar) {
+function mostrarRevisaoProbe(sinais, original, aoFechar) {
     let card = $('kaia-probe-revisao');
     if (!card) {
         card = document.createElement('div');
@@ -2445,10 +2438,21 @@ function mostrarRevisaoProbe(texto, original, aoFechar) {
     card.replaceChildren();
     const mostradoEm = performance.now();
 
-    const fato = document.createElement('p');
-    fato.className = 'probe-q';
-    fato.textContent = texto;
-    card.appendChild(fato);
+    const titulo = document.createElement('p');
+    titulo.className = 'probe-q';
+    titulo.textContent = 'Nessa questão:';
+    card.appendChild(titulo);
+
+    // lista, nao frase unica: um sinal solto soa como acusacao, o conjunto soa como relato —
+    // e e o conjunto que devolve a informacao que faltou a quem nao percebeu que derivou.
+    const lista = document.createElement('ul');
+    lista.className = 'probe-sinais';
+    (sinais || []).filter(Boolean).forEach((s) => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        lista.appendChild(li);
+    });
+    card.appendChild(lista);
 
     const q = document.createElement('p');
     q.className = 'probe-nota';

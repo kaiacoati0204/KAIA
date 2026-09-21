@@ -154,10 +154,12 @@ async function criarConta(event) {
             } catch (e) {
                 console.warn('[KaIA] aceite dos termos não registrado:', e);
             }
-            await finalizarLogin(falhar, false);
             // Menor de idade: NÃO redireciona. Mostra o link do responsável — sem o aceite dele
             // o backend não grava nada do estudo, então entrar direto só daria a impressão errada.
+            // ANTES do finalizarLogin, que termina em window.location.href: depois dele nada
+            // mais roda. (Esta tela só aparecia porque o finalizarLogin falhava e saía cedo.)
             if (ehMenor(nasc) && await mostrarLinkResponsavel()) return;
+            await finalizarLogin(falhar, false);
         } else if (okmsg) {
             // Confirmação ligada → precisa confirmar por email antes de logar.
             okmsg.textContent = 'Conta criada! Confirme pelo email e depois faça login.';

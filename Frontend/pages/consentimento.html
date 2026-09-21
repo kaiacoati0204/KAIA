@@ -93,6 +93,9 @@
         </div>
     </article>
 
+    <!-- config.js ANTES do comum.js: e ele que define API_URL. Sem isso a pagina caia no
+         fallback 127.0.0.1:5000 e tentava falar com o computador do proprio responsavel. -->
+    <script src="../config.js"></script>
     <script src="../js/comum.js"></script>
     <script src="../js/consentimento.js"></script>
 </body>

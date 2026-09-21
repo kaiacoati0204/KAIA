@@ -3358,9 +3358,15 @@ async function pedirApoioDaPausa() {
     if (!sessionId) return;
     try {
         const d = await postJSON('/prevencao/pausa', { session_id: sessionId });
+        // No console de propósito: quando a tela não aparece, o `motivo` é a única coisa que
+        // diz por quê (sem consentimento, reativa recente, risco baixo...). Sem isto só dava
+        // para descobrir abrindo a aba Network.
+        console.log('[KaIA Pausa]', d);
         if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx, d.plano);
         else if (d?.apoio === 'pausa_curta') mostrarOfertaDePausa(cx);
-    } catch (_) { /* apoio é opcional: falhou, o aluno segue sem nada */ }
+    } catch (e) {
+        console.warn('[KaIA Pausa] falhou:', e);   // apoio é opcional: o aluno segue sem nada
+    }
 }
 
 // Plano se-então + devolução do autorrelato. O plano NÃO é uma meta ("vou fazer 10"): é

@@ -31,7 +31,14 @@ const MSG_AUTH_FORA = 'Não foi possível falar com o servidor de login. '
 // `lembrar` (Fase 3): o padrão é sessionStorage (morre com a aba); "lembre de mim" grava também cópia em
 // localStorage + flag kaia_lembrar, lida por restaurarSessao(). lerUsuario() (comum.js) lê os dois na ordem certa.
 async function finalizarLogin(falhar, lembrar = false) {
-    const r = await apiFetch('/perfil');
+    // Uma retentativa, de propósito: logo depois do signUp o supabase-js às vezes ainda não
+    // publicou a sessão, e o apiFetch sai sem o Authorization (401). Antes isso era mascarado
+    // por uma segunda chamada com parâmetro inútil; agora é explícito e com espera.
+    let r = await apiFetch('/perfil');
+    if (!r.ok) {
+        await new Promise((ok) => setTimeout(ok, 400));
+        r = await apiFetch('/perfil');
+    }
     if (!r.ok) return falhar('Login feito, mas seu perfil não foi encontrado. Fale com o suporte.');
     const u = await r.json();
 
@@ -136,7 +143,9 @@ async function criarConta(event) {
         if (data.session) {
             // Confirmação de email desligada → já entra. Sem "lembrar": o
             // cadastro não tem a caixa (fica no escopo do login, Fase 3).
-            await finalizarLogin(falhar, false);
+            // GRAVA ANTES DE LER: o /perfil é o que cria a linha em `perfis`. Lendo primeiro,
+            // o finalizarLogin caía em 404 e mostrava "perfil não encontrado" numa conta que
+            // tinha acabado de ser criada.
             // Registra o aceite (quem, quando, qual versão): público menor de idade + coleta de
             // comportamento, e isso não se reconstrói depois. O backend grava o PRIMEIRO e não sobrescreve.
             try {
@@ -145,6 +154,7 @@ async function criarConta(event) {
             } catch (e) {
                 console.warn('[KaIA] aceite dos termos não registrado:', e);
             }
+            await finalizarLogin(falhar, false);
             // Menor de idade: NÃO redireciona. Mostra o link do responsável — sem o aceite dele
             // o backend não grava nada do estudo, então entrar direto só daria a impressão errada.
             if (ehMenor(nasc) && await mostrarLinkResponsavel()) return;

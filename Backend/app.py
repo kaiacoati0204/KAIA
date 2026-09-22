@@ -2947,14 +2947,20 @@ class PausaIn(BaseModel):
 # efeito MAIOR nos mais novos. Adolescente fica entre os dois - espere ~0,3, nao 0,65.
 # Qual plano mostrar sai de uma REGRA sobre a feature dominante, nao do modelo: com ~20
 # observacoes por braco, variar o texto dentro do braco so somaria ruido.
+# (feature, corte, teto, texto). O TETO existe porque comparar `feature / corte` entre features
+# de escalas diferentes nao diz nada: `frac_rapidas` vai ate 1,0 (razao max 2,5) e
+# `minutos_sessao` nao tem limite — numa sessao de 90 min ela ganharia de tudo por construcao,
+# nao por ser o que mais pesa. O escore virou "quanto ele andou DENTRO da propria zona de
+# risco", que e comparavel. Tres tetos saem da definicao da feature (fracao = 1; nivel 1..5
+# centrado em 3 = 2); o de minutos e calibragem: 50 min = o dobro do corte.
 PLANOS = {
-    "dificuldade": ("dificuldade_recente", 0.5,
+    "dificuldade": ("dificuldade_recente", 0.5, 2.0,
                     "Se vier uma questão difícil, então leio o enunciado de novo antes de escolher."),
-    "pressa": ("frac_rapidas_recentes", 0.4,
+    "pressa": ("frac_rapidas_recentes", 0.4, 1.0,
                "Se eu me pegar respondendo rápido demais, então releio a pergunta antes de marcar."),
-    "cansaco": ("minutos_sessao", 25.0,
+    "cansaco": ("minutos_sessao", 25.0, 50.0,
                 "Se eu sentir cansaço, então faço mais 3 questões e paro por hoje."),
-    "erros": ("queda_acerto_recente", 0.3,
+    "erros": ("queda_acerto_recente", 0.3, 1.0,
               "Se eu errar duas seguidas, então leio a explicação com calma antes de seguir."),
 }
 PLANO_PADRAO = ("celular",
@@ -2968,11 +2974,16 @@ def _plano_do_momento(feats):
     megaestudo do PNAS mostrou que mensagem que referencia dados da própria pessoa rende mais
     que a genérica. Sem nenhuma feature acima do corte, vai o plano padrão.
     """
-    melhor, razao = None, 1.0
-    for pid, (feat, corte, texto) in PLANOS.items():
-        r = float(feats.get(feat, 0) or 0) / corte
-        if r >= razao:
-            melhor, razao = (pid, texto), r
+    melhor, escore = None, -1.0
+    for pid, (feat, corte, teto, texto) in PLANOS.items():
+        v = float(feats.get(feat, 0) or 0)
+        if v < corte:
+            continue                                  # nem chegou na zona: nao concorre
+        # satura no teto: passado ele, esticar mais nao e "mais urgente" — e so a feature
+        # nao ter limite. Sem o min(), 90 min de sessao dava 2,6 e ganhava de tudo.
+        e = min((v - corte) / max(teto - corte, 1e-9), 1.0)
+        if e > escore:
+            melhor, escore = (pid, texto), e
     return melhor or PLANO_PADRAO
 
 

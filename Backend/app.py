@@ -627,6 +627,10 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
         return JSONResponse({"erro": "Falha ao carregar estatísticas."}, status_code=502)
 
     desempenho, analise = None, []
+    # Uma conversão só, usada nos dois lugares: a frase de `analise` e o `por_materia`
+    # do JSON precisam falar do mesmo dado. Campos explícitos em vez de dict(r) para
+    # o contrato da API não depender do nome das colunas da consulta.
+    materias = [{"materia": r["materia"], "acerto": r["acerto"]} for r in por_materia]
     if base and base["sessoes"]:
         # acerto só existe se houve questão respondida. `None` (e não 0%) quando o
         # aluno abriu sessões mas não respondeu nada: 0% afirmaria que ele errou
@@ -640,7 +644,7 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
             "semanas": base["semanas"],
             "materias": base["materias"],
         }
-        analise = _analise_regras(desempenho, [dict(r) for r in por_materia])
+        analise = _analise_regras(desempenho, materias)
 
     ultima_sessao = None
     if ult:
@@ -653,7 +657,11 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
             "quando": ult["window_ts"].strftime("%d/%m às %H:%M"),
         }
 
-    return {"desempenho": desempenho, "ultima_sessao": ultima_sessao, "analise": analise}
+    # por_materia já era calculado e só virava frase. Vai ao JSON porque o front monta
+    # a grade de matérias do perfil a partir dele; a ordem (acerto desc) é o que diz
+    # qual é o melhor tema e qual pede reforço.
+    return {"desempenho": desempenho, "ultima_sessao": ultima_sessao,
+            "analise": analise, "por_materia": materias}
 
 
 # ================== API: GERAR QUESTÃO objetiva =============================

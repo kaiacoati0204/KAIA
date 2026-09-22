@@ -85,8 +85,11 @@ body {
 ::-webkit-scrollbar {
   width: 8px;
 }
+/* Polegar em dourado TRANSLÚCIDO, não chapado: a barra acompanha a rolagem o tempo
+   todo e o amarelo cheio puxava o olho a cada gesto. Em 0.35 ela continua legível
+   como pista de "quanto falta" sem virar estímulo. Mesmo espírito do html:has(.lp-page). */
 ::-webkit-scrollbar-thumb {
-  background-color: var(--gravata-kinrou);
+  background-color: rgba(var(--gravata-rgb), 0.35);
   border-radius: 20px;
 }
 /* Trilha sem regra = branco puro do navegador (proibido no projeto). Fica
@@ -97,7 +100,7 @@ body {
   background: transparent;
 }
 html {
-  scrollbar-color: var(--gravata-kinrou) transparent;
+  scrollbar-color: rgba(var(--gravata-rgb), 0.35) transparent;
 }
 
 /* =========================
@@ -1185,6 +1188,262 @@ html {
   margin: 10px 0 0 20px;
 }
 
+/* ---- VELOCÍMETROS DA ANÁLISE (perfil) ---- */
+.analise-kaia { display: flex; flex-direction: column; gap: 16px; }
+
+.gauge-card {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 18px;
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  border-radius: 14px;
+  background: var(--card);
+}
+.gauge-principal .gauge-slot { flex: 0 0 150px; }
+.gauge-texto h3 {
+  margin: 0 0 4px;
+  color: var(--profundo);
+  font-size: 1rem;
+}
+.gauge-texto p { margin: 0; color: var(--tinta); font-size: .95rem; line-height: 1.5; }
+
+/* ---- GRADE DE MATÉRIAS ---- */
+/* auto-fit: quantas couberem por linha; no celular cai pra 2. */
+.materias-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 14px;
+}
+
+.materia-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  /* padding-bottom maior: abre o lugar da faixa, que é absoluta e não ocupa fluxo. */
+  padding: 14px 12px 18px;
+  overflow: hidden;   /* a faixa sangra até a borda sem furar o raio do card */
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: center;
+}
+.materia-card .gauge-slot { width: 104px; }
+.materia-card .gauge-num { font-size: 25px; }
+
+.materia-nome {
+  margin: 2px 0 0;
+  color: var(--profundo);
+  font-weight: 700;
+  font-size: .92rem;
+  line-height: 1.25;
+}
+.materia-recado {
+  margin: 0;
+  font-size: .78rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.materia-recado--bom     { color: var(--acerto-tx); }
+.materia-recado--reforco { color: var(--alerta-tx); }
+.materia-recado--neutro  { color: var(--muted); }
+
+/* Faixa de cor da matéria: o "lugar" onde a cor personalizada vai aparecer. */
+.materia-faixa {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 5px;
+}
+
+/* Botão de paleta: ícone só, bege-tinta (5,4:1 sobre o --card). Discreto de
+   propósito — é atalho de personalização, não ação da tela. */
+.materia-paleta {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--bege-tinta);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.materia-paleta:hover {
+  background: var(--bege-veu);
+  color: var(--profundo);
+}
+.materia-paleta:focus-visible {
+  outline: 2px solid var(--azul-coati);
+  outline-offset: 1px;
+}
+
+.gauge-slot { width: 100%; max-width: 160px; }
+.gauge-svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* Trilho = o arco todo em traço apagado: dá a escala (quanto seria 100%) sem
+   competir com o valor. Sem ele o número flutua sem referência. */
+.gauge-trilho {
+  fill: none;
+  stroke: rgba(var(--bege-rgb), 0.38);
+  stroke-width: 12;
+  stroke-linecap: round;
+}
+.gauge-valor {
+  fill: none;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset .9s ease-out;
+}
+.gauge-num {
+  fill: var(--profundo);
+  font-family: inherit;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge-valor { transition: none; }
+}
+
+/* Card principal empilha: lado a lado, a coluna de texto afina tanto que a frase
+   quebra numa palavra por linha. */
+@media (max-width: 700px) {
+  .gauge-card.gauge-principal { flex-direction: column; gap: 10px; text-align: center; }
+  .gauge-principal .gauge-slot { flex: 0 0 auto; width: 150px; }
+}
+
+/* Celular: 2 por linha, fixo. O .secao-perfil come 80px de padding, então num
+   telefone de 390px sobram 233px para a grade — o auto-fit de 155px pediria 324px
+   e despencaria para 1 coluna. Aqui a coluna manda, e o gauge encolhe junto. */
+@media (max-width: 480px) {
+  .materias-grade { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .materia-card { padding: 12px 8px 16px; }
+  .materia-card .gauge-slot { width: 84px; }
+  .materia-card .gauge-num { font-size: 30px; }   /* unidade do viewBox: sobe p/ compensar o slot menor */
+  .materia-nome { font-size: .86rem; }
+  .materia-recado { font-size: .74rem; }
+}
+
+/* ---- PAINEL DE PERSONALIZAÇÃO (cor + textura da matéria) ---- */
+/* Mora no <body> e é posicionado pelo JS em coordenadas de página. Absoluto (não
+   fixed) para acompanhar o scroll sem listener. */
+.paleta-painel {
+  position: absolute;
+  z-index: 60;
+  width: 236px;
+  padding: 12px;
+  border: 1px solid rgba(var(--bege-rgb), 0.45);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 10px 28px rgba(var(--profundo-rgb), 0.16);
+  font-family: inherit;
+}
+
+.paleta-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.paleta-rotulo {
+  color: var(--profundo);
+  font-weight: 700;
+  font-size: .82rem;
+}
+/* Some com a moldura que o navegador põe por padrão no swatch. */
+.paleta-cor {
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(var(--bege-rgb), 0.5);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.paleta-cor::-webkit-color-swatch { border: 0; border-radius: 6px; }
+.paleta-cor::-webkit-color-swatch-wrapper { padding: 2px; }
+.paleta-cor:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 2px; }
+
+.paleta-texturas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-bottom: 11px;
+}
+.tex-chip { position: relative; display: block; cursor: pointer; }
+/* O radio some da vista mas continua focável — é ele que dá navegação por setas
+   e leitura de grupo. `opacity:0` em vez de display:none justamente por isso. */
+.tex-chip input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.tex-vista {
+  display: block;
+  height: 34px;
+  border: 2px solid rgba(var(--bege-rgb), 0.5);
+  border-radius: 9px;
+  transition: border-color .15s, transform .15s;
+}
+.tex-chip:hover .tex-vista { transform: scale(1.05); }
+.tex-chip input:checked + .tex-vista {
+  border-color: var(--azul-coati);
+  box-shadow: 0 0 0 2px rgba(var(--azul-coati-rgb), 0.22);
+}
+.tex-chip input:focus-visible + .tex-vista {
+  outline: 2px solid var(--azul-coati);
+  outline-offset: 2px;
+}
+
+.paleta-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.paleta-acoes button {
+  padding: 6px 11px;
+  white-space: nowrap;
+  border-radius: 999px;
+  font: inherit;
+  font-size: .78rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.paleta-limpar {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+}
+.paleta-limpar:hover { color: var(--profundo); }
+.paleta-pronto {
+  border: 1px solid var(--azul-coati);
+  background: var(--azul-coati);
+  color: var(--card);
+  font-weight: 700;
+}
+.paleta-pronto:hover { background: var(--profundo); border-color: var(--profundo); }
+.paleta-acoes button:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tex-vista, .paleta-acoes button { transition: none; }
+  .tex-chip:hover .tex-vista { transform: none; }
+}
+
 /* =========================
    PAINEL DO RESPONSÁVEL
 ========================= */
@@ -2233,10 +2492,14 @@ body.textura-papel .conteudo {
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
+/* Ativo/hover em azul-coati, não no dourado: o dourado cheio entra de uma vez e
+   agride o público TEA/TDAH, e a marca reserva ele para pouca coisa. Marfim sobre
+   azul-coati dá 7,3:1 — passa AAA, e o botão ainda é 700. */
 .caderno-toggle:hover,
 .caderno-toggle[aria-pressed="true"] {
-  background: var(--gravata-kinrou);
-  color: var(--profundo);
+  background: var(--azul-coati);
+  color: var(--card);
+  border-color: var(--azul-coati);
 }
 
 /* Grupo esquerdo do quiz-nav: matéria + contador da sessão. */
@@ -4680,11 +4943,13 @@ body.ep-page .railnav {
 /* =========================
    MEU COATI — economia (meu-coati.html) — namespace mc-
 ========================= */
-/* Mesmo Céu coati da escola (só a base, sem manchas). Dourado só no "Comprar",
-   que é a ação principal da tela; o resto é azul-coati ou neutro. */
+/* SEM o azul-névoa do Céu coati aqui. Num degradê de 160deg a parada 0% cai no canto
+   superior ESQUERDO, e o azul virava uma mancha brilhante contra a textura de papel —
+   justo na tela do mascote, que é pra ser de descanso. Só marfim -> creme: os dois são
+   tons de papel, então o fundo lê como uma superfície só. Dourado segue só no "Comprar". */
 html:has(body.mc-page) {
   min-height: 100%;
-  background: linear-gradient(160deg, var(--azul-nevoa) 0%, var(--marfim) 45%, var(--creme-bg) 100%);
+  background: linear-gradient(160deg, var(--marfim) 0%, var(--creme-bg) 100%);
 }
 body.mc-page { background-color: transparent; }
 body.mc-page .main-content.mc-conteudo {

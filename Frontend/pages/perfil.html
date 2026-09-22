@@ -68,6 +68,9 @@
 
             <!-- COMPLEMENTO ao vivo: só aparece quando há session_features.
                  Sem sessão, mostra uma mensagem — nunca uma fileira de "—". -->
+            <!-- Só sinal que o aluno LÊ sobre si. Scroll, trocas de aba e cliques fora
+                 da área saíram: são insumo de detecção, não desempenho, e listados aqui
+                 viram placar de vigilância — o pior enquadramento pro público TEA/TDAH. -->
             <div class="secao-perfil" id="secaoUltimaSessao">
                 <h2>Sua última sessão <span class="secao-quando" id="ultimaQuando"></span></h2>
                 <div id="ultimaSessaoLista">
@@ -76,20 +79,8 @@
                         <span id="ultTempoResposta">—</span>
                     </div>
                     <div class="linha-perfil">
-                        <span>Velocidade de scroll</span>
-                        <span id="ultScroll">—</span>
-                    </div>
-                    <div class="linha-perfil">
-                        <span>Trocas de aba</span>
-                        <span id="ultAbas">—</span>
-                    </div>
-                    <div class="linha-perfil">
                         <span>Tempo fora de foco</span>
                         <span id="ultForaFoco">—</span>
-                    </div>
-                    <div class="linha-perfil">
-                        <span>Cliques fora da área</span>
-                        <span id="ultCliques">—</span>
                     </div>
                 </div>
                 <p class="secao-vazia" id="ultimaSessaoVazia" style="display:none">
@@ -110,10 +101,26 @@
 
             <div class="secao-perfil">
                 <h2>Análise da KaIA</h2>
-                <!-- Preenchida por carregarPerfil() com frases derivadas do
-                     desempenho real (regras, sem IA). Nada de placeholder fixo. -->
+                <!-- Velocímetros preenchidos por perfil.js a partir do /perfil/estatisticas
+                     (regras, sem IA). Todo card nasce [hidden]: o JS só revela o que TEM
+                     dado. Gauge vazio ou com "—" no meio mentiria sobre medir algo. -->
                 <div class="analise-kaia" id="analiseIA">
-                    <p>Carregando análise…</p>
+
+                    <!-- ---- Card principal: acerto médio geral + recomendação ---- -->
+                    <div class="gauge-card gauge-principal" id="cardGeral" hidden>
+                        <div class="gauge-slot" id="gaugeGeral"></div>
+                        <div class="gauge-texto">
+                            <h3>Seu acerto médio</h3>
+                            <p id="analiseRecomendacao"></p>
+                        </div>
+                    </div>
+
+                    <!-- ---- Grade por matéria: um card por matéria, montada por
+                         perfil.js. Fica vazia no HTML porque a quantidade de cards
+                         depende de quantas matérias o aluno estudou. ---- -->
+                    <div class="materias-grade" id="materiasGrade" hidden></div>
+
+                    <p class="secao-vazia" id="analiseVazia" hidden></p>
                 </div>
             </div>
 

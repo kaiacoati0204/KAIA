@@ -1769,13 +1769,30 @@ let respondidasHojeBase = 0;    // respondidas HOJE antes desta sessão (backend
 let metaDiariaContada   = false;// já contou a meta diária na streak nesta sessão?
 const META_QUESTOES = 10;       // meta = 10 (por rodada e por dia)
 
-// Probe de self-report (rótulo real de atenção p/ o ML): 1 por rodada, numa questão
-// sorteada da 5ª à 9ª — baseline de RT já aquecido e antes do fim da rodada.
-let probeAlvoRodada = 0;
-// 1ª rodada sorteia 3..7: o sistema já intervém a partir de INTERV_WARMUP_MIN (3 min) e, com o
-// probe só na 5ª, a abertura ficava sem rótulo real. As seguintes voltam a 5..9 (interrompe menos).
+// Probe de self-report (rótulo real de atenção p/ o ML): DOIS por rodada, em questões
+// sorteadas — baseline de RT já aquecido e antes do fim da rodada.
+//
+// Eram 1 por rodada. A medida individual de taxa de dispersão só estabiliza perto de 8
+// sondagens por pessoa (Goldilocks zone, análise secundária de bases publicadas); com
+// 3 sessões x 2 rodadas x 1 probe dava 6 — logo abaixo. Com 2 por rodada dá 12.
+// Variar a taxa de sondagem não ameaça a validade do procedimento; o que pode cobrar é
+// sondar demais (induz dispersão conforme a carga da tarefa) — medido por medir_dano_probe.py.
+// SÓ PARA O BETA: para voltar a 1, é PROBES_POR_RODADA = 1.
+const PROBES_POR_RODADA = 2;
+const PROBE_GAP_MIN = 2;        // questões entre um probe e o outro: dois seguidos cansam
+let probeAlvosRodada = [];
+// 1ª rodada começa em 3: o sistema já intervém a partir de INTERV_WARMUP_MIN (3 min) e, com o
+// primeiro probe só na 5ª, a abertura ficava sem rótulo real. As seguintes começam na 4ª.
+// O PRIMEIRO nunca passa da 7ª — senão não sobra espaço para o segundo respeitar o intervalo.
 function sortearAlvoProbe(primeiraDaSessao = false) {
-    probeAlvoRodada = (primeiraDaSessao ? 3 : 5) + Math.floor(Math.random() * 5);
+    const min1 = primeiraDaSessao ? 3 : 4;
+    const max1 = META_QUESTOES - PROBE_GAP_MIN - 1;          // 7 com META=10
+    const p1 = min1 + Math.floor(Math.random() * (max1 - min1 + 1));
+    probeAlvosRodada = [p1];
+    if (PROBES_POR_RODADA > 1) {
+        const min2 = p1 + PROBE_GAP_MIN;
+        probeAlvosRodada.push(min2 + Math.floor(Math.random() * (META_QUESTOES - min2 + 1)));
+    }
 }
 
 // Revisão de erros (Parte 7): guarda as questões erradas da sessão + estado da revisão.
@@ -2099,7 +2116,7 @@ function checkAnswer(idx, btn) {
     }
     atualizarBarraRodada();       // a barra da rodada sobe já na resposta
     if (_trocaFeedbackPendente) { _trocaFeedbackPendente = false; _perguntarDepoisDaTroca(); }   // troca: feedback só depois de responder no tema novo
-    const probeAgora = questoesNaRodada === probeAlvoRodada;   // 1/rodada (3ª–7ª na 1ª, 5ª–9ª depois)
+    const probeAgora = probeAlvosRodada.includes(questoesNaRodada);
     // Ao atingir a META DIÁRIA (10 no dia, 1ª vez na sessão): conta a streak + avisa no canto.
     if (!metaDiariaContada && totalHoje() >= META_QUESTOES) {
         registrarMetaDiaria();

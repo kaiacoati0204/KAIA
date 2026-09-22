@@ -1706,7 +1706,7 @@ def test_sem_nada_pesando_vai_o_plano_padrao():
 
 def test_todo_plano_e_um_se_entao_de_verdade():
     """se virar 'vou fazer 10 questões' perdeu o mecanismo: o gatilho tem que estar dito"""
-    textos = [t for _, _, t in app_mod.PLANOS.values()] + [app_mod.PLANO_PADRAO[1]]
+    textos = [t for *_, t in app_mod.PLANOS.values()] + [app_mod.PLANO_PADRAO[1]]
     for t in textos:
         assert t.startswith("Se ") and ", então " in t
 
@@ -1831,3 +1831,17 @@ async def test_gatilho_barrado_pelo_teto_fica_gravado(monkeypatch):
     # NUNCA como decisao_intervencao: aquele evento faz a pausa preventiva passar em branco,
     # e aqui nenhuma tela apareceu para o aluno
     assert not [a for q, a in conn.executed if "'decisao_intervencao'" in str(q)]
+
+
+def test_plano_nao_e_escolhido_pela_escala_da_feature():
+    """`minutos_sessao` não tem teto: comparando feature/corte cru, sessão longa ganhava de
+    tudo por construção. O escore é quanto andou DENTRO da própria zona, que é comparável."""
+    base = dict.fromkeys(app_mod.risco.FEATURES_RISCO, 0.0)
+    # 90 min (muito além do corte de 25) contra pressa NO máximo: antes o cansaço ganhava
+    # com razão 3,6 contra 2,5, por escala. Agora os dois saturam e a pressa não é roubada.
+    feats = dict(base, minutos_sessao=90.0, frac_rapidas_recentes=1.0)
+    assert app_mod._plano_do_momento(feats)[0] == "pressa"
+    # e sem ninguém na pressa, o cansaço continua ganhando normalmente
+    assert app_mod._plano_do_momento(dict(base, minutos_sessao=90.0))[0] == "cansaco"
+    # abaixo de todos os cortes -> plano padrão
+    assert app_mod._plano_do_momento(dict(base, minutos_sessao=10.0))[0] == app_mod.PLANO_PADRAO[0]

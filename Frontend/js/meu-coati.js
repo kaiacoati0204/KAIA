@@ -234,7 +234,81 @@
     }
 
     // ---- INIT ----
+    // ============================================================
+    //  NOME DO COATI (edição inline no título)
+    // ============================================================
+    // Mock em localStorage, por aluno. É só do aluno: não vai pro backend e não
+    // aparece para professor/coordenador em lugar nenhum — por isso não há filtro
+    // de conteúdo. O rótulo da railnav segue "Meu Coati"; só este h2 muda.
+    const NOME_PADRAO = 'Meu Coati';
+    const NOME_MAX = 20;
+    const CHAVE_NOME = `kaia_nome_coati:${typeof userId !== 'undefined' ? userId : 'anon'}`;
+
+    function lerNomeCoati() {
+        try { return (localStorage.getItem(CHAVE_NOME) || '').trim(); }
+        catch (_) { return ''; }
+    }
+
+    // Nome vazio REMOVE a chave em vez de gravar "": assim "nunca nomeou" e "apagou
+    // o nome" são o mesmo estado, e o título sempre cai no padrão.
+    function gravarNomeCoati(nome) {
+        try {
+            if (nome) localStorage.setItem(CHAVE_NOME, nome);
+            else localStorage.removeItem(CHAVE_NOME);
+        } catch (e) { console.warn('[KaIA] não deu para salvar o nome do coati:', e); }
+    }
+
+    function mostrarNomeCoati() {
+        const alvo = $('mc-nome');
+        if (!alvo) return;
+        const nome = lerNomeCoati();
+        alvo.textContent = nome || NOME_PADRAO;
+        $('mc-nome-btn').setAttribute(
+            'aria-label', `${nome || NOME_PADRAO}: nome do seu coati, clique para editar`);
+    }
+
+    function ligarNomeCoati() {
+        const botao = $('mc-nome-btn');
+        const campo = $('mc-nome-input');
+        if (!botao || !campo) return;
+        mostrarNomeCoati();
+
+        // `fechando` evita que o blur disparado pelo próprio fim da edição entre de
+        // novo aqui — sem ele, Esc gravava o valor cancelado no caminho de volta.
+        let fechando = false;
+
+        const sair = (salvar) => {
+            if (fechando) return;
+            fechando = true;
+            if (salvar) gravarNomeCoati(campo.value.trim().slice(0, NOME_MAX));
+            campo.hidden = true;
+            botao.hidden = false;
+            mostrarNomeCoati();
+            botao.focus();
+            fechando = false;
+        };
+
+        const abrir = () => {
+            campo.value = lerNomeCoati();      // vazio = campo vazio, com o padrão de placeholder
+            campo.placeholder = NOME_PADRAO;
+            botao.hidden = true;
+            campo.hidden = false;
+            campo.focus();
+            campo.select();
+        };
+
+        botao.addEventListener('click', abrir);
+        campo.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); sair(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); sair(false); }
+        });
+        campo.addEventListener('blur', () => sair(true));   // clicar fora confirma
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+        // O nome vem ANTES do carinho: ligarCarinho() depende do <model-viewer>, e o
+        // título não tem nada a ver com o 3D — não pode cair junto se ele faltar.
+        ligarNomeCoati();
         ligarCarinho();   // carinho não depende da economia
         if (!eco) {
             console.warn('[KaIA] coati-economia.js não carregou — tela do coati sem loja.');

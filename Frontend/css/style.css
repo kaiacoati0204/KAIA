@@ -601,6 +601,19 @@ html {
   background: var(--surface);
   border-color: var(--gravata-kinrou);
 }
+
+/* Faixa de cor/textura da matéria: reflete o que o aluno personalizou no perfil.
+   `position:relative` + `overflow:hidden` no card para ela sangrar de ponta a ponta
+   e ainda ser cortada pelo raio da borda. Mais grossa que a do perfil (5px): aqui o
+   card é maior e a faixa é o único sinal da cor na tela. */
+.mission-card { position: relative; overflow: hidden; }
+.mission-faixa {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 8px;
+}
 .mission-card .icon {
   font-size: 3rem;
   margin-bottom: 20px;
@@ -4963,6 +4976,58 @@ body.mc-page .railnav {
 }
 .mc-conteudo { max-width: 1280px; margin: 0 auto; }
 .mc-cabecalho { margin-bottom: 24px; }
+
+/* ---- nome do coati (título editável) ---- */
+/* O botão herda a tipografia do h2: o aluno vê um TÍTULO que dá pra clicar, não um
+   controle de formulário enfiado no cabeçalho. */
+.mc-titulo { display: flex; align-items: center; }
+.mc-nome-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  margin: 0;
+  padding: 2px 8px 2px 4px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.mc-nome-btn:hover { background: var(--bege-veu); }
+.mc-nome-btn:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 2px; }
+#mc-nome { overflow-wrap: anywhere; }
+
+/* O lápis fica fraco até o hover/foco: presente para quem procura, quieto para
+   quem não está mexendo nisso. */
+.mc-nome-lapis {
+  flex: none;
+  color: var(--bege-tinta);
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.mc-nome-btn:hover .mc-nome-lapis,
+.mc-nome-btn:focus-visible .mc-nome-lapis { opacity: 1; }
+
+/* Mesma caixa do botão: ao trocar um pelo outro o título não pula. */
+.mc-nome-input {
+  max-width: 100%;
+  padding: 2px 8px;
+  border: 0;
+  border-bottom: 2px solid var(--azul-coati);
+  border-radius: 10px 10px 0 0;
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+}
+.mc-nome-input:focus { outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-nome-btn, .mc-nome-lapis { transition: none; }
+}
 
 /* ---- saldos ---- */
 .mc-saldos {

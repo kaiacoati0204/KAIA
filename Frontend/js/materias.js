@@ -3426,3 +3426,38 @@ function aceitarPausaDaOferta() {
     atualizarContador();
     _entrarPausa();
 }
+
+// ============================================================
+//  FAIXA DE COR/TEXTURA NOS CARDS DE MATÉRIA (reflexo do perfil)
+// ============================================================
+// Só REFLETE: quem personaliza é o perfil. Nada aqui grava, e nenhum seletor de cor
+// mora nesta tela. Os dados saem de lerCores()/texturaDataUri(), no comum.js.
+//
+// O card guarda o CÓDIGO ("MAT") em data-materia; a personalização é chaveada pelo
+// NOME ("Matemática"), que é como /perfil/estatisticas devolve em por_materia.
+// nomeMateria() faz a ponte.
+function pintarFaixasDasMaterias() {
+    const cards = document.querySelectorAll('.mission-card[data-materia]');
+    if (!cards.length) return;                  // fora da tela de matérias: no-op
+    const escolhas = lerCores();
+    cards.forEach(card => {
+        let faixa = card.querySelector('.mission-faixa');
+        if (!faixa) {
+            faixa = document.createElement('span');
+            faixa.className = 'mission-faixa';
+            faixa.setAttribute('aria-hidden', 'true');   // decorativa: o nome já está no h3
+            card.appendChild(faixa);
+        }
+        // Sem personalização a faixa fica oculta — inventar uma cor aqui afirmaria
+        // uma escolha que o aluno não fez.
+        pintarFaixa(faixa, escolhas[nomeMateria(card.dataset.materia)]);
+    });
+}
+
+// Outra aba (o perfil costuma ficar aberto ao lado) muda a chave -> reflete na hora.
+// `storage` só dispara em OUTRAS abas, então não há laço com a própria escrita.
+window.addEventListener('storage', (e) => {
+    if (e.key === CHAVE_CORES) pintarFaixasDasMaterias();
+});
+
+document.addEventListener('DOMContentLoaded', pintarFaixasDasMaterias);

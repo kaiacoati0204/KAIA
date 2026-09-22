@@ -86,6 +86,91 @@ if (!userId) {
 const lerPerfil    = () => JSON.parse(localStorage.getItem('kaia_perfil') || '{}');
 const gravarPerfil = (p) => localStorage.setItem('kaia_perfil', JSON.stringify(p));
 
+// ============================================================
+//  PERSONALIZAÇÃO DE COR + TEXTURA POR MATÉRIA (perfil e matérias)
+// ============================================================
+// Mora aqui porque DOIS lados usam: o perfil (onde o aluno escolhe) e a tela de
+// matérias (que só reflete na faixa do card). Duplicar levaria os dois a divergir.
+
+// Espelha o dict MATERIAS do backend. O front guarda o CÓDIGO ("MAT") nos onclick e
+// no session_start, mas a chave da personalização é o NOME ("Matemática") — que é o
+// que /perfil/estatisticas devolve em por_materia. Este mapa é a ponte entre os dois.
+const MATERIAS_NOMES = {
+    MAT: 'Matemática', PORT: 'Português', HIS: 'História',
+    GEO: 'Geografia', BIO: 'Biologia', FIS: 'Física',
+    QUI: 'Química', FIL: 'Filosofia', SOC: 'Sociologia',
+};
+const nomeMateria = cod => MATERIAS_NOMES[cod] || cod;
+
+// Mock em localStorage, por aluno. Enquanto não há rota no backend, a escolha vive
+// no dispositivo — some se o aluno trocar de máquina.
+const CHAVE_CORES = `kaia_cores_materia:${userId}`;
+
+function lerCores() {
+    try { return JSON.parse(localStorage.getItem(CHAVE_CORES) || '{}'); }
+    catch (_) { return {}; }
+}
+function gravarCores(mapa) {
+    try { localStorage.setItem(CHAVE_CORES, JSON.stringify(mapa)); }
+    catch (e) { console.warn('[KaIA] não deu para salvar a cor da matéria:', e); }
+}
+
+// ---- TEXTURAS ----
+// Tinta translúcida fixa em vez de uma cor derivada da escolhida: o padrão precisa
+// aparecer sobre QUALQUER cor que o aluno pegue no seletor, inclusive as escuras.
+const TEXTURA_TINTA = 'rgba(43,42,38,0.42)';
+
+// Cada tile é desenhado uma vez e serve aos dois destinos (o <pattern> do gauge no
+// perfil e o background das faixas). Os pontos de entrada e saída de cada desenho
+// batem com as bordas do tile — é o que faz o padrão emendar sem costura visível.
+const TEXTURAS = [
+    { id: 'lisa', nome: 'Lisa (só cor)', w: 8, h: 8, tile: () => '' },
+    { id: 'listras', nome: 'Listras diagonais', w: 8, h: 8,
+      tile: t => `<path d="M-2 2L2 -2M0 8L8 0M6 10L10 6" stroke="${t}" stroke-width="2.6" fill="none"/>` },
+    { id: 'pontos', nome: 'Pontos', w: 7, h: 7,
+      tile: t => `<circle cx="3.5" cy="3.5" r="1.7" fill="${t}"/>` },
+    { id: 'xadrez', nome: 'Xadrez', w: 8, h: 8,
+      tile: t => `<rect width="4" height="4" fill="${t}"/><rect x="4" y="4" width="4" height="4" fill="${t}"/>` },
+    { id: 'linhas', nome: 'Linhas horizontais', w: 6, h: 6,
+      tile: t => `<rect width="6" height="2.6" fill="${t}"/>` },
+    { id: 'grade', nome: 'Grade', w: 8, h: 8,
+      tile: t => `<rect width="8" height="1.7" fill="${t}"/><rect width="1.7" height="8" fill="${t}"/>` },
+    { id: 'ziguezague', nome: 'Ziguezague', w: 8, h: 8,
+      tile: t => `<path d="M0 6L4 2L8 6" stroke="${t}" stroke-width="2.1" fill="none"/>` },
+    { id: 'ondas', nome: 'Ondas', w: 8, h: 8,
+      tile: t => `<path d="M0 5q2 -3.6 4 0t4 0" stroke="${t}" stroke-width="2" fill="none"/>` },
+    { id: 'triangulos', nome: 'Triângulos', w: 10, h: 10,
+      tile: t => `<path d="M5 1.5L9 8.5H1Z" fill="${t}"/>` },
+];
+const acharTextura = id => TEXTURAS.find(t => t.id === id) || TEXTURAS[0];
+
+// Tile como <svg> inteiro -> vira background-image de um elemento HTML (as faixas).
+function texturaDataUri(id, tinta = TEXTURA_TINTA) {
+    const t = acharTextura(id);
+    if (!t.tile(tinta)) return '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${t.w}" height="${t.h}" `
+              + `viewBox="0 0 ${t.w} ${t.h}">${t.tile(tinta)}</svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+// Pinta cor + textura numa faixa já existente. `escolha` é o {cor, textura} salvo;
+// sem escolha a faixa some — nunca inventa uma cor que o aluno não pediu.
+function pintarFaixa(faixa, escolha) {
+    if (!faixa) return false;
+    if (!escolha?.cor) {
+        faixa.hidden = true;
+        faixa.style.backgroundColor = '';
+        faixa.style.backgroundImage = '';
+        return false;
+    }
+    faixa.hidden = false;
+    // backgroundColor + backgroundImage separados: o atalho `background` zeraria a
+    // imagem que acabou de ser posta.
+    faixa.style.backgroundColor = escolha.cor;
+    faixa.style.backgroundImage = texturaDataUri(escolha.textura || 'lisa');
+    return true;
+}
+
 // Hobbies selecionados (sessionStorage 'hobbies'): a página de hobbies grava, e
 // matérias/perfil leem para mandar ao backend (alimentam o prompt da IA).
 const lerHobbies = () => JSON.parse(sessionStorage.getItem('hobbies') || '[]');

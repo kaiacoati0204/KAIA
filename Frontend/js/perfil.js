@@ -132,44 +132,6 @@ async function carregarEstatisticasPerfil() {
 const GAUGE_ARCO = 'M 27.47 92.53 A 46 46 0 1 1 92.53 92.53';
 const GAUGE_VOLTA = 216.77;   // 270/360 · 2πr
 
-// ---- TEXTURAS ----
-// Tinta translúcida fixa em vez de uma cor derivada da escolhida: o padrão precisa
-// aparecer sobre QUALQUER cor que o aluno pegue no seletor, inclusive as escuras.
-const TEXTURA_TINTA = 'rgba(43,42,38,0.42)';
-
-// Cada tile é desenhado uma vez e serve aos dois destinos (o <pattern> do gauge e o
-// background da faixa). Os pontos de entrada e saída de cada desenho batem com as
-// bordas do tile — é o que faz o padrão emendar sem costura visível.
-const TEXTURAS = [
-    { id: 'lisa', nome: 'Lisa (só cor)', w: 8, h: 8, tile: () => '' },
-    { id: 'listras', nome: 'Listras diagonais', w: 8, h: 8,
-      tile: t => `<path d="M-2 2L2 -2M0 8L8 0M6 10L10 6" stroke="${t}" stroke-width="2.6" fill="none"/>` },
-    { id: 'pontos', nome: 'Pontos', w: 7, h: 7,
-      tile: t => `<circle cx="3.5" cy="3.5" r="1.7" fill="${t}"/>` },
-    { id: 'xadrez', nome: 'Xadrez', w: 8, h: 8,
-      tile: t => `<rect width="4" height="4" fill="${t}"/><rect x="4" y="4" width="4" height="4" fill="${t}"/>` },
-    { id: 'linhas', nome: 'Linhas horizontais', w: 6, h: 6,
-      tile: t => `<rect width="6" height="2.6" fill="${t}"/>` },
-    { id: 'grade', nome: 'Grade', w: 8, h: 8,
-      tile: t => `<rect width="8" height="1.7" fill="${t}"/><rect width="1.7" height="8" fill="${t}"/>` },
-    { id: 'ziguezague', nome: 'Ziguezague', w: 8, h: 8,
-      tile: t => `<path d="M0 6L4 2L8 6" stroke="${t}" stroke-width="2.1" fill="none"/>` },
-    { id: 'ondas', nome: 'Ondas', w: 8, h: 8,
-      tile: t => `<path d="M0 5q2 -3.6 4 0t4 0" stroke="${t}" stroke-width="2" fill="none"/>` },
-    { id: 'triangulos', nome: 'Triângulos', w: 10, h: 10,
-      tile: t => `<path d="M5 1.5L9 8.5H1Z" fill="${t}"/>` },
-];
-const _textura = id => TEXTURAS.find(t => t.id === id) || TEXTURAS[0];
-
-// Tile como <svg> inteiro -> vira background-image da faixa (elemento HTML).
-function _texturaDataUri(id, tinta = TEXTURA_TINTA) {
-    const t = _textura(id);
-    if (!t.tile(tinta)) return '';
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${t.w}" height="${t.h}" `
-              + `viewBox="0 0 ${t.w} ${t.h}">${t.tile(tinta)}</svg>`;
-    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-}
-
 let _gaugeSeq = 0;
 
 // Desenha um velocímetro dentro de `slot`. A textura entra como SEGUNDA passada por
@@ -180,7 +142,7 @@ let _gaugeSeq = 0;
 function montarGauge(slot, { valor, cor, textura = 'lisa', rotulo = '', animar = true }) {
     if (!slot) return;
     const pct = Math.max(0, Math.min(100, Number(valor) || 0));
-    const t = _textura(textura);
+    const t = acharTextura(textura);
     const marca = t.tile(TEXTURA_TINTA);
     const id = `tex${++_gaugeSeq}`;
     const falta = GAUGE_VOLTA * (1 - pct / 100);
@@ -213,20 +175,8 @@ function montarGauge(slot, { valor, cor, textura = 'lisa', rotulo = '', animar =
 // ============================================================
 //  PERSONALIZAÇÃO DE COR + TEXTURA POR MATÉRIA
 // ============================================================
-// Mock em localStorage, por aluno (`userId` vem do comum.js). Enquanto não há rota
-// no backend, a escolha vive no dispositivo — some se o aluno trocar de máquina.
-// PENDENTE (Bia): faixa de cor por matéria na tela de estudo (materias) — ler a
-// mesma chave do localStorage que o perfil salva.
-const CHAVE_CORES = `kaia_cores_materia:${typeof userId !== 'undefined' ? userId : 'anon'}`;
-
-function lerCores() {
-    try { return JSON.parse(localStorage.getItem(CHAVE_CORES) || '{}'); }
-    catch (_) { return {}; }
-}
-function gravarCores(mapa) {
-    try { localStorage.setItem(CHAVE_CORES, JSON.stringify(mapa)); }
-    catch (e) { console.warn('[KaIA] não deu para salvar a cor da matéria:', e); }
-}
+// TEXTURAS, texturaDataUri, CHAVE_CORES, lerCores/gravarCores e pintarFaixa moram no
+// comum.js: a tela de matérias lê os mesmos dados para a faixa dos cards.
 
 // ---- Recados por POSIÇÃO na lista (o backend já manda ordenado por acerto desc) ----
 // O da pior matéria é sempre CONVITE, nunca cobrança: quem já vai mal na matéria não
@@ -280,11 +230,9 @@ function _pintarCard(card, item, papel, animar = true) {
     montarGauge(card.querySelector('.gauge-slot'),
                 { valor: item.acerto, cor, textura, rotulo: item.materia, animar });
 
-    // backgroundColor + backgroundImage separados: o atalho `background` zeraria a
-    // imagem que acabou de ser posta.
-    const faixa = card.querySelector('.materia-faixa');
-    faixa.style.backgroundColor = cor;
-    faixa.style.backgroundImage = _texturaDataUri(textura);
+    // Aqui a faixa aparece SEMPRE (cor automática quando não há escolha) — diferente
+    // da tela de matérias, onde sem personalização não há faixa nenhuma.
+    pintarFaixa(card.querySelector('.materia-faixa'), { cor, textura });
     return { cor, textura };
 }
 
@@ -426,7 +374,7 @@ function abrirPaleta(botao, card, item, papel) {
         grupo.querySelectorAll('.tex-chip').forEach((chip, i) => {
             const v = chip.querySelector('.tex-vista');
             v.style.backgroundColor = cor.value;
-            v.style.backgroundImage = _texturaDataUri(TEXTURAS[i].id);
+            v.style.backgroundImage = texturaDataUri(TEXTURAS[i].id);
         });
     };
     const aplicar = () => {
@@ -480,6 +428,8 @@ function abrirPaleta(botao, card, item, papel) {
 // Não dá pra extrair das frases de `analise`: o número vive dentro do texto.
 // Enquanto não vier, a grade fica [hidden] — a regra do "só se existe".
 // Preview local sem backend: abrir perfil.html?mock=1
+// Nomes POR EXTENSO de propósito: é o que o backend devolve depois que a rota passou
+// a traduzir o código por MATERIAS. Mock com 'MAT' aqui esconderia regressão de nome.
 const MOCK_POR_MATERIA = [
     { materia: 'Matemática', acerto: 88 },
     { materia: 'Biologia',   acerto: 74 },

@@ -26,7 +26,24 @@
 
     <main class="main-content mc-conteudo">
         <header class="content-header mc-cabecalho">
-            <h2>Meu Coati</h2>
+            <!-- Título editável: é o NOME que o aluno deu ao bichinho. O rótulo da
+                 railnav continua "Meu Coati" — só este h2 personaliza.
+                 <button> de verdade em vez de span+tabindex: foco, Enter e Espaço
+                 saem de graça e o leitor de tela já anuncia como acionável. -->
+            <h2 class="mc-titulo">
+                <button type="button" id="mc-nome-btn" class="mc-nome-btn">
+                    <span id="mc-nome">Meu Coati</span>
+                    <svg class="mc-nome-lapis" viewBox="0 0 24 24" width="18" height="18"
+                         fill="none" aria-hidden="true">
+                        <path d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"
+                              stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                        <path d="M14.5 6.5 17.5 9.5" stroke="currentColor" stroke-width="1.7"/>
+                    </svg>
+                </button>
+                <input type="text" id="mc-nome-input" class="mc-nome-input"
+                       maxlength="20" autocomplete="off" spellcheck="false"
+                       aria-label="Nome do seu coati" hidden>
+            </h2>
             <p>Dê carinho e comidinhas pro seu mascote com o que você ganha estudando.</p>
         </header>
 

@@ -630,7 +630,12 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
     # Uma conversão só, usada nos dois lugares: a frase de `analise` e o `por_materia`
     # do JSON precisam falar do mesmo dado. Campos explícitos em vez de dict(r) para
     # o contrato da API não depender do nome das colunas da consulta.
-    materias = [{"materia": r["materia"], "acerto": r["acerto"]} for r in por_materia]
+    # MATERIAS traduz o CÓDIGO gravado em session_start ("MAT") para o nome que o aluno
+    # lê ("Matemática"). Sem isso o perfil mostrava o código cru nos cards e na frase
+    # da análise ("Seu melhor tema é MAT"). O nome também é a chave da personalização
+    # de cor/textura no front, então os dois lados têm de falar a mesma língua.
+    materias = [{"materia": MATERIAS.get(r["materia"], r["materia"]), "acerto": r["acerto"]}
+                for r in por_materia]
     if base and base["sessoes"]:
         # acerto só existe se houve questão respondida. `None` (e não 0%) quando o
         # aluno abriu sessões mas não respondeu nada: 0% afirmaria que ele errou

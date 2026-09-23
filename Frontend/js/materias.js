@@ -1404,6 +1404,10 @@ function registrarSensores() {
     // --- mouse: zera ociosidade + captura 1ª interação e o trajeto (features de mouse) ---
     quizView?.addEventListener('mousemove', (e) => {
         if (!isMissionActive) return;
+        // Arrastar a divisória questão|caderno é um traço horizontal longo e reto que
+        // entraria no mouse_track como trajeto de estudo — e não é. Ajustar a tela é
+        // preparar o ambiente, não resolver a questão.
+        if (redimensionandoSplit) return;
         idleTime = 0;
         mexeuDesdeUltimoTick = true;
         setEstado('ESTUDANDO');
@@ -3012,6 +3016,7 @@ function toggleCaderno() {
     painel.hidden = !abrindo;
     if (botao) botao.setAttribute('aria-pressed', String(abrindo));
     if (abrindo) carregarCaderno(currentTema);
+    sincronizarAlca();   // sem caderno aberto não há divisória
 }
 
 // Troca o canvas para um tema (salva o anterior antes, se estiver sujo).
@@ -3478,3 +3483,108 @@ window.addEventListener('storage', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', pintarFaixasDasMaterias);
+
+// ============================================================
+//  ALÇA DE REDIMENSIONAR (divisória questão | caderno)
+// ============================================================
+// Só mexe no layout do .quiz-split. Não toca em fluxo de questão nem grava evento —
+// a única linha fora daqui é a guarda em registrarSensores(), que impede o arrasto
+// de entrar no mouse_track como trajeto de estudo.
+const SPLIT_MIN = 28;                    // % mínimo de cada lado: nenhum dos dois some
+const SPLIT_PADRAO = 50;
+const SPLIT_BP = 820;                    // abaixo disso o split vira coluna (CSS)
+const SPLIT_PASSO = 2;                   // % por tecla de seta
+const splitChave = () => `kaia_split_quiz:${userId}`;
+
+// Lida pelo sensor de mousemove: true só enquanto o ponteiro arrasta a divisória.
+let redimensionandoSplit = false;
+
+function lerSplit() {
+    const n = parseFloat(localStorage.getItem(splitChave()));
+    return Number.isFinite(n) ? Math.min(100 - SPLIT_MIN, Math.max(SPLIT_MIN, n)) : SPLIT_PADRAO;
+}
+
+function aplicarSplit(pct, salvar) {
+    const lado = document.querySelector('.quiz-lado-questao');
+    const caderno = $('caderno');
+    if (!lado || !caderno) return;
+    const v = Math.min(100 - SPLIT_MIN, Math.max(SPLIT_MIN, pct));
+    // flex-basis em % + flex-grow 0: o gap continua sendo do flex, então os dois lados
+    // somam menos de 100% da linha e nada estoura.
+    lado.style.flex = `0 0 ${v}%`;
+    caderno.style.flex = `0 0 ${100 - v - 2}%`;
+    $('quiz-alca')?.setAttribute('aria-valuenow', Math.round(v));
+    if (salvar) {
+        try { localStorage.setItem(splitChave(), String(Math.round(v))); } catch (_) {}
+    }
+}
+
+// Chamada ao abrir/fechar o caderno: sem caderno não há o que dividir.
+function sincronizarAlca() {
+    const alca = $('quiz-alca');
+    const caderno = $('caderno');
+    if (!alca || !caderno) return;
+    const aberto = !caderno.hidden;
+    alca.hidden = !aberto;
+    if (aberto) aplicarSplit(lerSplit(), false);
+    else {
+        // Devolve o layout ao CSS: fechado, a questão ocupa 100% por conta própria.
+        document.querySelector('.quiz-lado-questao')?.style.removeProperty('flex');
+        caderno.style.removeProperty('flex');
+    }
+}
+
+function ligarAlcaSplit() {
+    const alca = $('quiz-alca');
+    const split = document.querySelector('.quiz-split');
+    if (!alca || !split) return;
+
+    alca.setAttribute('aria-valuemin', SPLIT_MIN);
+    alca.setAttribute('aria-valuemax', 100 - SPLIT_MIN);
+
+    const pctDoPonteiro = (clientX) => {
+        const r = split.getBoundingClientRect();
+        return r.width ? ((clientX - r.left) / r.width) * 100 : SPLIT_PADRAO;
+    };
+
+    alca.addEventListener('pointerdown', (e) => {
+        // Abaixo do breakpoint o split é coluna e a alça está oculta; a checagem fica
+        // por garantia (o CSS pode mudar antes do JS perceber).
+        if (window.innerWidth <= SPLIT_BP) return;
+        e.preventDefault();                       // sem isso o arrasto vira seleção de texto
+        redimensionandoSplit = true;
+        alca.setPointerCapture(e.pointerId);
+        alca.classList.add('arrastando');
+        document.body.classList.add('split-arrastando');
+    });
+
+    alca.addEventListener('pointermove', (e) => {
+        if (!redimensionandoSplit) return;
+        aplicarSplit(pctDoPonteiro(e.clientX), false);   // grava só no fim do arrasto
+    });
+
+    const soltar = (e) => {
+        if (!redimensionandoSplit) return;
+        redimensionandoSplit = false;
+        try { alca.releasePointerCapture(e.pointerId); } catch (_) {}
+        alca.classList.remove('arrastando');
+        document.body.classList.remove('split-arrastando');
+        aplicarSplit(pctDoPonteiro(e.clientX), true);
+    };
+    alca.addEventListener('pointerup', soltar);
+    alca.addEventListener('pointercancel', soltar);
+
+    // Teclado: quem não usa mouse também ajusta.
+    alca.addEventListener('keydown', (e) => {
+        const passo = e.key === 'ArrowLeft' ? -SPLIT_PASSO : e.key === 'ArrowRight' ? SPLIT_PASSO : 0;
+        if (passo) { e.preventDefault(); aplicarSplit(lerSplit() + passo, true); }
+        else if (e.key === 'Home') { e.preventDefault(); aplicarSplit(SPLIT_PADRAO, true); }
+    });
+
+    // Voltar do celular para o desktop: o CSS reativa a linha, o inline volta a valer.
+    window.addEventListener('resize', () => { if (!$('caderno')?.hidden) sincronizarAlca(); });
+
+    sincronizarAlca();
+}
+
+document.addEventListener('DOMContentLoaded', ligarAlcaSplit);

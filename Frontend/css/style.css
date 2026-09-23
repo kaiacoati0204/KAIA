@@ -3556,6 +3556,44 @@ body.kaia-reancorar .option-btn {
   display: none;
 }
 
+/* ---- alça de redimensionar (divisória questão | caderno) ---- */
+/* Fina e quase invisível em repouso: é ferramenta, não decoração. O traço só ganha
+   cor no hover/foco/arrasto, quando o aluno já está mirando nela. */
+.quiz-alca {
+  flex: 0 0 10px;
+  align-self: stretch;
+  position: relative;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: col-resize;
+  touch-action: none;   /* o pointermove é nosso; sem isto o navegador rola a página */
+}
+.quiz-alca[hidden] { display: none; }
+.quiz-alca::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(var(--bege-rgb), 0.5);
+  transition: background 0.15s;
+}
+.quiz-alca:hover::before,
+.quiz-alca.arrastando::before { background: var(--azul-coati); }
+.quiz-alca:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 2px; }
+
+/* Durante o arrasto o cursor não pode "pular" ao passar sobre texto, e nada deve
+   ser selecionado sem querer. */
+body.split-arrastando { cursor: col-resize; user-select: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .quiz-alca::before { transition: none; }
+}
+
 .caderno-cabecalho {
   display: flex;
   justify-content: space-between;
@@ -3681,6 +3719,11 @@ body.kaia-reancorar .option-btn {
   .quiz-split {
     flex-direction: column;
   }
+  /* Coluna: não há divisória vertical pra arrastar. !important vence o flex inline
+     que o JS escreve, devolvendo os dois lados à largura cheia. */
+  .quiz-alca { display: none; }
+  .quiz-split .quiz-lado-questao,
+  .quiz-split .caderno:not([hidden]) { flex: 1 1 auto !important; }
 }
 
 /* =========================

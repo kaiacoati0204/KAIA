@@ -130,6 +130,15 @@
                             onclick="reportarQuestao()">Reportar problema nesta questão</button>
                 </div>
 
+                <!-- Divisória arrastável questão|caderno. role=separator + tabindex: quem
+                     não usa mouse redimensiona pelas setas. Só existe com o caderno
+                     aberto (o JS espelha o [hidden] do #caderno) e some abaixo de 820px,
+                     onde o split vira coluna. -->
+                <div id="quiz-alca" class="quiz-alca" role="separator"
+                     aria-orientation="vertical" tabindex="0"
+                     aria-label="Divisória entre a questão e o caderno. Use as setas para a esquerda e direita para redimensionar."
+                     hidden></div>
+
                 <aside id="caderno" class="caderno" hidden>
                     <div class="caderno-cabecalho">
                         <span class="caderno-titulo" id="caderno-tema">Caderno</span>

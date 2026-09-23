@@ -2952,7 +2952,10 @@ class PausaIn(BaseModel):
 # efeito MAIOR nos mais novos. Adolescente fica entre os dois - espere ~0,3, nao 0,65.
 # Qual plano mostrar sai de uma REGRA sobre a feature dominante, nao do modelo: com ~20
 # observacoes por braco, variar o texto dentro do braco so somaria ruido.
-# (feature, corte, teto, texto). O TETO existe porque comparar `feature / corte` entre features
+# (feature, corte, teto, texto). O "se" e um evento que o aluno RECONHECE acontecendo, nao um
+# estado interno vago: "More or better" (Wageningen) achou que o NUMERO de planos nao preve
+# nada e a ESPECIFICIDADE preve, com o "quando agir" sendo o que mais pesa. Por isso um plano
+# por vez, e o gatilho contavel. O TETO existe porque comparar `feature / corte` entre features
 # de escalas diferentes nao diz nada: `frac_rapidas` vai ate 1,0 (razao max 2,5) e
 # `minutos_sessao` nao tem limite — numa sessao de 90 min ela ganharia de tudo por construcao,
 # nao por ser o que mais pesa. O escore virou "quanto ele andou DENTRO da propria zona de
@@ -2960,11 +2963,11 @@ class PausaIn(BaseModel):
 # centrado em 3 = 2); o de minutos e calibragem: 50 min = o dobro do corte.
 PLANOS = {
     "dificuldade": ("dificuldade_recente", 0.5, 2.0,
-                    "Se vier uma questão difícil, então leio o enunciado de novo antes de escolher."),
+                    "Se eu não souber por onde começar, então releio o enunciado antes de escolher."),
     "pressa": ("frac_rapidas_recentes", 0.4, 1.0,
-               "Se eu me pegar respondendo rápido demais, então releio a pergunta antes de marcar."),
+               "Se eu for marcar sem ter lido todas as alternativas, então leio todas antes de escolher."),
     "cansaco": ("minutos_sessao", 25.0, 50.0,
-                "Se eu sentir cansaço, então faço mais 3 questões e paro por hoje."),
+                "Se eu reler a mesma linha duas vezes, então faço mais 3 questões e paro por hoje."),
     "erros": ("queda_acerto_recente", 0.3, 1.0,
               "Se eu errar duas seguidas, então leio a explicação com calma antes de seguir."),
 }

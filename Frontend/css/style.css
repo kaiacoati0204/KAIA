@@ -3720,6 +3720,62 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
 }
 
 /* Fundo pontilhado BEGE: pontos discretos de --tinta sobre --card. */
+/* ---- paleta de símbolos (caderno, só MAT/FIS) ---- */
+/* Recolhida por padrão: quem não precisa de símbolo não perde área de escrita. */
+.cad-simbolos {
+  margin-bottom: 8px;
+  border: 1px solid rgba(var(--bege-rgb), 0.4);
+  border-radius: 10px;
+  background: var(--card);
+}
+.cad-simbolos[hidden] { display: none; }
+.cad-simbolos > summary {
+  padding: 7px 12px;
+  color: var(--profundo);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+/* Triângulo próprio: o marcador nativo muda de desenho a cada navegador. */
+.cad-simbolos > summary::-webkit-details-marker { display: none; }
+.cad-simbolos > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 7px;
+  color: var(--bege-tinta);
+  transition: transform 0.15s;
+}
+.cad-simbolos[open] > summary::before { transform: rotate(90deg); }
+.cad-simbolos > summary:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: -2px; border-radius: 10px; }
+
+/* auto-fill: acompanha a largura que a alça der ao caderno, sem quebrar em coluna única. */
+.cad-simbolos-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 4px;
+  padding: 0 8px 8px;
+}
+.cad-simbolo {
+  min-height: 32px;
+  padding: 2px;
+  border: 1px solid rgba(var(--bege-rgb), 0.4);
+  border-radius: 8px;
+  background: var(--marfim);
+  color: var(--profundo);
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.cad-simbolo:hover { background: var(--bege-veu); border-color: var(--azul-coati); }
+.cad-simbolo:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cad-simbolos > summary::before, .cad-simbolo { transition: none; }
+}
+
 .caderno-canvas {
   position: relative;
   flex: 1 1 auto;

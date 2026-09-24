@@ -114,7 +114,7 @@ async function criarConta(event) {
     const nome  = $('cad-nome')?.value.trim() || '';
     const email = $('cad-email')?.value.trim() || '';
     const senha = $('cad-senha')?.value || '';
-    const nasc  = $('cad-nascimento')?.value || '';
+    const nasc  = dataNascimentoISO();   // três selects -> 'AAAA-MM-DD', como era antes
     const erro  = $('cad-erro');
     const okmsg = $('cad-ok');
     const falhar = (msg) => { if (erro) erro.textContent = msg; if (okmsg) okmsg.textContent = ''; };
@@ -122,7 +122,7 @@ async function criarConta(event) {
     falhar('');
     if (!nome || !email || !senha) return falhar('Preencha nome, email e senha.');
     if (!nasc) return falhar('Informe sua data de nascimento.');
-    if (!idadeValida(nasc)) return falhar('Confira a data de nascimento.');
+    if (!dataNascimentoReal(nasc) || !idadeValida(nasc)) return falhar('Confira a data de nascimento.');
     if (!$('cad-termos')?.checked) return falhar('É preciso aceitar os termos para criar a conta.');
     if (senha.length < 6) return falhar('A senha precisa ter ao menos 6 caracteres.');
     if (!window.supabaseClient) return falhar('Cadastro indisponível (config.js sem Supabase).');
@@ -329,3 +329,71 @@ async function mostrarLinkResponsavel() {
         return false;
     }
 }
+
+// ---- Data de nascimento em três selects (só no cadastro) ----
+// Substitui o <input type="date">: para NASCIMENTO o calendário nativo abre no mês
+// atual e obriga a voltar centenas de meses. Três dropdowns é o que Google e
+// Instagram usam, e é a forma acessível (o <select> nativo funciona com teclado e
+// leitor de tela em qualquer navegador).
+//
+// O antigo min/max saiu daqui: o limite 1900..hoje agora É a lista de anos. Quem
+// decide continua sendo o idadeValida()/ehMenor() no envio — este arquivo só monta
+// a string ISO que eles sempre receberam.
+const MESES_NASCIMENTO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+                          'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const ANO_NASCIMENTO_MIN = 1900;
+
+// Monta 'AAAA-MM-DD' com zero à esquerda. Devolve '' se faltar qualquer um dos três —
+// é o que faz o criarConta cair no "Informe sua data de nascimento".
+function dataNascimentoISO() {
+    const d = $('cad-dia')?.value || '';
+    const m = $('cad-mes')?.value || '';
+    const a = $('cad-ano')?.value || '';
+    if (!d || !m || !a) return '';
+    return `${a}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// 31/02 existe como string mas não como data. E o Date NÃO recusa: medido no Chrome,
+// new Date('2008-02-31T00:00:00') devolve 2 de MARÇO, calado — a conta seria criada com
+// uma data que o aluno não escolheu. Só a ida e volta pelos componentes denuncia isso.
+function dataNascimentoReal(iso) {
+    const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    if (!partes) return false;
+    const ano = +partes[1], mes = +partes[2], dia = +partes[3];
+    const d = new Date(ano, mes - 1, dia);
+    return d.getFullYear() === ano && d.getMonth() === mes - 1 && d.getDate() === dia;
+}
+
+function montarSelectsNascimento() {
+    const dia = $('cad-dia'), mes = $('cad-mes'), ano = $('cad-ano');
+    if (!dia || !mes || !ano) return;        // login.html não tem estes campos
+
+    const opcao = (valor, texto) => {
+        const o = document.createElement('option');
+        o.value = valor;
+        o.textContent = texto;
+        return o;
+    };
+
+    // 1..31 fixo: recortar os dias por mês obrigaria a remontar a lista (e a apagar a
+    // escolha do aluno) a cada troca de mês. 31/02 é barrado na validação.
+    for (let i = 1; i <= 31; i++) dia.appendChild(opcao(i, i));
+    MESES_NASCIMENTO.forEach((nome, i) => mes.appendChild(opcao(i + 1, nome)));
+    // Decrescente: quem está se cadastrando nasceu perto do topo da lista. O ano de
+    // cima é o ATUAL, calculado em runtime — um número fixo envelheceria sozinho.
+    for (let a = new Date().getFullYear(); a >= ANO_NASCIMENTO_MIN; a--) ano.appendChild(opcao(a, a));
+
+    // Aviso na hora de escolher, em vez de só no envio. Reaproveita o #cad-erro (é onde
+    // a pessoa já olha) e só limpa a própria mensagem, para não apagar outro erro.
+    const AVISO = 'Confira sua data de nascimento.';
+    const conferir = () => {
+        const erro = $('cad-erro');
+        if (!erro) return;
+        const iso = dataNascimentoISO();
+        if (iso && (!dataNascimentoReal(iso) || !idadeValida(iso))) erro.textContent = AVISO;
+        else if (erro.textContent === AVISO) erro.textContent = '';
+    };
+    [dia, mes, ano].forEach(s => s.addEventListener('change', conferir));
+}
+
+document.addEventListener('DOMContentLoaded', montarSelectsNascimento);

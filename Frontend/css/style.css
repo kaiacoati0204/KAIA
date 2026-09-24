@@ -263,6 +263,72 @@ html {
 .grupo-input input::placeholder {
   color: rgba(var(--profundo-rgb), 0.5);
 }
+
+/* ---- data de nascimento em três selects ---- */
+/* <fieldset> zerado: ele é semântica (agrupa os três campos numa pergunta só), não
+   deve trazer a moldura que o navegador desenha por padrão. */
+.grupo-data {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.grupo-data legend {
+  padding: 0;
+  margin-bottom: 10px;
+  color: var(--profundo);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+/* Proporções medidas, não estimadas: dentro dos 298px úteis da .caixa-login (400px
+   menos o respiro do card), "setembro" pede 75px de texto, "2026" 41px e "Dia" 25px.
+   Daí 0.8 / 1.42 / 1 — com as três iguais, o mês cortava. minmax(0,…) para o select
+   poder encolher abaixo do conteúdo em vez de estourar a linha. */
+.data-campos {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.42fr) minmax(0, 1fr);
+  gap: 8px;
+}
+/* Mesma caixa dos <input> do cadastro. appearance:none tira o estilo do sistema
+   (que ignora border-radius no Windows) e a seta vem de um SVG inline nosso. */
+.data-campos select {
+  width: 100%;
+  /* 18px em cima/baixo iguala a altura dos <input> ao lado. Na horizontal é apertado
+     de propósito: são três caixas em 298px, e o padding antigo (58px por caixa) comia
+     174px só de respiro — o texto de todas as três cortava. */
+  padding: 18px 26px 18px 13px;
+  border-radius: 18px;
+  border: 1px solid rgba(var(--profundo-rgb), 0.14);
+  background-color: rgba(var(--card-rgb), 0.85);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%231a2b4c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  transition: 0.3s ease;
+}
+/* Mesmo foco azul-coati dos inputs (o dourado sobre claro dá 1,3:1 e sumiria). */
+.data-campos select:focus-visible {
+  border-color: var(--azul-coati);
+  background-color: rgba(var(--card-rgb), 0.97);
+  box-shadow: 0 0 0 3px rgba(var(--azul-coati-rgb), 0.18);
+}
+/* A opção-rótulo ("Dia", "Mês", "Ano") lê como placeholder enquanto nada foi
+   escolhido — mesmo tom do ::placeholder dos inputs ao lado. */
+.data-campos select:has(option[value=""]:checked) {
+  color: rgba(var(--profundo-rgb), 0.5);
+}
+
+@media (max-width: 420px) {
+  .data-campos select { padding: 16px 24px 16px 11px; font-size: 0.95rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-campos select { transition: none; }
+}
 /* Foco em azul-coati e não no dourado: o indicador de foco é componente de UI
    (WCAG pede 3:1) e o dourado sobre claro entrega 1.3:1 — sumiria justo para
    quem navega por teclado. */
@@ -376,23 +442,58 @@ html {
 }
 
 /* Páginas legais (termos, privacidade) — fundo claro, leitura confortável. */
+/* Página de leitura longa (termos, privacidade): o texto é jurídico e para ser lido
+   com calma, então a régua aqui é legibilidade, não densidade. */
 .pagina-legal {
   max-width: 760px;
   margin: 0 auto;
-  padding: 48px 24px 80px;
+  padding: 48px 24px 96px;
   color: var(--tinta);
-  line-height: 1.65;
+  line-height: 1.75;
 }
+/* Medida de leitura: ~68 caracteres por linha (medido, não estimado). Em px e não em
+   `ch` porque o "0" do Plus Jakarta Sans é largo — 66ch dava 712px, mais que a coluna
+   inteira, e a regra não surtia efeito nenhum. O container segue em 760px: título e
+   faixa de aviso usam a largura cheia, só o corpo do texto estreita. */
+.pagina-legal p,
+.pagina-legal li {
+  max-width: 648px;
+}
+.pagina-legal p { margin: 0 0 14px; }
+.pagina-legal ul { margin: 0 0 14px; padding-left: 22px; }
+.pagina-legal li { margin-bottom: 8px; }
+
 .pagina-legal h1 {
   margin-bottom: 8px;
   font-size: 2rem;
   color: var(--profundo);
 }
+/* O respiro ANTES do título é o que separa as seções: 48px acima contra 10px abaixo
+   amarra o título ao próprio texto, em vez de deixá-lo boiando entre dois blocos. */
 .pagina-legal h2 {
-  margin: 28px 0 8px;
-  font-size: 1.2rem;
+  margin: 48px 0 10px;
+  font-size: 1.3rem;
+  line-height: 1.3;
   color: var(--profundo);
+  scroll-margin-top: 24px;
 }
+/* Filete curto em bege: marca o começo da seção sem virar mais uma linha cheia
+   atravessando a página (são 13 seções — uma régua em cada viraria grade). */
+.pagina-legal h2::before {
+  content: "";
+  display: block;
+  width: 34px;
+  height: 3px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: var(--bege-forte);
+}
+
+/* Os pontos que mais importam (menor de 18, IA pode errar, sem promessa de resultado)
+   já vinham em <strong> no texto. Escurecer é o destaque — fundo colorido viraria
+   marca-texto e, com 22 ocorrências na privacidade, poluiria a página. */
+.pagina-legal strong { color: var(--profundo); }
+
 .pagina-legal .aviso-placeholder {
   margin: 16px 0 28px;
   padding: 14px 16px;

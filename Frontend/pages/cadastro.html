@@ -67,10 +67,26 @@
 
             <!-- Data de nascimento: é ela que diz se o cadastro precisa da autorização de um
                  responsável (LGPD art. 14). Sem ela não dá para saber, e o beta coleta comportamento. -->
-            <div class="grupo-input">
-                <label for="cad-nascimento">Data de nascimento</label>
-                <input id="cad-nascimento" type="date" autocomplete="bday">
-            </div>
+            <!-- Três selects em vez de <input type="date">: para NASCIMENTO o calendário
+                 nativo é ruim (abre no mês atual e obriga a voltar mês a mês por ~200
+                 meses). O limite 1900..hoje vira consequência das opções do <select>, e
+                 não precisa mais de min/max. O login.js remonta a data ISO a partir daqui;
+                 idadeValida() e ehMenor() continuam recebendo o mesmo formato de antes.
+                 <fieldset>/<legend> porque os três campos são UMA pergunta só. -->
+            <fieldset class="grupo-input grupo-data">
+                <legend>Data de nascimento</legend>
+                <div class="data-campos">
+                    <select id="cad-dia" autocomplete="bday-day" aria-label="Dia do nascimento">
+                        <option value="">Dia</option>
+                    </select>
+                    <select id="cad-mes" autocomplete="bday-month" aria-label="Mês do nascimento">
+                        <option value="">Mês</option>
+                    </select>
+                    <select id="cad-ano" autocomplete="bday-year" aria-label="Ano do nascimento">
+                        <option value="">Ano</option>
+                    </select>
+                </div>
+            </fieldset>
 
             <div class="grupo-termos">
                 <input id="cad-termos" type="checkbox">

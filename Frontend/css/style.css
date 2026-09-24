@@ -510,6 +510,118 @@ html {
   text-decoration: none;
 }
 
+
+/* =========================
+   LUMINOSIDADE / TEMA DO FUNDO (perfil > Configurações)
+========================= */
+/* Quatro opções: os dois primeiros são a MARCA (marfim e uma variação neutra dele);
+   os dois últimos são SKINS extras que o aluno escolhe para variar — não seguem o
+   60-30-10 e não são cores oficiais.
+   Troca tokens em vez de filter/brightness: o filtro lavaria texto e ícones junto.
+
+   Nos dois temas coloridos o fundo da PÁGINA é médio (luminância ~0,32 e ~0,37),
+   então o texto tem de ser escuro — texto claro sumiria. E o card fica CLARO, um tom
+   pálido do próprio tema: é onde mora quase todo o texto, e mantém a mesma lógica do
+   projeto (card mais claro que a página).
+
+   CONTRASTE medido par a par (7 tokens de texto x 3 superfícies) e depois auditado no
+   browser elemento a elemento: o pior par fica em 4,60:1, acima do 4,5:1 da WCAG AA.
+   Os tokens secundários (muted, bege-tinta, acerto-tx, alerta-tx, azul-coati) tiveram
+   de escurecer MUITO nesses temas — sobre o azul, o #7d5f45 original dava 1,8:1.
+   Escureci mantendo o matiz (HLS), então verde segue verde e âmbar segue âmbar. */
+
+/* 1 — Padrão: o marfim da marca. Não redeclara nada. */
+
+/* 2 — Neutro: o mesmo papel, menos amarelo. */
+html[data-luz="2"] {
+  --marfim: #f1eee9;
+  --card: #f7f4f0;
+  --card-rgb: 247, 244, 240;
+  --creme-bg: #ebe7e1;
+}
+
+/* 3 — Azul suave (skin) */
+/* Azul-marinho acinzentado: matiz 222° e saturação 26%, contra os 234°/50% do lilás
+   que veio antes — bem menos roxo, como pedido.
+   A claridade, porém, é o que o contraste cobra. O #6f81ab pedido tem luminância 0,220,
+   e nele nenhum texto escuro chega a 4,5:1 sem ser quase preto (o teto é 0,010 — preto
+   puro dá só 5,40, e o projeto não usa #000). Em matérias isso pesa: o .content-header
+   não tem fundo próprio, então o subtítulo fica direto sobre a cor do tema e daria 3,58.
+   Este #8897ba é o tom MAIS ESCURO da mesma família que ainda passa — mesmo matiz e
+   mesma saturação, só 6% mais claro. */
+html[data-luz="3"] {
+  --marfim: #8897ba;
+  --card: #dde3ee;
+  --card-rgb: 221, 227, 238;
+  --creme-bg: #b3bfd6;
+  --surface: #d2dae8;
+  --azul-nevoa: #b3bfd6;
+  --profundo: #1a2340;
+  --profundo-rgb: 26, 35, 64;
+  --tinta: #232a4d;
+  --muted: #302d29;
+  --bege-tinta: #392c20;
+  --acerto-tx: #1a3420;
+  --alerta-tx: #382c09;
+  --azul-coati: #1a2b60;
+  --azul-coati-rgb: 26, 43, 96;
+  /* bordas e o trilho do velocímetro leem daqui; o bege original destoaria do azul */
+  --bege-rgb: 123, 136, 168;
+  --bege-forte: #6f7da0;
+  --acerto-bg: #ccd7d2;
+  --alerta-bg: #ddd8c4;
+}
+
+/* 4 — Cinza-pedra (skin) */
+html[data-luz="4"] {
+  --marfim: #a9a29a;
+  --card: #e6e3df;
+  --card-rgb: 230, 227, 223;
+  --creme-bg: #c7c2bb;
+  --surface: #dcd8d2;
+  --azul-nevoa: #c7c2bb;
+  --profundo: #1f1d18;
+  --profundo-rgb: 31, 29, 24;
+  --tinta: #2b2820;
+  --muted: #3b3834;
+  --bege-tinta: #463527;
+  --acerto-tx: #203f27;
+  --alerta-tx: #44350b;
+  --azul-coati: #1f3473;
+  --azul-coati-rgb: 31, 52, 115;
+  --bege-rgb: 142, 136, 128;
+  --bege-forte: #8e8880;
+  --acerto-bg: #d5ddd2;
+  --alerta-bg: #e2dac6;
+}
+
+/* ---- o controle, nas Configurações do perfil ---- */
+.linha-luz { flex-wrap: wrap; gap: 12px; }
+.luz-controle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.luz-nivel {
+  min-width: 92px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+.luz-escala {
+  width: 148px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  accent-color: var(--azul-coati);
+  cursor: pointer;
+}
+.luz-escala:focus-visible {
+  outline: 2px solid var(--azul-coati);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
 /* =========================
    HOBBIES
 ========================= */
@@ -1262,10 +1374,13 @@ html {
   letter-spacing: -1px;
   color: var(--azul-coati);
 }
+/* --bege-tinta e não --bege: o bege puro dá 2,2:1 sobre o card e reprova em AA como
+   texto (o próprio bloco dos tokens bege diz isso). Achado na auditoria de contraste
+   dos temas — já reprovava no marfim padrão, e nos temas coloridos caía para 1,9:1. */
 .card-perfil p {
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--bege);
+  color: var(--bege-tinta);
 }
 
 .secao-perfil {

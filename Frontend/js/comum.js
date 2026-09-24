@@ -414,10 +414,25 @@ function aplicarTexturaPapel() {
     document.body.classList.toggle('textura-papel', localStorage.getItem('kaia_textura_papel') === '1');
 }
 
+// Luminosidade do fundo (perfil > Configurações). Escolha por dispositivo, como a
+// textura. No <html> e não no <body> porque os tokens vivem no :root — e daí valem
+// para a página inteira, inclusive o degradê que mora na raiz (mc-page, ep-page).
+const LUZ_PADRAO = 1;       // 1 é o marfim da marca
+const LUZ_MAX = 4;          // 1 padrão · 2 neutro · 3 lavanda · 4 cinza-pedra
+function aplicarLuzFundo() {
+    const n = parseInt(localStorage.getItem('kaia_luz_fundo'), 10);
+    // Fora da faixa cai no padrão — cobre lixo no storage e preferências salvas
+    // enquanto a escala tinha outra ordem.
+    const nivel = (n >= 1 && n <= LUZ_MAX) ? n : LUZ_PADRAO;
+    document.documentElement.dataset.luz = nivel;
+    return nivel;
+}
+
 // Roda em toda página (comum.js é carregado em todas). Ambas se auto-protegem:
 // sem <body data-rail> a rail é no-op — seguro em login/cadastro.
 document.addEventListener('DOMContentLoaded', () => {
     montarRail();
     ativarDockRail();      // só efeito visual, depois da rail montada; se falhar, avisa e segue
     aplicarTexturaPapel();
+    aplicarLuzFundo();
 });

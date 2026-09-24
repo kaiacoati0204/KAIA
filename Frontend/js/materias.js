@@ -1579,6 +1579,19 @@ let filaQuestoes     = [];
 let filaChave        = null;   // `${materia}::${tema}` do buffer em memória
 let loteBloqueadoAte = 0;      // enquanto performance.now() < isto, não re-chama o backend
 let hobbiesSessao    = [];     // 2 hobbies sorteados por sessão (variedade sem trocar de tema a cada questão)
+
+// ==== SIMULADO ====
+// Rodada que varre temas (e matérias, no geral) em vez de ficar num tema só. Níveis
+// espalhados 1..5 pelo backend, como prova real. O resultado NÃO move o nível do aluno:
+// o simulado MEDE, quem ajusta é a rodada normal — e no geral o nível é por matéria,
+// então uma prova ruim não pode derrubar todas de uma vez. Sai no reload do resumo.
+let modoSimulado = null;   // null | {escopo:'geral'} | {escopo:'materia', materia}
+
+// No simulado a fila é uma só para todas as faixas; fora dele, uma por matéria+tema.
+function chaveFila(subject, tema) {
+    return modoSimulado ? `SIM::${modoSimulado.escopo}::${modoSimulado.materia || ''}`
+                        : `${subject}::${tema}`;
+}
 const LOTE_COOLDOWN_MS  = 120000;   // após uma falha (ex.: cota estourada), 2 min sem re-tentar
 
 // Debug opcional da dificuldade (só no console do dev): kaiaDebug(true) liga e persiste.
@@ -1634,6 +1647,13 @@ function embaralhar(arr) {
 // Busca UM buffer no backend e devolve as questões válidas (ou [] em falha silenciosa).
 // Envia os 2 hobbies da sessão; o backend faz rodízio deles por faixa.
 async function buscarBufferQuestoes(subject, tema) {
+    if (modoSimulado) {
+        const data = await postJSON('/gerar-simulado', {
+            escopo: modoSimulado.escopo, materia: modoSimulado.materia || null,
+            quantidade: META_QUESTOES, user_id: userId,
+        });
+        return (data?.questoes || []).filter(q => q && Array.isArray(q.opts));
+    }
     const dist = sortearDistribuicao(nivelDificuldade);
     _dbg(`buffer pedido: centro ${nivelDificuldade}, distribuição`, dist);
     const data = await postJSON('/gerar-questao', {
@@ -1648,7 +1668,7 @@ async function buscarBufferQuestoes(subject, tema) {
 }
 
 async function obterProximaQuestao(subject, tema) {
-    const chave = `${subject}::${tema}`;
+    const chave = chaveFila(subject, tema);
     if (filaChave !== chave) { devolverFila(); filaChave = chave; }   // tema novo → devolve o buffer antigo
     if (!filaQuestoes.length) {
         // Fronteira: espera a fila encher (compartilha o preenchimento do prefetch, se
@@ -1672,10 +1692,10 @@ function garantirFila(subject, tema) {
     _fillPromise = (async () => {
         try {
             for (let i = 0; i < 3 && filaQuestoes.length < META_QUESTOES; i++) {
-                if (filaChave !== `${subject}::${tema}`) break;    // trocou de tema
+                if (filaChave !== chaveFila(subject, tema)) break;    // trocou de tema
                 const novas = await buscarBufferQuestoes(subject, tema);
                 if (!novas.length) break;
-                if (filaChave === `${subject}::${tema}`) filaQuestoes.push(...novas);
+                if (filaChave === chaveFila(subject, tema)) filaQuestoes.push(...novas);
             }
             loteBloqueadoAte = 0;
         } catch (e) {
@@ -1689,7 +1709,7 @@ function garantirFila(subject, tema) {
 // Decide SE vale encher agora (fim de rodada = força a próxima; durante a rodada =
 // só se o buffer veio curto) e delega pro garantirFila (que nunca duplica).
 function talvezReabastecerFila(subject, tema, forcar = false) {
-    if (filaChave !== `${subject}::${tema}`) return;
+    if (filaChave !== chaveFila(subject, tema)) return;
     if (filaQuestoes.length >= META_QUESTOES) return;                        // já cheia
     // +1 conta a questão em tela (já saiu da fila, ainda não foi respondida).
     if (!forcar && questoesNaRodada + 1 + filaQuestoes.length >= META_QUESTOES) return;
@@ -1762,6 +1782,15 @@ async function abrirMateria(subject) {
     }
     temasAtuais = temas;   // guarda p/ a intervenção "troca de tema"
     renderBotoes(temasBox, temas, (tema) => startMission(subject, tema));
+    const btnSim = $('btn-simulado-materia');
+    if (btnSim) { btnSim.hidden = false; btnSim.onclick = () => iniciarSimulado('materia', subject); }
+}
+
+// Entra no simulado: a fila do tema anterior não serve mais (outras faixas).
+async function iniciarSimulado(escopo, materia = null) {
+    modoSimulado = { escopo, materia };
+    devolverFila();
+    await startMission('SIMULADO', escopo === 'materia' ? materia : 'geral');
 }
 
 // ==== SESSÃO CONTÍNUA + META POR RODADA + META DIÁRIA ====
@@ -1818,6 +1847,8 @@ const NIVEL_MIN = 1, NIVEL_MAX = 5;
 // Fecha a rodada: a nota das META questões desloca o centro em ±1. Retorna se mudou.
 function fecharNivelDaRodada() {
     const antigo = nivelDificuldade;
+    // Simulado mede, não treina: a nota dele não desloca o centro.
+    if (modoSimulado) { acertosNaRodada = 0; validadasNaRodada = 0; rodadaId++; return false; }
     // Com poucas verificadas a amostra não sustenta a decisão — mantém o nível.
     const MIN_VALIDADAS = Math.ceil(META_QUESTOES * 0.6);
     if (validadasNaRodada >= MIN_VALIDADAS) {
@@ -1921,13 +1952,19 @@ async function carregarQuestao(subject, tema) {
     mudancasAba = 0;
     focusLostAt = null;
 
+    // No simulado cada questão traz a própria faixa -> o cabeçalho e os sensores
+    // seguem a questão, não o que foi pedido ao entrar.
+    if (currentQuestion?.materia) {
+        currentSubject = currentQuestion.materia;
+        currentTema = currentQuestion.tema || tema;
+    }
     const subjectEl = $('current-subject');
-    if (subjectEl) subjectEl.innerText = `${subject} · ${tema}`;
+    if (subjectEl) subjectEl.innerText = `${currentSubject} · ${currentTema}`;
     atualizarContador();
 
     dynamicLimit = calculateReadingTime(currentQuestion.q, currentQuestion.opts);
     limiteLeituraMs = dynamicLimit;      // ja era calculado e descartado: sem ele, "demorou 90s" nao da pra interpretar
-    limiteOciosoS = limiarOcioso(dynamicLimit, subject);   // overlay: bem mais folgado
+    limiteOciosoS = limiarOcioso(dynamicLimit, currentSubject);   // overlay: bem mais folgado
     questaoIniciadaEm = new Date().toISOString();
     $('question-display').innerText = currentQuestion.q;
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));

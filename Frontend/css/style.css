@@ -903,6 +903,26 @@ html {
   box-shadow: 0 10px 22px rgba(243, 208, 9, 0.35);
 }
 
+/* Simulado: alternativa aos temas, não concorrente deles -> secundário (o amarelo
+   fica só no contorno do hover, nunca de fundo). */
+.botao-simulado {
+  display: block;
+  width: 100%;
+  margin: 18px 0 0;
+  padding: 14px 20px;
+  border: 1px solid rgba(43, 42, 38, 0.18);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--profundo);
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.botao-simulado:hover {
+  border-color: var(--gravata-kinrou);
+}
+
 /* =========================
    OVERLAY DE INATIVIDADE
 ========================= */

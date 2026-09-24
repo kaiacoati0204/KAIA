@@ -282,6 +282,55 @@ def test_exemplos_few_shot_traz_da_materia(monkeypatch):
     assert len(r) == 1 and r[0]["enunciado"] == "E1"
 
 
+async def _simulado(monkeypatch, corpo):
+    """Roda /gerar-simulado com _montar_banda falso; devolve (resposta, faixas pedidas)."""
+    faixas = []
+    async def fake_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
+        faixas.append((materia, tema, nivel, hobbie))
+        return [{"q": f"{materia}/{tema}/{nivel}", "opts": list("abcde"), "ans": 0}
+                for _ in range(n)]
+    monkeypatch.setattr(app_mod, "_montar_banda", fake_banda)
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.post("/gerar-simulado", json=corpo)
+    return r, faixas
+
+
+async def test_simulado_geral_varre_materias_e_espalha_niveis(monkeypatch):
+    # O ponto do simulado: sair de UMA faixa. Matérias distintas, níveis sem repetir
+    # (1..5) e sem hobbie — e cada questão etiquetada com a faixa de onde veio.
+    r, faixas = await _simulado(monkeypatch, {"escopo": "geral", "quantidade": 10})
+    body = r.json()
+    assert r.status_code == 200 and body["escopo"] == "geral"
+    assert len(faixas) == app_mod.FAIXAS_SIMULADO
+    assert len({m for m, _, _, _ in faixas}) == app_mod.FAIXAS_SIMULADO   # sem repetir matéria
+    assert sorted(nv for _, _, nv, _ in faixas) == [1, 2, 3, 4, 5]
+    assert all(hob is None for _, _, _, hob in faixas)                    # simulado = sem hobbie
+    assert len(body["questoes"]) == 10
+    assert all(q.get("materia") and q.get("tema") for q in body["questoes"])
+
+
+async def test_simulado_por_materia_fica_na_materia_e_varia_o_tema(monkeypatch):
+    r, faixas = await _simulado(monkeypatch, {"escopo": "materia", "materia": "FIS"})
+    assert r.status_code == 200
+    assert {m for m, _, _, _ in faixas} == {"FIS"}
+    assert len({t for _, t, _, _ in faixas}) == len(faixas)               # temas distintos
+
+
+async def test_simulado_materia_invalida():
+    _set_state(pool=FakePool(FakeConn()))
+    async with _client() as c:
+        r = await c.post("/gerar-simulado", json={"escopo": "materia", "materia": "XXX"})
+    assert r.status_code == 400
+
+
+async def test_simulado_sem_banco():
+    _set_state(pool=None)
+    async with _client() as c:
+        r = await c.post("/gerar-simulado", json={"escopo": "geral"})
+    assert r.status_code == 503
+
+
 async def test_gerar_questao_buffer_por_niveis(monkeypatch):
     # /gerar-questao com distribuição -> gera por FAIXA e combina o buffer.
     chamadas = []
@@ -1556,6 +1605,43 @@ async def test_evento_de_menor_sem_autorizacao_nao_e_gravado():
                                           "event_type": "question_answer", "payload": {}})
     assert r.status_code == 200 and r.json() == {"status": "sem_consentimento"}
     assert not [q for (q, _) in conn.executed if "insert into session_events" in q]
+
+
+async def test_evento_de_conta_de_teste_nao_e_gravado():
+    """equipe testando no ar (@teste.kaia): o app responde ok, o banco não recebe nada"""
+    conn = FakeConn(fetchrow={"select data_nascimento, consentimento_status": {
+        "data_nascimento": None, "consentimento_status": None, "conta_de_teste": True}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/events", json={"session_id": "11111111-1111-1111-1111-111111111111",
+                                          "event_type": "probe_atencao", "payload": {}})
+    assert r.status_code == 200 and r.json() == {"status": "conta_de_teste"}
+    assert not [q for (q, _) in conn.executed if "insert into session_events" in q]
+    assert not [q for (q, _) in conn.executed if "insert into probe_labels" in q]
+
+
+async def test_evento_de_conta_normal_segue_gravando():
+    # o gate novo não pode calar quem não é de teste
+    conn = FakeConn(fetchrow={"select data_nascimento, consentimento_status": {
+        "data_nascimento": None, "consentimento_status": None, "conta_de_teste": False}})
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/events", json={"session_id": "11111111-1111-1111-1111-111111111111",
+                                          "event_type": "question_answer", "payload": {}})
+    # 403 = passou do gate e chegou na checagem de dono da sessão (o FakeConn não
+    # monta o dono). O que este teste garante é que a conta normal não é CALADA.
+    assert r.status_code == 403 and r.json().get("status") != "conta_de_teste"
+
+
+async def test_sessao_de_conta_de_teste_nao_vai_pro_banco():
+    # devolve session_id válido (o front segue), mas sem linha em sessions
+    conn = FakeConn(fetchval=True)
+    _set_state(pool=FakePool(conn))
+    async with _client() as c:
+        r = await c.post("/sessions", json={"platform": "web", "app_version": "1"})
+    body = r.json()
+    assert r.status_code == 200 and body["status"] == "conta_de_teste" and body["session_id"]
+    assert not [q for (q, _) in conn.executed if "insert into sessions" in q]
 
 
 # ================================================ prevenção na pausa (Fluxo 1)

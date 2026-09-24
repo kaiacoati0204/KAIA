@@ -123,6 +123,11 @@ TEMAS_FIXOS = {
              "Soluções", "Eletroquímica"],
 }
 
+# Física saía 100% pelo PoT e virou "só saber a fórmula" (feedback do beta). Física de ENEM
+# é mais interpretação que conta -> esta fração do lote sai pelo caminho conceitual.
+# MAT/QUI seguem 100% conta por enquanto.
+FRACAO_CONCEITUAL = {"FIS": 0.4}
+
 # Tópicos de CÁLCULO -> geração via PoT (a IA dá a fórmula, o backend executa).
 # Os demais seguem a geração normal. QUI é misto (Orgânica/Geral são conceituais).
 TEMAS_CALCULO = {
@@ -957,12 +962,22 @@ Responda APENAS com um ARRAY JSON de {n_pedir} objetos, cada um no formato EXATO
 Regras:
 - "ans" é o índice (0 a 4) da alternativa correta.
 - "porque_erradas" tem EXATAMENTE o tamanho e a ordem de "opts"; no índice da correta use "".
-- As {n_pedir} questões devem ser distintas entre si (enunciados e focos diferentes).
+- As {n_pedir} questões devem ser distintas entre si: não vale a mesma situação com números,
+  nomes ou cenário trocados — se o caminho de resolução for o mesmo, é a mesma questão.
 - Alternativas (corretas E erradas) devem ser termos/conceitos REAIS e plausíveis; NUNCA invente palavras ou termos que não existam.
 - Enunciados em TEXTO CORRIDO — sem markdown (nada de ##, **, títulos ou listas).
 - O enunciado TEM de terminar em PERGUNTA ("?") ou em trecho que as alternativas completam
   (sem ponto final). NUNCA termine em frase fechada seguida de alternativas soltas.
-- As 5 alternativas devem ser DIFERENTES entre si (nem repetição, nem paráfrase da mesma coisa).
+- As 5 alternativas têm de ser PRÓXIMAS o bastante para exigir raciocínio: cada uma das 4
+  erradas é um erro que um aluno de verdade cometeria (conceito vizinho confundido, leitura
+  apressada do enunciado, etapa pulada). Nenhuma pode parafrasear outra, e nenhuma pode ser
+  descartada sem pensar no conteúdo.
+- VARIE o FORMATO entre as {n_pedir}: distribua entre interpretação de um texto curto citado
+  no próprio enunciado, leitura de uma situação/dado descrito, comparação entre duas posições
+  ou conceitos, e aplicação direta. No máximo DUAS podem ter o mesmo formato — quem responder
+  todas não pode achar um macete de resposta que sirva para o conjunto.
+- Cada questão puxa um RECORTE diferente de "{tema}": a rodada inteira não pode cair no
+  subtema mais óbvio.
 - Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre a esse nível.
 {regra_hobbie}- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 {bloco_evitar}{bloco_exemplos}"""
@@ -1012,7 +1027,9 @@ async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=Non
     regra_hobbie = ""
     if hobbie:
         regra_hobbie = (f'- Em ~{max(1, round(n_pedir * 0.6))} das {n_pedir}, use "{hobbie}" como contexto '
-                        f'central do enunciado (a conta continua a mesma).\n')
+                        f'central do enunciado: a cena É a do hobbie e os números saem dela (a conta '
+                        f'continua a mesma). Não basta citar o nome — se der para trocar "{hobbie}" por '
+                        f'qualquer palavra sem mudar nada, não vale.\n')
     bloco_ex = ""
     if exemplos:
         refs = "\n---\n".join(
@@ -1024,7 +1041,8 @@ async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=Non
     if evitar:
         lst = "\n".join(f"- {e[:150]}" for e in evitar[:8] if e)
         if lst:
-            bloco_evitar = "\nEstas JÁ EXISTEM — mude os números e o contexto:\n" + lst + "\n"
+            bloco_evitar = ("\nEstas JÁ EXISTEM — troque a SITUAÇÃO e o tipo de conta,\n"
+                            "não só os números:\n" + lst + "\n")
     prompt = f"""Crie {n_pedir} questões objetivas de CÁLCULO sobre "{tema}" ({nome}) para o ensino médio.
 Responda APENAS com um ARRAY JSON de {n_pedir} objetos no formato EXATO:
 {_FORMATO_POT}
@@ -1034,9 +1052,17 @@ Regras:
 - Os dados do enunciado têm de ser CONSISTENTES entre si (se há duas condições, ambas
   precisam valer para a mesma resposta) e levar a um resultado limpo.
 - A resposta CORRETA tem de ser EXATAMENTE o valor que a "formula" calcula, e estar entre as 5 "opts".
-- As outras 4 "opts" são distratores plausíveis (erros comuns), com a MESMA unidade/formato.
+- As outras 4 "opts" são erros que um aluno de verdade cometeria nessa conta (unidade não
+  convertida, sinal trocado, uma etapa pulada, fórmula vizinha), com a MESMA unidade/formato —
+  nenhuma pode ser descartável só pela ordem de grandeza.
 - "opts" com número + unidade (ex.: "12 m/s"); use ponto decimal.
+- As {n_pedir} questões não podem ser a mesma conta com números ou nomes trocados: cada uma
+  pede uma situação e um raciocínio diferentes.
 - Dificuldade: nível {nivel}/5 ({dificuldade}). Termos/unidades REAIS, nunca invente.
+- O enunciado apresenta uma SITUAÇÃO antes dos números: os dados aparecem dentro da cena, não
+  numa lista pronta para substituir na fórmula. O aluno tem de decidir qual conta fazer.
+- VARIE o tipo de conta entre as {n_pedir} e o RECORTE dentro de "{tema}": não pode ser a
+  mesma fórmula com valores diferentes.
 - Enunciado em texto corrido, sem markdown, terminando em pergunta ou trecho a completar.
 {regra_hobbie}{bloco_evitar}{bloco_ex}"""
     try:
@@ -1372,7 +1398,7 @@ async def _enunciados_existentes(conn, materia, tema, nivel, limite=10):
     try:
         rows = await conn.fetch(
             "select enunciado from questoes_cache "
-            "where materia = $1 and tema = $2 and nivel = $3 order by random() limit $4",
+            "where materia = $1 and tema = $2 and nivel = $3 order by criada_em desc limit $4",
             materia, tema, nivel, limite)
         return [r["enunciado"] for r in rows]
     except Exception as e:
@@ -1405,27 +1431,96 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
     #    (com anti-repetição a cada volta) pra não devolver o buffer curto.
     if n - len(entregues) > 0:
         calc = _eh_calculo(materia, tema)               # cálculo -> PoT (fórmula executada)
-        gerar = _gerar_calculo_pot if calc else _gerar_no_gemini
-        # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo não
-        exemplos = None
-        if FEWSHOT_DINAMICO:
-            exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=calc,
-                                                 por_tema=_exatas_natureza(materia))
-        exemplos = exemplos or (None if calc else _exemplos_few_shot(materia))
-        for _ in range(3):
-            if n - len(entregues) <= 0:
-                break
-            evitar = await _enunciados_existentes(conn, materia, tema, nivel)
-            novas = await gerar(n - len(entregues), materia, nome, tema, hobbie, nivel,
-                                exemplos=exemplos, evitar=evitar)
-            if not novas:
-                break   # vazio/erro -> não insiste (evita loop e gasto de cota)
-            entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
+        falta = n - len(entregues)
+        conceituais = round(falta * FRACAO_CONCEITUAL.get(materia, 0.0)) if calc else falta
+        blocos = ([(True, falta - conceituais)] if calc else []) + [(False, conceituais)]
+        # o que ESTA chamada já gerou vai na frente do "evitar": o cache sozinho não
+        # garante que a volta 2 veja a volta 1, e era aí que saía questão repetida.
+        desta_chamada = []
+        for por_pot, alvo in blocos:
+            if alvo <= 0:
+                continue
+            gerar = _gerar_calculo_pot if por_pot else _gerar_no_gemini
+            # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo não
+            exemplos = None
+            if FEWSHOT_DINAMICO:
+                exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=por_pot,
+                                                     por_tema=_exatas_natureza(materia))
+            exemplos = exemplos or (None if por_pot else _exemplos_few_shot(materia))
+            feitas = 0
+            for _ in range(3):
+                if feitas >= alvo or n - len(entregues) <= 0:
+                    break
+                evitar = desta_chamada + await _enunciados_existentes(conn, materia, tema, nivel)
+                novas = await gerar(alvo - feitas, materia, nome, tema, hobbie, nivel,
+                                    exemplos=exemplos, evitar=evitar)
+                if not novas:
+                    break   # vazio/erro -> não insiste (evita loop e gasto de cota)
+                feitas += len(novas)
+                desta_chamada += [q.get("q", "") for q in novas if q.get("q")]
+                entregues += await _salvar_no_cache(conn, materia, tema, nivel, hobbie, novas)
     # 5) marca vistas + etiqueta o nível
     await _marcar_vistas(conn, user_id, entregues)
     for q in entregues:
         q["nivel"] = nivel
     return entregues
+
+
+# ==== SIMULADO ====
+# Rodada que varre TEMAS (e matérias, no escopo geral) em vez de ficar num tema só —
+# o beta reclamou de "caiu praticamente só potência elétrica". Uma faixa por nível,
+# 1..5 embaralhados: a prova sai espalhada como a real, não centrada no nível do aluno.
+# Sem hobbie de propósito: simulado tem de parecer prova.
+FAIXAS_SIMULADO = 5
+
+
+@app.post("/gerar-simulado")
+async def gerar_simulado(request: Request, dados: dict = Body(default={}),
+                         uid: str = Depends(usuario_autenticado)):
+    escopo = "materia" if dados.get("escopo") == "materia" else "geral"
+    user_id = (uid or "").strip() or None
+    try:
+        quantidade = max(1, min(int(dados.get("quantidade") or 10), 20))
+    except (TypeError, ValueError):
+        quantidade = 10
+
+    if escopo == "materia":
+        materia = dados.get("materia", "")
+        if materia not in TEMAS_FIXOS:
+            return JSONResponse({"erro": "Matéria desconhecida."}, status_code=400)
+        temas = TEMAS_FIXOS[materia]
+        faixas = [(materia, t) for t in random.sample(temas, min(FAIXAS_SIMULADO, len(temas)))]
+    else:
+        escolhidas = random.sample(list(TEMAS_FIXOS), min(FAIXAS_SIMULADO, len(TEMAS_FIXOS)))
+        faixas = [(m, random.choice(TEMAS_FIXOS[m])) for m in escolhidas]
+
+    niveis = random.sample(range(1, 6), len(faixas))          # um nível por faixa, sem repetir
+    por_faixa = max(1, round(quantidade / len(faixas)))
+
+    pool = getattr(request.app.state, "pool", None)
+    if pool is None or not user_id:
+        return JSONResponse({"erro": "Simulado indisponível sem banco."}, status_code=503)
+
+    entregues = []
+    try:
+        # Sequencial com UMA conexão, como /gerar-questao: o cache cobre a maioria das
+        # faixas sem chamar o Gemini, e o pool não leva 5 conexões de uma vez.
+        async with pool.acquire() as conn:
+            for (materia, tema), nivel in zip(faixas, niveis):
+                banda = await _montar_banda(conn, user_id, materia, MATERIAS.get(materia, materia),
+                                            tema, None, nivel, por_faixa)
+                for q in banda:
+                    q["materia"] = materia      # cada questão diz de onde veio: o cabeçalho
+                    q["tema"] = tema            # do quiz muda a cada questão no simulado
+                entregues += banda
+    except Exception as e:
+        print("[KaIA] erro no simulado:", e)
+
+    if not entregues:
+        _registrar_falha_geracao("gerar-simulado")
+        return JSONResponse({"erro": "Não foi possível montar o simulado."}, status_code=502)
+    random.shuffle(entregues)                   # não entregar agrupado por matéria/nível
+    return {"questoes": entregues[:quantidade], "escopo": escopo}
 
 
 @app.post("/gerar-questao")
@@ -1436,9 +1531,9 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
     tema = dados.get("tema", "")
     hobbie = dados.get("hobbie") or None                 # singular; None = genérica
     user_id = (uid or "").strip() or None                # dono = token, não body.user_id
-    # compat com o formato antigo (lista "hobbies"): usa o 1º como hobbie.
+    # compat com o formato antigo (lista "hobbies"): sorteia um deles como hobbie.
     if hobbie is None and isinstance(dados.get("hobbies"), list) and dados["hobbies"]:
-        hobbie = dados["hobbies"][0]
+        hobbie = random.choice(dados["hobbies"])   # sorteia: fixar o 1º faz quem tem 3 ver só um
     # Lista completa de hobbies (buffer varia o hobby POR FAIXA -> não domina um só).
     hobbies_lista = [h for h in (dados.get("hobbies") or []) if h] if isinstance(dados.get("hobbies"), list) else []
 
@@ -2824,6 +2919,13 @@ async def criar_sessao(body: SessionIn, request: Request, ident: dict = Depends(
         return _SEM_BANCO
     user_id = ident.get("sub") or str(uuid.uuid4())   # dono da sessão = usuário do token, não body.user_id
     async with pool.acquire() as conn:
+        # Conta da equipe: sessão só de fachada (id válido, nenhuma linha gravada). Como
+        # ela não existe no banco, /events e /sessions/{id}/end já não acham nada.
+        if await conn.fetchval(
+                "select conta_de_teste from perfis where user_id = $1::uuid", user_id):
+            return {"status": "conta_de_teste",
+                    "session_id": body.session_id or str(uuid.uuid4()),
+                    "user_id": str(user_id)}
         async with conn.transaction():
             # Garante o aluno em `perfis` ANTES da sessão (FK sessions.user_id
             # -> perfis.user_id). Cria um perfil mínimo; o /perfil enriquece depois.
@@ -3311,7 +3413,13 @@ async def receber_evento(body: EventIn, request: Request, ident: dict = Depends(
         # LGPD art. 14: sem aceite do responsável, comportamento de menor não é gravado.
         # Não é erro do aluno — devolve ok e o front segue normal, só sem coleta.
         perfil_lgpd = await conn.fetchrow(
-            "select data_nascimento, consentimento_status from perfis where user_id = $1::uuid", sub)
+            "select data_nascimento, consentimento_status, conta_de_teste "
+            "from perfis where user_id = $1::uuid", sub)
+        # Conta da equipe (@teste.kaia): o app funciona igual, mas nada e gravado — sem
+        # isso um teste interno vira probe e sessao no meio do dado do beta. A marca e
+        # coluna GERADA em perfis; ver migration 20260924120000_conta_de_teste.
+        if perfil_lgpd and perfil_lgpd.get("conta_de_teste"):
+            return {"status": "conta_de_teste"}
         if not consent.coleta_permitida(perfil_lgpd["data_nascimento"] if perfil_lgpd else None,
                                         perfil_lgpd["consentimento_status"] if perfil_lgpd else None,
                                         CONSENTIMENTO_ESTRITO):

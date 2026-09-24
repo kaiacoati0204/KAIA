@@ -1497,7 +1497,7 @@ function registrarSensores() {
     document.addEventListener('mouseout', (e) => {
         if (!sessaoDeEstudoAberta || pausaAtiva) return;   // não avisa durante o descanso
         if (e.relatedTarget || e.clientY > EXIT_TOPO_PX) return;
-        mostrarAvisoSaida();
+        registrarSaidaPeloTopo();
     });
 
     // Scroll voltou como CAPTURA (virar feature é decisão futura): texto-base de Humanas não cabe
@@ -2807,40 +2807,25 @@ window.addEventListener('beforeunload', () => {
 });
 
 // ============================================================
-//        AVISO DE EXIT-INTENT (lembrete gentil, não bloqueia)
+//        SAÍDA PELO TOPO (só registro, sem aviso na tela)
 // ============================================================
-// Balão na própria tela quando o cursor vai para a barra de abas durante a
-// missão. Some sozinho; no máximo 1 por janela de cooldown para não virar spam.
-const EXIT_AVISO_COOLDOWN_MS = 18000;   // reaparece a cada nova intenção, mín. ~18s entre avisos
-const EXIT_AVISO_DURACAO_MS  = 5000;    // some sozinho após 5s
-const EXIT_TOPO_PX           = 12;      // faixa do topo que conta como "saindo por cima"
-let _exitAvisoAte   = 0;                 // performance.now() até quando fica em cooldown
-let _exitAvisoTimer = null;
+// O cursor ir para os 12px do topo vira evento `exit_intent` — sinal para o Pomodoro
+// adaptativo. Não alimenta feature, evento objetivo nem recompensa.
+//
+// O BALÃO foi removido (beta, 23/09). Ele disparava 12 vezes em 31 questões nos dois
+// primeiros testes reais e os dois reclamaram: o botão do caderno fica no topo, então
+// ABRIR O CADERNO acusava "você está saindo da tela de estudo. Distrações contam no seu
+// tempo de foco". Era uma intervenção que disparava muito, acusava sem razão, não estava
+// no bandit, não tinha botão de alarme falso e não era medida por nada.
+// O cooldown FICA: sem ele o evento vira spam a cada movimento do mouse para cima.
+const EXIT_COOLDOWN_MS = 18000;
+const EXIT_TOPO_PX     = 12;      // faixa do topo que conta como "saindo por cima"
+let _exitAte = 0;                 // performance.now() até quando fica em cooldown
 
-function _garantirAvisoSaida() {
-    if ($('kaia-exit-aviso')) return;
-    const el = document.createElement('div');
-    el.id = 'kaia-exit-aviso';
-    el.setAttribute('role', 'status');       // anunciado sem roubar foco
-    el.setAttribute('aria-live', 'polite');
-    el.innerHTML =
-        `<strong class="kaia-exit-titulo">Atenção</strong>`
-        + `<p>Você está saindo da tela de estudo. Distrações contam no seu tempo de foco.</p>`;
-    document.body.appendChild(el);
-}
-
-function mostrarAvisoSaida() {
+function registrarSaidaPeloTopo() {
     const agora = performance.now();
-    if (agora < _exitAvisoAte) return;                 // ainda em cooldown
-    _exitAvisoAte = agora + EXIT_AVISO_COOLDOWN_MS;
-
-    _garantirAvisoSaida();
-    const el = $('kaia-exit-aviso');
-    el.classList.add('visivel');
-    clearTimeout(_exitAvisoTimer);
-    _exitAvisoTimer = setTimeout(() => el.classList.remove('visivel'), EXIT_AVISO_DURACAO_MS);
-
-    // Sinal de distração para o Pomodoro adaptativo (paralelo ao tab_change).
+    if (agora < _exitAte) return;
+    _exitAte = agora + EXIT_COOLDOWN_MS;
     logEvent('exit_intent', { origem: 'mouse_topo' });
 }
 

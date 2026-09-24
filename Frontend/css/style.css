@@ -2859,7 +2859,6 @@ body.kaia-mr-aberta #kaia-notificacoes {
       5000   #overlay — inatividade
     → 5500   overlays centrais das 7 + probe de autorrelato
     → 5600   barra do micro_refoco (acima dos centrais: pode conviver com eles)
-      6000   #kaia-exit-aviso — exit-intent
       7000   #kaia-pausa — pausa do pomodoro
       8000   #kaia-preloader
       9999   pilha de cards
@@ -3724,55 +3723,6 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
   .quiz-alca { display: none; }
   .quiz-split .quiz-lado-questao,
   .quiz-split .caderno:not([hidden]) { flex: 1 1 auto !important; }
-}
-
-/* =========================
-   AVISO DE EXIT-INTENT
-   Lembrete gentil quando o cursor vai para a barra de abas durante a missão.
-   Não bloqueia (pointer-events:none) e some sozinho. Âmbar suave (token de
-   "atenção"), sem vermelho de alarme; fade discreto, respeita reduced-motion.
-========================= */
-#kaia-exit-aviso {
-  position: fixed;
-  top: 104px;                           /* abaixo da barra de ações, fora do enunciado */
-  right: 20px;
-  z-index: 6000;
-  width: calc(100% - 40px);
-  max-width: 360px;
-  padding: 18px 22px;
-  border-radius: 14px;
-  border: 1.5px solid var(--erro-tx);   /* borda mais marcada, rosê escuro (sem alarme) */
-  border-left-width: 6px;
-  background: var(--erro-bg);           /* rosado claro */
-  color: var(--erro-tx);                /* texto escuro rosê */
-  box-shadow: 0 12px 32px rgba(138, 59, 59, 0.18);
-  opacity: 0;
-  transform: translateY(-8px);
-  pointer-events: none;                 /* nunca bloqueia a saída: é só lembrete */
-  transition: opacity 0.15s ease, transform 0.15s ease;   /* quase instantâneo */
-}
-#kaia-exit-aviso.visivel {
-  opacity: 1;
-  transform: translateY(0);
-}
-.kaia-exit-titulo {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: var(--erro-tx);
-}
-#kaia-exit-aviso p {
-  margin: 0;
-  font-size: 1.02rem;
-  line-height: 1.5;
-  color: var(--erro-tx);
-}
-@media (prefers-reduced-motion: reduce) {
-  #kaia-exit-aviso {
-    transition: opacity 0.15s ease;
-    transform: translateY(0);
-  }
 }
 
 /* =========================

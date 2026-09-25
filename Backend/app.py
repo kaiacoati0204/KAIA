@@ -945,6 +945,8 @@ def _distratores_derivados(formula, certo, modelo_texto, n=4):
             continue
         if v < 0 and certo > 0:
             continue                                  # negativo onde a grandeza não é
+        if abs(v) < 1e-12:
+            continue      # zero: não vira alternativa e ainda estouraria a razão abaixo
         chave = round(v, 9)
         if chave in vistos:
             continue

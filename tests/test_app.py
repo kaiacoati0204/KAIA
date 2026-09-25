@@ -1674,6 +1674,16 @@ def test_distratores_nao_repetem_nem_zeram():
         assert all(app_mod._pot_num(t) != 0 for t in textos)  # sem "0.0 A"
 
 
+def test_distrator_que_da_zero_nao_quebra():
+    """Mutação que zera estourava ZeroDivisionError e derrubava a geração inteira."""
+    # "trocou o sinal" em 5-5 dá 0; "somou em vez de multiplicar" em 0*x também
+    for formula, certo, modelo in (("5*0.0001", 0.0005, "0.0005 A"),
+                                   ("10-5", 5.0, "5 m"), ("0.5*2", 1.0, "1 V")):
+        d = app_mod._distratores_derivados(formula, certo, modelo)
+        assert isinstance(d, list)
+        assert all(app_mod._pot_num(t) != 0 for t, _ in d)
+
+
 def test_distratores_desistem_quando_a_formula_nao_rende():
     # fórmula de um termo só: sem operador não há erro de procedimento p/ derivar
     assert app_mod._distratores_derivados("42", 42.0, "42 m") == []

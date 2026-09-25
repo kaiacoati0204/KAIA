@@ -502,13 +502,18 @@ html {
   color: var(--alerta-tx);
   font-size: 0.9rem;
 }
-.pagina-legal a.voltar {
+/* `a.voltar` solto no seletor: a avaliacao.html usa o mesmo link de volta e não é
+   .pagina-legal — sem isto ele caía no azul sublinhado padrão do navegador. */
+.pagina-legal a.voltar,
+a.voltar {
   display: inline-block;
   margin-bottom: 24px;
   color: var(--profundo);
   font-weight: 700;
   text-decoration: none;
 }
+a.voltar:hover { text-decoration: underline; }
+a.voltar:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 3px; border-radius: 6px; }
 
 
 /* =========================
@@ -2680,6 +2685,67 @@ body.textura-papel .conteudo {
   margin-bottom: 14px;
   font-size: 0.85rem;
   color: color-mix(in srgb, var(--tinta) 60%, transparent);
+}
+
+/* ---- convite para avaliar (card no fim do perfil) ---- */
+/* Card de UMA ação: texto à esquerda, botão à direita. Em tela estreita empilha e o
+   botão ocupa a largura toda, que é o alvo de toque confortável. */
+.secao-avaliar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.avaliar-texto { flex: 1 1 260px; }
+.secao-avaliar h2 { margin-bottom: 6px; }
+.secao-avaliar .secao-sub { margin: 0; }
+
+/* Azul-coati e não o dourado: o dourado é reservado à ação principal da tela, e aqui
+   a ação principal é estudar — avaliar é um convite, não a tarefa. */
+.btn-avaliar {
+  flex: 0 0 auto;
+  display: inline-block;
+  padding: 13px 22px;
+  border-radius: 999px;
+  background: var(--azul-coati);
+  color: var(--card);
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.15s;
+}
+.btn-avaliar:hover { background: var(--profundo); transform: translateY(-2px); }
+.btn-avaliar:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 3px; }
+
+@media (max-width: 520px) {
+  .btn-avaliar { flex: 1 1 100%; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-avaliar { transition: none; }
+  .btn-avaliar:hover { transform: none; }
+}
+
+/* ---- formulário de avaliação (Tally) ---- */
+/* O iframe vem com transparentBackground, então quem dá a superfície é o
+   .secao-perfil em volta — e o form acompanha o tema de fundo escolhido.
+   `display:block` tira a linha de base que o navegador reserva embaixo do iframe
+   (ele é inline por padrão) e que abriria uma fresta no fim do card. */
+.form-avaliacao {
+  margin-top: 4px;
+  min-height: 320px;   /* segura o espaço enquanto o iframe carrega: a página não pula */
+}
+/* O height do atributo nasce pequeno e o script do Tally o sobrescreve com a altura
+   total do formulário (style inline), então quem rola é a página, não o quadro.
+   O min-height aqui é o plano B: se o embed.js for bloqueado, o iframe cai no src
+   direto e sem este piso ficaria num quadradinho de 200px. */
+.form-avaliacao iframe {
+  display: block;
+  width: 100%;
+  min-height: 620px;
+  border: 0;
 }
 .secao-quando {
   font-size: 0.8rem;

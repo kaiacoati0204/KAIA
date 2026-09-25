@@ -137,12 +137,23 @@ TEMAS_CALCULO = {
 }
 
 
+# Tema gravado com outra caixa ("Geometria espacial") nunca casava com o da lista
+# ("Geometria Espacial") e a questao virava cache morto -- 40% do estoque estava assim.
+# Normaliza na ENTRADA (gravacao e busca) para nao voltar a acontecer.
+_TEMAS_CANONICOS = {t.casefold(): t for temas in TEMAS_FIXOS.values() for t in temas}
+
+
+def _tema_canonico(tema):
+    return _TEMAS_CANONICOS.get(str(tema or "").strip().casefold(), str(tema or "").strip())
+
+
 def _eh_calculo(materia, tema):
     return tema in TEMAS_CALCULO.get(materia, ())
 
 
 def _exatas_natureza(materia):
-    # onde a estrutura da questão muda por tema -> few-shot prefere o MESMO tema
+    # Area em que a estrutura da questao muda por tema. NAO decide mais o few-shot
+    # (ver _montar_banda): ficou para ml/teste_impostor.py.
     return materia in ("MAT", "FIS", "QUI", "BIO")
 
 # Resposta padrão quando o servidor está sem banco (pool = None).
@@ -818,6 +829,162 @@ def _pot_num(s):
         return None
 
 
+# ==== DISTRATORES POR ERRO DE PROCEDIMENTO ====
+# O beta: "normalmente você fica presa em duas respostas, mas aqui todas são muito
+# diferentes". As erradas vinham do modelo e saíam descartáveis no olho.
+#
+# Aqui elas são DERIVADAS da fórmula que o PoT já executa: cada uma é a conta que
+# sairia de um erro real (inverter a divisão, esquecer o expoente, não converter a
+# unidade). Assim a alternativa errada é plausível por construção, e o "porque_erradas"
+# deixa de ser invenção e passa a nomear o erro exato — que também diz, quando o aluno
+# marca, QUAL erro ele cometeu.
+#
+# É a mesma ideia de item-writing de prova de verdade: distrator bom vem de erro
+# previsível do aluno, não de opção implausível.
+
+# Pelo menos este tanto das erradas tem de cair PERTO da resposta (dentro do fator
+# abaixo). Sem isso a questão não "prende": o aluno elimina por ordem de grandeza.
+# O fator é 10 e não 3 porque erro de procedimento REAL costuma dar salto grande --
+# inverter 15/3 já dá 25x. Medido nas fórmulas do beta: com 3 nenhuma questão
+# passava, com 10 todas passam.
+DISTRATORES_PERTO_MIN = 2
+FATOR_PERTO = 10.0
+
+
+def _pot_mutacoes(formula):
+    """(prioridade, motivo, expressão) por erro que cabe nesta fórmula.
+
+    Prioridade 1 = errou o RACIOCÍNIO (é o distrator que ensina algo quando o aluno
+    cai nele), 2 = errou a unidade, 3 = só moveu a vírgula. Nessa ordem."""
+    f = formula.strip()
+    m = []
+    corte = _pot_corte_topo(f)
+    if corte:
+        esq, op, dir_ = corte
+        if op == "/":
+            m.append((1, "inverteu a divisão", f"({dir_})/({esq})"))
+            m.append((1, "multiplicou em vez de dividir", f"({esq})*({dir_})"))
+        elif op == "*":
+            m.append((1, "dividiu em vez de multiplicar", f"({esq})/({dir_})"))
+            m.append((1, "somou em vez de multiplicar", f"({esq})+({dir_})"))
+        elif op in "+-":
+            outro = "-" if op == "+" else "+"
+            m.append((1, "trocou o sinal", f"({esq}){outro}({dir_})"))
+    if "**2" in f:
+        m.append((1, "esqueceu de elevar ao quadrado", f.replace("**2", "", 1)))
+    if "**" in f:
+        m.append((1, "usou o expoente errado", f.replace("**", "*", 1)))
+    m.append((2, "não converteu a unidade", f"({f})/1000"))
+    m.append((2, "converteu para o lado errado", f"({f})*1000"))
+    m.append((3, "errou a ordem de grandeza", f"({f})*10"))
+    m.append((3, "errou a ordem de grandeza", f"({f})/10"))
+    return m
+
+
+def _pot_corte_topo(f):
+    """Quebra a expressão no operador de MENOR precedência fora de parênteses."""
+    prof = 0
+    corte = None
+    for i, ch in enumerate(f):
+        if ch == "(":
+            prof += 1
+        elif ch == ")":
+            prof -= 1
+        elif prof == 0 and ch in "+-*/" and i > 0 and f[i - 1] not in "+-*/(eE":
+            peso = 0 if ch in "+-" else 1
+            if corte is None or peso <= corte[0]:
+                corte = (peso, i, ch)
+    if corte is None:
+        return None
+    _, i, op = corte
+    return f[:i].strip(), op, f[i + 1:].strip()
+
+
+def _formatar_como(valor, modelo):
+    """Escreve `valor` no formato da alternativa correta (casas decimais e unidade).
+
+    O \s ficava fora do recorte de propósito: com ele o espaço antes da unidade era
+    comido e saía "2.0A". E valores pequenos ganham casas extras em vez de arredondar
+    para "0.0", que seria uma alternativa sem sentido."""
+    texto = str(modelo)
+    m = re.search(r"[-+]?\d[\d.,]*", texto)
+    if not m:
+        return f"{valor:g}"
+    bruto = m.group(0)
+    casas = 0
+    for sep in (",", "."):
+        if sep in bruto and not bruto.endswith(sep):
+            casas = max(casas, len(bruto.rsplit(sep, 1)[1]))
+    casas = min(casas, 4)
+    if valor and abs(valor) < 10 ** -casas:
+        num = f"{valor:.2g}"                     # pequeno demais p/ as casas do modelo
+    elif casas:
+        num = f"{valor:.{casas}f}"
+    else:
+        num = f"{round(valor):d}" if abs(valor) >= 1 else f"{valor:.2g}"
+    if "," in bruto and "." not in bruto:
+        num = num.replace(".", ",")
+    return texto[:m.start()] + num + texto[m.end():]
+
+
+def _distratores_derivados(formula, certo, modelo_texto, n=4):
+    """n alternativas erradas, cada uma vinda de um erro de procedimento.
+
+    Devolve [(texto, motivo)] ou [] quando a fórmula não rende distratores suficientes
+    (aí o PoT fica com as alternativas do modelo)."""
+    if not formula or abs(certo) < 1e-12:
+        return []
+    vistos = {round(certo, 9)}
+    cands = []
+    for prio, motivo, expr in _pot_mutacoes(formula):
+        try:
+            v = _pot_eval(_pot_limpar_formula(expr))
+        except Exception:
+            continue
+        if not isinstance(v, (int, float)) or v != v or abs(v) == float("inf"):
+            continue
+        if v < 0 and certo > 0:
+            continue                                  # negativo onde a grandeza não é
+        chave = round(v, 9)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        razao = max(abs(v) / abs(certo), abs(certo) / abs(v))
+        cands.append((prio, razao, v, motivo))
+    # descarta o que o formato da questão não consegue representar sem virar a
+    # própria resposta (ou zero): alternativa repetida/absurda é pior que nenhuma
+    validos = []
+    for prio, razao, v, motivo in cands:
+        texto = _formatar_como(v, modelo_texto)
+        lido = _pot_num(texto)
+        if lido is None or lido == 0 or abs(lido - certo) < 1e-9:
+            continue
+        if any(t == texto for t, _, _, _ in validos):
+            continue
+        validos.append((texto, prio, razao, motivo))
+    perto = [c for c in validos if c[2] <= FATOR_PERTO]
+    prio1 = [c for c in validos if c[1] == 1]
+    if len(validos) < n or len(perto) < DISTRATORES_PERTO_MIN or not prio1:
+        return []            # não rende, não prende, ou vira só vírgula fora do lugar
+    # 1) as duas que prendem (mais perto, erro de raciocínio primeiro)
+    perto.sort(key=lambda c: (c[1], c[2]))
+    escolhidos = perto[:DISTRATORES_PERTO_MIN]
+    # 2) garante pelo menos um erro de RACIOCÍNIO entre as quatro
+    if not any(c[1] == 1 for c in escolhidos):
+        escolhidos.append(sorted(prio1, key=lambda c: c[2])[0])
+    resto = sorted([c for c in validos if c not in escolhidos], key=lambda c: (c[1], c[2]))
+    # 3) no máximo duas de "só moveu a vírgula" no conjunto todo
+    for c in resto:
+        if len(escolhidos) >= n:
+            break
+        if c[1] == 3 and sum(1 for e in escolhidos if e[1] == 3) >= 2:
+            continue
+        escolhidos.append(c)
+    if len(escolhidos) < n:
+        return []
+    return [(texto, motivo) for texto, _, _, motivo in escolhidos[:n]]
+
+
 def _pot_acha_opcao(calc, opts, tol=0.005, folga=2.0):
     """Índice da opção que É o valor calculado. None = descarta a questão.
 
@@ -848,14 +1015,61 @@ _FORMATO_QUESTAO = (
     '  "porque_erradas": ["por que a opção 0 está errada", "...opção 1...", "...", "...", "..."]}'
 )
 
-# Descrição da dificuldade por nível (1..5) para o prompt do Gemini (Parte 6).
-_NIVEIS_DIF = {
-    1: "reconhecer/lembrar um conceito isolado (definição direta)",
-    2: "aplicar um conceito em situação direta, um único passo",
-    3: "interpretar um texto/gráfico/dado e relacionar a um conceito (padrão ENEM)",
-    4: "combinar 2 ou mais conceitos/etapas; interpretar e inferir",
-    5: "integrar áreas/ideias, com raciocínio contra-intuitivo e distrator forte que exige eliminação",
+# ==== RUBRICA DE DIFICULDADE ====
+# UMA rubrica para todas as matérias fazia "um único passo" virar uma divisão em física
+# e virar reconhecer "uberização" em sociologia — o beta reclamou exatamente disso.
+# São duas escalas porque o que cria dificuldade é outro em cada caminho.
+#
+# Cada nível fixa TRÊS coisas, não uma: quanto raciocínio, quanta leitura e quão PERTO
+# ficam os distratores. A terceira entra porque a qualidade do distrator move a
+# dificuldade do item tanto quanto o enunciado — distrator bom vem de erro previsível
+# do aluno, não de opção implausível.
+#
+# Limite honesto: o ENEM não define dificuldade por rubrica, ele MEDE depois (TRI,
+# parâmetro b, com a resposta de milhões). Julgamento a priori explica ~1/3 da
+# dificuldade real. Esta rubrica é o ponto de partida da GERAÇÃO; a calibração de
+# verdade tem de vir da taxa de acerto real por matéria x nível.
+_NIVEIS_DIF_CONCEITO = {
+    1: "reconhecer um conceito do dia a dia, já nomeado no próprio enunciado; "
+       "as erradas tratam de assuntos claramente outros",
+    2: "aplicar a um caso simples um conceito visto em sala — SEM exigir o termo "
+       "técnico de cabeça: se para acertar basta saber o nome certo, isso já é nível 4. "
+       "As erradas são conceitos vizinhos do mesmo campo",
+    3: "interpretar um texto, gráfico ou dado do enunciado e ligar a um conceito "
+       "(padrão ENEM); as erradas são leituras parciais do mesmo texto",
+    4: "comparar duas leituras possíveis do mesmo fato, ou combinar dois conceitos; "
+       "as erradas defendem a leitura que o texto NÃO sustenta",
+    5: "integrar áreas ou ideias, com raciocínio contra-intuitivo e distrator forte "
+       "que só cai eliminando",
 }
+_NIVEIS_DIF_CALCULO = {
+    1: "substituir os valores numa fórmula única, sem converter nada",
+    2: "uma conversão de unidade OU duas etapas dentro da mesma fórmula",
+    3: "ler a situação e DECIDIR qual fórmula usar — o enunciado não nomeia a grandeza "
+       "pedida com as palavras da fórmula",
+    4: "encadear duas fórmulas: o resultado da primeira é dado de entrada da segunda",
+    5: "raciocínio contra-intuitivo, ou um dado do enunciado que NÃO entra na conta",
+}
+
+
+def _vizinhos_do_tema(materia, tema):
+    """Os OUTROS temas da matéria, para o prompt não escorregar para o vizinho.
+
+    Medido: 15% das questões do cache estavam no tema errado, e quase sempre no tema
+    ao lado (Geopolítica virando Globalização, Estatística virando Probabilidade).
+    O gerador não sabia onde ficava a fronteira porque ninguém dizia."""
+    outros = [t for t in TEMAS_FIXOS.get(materia, ()) if t != tema]
+    if not outros:
+        return ""
+    return ('- Esta questão é de "{}" e só disso. Estes são temas VIZINHOS da mesma '
+            'matéria e NÃO podem ser o foco: {}. Se o conteúdo central cair num deles, '
+            'refaça.'.format(tema, ", ".join(outros))) + chr(10)
+
+
+def _rubrica(nivel, calculo):
+    nivel = max(1, min(nivel, 5))
+    return (_NIVEIS_DIF_CALCULO if calculo else _NIVEIS_DIF_CONCEITO)[nivel]
+
 
 # Formato com a marca usa_hobbie (para o cache saber quais salvar com hobbie).
 _FORMATO_QUESTAO_HOBBIE = (
@@ -916,15 +1130,17 @@ def _exemplos_few_shot(materia):
 # reais injetadas como few-shot (estilo/dificuldade), quando houver.
 async def _gerar_no_gemini(n, materia, nome, tema, hobbie, nivel, exemplos=None, evitar=None):
     n_pedir = max(n, math.ceil(n * FATOR_SOBRA_GERACAO))   # sobra p/ cobrir os descartes
-    dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
+    dificuldade = _rubrica(nivel, calculo=False)
+    bloco_vizinhos = _vizinhos_do_tema(materia, tema)
     if hobbie:
         proporcao = max(1, round(n_pedir * 0.6))
         formato = _FORMATO_QUESTAO_HOBBIE
         regra_hobbie = (
             f'- Em aproximadamente {proporcao} das {n_pedir} questões, use o hobbie "{hobbie}" como '
-            f'CONTEXTO CENTRAL do enunciado — a situação/cenário gira em torno dele, não é só '
-            f'uma menção de passagem; o conceito avaliado continua EXATAMENTE o mesmo. Nas '
-            f'outras, enunciados genéricos (sem citar o hobbie).\n'
+            f'CONTEXTO do enunciado — a cena se passa nesse universo, mas o TEMA avaliado '
+            f'continua sendo "{tema}". O hobbie é cenário, nunca assunto: se para responder '
+            f'o aluno precisar saber algo sobre "{hobbie}", está errado. Nas outras, '
+            f'enunciados genéricos (sem citar o hobbie).\n'
             f'- Em CADA questão inclua o booleano "usa_hobbie" indicando se usou o hobbie.\n'
         )
     else:
@@ -978,6 +1194,7 @@ Regras:
   todas não pode achar um macete de resposta que sirva para o conjunto.
 - Cada questão puxa um RECORTE diferente de "{tema}": a rodada inteira não pode cair no
   subtema mais óbvio.
+{bloco_vizinhos}
 - Dificuldade: nível {nivel}/5 ({dificuldade}) — calibre a esse nível.
 {regra_hobbie}- Linguagem simples e acolhedora — o erro não é punição, é aprendizado.
 {bloco_evitar}{bloco_exemplos}"""
@@ -1023,7 +1240,25 @@ async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=Non
     """PoT: a IA gera a questão de cálculo COM a fórmula; o backend EXECUTA a fórmula e
     usa a opção que bate como gabarito (a CONTA, não o 'achismo'), DESCARTANDO as que não
     fecham. Devolve no formato normal (q/opts/ans/porque_erradas)."""
-    dificuldade = _NIVEIS_DIF[max(1, min(nivel, 5))]
+    dificuldade = _rubrica(nivel, calculo=True)
+    bloco_vizinhos = _vizinhos_do_tema(materia, tema)
+    regra_nivel = ""
+    if nivel >= 3:
+        regra_nivel += (
+            '- NAO nomeie a grandeza pedida com a palavra da formula. Pergunte o que a '
+            'SITUACAO quer saber ("quanto custa deixar ligado por um mes", "da para ligar '
+            'os dois na mesma tomada") e deixe o aluno descobrir que conta fazer. '
+            '"Qual e a resistencia?" com a resistencia pedida de bandeja e nivel 2, nao 3.'
+            + chr(10) +
+            # efeito colateral medido: o modelo comecou a escrever "duzentos e vinte volts".
+            # Isso so aumenta a carga de leitura -- ruim para TEA/TDAH, e nao mede fisica.
+            '- Os valores vao em ALGARISMOS ("220 V"), nunca por extenso. A questao fica '
+            'dificil pelo raciocinio, nunca por ser cansativa de ler.'
+            + chr(10))
+    if nivel >= 5:
+        regra_nivel += (
+            '- Inclua UM dado que NAO entra na conta. O aluno tem de perceber que sobra.'
+            + chr(10))
     regra_hobbie = ""
     if hobbie:
         regra_hobbie = (f'- Em ~{max(1, round(n_pedir * 0.6))} das {n_pedir}, use "{hobbie}" como contexto '
@@ -1063,6 +1298,7 @@ Regras:
   numa lista pronta para substituir na fórmula. O aluno tem de decidir qual conta fazer.
 - VARIE o tipo de conta entre as {n_pedir} e o RECORTE dentro de "{tema}": não pode ser a
   mesma fórmula com valores diferentes.
+{bloco_vizinhos}{regra_nivel}
 - Enunciado em texto corrido, sem markdown, terminando em pergunta ou trecho a completar.
 {regra_hobbie}{bloco_evitar}{bloco_ex}"""
     try:
@@ -1084,6 +1320,19 @@ Regras:
         idx = _pot_acha_opcao(calc, opts)
         if idx is None:
             continue                                   # a conta não bate com opção -> furada, descarta
+        certa = opts[idx]
+        derivados = _distratores_derivados(_pot_limpar_formula(q["formula"]), calc, certa)
+        if derivados:
+            # as erradas passam a ser contas erradas de verdade, e o "por que errou"
+            # nomeia o erro em vez de descrever a opção
+            opts = [certa] + [t for t, _ in derivados]
+            porques = [""] + [f"Esse é o valor de quem {m}." for _, m in derivados]
+            ordem = list(range(len(opts)))
+            random.shuffle(ordem)                      # gabarito não pode ficar sempre no A
+            opts = [opts[i] for i in ordem]
+            q["porque_erradas"] = [porques[i] for i in ordem]
+            idx = ordem.index(0)
+            q["distratores_derivados"] = True
         q["opts"] = opts
         q["ans"] = idx                                 # gabarito = a CONTA (não o que a IA disse)
         q["formula_pot"] = q.pop("formula", None)      # guardada: e o que permite auditar depois
@@ -1107,10 +1356,16 @@ VERSAO_PROMPT = "v4-2026-09"
 # Encarece ~50% a geracao (fracao de centavo) e evita lote curto; o aluno continua vendo n.
 FATOR_SOBRA_GERACAO = 1.5
 # Familia Flash (nao Flash-Lite, que e a do gerador): a independencia vem justamente
-# de nao compartilhar treinamento. O 3.6 tem cota diaria pequena demais no tier
-# gratuito (~20 chamadas); o 3.8 e mais novo e tem cota.
-MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.8-flash")
-VERIF_LOTE = int(os.getenv("KAIA_VERIF_LOTE", "5"))   # questoes por chamada de verificacao
+# de nao compartilhar treinamento -- e GERACAO diferente da do gerador (3.5), senao o
+# "modelo independente" compartilha os mesmos vieses e concorda com o proprio erro.
+#
+# Nao use a familia 2.5: o Google parou de liberar 2.5-flash e 2.5-pro para projetos
+# novos (404 "no longer available to new users"), entao trocar a chave derruba o
+# verificador. O teto por DIA no tier gratuito e baixo em toda a familia Flash -- foi
+# assim que 625 questoes ficaram sem veredito; o volume normal cabe (~5 chamadas/dia),
+# o mutirao de estoque nao.
+MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.6-flash")
+VERIF_LOTE = int(os.getenv("KAIA_VERIF_LOTE", "10"))  # questoes por chamada de verificacao
 QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
 VERIFICA_POR_RODADA = 20          # quantas por ciclo do job (em lotes de VERIF_LOTE)
 # Cota DIARIA do verificador (GenerateRequestsPerDayPerProjectPerModel-FreeTier) medida em
@@ -1224,10 +1479,16 @@ async def job_verificar_cache(app):
         return
     async with app.state.pool.acquire() as conn:
         try:
+            # Metade nas MAIS NOVAS (chegam ao aluno agora), metade nas MAIS VELHAS.
+            # So `criada_em desc` deixava o estoque antigo parado enquanto houvesse
+            # geracao -- foi assim que 625 questoes ficaram sem veredito.
             pend = await conn.fetch(
-                "select questao_id, enunciado, alternativas, resposta_correta "
-                "from questoes_cache where veredito is null "
-                "order by criada_em desc limit $1", VERIFICA_POR_RODADA)
+                "(select questao_id, enunciado, alternativas, resposta_correta "
+                " from questoes_cache where veredito is null order by criada_em desc limit $1) "
+                "union "
+                "(select questao_id, enunciado, alternativas, resposta_correta "
+                " from questoes_cache where veredito is null order by criada_em asc limit $1)",
+                VERIFICA_POR_RODADA // 2)
         except Exception as e:
             print("[KaIA] verificacao indisponivel (banco atras do schema?):", e)
             return
@@ -1410,6 +1671,7 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
     """Monta até `n` questões de UMA faixa (materia+tema+nivel): cache-first (hobbie -> genérica
     -> reset de vistas antigas), gera o que faltar no Gemini salvando no cache, marca as
     entregues como vistas e etiqueta o nível (o front escolhe pela faixa no buffer)."""
+    tema = _tema_canonico(tema)
     entregues = []
     # 1) cache com o hobbie da vez
     if hobbie:
@@ -1444,8 +1706,13 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
             # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo não
             exemplos = None
             if FEWSHOT_DINAMICO:
+                # SEMPRE por tema. Antes so as exatas filtravam, e em humanas o few-shot
+                # pescava por semelhanca solta: pedindo "Geopolitica" ele mandava de
+                # exemplo terremoto e macrocefalia urbana, e a questao gerada saia no
+                # tema do exemplo. Medido em GEO: com few-shot 4/6 no tema certo, sem
+                # few-shot 6/6 -- o exemplo estava puxando o conteudo, nao so o estilo.
                 exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=por_pot,
-                                                     por_tema=_exatas_natureza(materia))
+                                                     por_tema=True)
             exemplos = exemplos or (None if por_pot else _exemplos_few_shot(materia))
             feitas = 0
             for _ in range(3):
@@ -1528,7 +1795,7 @@ async def gerar_questao(request: Request, dados: dict = Body(default={}),
                         uid: str = Depends(usuario_autenticado)):
     materia = dados.get("materia", "")
     nome = MATERIAS.get(materia, materia)
-    tema = dados.get("tema", "")
+    tema = _tema_canonico(dados.get("tema", ""))   # casa com o cache mesmo com outra caixa
     hobbie = dados.get("hobbie") or None                 # singular; None = genérica
     user_id = (uid or "").strip() or None                # dono = token, não body.user_id
     # compat com o formato antigo (lista "hobbies"): sorteia um deles como hobbie.

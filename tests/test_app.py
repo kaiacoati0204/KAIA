@@ -1644,6 +1644,103 @@ async def test_sessao_de_conta_de_teste_nao_vai_pro_banco():
     assert not [q for (q, _) in conn.executed if "insert into sessions" in q]
 
 
+def test_distratores_vem_de_erro_de_procedimento():
+    """Cada errada é a conta que sai de um erro real — o '3' quando a resposta é '4'."""
+    d = app_mod._distratores_derivados("15/3", 5.0, "5 A")
+    assert len(d) == 4
+    textos = [t for t, _ in d]
+    assert "45 A" in textos                     # multiplicou em vez de dividir
+    assert all(" A" in t for t in textos)       # unidade preservada (saía "45A")
+    assert all(app_mod._pot_num(t) not in (None, 0, 5.0) for t in textos)
+    motivos = " ".join(m for _, m in d)
+    assert "dividir" in motivos or "divisão" in motivos
+
+
+def test_distratores_tem_ao_menos_dois_perto_da_resposta():
+    # o beta: "você fica presa em duas respostas" — sem isso a questão não prende
+    d = app_mod._distratores_derivados("150*0.2**2*10", 60.0, "60 J")
+    perto = [t for t, _ in d
+             if max(app_mod._pot_num(t) / 60.0, 60.0 / app_mod._pot_num(t))
+             <= app_mod.FATOR_PERTO]
+    assert len(perto) >= app_mod.DISTRATORES_PERTO_MIN
+
+
+def test_distratores_nao_repetem_nem_zeram():
+    for formula, certo, modelo in (("60/120", 0.5, "0.5 A"), ("0.05*20", 1.0, "1.0 V"),
+                                   ("3600/120", 30.0, "30 W")):
+        d = app_mod._distratores_derivados(formula, certo, modelo)
+        textos = [t for t, _ in d]
+        assert len(set(textos)) == len(textos)              # sem repetida
+        assert all(app_mod._pot_num(t) != 0 for t in textos)  # sem "0.0 A"
+
+
+def test_distratores_desistem_quando_a_formula_nao_rende():
+    # fórmula de um termo só: sem operador não há erro de procedimento p/ derivar
+    assert app_mod._distratores_derivados("42", 42.0, "42 m") == []
+    assert app_mod._distratores_derivados("", 1.0, "1 m") == []
+    assert app_mod._distratores_derivados("1/1", 0.0, "0 m") == []
+
+
+def test_formatar_como_segue_o_modelo():
+    assert app_mod._formatar_como(2.0, "0.5 A") == "2.0 A"      # casas e unidade
+    assert app_mod._formatar_como(45, "5 A") == "45 A"          # inteiro segue inteiro
+    assert app_mod._formatar_como(2.5, "1,0 V") == "2,5 V"      # vírgula decimal
+    assert app_mod._pot_num(app_mod._formatar_como(0.0005, "0.5 A")) != 0
+
+
+def test_corte_no_operador_de_menor_precedencia():
+    assert app_mod._pot_corte_topo("150*0.2**2*10")[1] == "*"
+    assert app_mod._pot_corte_topo("2+3*4") == ("2", "+", "3*4")
+    assert app_mod._pot_corte_topo("(2*3)/(4*5)") == ("(2*3)", "/", "(4*5)")
+    assert app_mod._pot_corte_topo("42") is None
+
+
+async def test_montar_banda_divide_calculo_entre_pot_e_conceitual(monkeypatch):
+    """Física saía 100% conta. O lote agora sai dividido: ~60% PoT, ~40% conceitual."""
+    pedidos = []
+    async def fake_pot(n, *a, **k):
+        pedidos.append(("pot", n))
+        return [{"q": f"pot{i}", "opts": list("abcde"), "ans": 0} for i in range(n)]
+    async def fake_conc(n, *a, **k):
+        pedidos.append(("conceitual", n))
+        return [{"q": f"conc{i}", "opts": list("abcde"), "ans": 0} for i in range(n)]
+    monkeypatch.setattr(app_mod, "_gerar_calculo_pot", fake_pot)
+    monkeypatch.setattr(app_mod, "_gerar_no_gemini", fake_conc)
+    monkeypatch.setattr(app_mod, "_buscar_cache", lambda *a, **k: _vazio())
+    monkeypatch.setattr(app_mod, "_salvar_no_cache",
+                        lambda conn, m, t, nv, h, novas: _eco(novas))
+    monkeypatch.setattr(app_mod, "_marcar_vistas", lambda *a, **k: _vazio())
+    monkeypatch.setattr(app_mod, "_enunciados_existentes", lambda *a, **k: _vazio())
+    await app_mod._montar_banda(FakeConn(), "u", "FIS", "Física", "Eletricidade", None, 2, 10)
+    assert dict(pedidos) == {"pot": 6, "conceitual": 4}
+
+
+async def test_montar_banda_materia_conceitual_nao_chama_pot(monkeypatch):
+    pedidos = []
+    async def fake_pot(n, *a, **k):
+        pedidos.append(("pot", n)); return []
+    async def fake_conc(n, *a, **k):
+        pedidos.append(("conceitual", n))
+        return [{"q": f"c{i}", "opts": list("abcde"), "ans": 0} for i in range(n)]
+    monkeypatch.setattr(app_mod, "_gerar_calculo_pot", fake_pot)
+    monkeypatch.setattr(app_mod, "_gerar_no_gemini", fake_conc)
+    monkeypatch.setattr(app_mod, "_buscar_cache", lambda *a, **k: _vazio())
+    monkeypatch.setattr(app_mod, "_salvar_no_cache",
+                        lambda conn, m, t, nv, h, novas: _eco(novas))
+    monkeypatch.setattr(app_mod, "_marcar_vistas", lambda *a, **k: _vazio())
+    monkeypatch.setattr(app_mod, "_enunciados_existentes", lambda *a, **k: _vazio())
+    await app_mod._montar_banda(FakeConn(), "u", "SOC", "Sociologia", "Trabalho", None, 2, 10)
+    assert pedidos == [("conceitual", 10)]
+
+
+async def _vazio():
+    return []
+
+
+async def _eco(novas):
+    return list(novas)
+
+
 # ================================================ prevenção na pausa (Fluxo 1)
 from bandit_prevencao import BRACOS, BanditPrevencao   # noqa: E402
 

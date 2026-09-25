@@ -21,8 +21,11 @@ let idleInterval    = null;
 // real as respostas levaram 50-99s e o overlay subiu 11x em 6 min. Ele e pra quem SAIU (fica
 // fora por minutos), nao pra quem esta pensando — dai o piso alto e o fator sobre a leitura.
 // TEA/TDAH: escurecer a cada 30s e estimulo desnecessario e corta o raciocinio.
-const PISO_OCIOSO_S        = 60;    // nunca abaixo disto, por mais curta que seja
-const PISO_OCIOSO_CALCULO_S = 90;   // MAT/FIS/QUI: tem conta pra fazer
+// Calibrado no dado REAL (164 questoes das sessoes do beta): o maior bloco parado
+// por questao teve p95 = 78s e MAXIMO de 109s. Com piso 60s o overlay subiria em 12%
+// das questoes -- em cima de quem estava so pensando. Em 120s, nenhuma.
+const PISO_OCIOSO_S        = 120;   // nunca abaixo disto, por mais curta que seja
+const PISO_OCIOSO_CALCULO_S = 150;  // MAT/FIS/QUI: tem conta pra fazer
 const FATOR_OCIOSO         = 3;     // sobre a estimativa de leitura
 const MATERIAS_CALCULO     = ['MAT', 'FIS', 'QUI'];   // codigos, e o que 'subject' carrega
 

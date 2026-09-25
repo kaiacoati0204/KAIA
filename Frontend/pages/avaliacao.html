@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA | Avaliar</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../config.js"></script>
+    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+    </script>
+</head>
+
+<!-- data-rail: o comum.js injeta a barra lateral estática. Esta página não está no
+     MENU_LINKS de propósito — chega-se a ela pelo botão do perfil, e um item a mais
+     na rail competiria com as seis áreas do estudo. -->
+<body data-rail>
+
+    <main class="conteudo">
+        <section class="perfil">
+
+            <div class="secao-perfil">
+                <a href="perfil.html" class="voltar">← Voltar ao perfil</a>
+                <h2>Sua opinião</h2>
+                <p class="secao-sub">Sua experiência ajuda a gente a melhorar de verdade.
+                    Leva 2 minutinhos 💛</p>
+
+                <!-- SÓ data-tally-src, sem `src`: o loadEmbeds() do Tally procura por
+                     `iframe[data-tally-src]:not([src])`. Com o src já preenchido ele pulava
+                     este iframe, que ficava preso na altura fixa e rolava por dentro.
+                     height pequeno de propósito — o script mede o formulário e cresce o
+                     iframe até a altura total, então quem rola é a PÁGINA.
+                     hideTitle porque o &lt;h2&gt; acima já nomeia a página;
+                     transparentBackground para o form pegar o tema de fundo escolhido nas
+                     Configurações do perfil, em vez de abrir uma mancha branca no meio. -->
+                <div class="form-avaliacao">
+                    <iframe
+                        data-tally-src="https://tally.so/embed/68oA4J?alignLeft=1&amp;hideTitle=1&amp;transparentBackground=1&amp;dynamicHeight=1"
+                        width="100%" height="200" frameborder="0" marginheight="0" marginwidth="0"
+                        title="Formulário de avaliação da KaIA"></iframe>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Bootstrap de embed do Tally (o snippet oficial). Vale pelos dois caminhos:
+         com o embed.js carregado, o loadEmbeds() assume o iframe e sincroniza a altura;
+         se o script for bloqueado (rede de escola costuma barrar domínio externo), o
+         onerror ainda preenche o src na mão — o formulário aparece, só sem crescer
+         sozinho. Nesse caso o min-height do .form-avaliacao segura um tamanho usável. -->
+    <script>
+        (function () {
+            const URL_TALLY = 'https://tally.so/widgets/embed.js';
+            const ligar = () => {
+                if (typeof Tally !== 'undefined') return Tally.loadEmbeds();
+                // sem o script: pelo menos mostra o formulário
+                document.querySelectorAll('iframe[data-tally-src]:not([src])')
+                    .forEach(el => { el.src = el.dataset.tallySrc; });
+            };
+            if (typeof Tally !== 'undefined') return ligar();
+            if (document.querySelector('script[src="' + URL_TALLY + '"]')) return;
+            const s = document.createElement('script');
+            s.src = URL_TALLY;
+            s.onload = ligar;
+            s.onerror = ligar;
+            document.body.appendChild(s);
+        })();
+    </script>
+
+    <script src="../js/comum.js"></script>
+</body>
+
+</html>

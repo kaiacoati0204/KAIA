@@ -97,6 +97,17 @@
                         <span class="switch-slider"></span>
                     </label>
                 </div>
+                <!-- Luminosidade: NÃO é modo noturno. Quatro variações do mesmo papel,
+                     todas conferidas no contraste (ver o bloco data-luz no style.css). -->
+                <div class="linha-perfil linha-luz">
+                    <span id="luzRotulo">Tema do fundo</span>
+                    <div class="luz-controle">
+                        <input type="range" class="luz-escala" id="ajusteLuz"
+                               min="1" max="4" step="1" value="1"
+                               aria-labelledby="luzRotulo" aria-describedby="luzNivel">
+                        <span class="luz-nivel" id="luzNivel" aria-live="polite">Padrão</span>
+                    </div>
+                </div>
             </div>
 
             <div class="secao-perfil">
@@ -124,12 +135,45 @@
                 </div>
             </div>
 
+            <!-- Convite para avaliar. O formulário vive em avaliacao.html e não aqui:
+                 embutido, ele dobrava a altura do perfil e empurrava a análise para longe.
+                 Fica no fim de propósito — quem chega até aqui já viu o próprio
+                 desempenho e tem o que dizer. -->
+            <div class="secao-perfil secao-avaliar">
+                <div class="avaliar-texto">
+                    <h2>Como está sendo a KaIA?</h2>
+                    <p class="secao-sub">Sua experiência ajuda a gente a melhorar de verdade.
+                        Leva 2 minutinhos 💛</p>
+                </div>
+                <a href="avaliacao.html" class="btn-avaliar">Contar como foi 💛</a>
+            </div>
+
         </section>
     </main>
 
     <script src="../js/comum.js"></script>
     <script src="../js/perfil.js"></script>
     <script>
+        // Luminosidade do fundo: o comum.js aplica em toda página; aqui só o controle.
+        // A prévia é imediata (o aluno precisa VER o nível pra escolher), e a gravação
+        // acontece no mesmo gesto — não há botão de confirmar.
+        (function () {
+            const NOMES = { 1: 'Padrão', 2: 'Neutro', 3: 'Azul suave', 4: 'Cinza-pedra' };
+            const escala = document.getElementById('ajusteLuz');
+            const rotulo = document.getElementById('luzNivel');
+            if (!escala || typeof aplicarLuzFundo !== 'function') return;
+            const mostrar = (n) => {
+                escala.value = n;
+                rotulo.textContent = NOMES[n];
+                escala.setAttribute('aria-valuetext', NOMES[n]);   // leitor de tela lê o nome, não "3"
+            };
+            mostrar(aplicarLuzFundo());
+            escala.addEventListener('input', () => {
+                localStorage.setItem('kaia_luz_fundo', escala.value);
+                mostrar(aplicarLuzFundo());
+            });
+        })();
+
         // Toggle da textura de papel (Etapa 6 — PREVIEW só no perfil por enquanto).
         // Preferência por-dispositivo em localStorage; desligada por padrão.
         (function () {

@@ -153,6 +153,15 @@
                         <span class="caderno-titulo" id="caderno-tema">Caderno</span>
                         <span class="caderno-status" id="caderno-status" data-estado="salvo">salvo</span>
                     </div>
+                    <!-- Paleta de símbolos: só MAT e FIS (o materias.js mostra/esconde por
+                         currentSubject). <details> nativo — recolhido por padrão, abre por
+                         teclado e não precisa de JS pro toggle. Os botões são preenchidos
+                         pelo JS. São caracteres Unicode: entram no texto como qualquer letra
+                         e salvam no caderno sem mexer no armazenamento. -->
+                    <details class="cad-simbolos" id="cad-simbolos" hidden>
+                        <summary>Símbolos</summary>
+                        <div class="cad-simbolos-grade" id="cad-simbolos-grade"></div>
+                    </details>
                     <div class="caderno-canvas" id="caderno-canvas"></div>
                     <p class="caderno-dica">
                         Clique num espaço vazio para escrever · cole imagem com Ctrl+V · arraste pela alça <span aria-hidden="true">⠿</span> · Delete apaga o bloco selecionado

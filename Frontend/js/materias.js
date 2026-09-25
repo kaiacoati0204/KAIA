@@ -498,17 +498,16 @@ function iniciarPollIntervencao() {
 // Remover: apagar este bloco e todo trecho marcado "(gatilho de teste)".
 const GATILHO_TESTE = false;
 
-// Barra de teste: AUTOMÁTICA nas contas @teste.kaia (as de teste que criamos), OU por
-// flag no localStorage (kaiaGatilhoTeste(true)), OU pela const de produção. Assim ela
-// só aparece pra quem está testando, sem tocar no GATILHO_TESTE=false de produção.
+// Barra de teste: ESCONDIDA por padrão, inclusive nas contas @teste.kaia. Ela era
+// automática nesses emails, mas os testers do beta usam justamente essas contas — e
+// uma intervenção disparada à mão entra na sessão como se fosse do modelo, sujando o
+// dado que o beta existe para coletar.
+// Agora só liga por gesto explícito: kaiaGatilhoTeste(true) no console (persiste até
+// kaiaGatilhoTeste(false)), ou GATILHO_TESTE=true em código.
 function _barraTesteLigada() {
     try {
-        const p = (typeof lerPerfil === 'function' && lerPerfil()) || {};
-        const u = (typeof lerUsuario === 'function' && lerUsuario()) || {};
-        const email = (p.email || u.email || '').toLowerCase();
-        if (email.endsWith('@teste.kaia')) return true;
         if (localStorage.getItem('kaia_teste_bar') === '1') return true;
-    } catch (e) { /* perfil/localStorage indisponível */ }
+    } catch (e) { /* localStorage indisponível */ }
     return GATILHO_TESTE;
 }
 
@@ -1999,6 +1998,7 @@ async function carregarQuestao(subject, tema) {
     if (typeof cadAberto === 'function' && cadAberto() && cadTema !== tema) {
         carregarCaderno(tema);
     }
+    sincronizarSimbolosCaderno();   // a matéria pode ter mudado entre rodadas
 
     // Reabastece a fila em background (sem loader) enquanto o aluno lê/responde.
     talvezReabastecerFila(subject, tema);
@@ -3039,6 +3039,7 @@ function toggleCaderno() {
     if (botao) botao.setAttribute('aria-pressed', String(abrindo));
     if (abrindo) carregarCaderno(currentTema);
     sincronizarAlca();   // sem caderno aberto não há divisória
+    sincronizarSimbolosCaderno();   // paleta só em MAT/FIS
 }
 
 // Troca o canvas para um tema (salva o anterior antes, se estiver sujo).
@@ -3610,3 +3611,93 @@ function ligarAlcaSplit() {
 }
 
 document.addEventListener('DOMContentLoaded', ligarAlcaSplit);
+
+// ============================================================
+//  PALETA DE SÍMBOLOS DO CADERNO (só MAT e FIS)
+// ============================================================
+// Caracteres Unicode, sem biblioteca e sem fração montável (decidido: montável exigiria
+// trocar o armazenamento do caderno de texto puro para conteúdo rico). Símbolo É texto:
+// entra no .cad-texto como qualquer letra, dispara o mesmo `input` que já salva, e sobe
+// pro /anotacoes sem nenhuma mudança de formato.
+const CAD_MATERIAS_SIMBOLOS = ['MAT', 'FIS'];
+const CAD_SIMBOLOS = [
+    ['π', 'pi'], ['√', 'raiz quadrada'], ['∑', 'somatório'], ['∫', 'integral'],
+    ['≤', 'menor ou igual'], ['≥', 'maior ou igual'], ['≠', 'diferente'], ['±', 'mais ou menos'],
+    ['∞', 'infinito'], ['·', 'multiplicação (ponto)'], ['÷', 'divisão'], ['×', 'multiplicação'],
+    ['²', 'ao quadrado'], ['³', 'ao cubo'], ['½', 'um meio'], ['¼', 'um quarto'], ['⅓', 'um terço'],
+    ['Δ', 'delta'], ['θ', 'teta'], ['α', 'alfa'], ['β', 'beta'], ['λ', 'lambda'],
+    ['μ', 'mi'], ['σ', 'sigma'], ['→', 'seta para a direita'], ['∈', 'pertence a'], ['°', 'grau'],
+];
+
+// Guardado no focusin (delegado no canvas) em vez de dentro do montarBloco: os blocos
+// nascem sob demanda, e assim a paleta não precisa tocar na criação deles.
+let _cadUltimoTexto = null;
+
+// Insere no ponto do cursor. execCommand é depreciado mas é o único caminho que mantém
+// o histórico de desfazer do contenteditable — e dispara o `input` que o caderno já
+// escuta para salvar. O fallback manual cobre navegador que o recuse.
+function inserirSimboloCaderno(simbolo) {
+    const ativo = document.activeElement;
+    const alvo = (ativo && ativo.classList && ativo.classList.contains('cad-texto'))
+        ? ativo : _cadUltimoTexto;
+    if (!alvo || !alvo.isConnected) return false;
+
+    if (document.activeElement !== alvo) {
+        alvo.focus();
+        const r = document.createRange();
+        r.selectNodeContents(alvo);
+        r.collapse(false);                  // sem cursor conhecido, escreve no fim
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+    }
+    let ok = false;
+    try { ok = document.execCommand('insertText', false, simbolo); } catch (e) { ok = false; }
+    if (!ok) {
+        const sel = window.getSelection();
+        if (!sel || !sel.rangeCount) return false;
+        const r = sel.getRangeAt(0);
+        r.deleteContents();
+        const no = document.createTextNode(simbolo);
+        r.insertNode(no);
+        r.setStartAfter(no);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        alvo.dispatchEvent(new Event('input', { bubbles: true }));   // o salvar escuta isto
+    }
+    return true;
+}
+
+function montarSimbolosCaderno() {
+    const grade = $('cad-simbolos-grade');
+    if (!grade || grade.childElementCount) return;      // monta uma vez só
+
+    CAD_SIMBOLOS.forEach(([s, nome]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cad-simbolo';
+        b.textContent = s;
+        b.title = nome;
+        b.setAttribute('aria-label', `Inserir ${nome} (${s})`);
+        // preventDefault no mousedown: sem isto o clique tira o foco do .cad-texto e o
+        // cursor se perde antes de o símbolo chegar.
+        b.addEventListener('mousedown', (e) => e.preventDefault());
+        b.addEventListener('click', () => inserirSimboloCaderno(s));
+        grade.appendChild(b);
+    });
+
+    cadCanvas()?.addEventListener('focusin', (e) => {
+        if (e.target.classList?.contains('cad-texto')) _cadUltimoTexto = e.target;
+    });
+}
+
+// Chamada ao abrir o caderno e a cada questão nova: a matéria muda entre rodadas.
+function sincronizarSimbolosCaderno() {
+    const cx = $('cad-simbolos');
+    if (!cx) return;
+    const mostrar = CAD_MATERIAS_SIMBOLOS.includes(currentSubject);
+    cx.hidden = !mostrar;
+    if (!mostrar) cx.open = false;      // trocar de matéria não deixa a gaveta aberta e vazia
+    else montarSimbolosCaderno();
+}

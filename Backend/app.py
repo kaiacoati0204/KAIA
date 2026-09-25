@@ -842,13 +842,17 @@ def _pot_num(s):
 # É a mesma ideia de item-writing de prova de verdade: distrator bom vem de erro
 # previsível do aluno, não de opção implausível.
 
-# Pelo menos este tanto das erradas tem de cair PERTO da resposta (dentro do fator
-# abaixo). Sem isso a questão não "prende": o aluno elimina por ordem de grandeza.
-# O fator é 10 e não 3 porque erro de procedimento REAL costuma dar salto grande --
-# inverter 15/3 já dá 25x. Medido nas fórmulas do beta: com 3 nenhuma questão
-# passava, com 10 todas passam.
+# Quantas das erradas têm de cair PERTO da resposta (dentro do fator abaixo). Sem
+# isso a questão não "prende": o aluno elimina por ordem de grandeza e acerta sem
+# fazer conta nenhuma -- medido, dava para acertar 8 de 8 assim.
+# O aperto (3 dentro de 5x) só é possível porque _pot_mutacoes passou a gerar erros
+# que nascem perto (fator 2, gravidade arredondada); com as mutações antigas, que dão
+# saltos de 25x ou mais, nenhuma questão passaria nesse critério.
+# 2 e nao 3: com 3, metade das formulas simples (30 = 3600/120) desistia e caia nas
+# alternativas do MODELO -- que medimos em 100% de acerto sem calcular. Desistir e
+# pior que um criterio um pouco mais frouxo.
 DISTRATORES_PERTO_MIN = 2
-FATOR_PERTO = 10.0
+FATOR_PERTO = 5.0
 
 
 def _pot_mutacoes(formula):
@@ -874,6 +878,17 @@ def _pot_mutacoes(formula):
         m.append((1, "esqueceu de elevar ao quadrado", f.replace("**2", "", 1)))
     if "**" in f:
         m.append((1, "usou o expoente errado", f.replace("**", "*", 1)))
+    # fator 1/2 (energia cinética, área de triângulo, MRUV): só se ele existe mesmo
+    if "/2" in f or "*0.5" in f or "0.5*" in f:
+        m.append((1, "esqueceu de dividir por 2", f"({f})*2"))
+    # gravidade arredondada: erro clássico e cai a 2% da resposta
+    if "9.8" in f:
+        m.append((2, "arredondou a gravidade para 10", f.replace("9.8", "10")))
+    if "9,8" in f:
+        m.append((2, "arredondou a gravidade para 10", f.replace("9,8", "10")))
+    # contar um valor a mais / a menos: erro de leitura do enunciado, e cai a 2x
+    m.append((2, "contou o valor duas vezes", f"({f})*2"))
+    m.append((2, "usou só metade do valor", f"({f})/2"))
     m.append((2, "não converteu a unidade", f"({f})/1000"))
     m.append((2, "converteu para o lado errado", f"({f})*1000"))
     m.append((3, "errou a ordem de grandeza", f"({f})*10"))
@@ -920,6 +935,12 @@ def _formatar_como(valor, modelo):
         num = f"{valor:.2g}"                     # pequeno demais p/ as casas do modelo
     elif casas:
         num = f"{valor:.{casas}f}"
+        # As casas do modelo podem deformar o valor (0,25 virava "0,2" e a alternativa
+        # deixava de ser a conta que o "por que errou" diz que e). Ganha casas ate bater.
+        for extra in range(1, 4):
+            if abs(float(num) - valor) <= abs(valor) * 0.01:
+                break
+            num = f"{valor:.{casas + extra}f}"
     else:
         num = f"{round(valor):d}" if abs(valor) >= 1 else f"{valor:.2g}"
     if "," in bruto and "." not in bruto:

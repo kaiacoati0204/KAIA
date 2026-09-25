@@ -1691,6 +1691,13 @@ def test_distratores_desistem_quando_a_formula_nao_rende():
     assert app_mod._distratores_derivados("1/1", 0.0, "0 m") == []
 
 
+def test_formatar_nao_deforma_o_valor():
+    """0,25 virava "0,2" nas casas do modelo — e aí a alternativa deixava de ser a
+    conta que o "por que errou" afirma que ela é."""
+    assert app_mod._pot_num(app_mod._formatar_como(0.25, "0.5 A")) == 0.25
+    assert app_mod._pot_num(app_mod._formatar_como(0.125, "1.0 V")) == 0.125
+
+
 def test_formatar_como_segue_o_modelo():
     assert app_mod._formatar_como(2.0, "0.5 A") == "2.0 A"      # casas e unidade
     assert app_mod._formatar_como(45, "5 A") == "45 A"          # inteiro segue inteiro

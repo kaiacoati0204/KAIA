@@ -68,3 +68,10 @@ council-transcript-*.md
 # base de terceiro: nao vai para o repositorio
 ml/dados_externos/
 skill_builder_data.csv
+
+# Saidas das comparacoes (o codigo que gera esta versionado; o resultado, nao).
+# base_b_2023.json: rode ml/baixar_itens_enem.py + ml/montar_base_dificuldade.py
+ml/artifacts/comparar_llms.json
+ml/artifacts/temas_que_caem.json
+ml/artifacts/base_b_*.json
+ml/artifacts/itens_*.csv

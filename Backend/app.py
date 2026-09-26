@@ -1373,7 +1373,10 @@ Regras:
 # somaria ~5s ao aluno); ate la a questao fica em QUARENTENA, servida a poucos alunos.
 # Versao das REGRAS do prompt: suba ao mudar qualquer regra de geracao, senao questao
 # velha e nova ficam indistinguiveis no banco.
-VERSAO_PROMPT = "v4-2026-09"
+# v5: distratores derivados da formula (erro de procedimento em vez de alternativa
+# inventada), rubrica separada por caminho (conta x conceito), regra de tema vizinho,
+# hobbie como cenario e nao assunto, variedade de formato forcada.
+VERSAO_PROMPT = "v5-2026-09"
 
 # Gera mais do que precisa e fica com as que passam nas barreiras (como o Duolingo).
 # Encarece ~50% a geracao (fracao de centavo) e evita lote curto; o aluno continua vendo n.

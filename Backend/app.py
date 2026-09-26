@@ -1389,6 +1389,19 @@ FATOR_SOBRA_GERACAO = 1.5
 # o mutirao de estoque nao.
 MODELO_VERIFICADOR = os.getenv("KAIA_MODELO_VERIFICADOR", "gemini-3.6-flash")
 VERIF_LOTE = int(os.getenv("KAIA_VERIF_LOTE", "10"))  # questoes por chamada de verificacao
+# Provedor do VERIFICADOR, separado do gerador. O padrao e gemini -- medido em 131
+# questoes do ENEM com gabarito oficial, o gemini-3.6-flash pegou 19 de 20 gabaritos
+# adulterados sem acusar NENHUMA das 20 boas, e foi o melhor dos 7 testados.
+#
+# O groq existe aqui por COTA, nao por qualidade: ele roda numa conta diferente, entao
+# esvaziar estoque de quarentena por la nao gasta o orcamento que gera questao para o
+# aluno -- que e o que travou 600 questoes sem veredito. Modelo aberto rodando em
+# hardware de outra empresa: independencia de verdade do gerador, que e Gemini.
+# Cuidado: o free tier do groq tem teto de 8.000 TOKENS/MINUTO (o limite de 1.000
+# requisicoes/dia nem chega perto), por isso a pausa e o lote menor.
+VERIF_PROVEDOR = os.getenv("KAIA_VERIF_PROVEDOR", "gemini").lower()
+VERIF_MODELO_GROQ = os.getenv("KAIA_VERIF_MODELO_GROQ", "openai/gpt-oss-20b")
+VERIF_PAUSA_S = float(os.getenv("KAIA_VERIF_PAUSA_S", "0"))
 QUARENTENA_MAX_ALUNOS = int(os.getenv("KAIA_QUARENTENA_ALUNOS", "3"))
 VERIFICA_POR_RODADA = 20          # quantas por ciclo do job (em lotes de VERIF_LOTE)
 # Cota DIARIA do verificador (GenerateRequestsPerDayPerProjectPerModel-FreeTier) medida em
@@ -1418,6 +1431,62 @@ def _letra_para_indice(letra):
     return ord(letra) - 65 if len(letra) == 1 and "A" <= letra <= "E" else None
 
 
+def _segundos(valor):
+    """'39.915s', '1m30s', '0.69' -> segundos. O Groq manda com sufixo, e float()
+    cru levantava ValueError -- a excecao subia e o lote inteiro virava 'sem
+    resposta' em milissegundos, sem nunca esperar."""
+    t = str(valor or "").strip().lower()
+    if not t:
+        return 0.0
+    total, num = 0.0, ""
+    for ch in t:
+        if ch.isdigit() or ch == ".":
+            num += ch
+        elif ch in "hms" and num:
+            total += float(num) * {"h": 3600, "m": 60, "s": 1}[ch]
+            num = ""
+    if num:
+        total += float(num)
+    return total
+
+
+def _chamar_verificador(prompt):
+    """Texto cru do verificador, no provedor configurado. Vazio = nao respondeu."""
+    if VERIF_PAUSA_S:
+        time.sleep(VERIF_PAUSA_S)          # teto por minuto do groq
+    if VERIF_PROVEDOR == "groq":
+        # O teto e por MINUTO (8.000 tokens no tier gratuito) e o proprio Groq diz
+        # quanto esperar no `retry-after`. Sem honrar isso, um pico derruba o lote
+        # inteiro -- medido: 12 de 12 questoes voltavam vazias, e a chamada avulsa
+        # logo depois funcionava.
+        for tentativa in range(4):
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions", timeout=180,
+                headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY', '')}"},
+                json={"model": VERIF_MODELO_GROQ, "temperature": 0, "max_tokens": 2500,
+                      "messages": [{"role": "user", "content": prompt}]})
+            if r.status_code == 200:
+                # Espera ANTES de estourar: o Groq diz quanto resta do minuto e quando
+                # zera. Bater no teto e so descobrir depois custa uma rodada inteira de
+                # 429 -- foi assim que 418 de 428 questoes voltaram vazias.
+                resta = _segundos(r.headers.get("x-ratelimit-remaining-tokens"))
+                if resta and resta < 2000:
+                    time.sleep(_segundos(r.headers.get("x-ratelimit-reset-tokens")) + 1)
+                return (r.json()["choices"][0]["message"].get("content") or "")
+            if r.status_code not in (429, 503):
+                return ""
+            espera = (_segundos(r.headers.get("retry-after"))
+                      or _segundos(r.headers.get("x-ratelimit-reset-tokens"))
+                      or 15 * (tentativa + 1))
+            time.sleep(min(espera + 1, 65))
+        return ""
+    url = ("https://generativelanguage.googleapis.com/v1beta/"
+           f"models/{MODELO_VERIFICADOR}:generateContent?key={API_KEY}")
+    r = requests.post(url, json={"contents": [{"parts": [{"text": prompt}]}]},
+                      timeout=180).json()
+    return r["candidates"][0]["content"]["parts"][0]["text"]
+
+
 def verificar_lote(questoes):
     """[(indice, nota)] para uma lista de (enunciado, opts), UMA chamada só.
     -1 = "nenhuma alternativa correta"; None = sem resposta do verificador para aquela
@@ -1428,14 +1497,12 @@ def verificar_lote(questoes):
     for i, (enun, opts) in enumerate(questoes, 1):
         alts = "\n".join(f"{chr(65 + j)}) {o}" for j, o in enumerate(opts))
         blocos.append(f"### Questão {i}\n{enun}\n{alts}")
-    url = ("https://generativelanguage.googleapis.com/v1beta/"
-           f"models/{MODELO_VERIFICADOR}:generateContent?key={API_KEY}")
-    body = {"contents": [{"parts": [{"text": _PROMPT_VERIFICACAO.format(
-        questoes=("\n\n").join(blocos))}]}]}
+    prompt = _PROMPT_VERIFICACAO.format(questoes=("\n\n").join(blocos))
     vazio = [(None, "")] * len(questoes)
     try:
-        r = requests.post(url, json=body, timeout=180).json()
-        bruto = r["candidates"][0]["content"]["parts"][0]["text"].strip()
+        bruto = _chamar_verificador(prompt).strip()
+        if not bruto:
+            return vazio
     except Exception:
         return vazio
     try:

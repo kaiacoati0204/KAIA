@@ -1840,7 +1840,41 @@ let revisaoRespondidas = 0;
 // Dificuldade adaptativa (Parte 6): centro começa em 2. NÃO muda no meio da rodada —
 // cada rodada é um SORTEIO de níveis com peso no centro (sortearDistribuicao). No FIM
 // das META questões, a NOTA move o centro em ±1 (>=7 sobe, <=4 desce).
-let nivelDificuldade = 2;    // centro atual (1..5)
+let nivelDificuldade = 2;    // centro atual (1..5) — carregado por MATÉRIA ao abrir
+
+// ==== NÍVEL POR MATÉRIA (persistido) ====
+// Antes o nível zerava em 2 a cada troca de matéria (e a troca recarrega a página), então
+// quem chegava ao 4 em matemática recomeçava física no 2 — e quem alternava matérias nunca
+// saía do piso. Pior: reconquistar o nível custa uma rodada de questões fáceis demais, e
+// tédio é um dos empurrões conhecidos para a mente vagar.
+//
+// Cada matéria guarda o seu, porque ser bom em português não diz nada sobre física.
+// Decaimento em vez de reset: sem praticar aquela matéria por um tempo, cai UM nível —
+// modelar esquecimento é razoável, mandar de volta ao piso não é.
+const NIVEL_CHAVE = 'kaia_nivel_materia';
+const NIVEL_DECAI_DIAS = 14;   // sem tocar na matéria por isso, cai 1
+
+function lerNiveis() {
+    try { return JSON.parse(localStorage.getItem(NIVEL_CHAVE) || '{}'); }
+    catch { return {}; }
+}
+
+function carregarNivel(materia) {
+    // nivelComDecaimento vem de puros.js (carregado antes) — testável à parte
+    return nivelComDecaimento(lerNiveis()[materia], Date.now(),
+                              NIVEL_DECAI_DIAS, NIVEL_MIN, NIVEL_MAX);
+}
+
+function guardarNivel(materia, nivel) {
+    if (!materia) return;
+    try {
+        const todos = lerNiveis();
+        todos[materia] = { nivel, em: Date.now() };
+        localStorage.setItem(NIVEL_CHAVE, JSON.stringify(todos));
+    } catch (e) {
+        console.warn('[KaIA] nível não persistiu:', e);   // segue com o da memória
+    }
+}
 let acertosNaRodada  = 0;    // acertos da rodada corrente -> define a troca de nível
 let validadasNaRodada = 0;   // dessas, quantas NÃO estavam em quarentena
 let rodadaId = 0;           // muda a cada rodada: resposta atrasada do /events não mexe na rodada seguinte
@@ -1864,6 +1898,7 @@ function fecharNivelDaRodada() {
     acertosNaRodada = 0;
     validadasNaRodada = 0;
     rodadaId++;
+    guardarNivel(currentSubject, nivelDificuldade);
     atualizarNivel();
     return nivelDificuldade !== antigo;
 }
@@ -1901,7 +1936,7 @@ async function iniciarSessaoEstudo(subject, tema) {
     sortearAlvoProbe(true);        // 1ª rodada da sessão: cobre a abertura
     errosSessao = [];
     emRevisao = false;
-    nivelDificuldade = 2;
+    nivelDificuldade = carregarNivel(subject);   // retoma o nível DESTA matéria
     acertosNaRodada = 0;
     validadasNaRodada = 0;
     rodadaId++;
@@ -2019,6 +2054,10 @@ async function startMission(subject, tema) {
     try {
         if (!sessaoDeEstudoAberta) await iniciarSessaoEstudo(subject, tema);
         await carregarQuestao(subject, tema);
+        // Saiu no meio e voltou dentro da janela: a oferta anterior não foi consumida,
+        // então ela CONTINUA aqui (mesma decisão do bandit, não uma nova).
+        const pend = lerPlanoPendente();
+        if (pend) mostrarPlanoRetomado(pend);
     } finally {
         esperaIAFim();   // sai sempre, inclusive se iniciarSessaoEstudo falhar
     }
@@ -3449,6 +3488,10 @@ function mostrarPacoteFoco(cx, plano) {
         : '';
     const texto = plano?.texto || 'Se eu pensar em pegar o celular, então termino a questão aberta primeiro.';
     _planoAtual = plano?.id || 'celular';
+    // a decisão do bandit vai junto: retomar é a MESMA decisão, não uma nova — contar
+    // duas vezes daria ao braço mais evidência do que ele tem
+    guardarPlanoPendente({ id: _planoAtual, texto, aceito: false,
+                           decisao_session_id: sessionId });
     cx.innerHTML = `
         ${devolucao}
         <p class="apoio-pergunta">Um plano para a próxima rodada:</p>
@@ -3462,13 +3505,90 @@ function mostrarPacoteFoco(cx, plano) {
 
 let _planoAtual = null;
 
+// ==== O PLANO SOBREVIVE À SAÍDA ====
+// A oferta aparecia no fim da rodada e morria ali: quem saía para outra matéria
+// recomeçava sem nada, porque a próxima oferta só viria depois de mais 10 questões —
+// e sair recarrega a página, então a memória some. Aqui ela fica no localStorage.
+//
+// Por que 2 h: nos intervalos reais entre sessões, as pessoas ou voltam em minutos
+// (mediana 16 min) ou voltam dias depois; entre 2 h e 12 h quase não há caso, então
+// qualquer valor nessa faixa dá o mesmo. 2 h é o menor que ainda cobre continuação.
+//
+// A pesquisa de intenção de implementação diz que o plano NÃO vence em horas (o efeito
+// decai em semanas) e que LEMBRAR renova a ativação. Por isso retomar é melhor que
+// reofertar: para quem aceitou, é lembrete + devolução; para quem não aceitou, é uma
+// segunda chance numa fronteira melhor (voltando a estudar, não indo embora).
+const PLANO_CHAVE = 'kaia_plano_pendente';
+const PLANO_VALE_MS = 2 * 60 * 60 * 1000;
+
+function guardarPlanoPendente(dados) {
+    try { localStorage.setItem(PLANO_CHAVE, JSON.stringify({ ...dados, em: Date.now() })); }
+    catch (e) { console.warn('[KaIA] plano não persistiu:', e); }
+}
+
+function lerPlanoPendente() {
+    try {
+        const d = JSON.parse(localStorage.getItem(PLANO_CHAVE) || 'null');
+        if (!d || Date.now() - (d.em || 0) > PLANO_VALE_MS) return null;
+        return d;
+    } catch { return null; }
+}
+
+function limparPlanoPendente() {
+    try { localStorage.removeItem(PLANO_CHAVE); } catch (e) { /* storage bloqueado */ }
+}
+
 function escolherPlano(aceitou) {
     // `meta` mantém o nome antigo do campo para o relatório continuar lendo a aceitação
     logEvent('meta_rodada', { meta: aceitou ? 1 : null, plano: _planoAtual, aceitou });
-    const cx = $('resumo-apoio');
+    const pend = lerPlanoPendente();
+    if (pend) guardarPlanoPendente({ ...pend, aceito: !!aceitou });
+    // a decisão pode estar vindo da oferta (modal do fim) ou da retomada (início)
+    const cx = $('retomada-apoio')?.hidden === false ? $('retomada-apoio') : $('resumo-apoio');
     if (!cx) return;
     if (!aceitou) { cx.hidden = true; return; }
     cx.innerHTML = '<p class="apoio-devolucao">Combinado. Boa rodada!</p>';
+}
+
+
+// Ao RETOMAR (saiu e voltou dentro das 2 h), em vez da oferta do zero:
+//   aceitou antes -> lembra o combinado e pergunta se funcionou (automonitoramento)
+//   não aceitou   -> mostra de novo, com a opção de aceitar
+function mostrarPlanoRetomado(pend) {
+    const cx = $('retomada-apoio');
+    if (!cx) return false;
+    _planoAtual = pend.id;
+    if (pend.aceito) {
+        cx.innerHTML = `
+            <p class="apoio-pergunta">Você tinha combinado:</p>
+            <p class="apoio-plano">“${pend.texto}”</p>
+            <div class="apoio-botoes">
+                <button type="button" onclick="responderRetomada(true)">Funcionou</button>
+                <button type="button" class="apoio-pular"
+                        onclick="responderRetomada(false)">Não deu</button>
+            </div>`;
+    } else {
+        cx.innerHTML = `
+            <p class="apoio-pergunta">Um plano para esta rodada:</p>
+            <p class="apoio-plano">“${pend.texto}”</p>
+            <div class="apoio-botoes">
+                <button type="button" onclick="escolherPlano(true)">Combinado</button>
+                <button type="button" class="apoio-pular"
+                        onclick="escolherPlano(false)">Agora não</button>
+            </div>`;
+    }
+    cx.hidden = false;
+    logEvent('plano_retomado', { plano: pend.id, era_aceito: !!pend.aceito,
+                                 minutos_fora: Math.round((Date.now() - pend.em) / 60000),
+                                 decisao_session_id: pend.decisao_session_id || null });
+    return true;
+}
+
+function responderRetomada(funcionou) {
+    logEvent('plano_resultado', { plano: _planoAtual, funcionou });
+    limparPlanoPendente();                       // já foi devolvido: não repete
+    const cx = $('retomada-apoio');
+    if (cx) cx.hidden = true;
 }
 
 // A pausa já existe (pomodoro). Aqui ela é OFERECIDA, não imposta — quem decide é o aluno.

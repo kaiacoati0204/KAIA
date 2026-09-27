@@ -34,7 +34,22 @@
         });
     }
 
+    // Nível guardado por matéria, envelhecido pelo tempo sem praticar. Fica aqui (e não
+    // em materias.js) porque é pura: dado o registro e o agora, devolve o nível -- e por
+    // isso dá para testar o decaimento sem mexer em localStorage.
+    //
+    // Cai UM nível a cada janela sem tocar na matéria, em vez de voltar ao piso: modelar
+    // esquecimento é razoável, mandar quem estava no 4 de volta ao 2 não é -- e
+    // reconquistar custa uma rodada de questões fáceis demais, que é convite ao tédio.
+    function nivelComDecaimento(reg, agora, janelaDias = 14, min = 1, max = 5) {
+        if (!reg || !Number.isInteger(reg.nivel)) return 2;
+        const dias = Math.max(0, (agora - (reg.em || 0)) / 86400000);
+        const quedas = Math.floor(dias / janelaDias);
+        return Math.max(min, Math.min(reg.nivel - quedas, max));
+    }
+
     raiz.calculateReadingTime = calculateReadingTime;
     raiz.bytesDataUrl = bytesDataUrl;
     raiz.renderBotoes = renderBotoes;
+    raiz.nivelComDecaimento = nivelComDecaimento;
 })(globalThis);

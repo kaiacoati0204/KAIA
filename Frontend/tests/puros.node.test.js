@@ -37,3 +37,33 @@ describe('bytesDataUrl', () => {
     expect(bytesDataUrl('data:x;base64,TQ==')).toBe(1);
   });
 });
+
+describe('nivelComDecaimento', () => {
+  const { nivelComDecaimento } = globalThis;
+  const AGORA = Date.parse('2026-09-27T12:00:00Z');
+  const diasAtras = (d) => AGORA - d * 86400000;
+
+  it('sem registro, começa no 2', () => {
+    expect(nivelComDecaimento(null, AGORA)).toBe(2);
+    expect(nivelComDecaimento({}, AGORA)).toBe(2);
+  });
+
+  it('mantém o nível de quem praticou há pouco', () => {
+    expect(nivelComDecaimento({ nivel: 4, em: diasAtras(3) }, AGORA)).toBe(4);
+    expect(nivelComDecaimento({ nivel: 4, em: diasAtras(13) }, AGORA)).toBe(4);
+  });
+
+  it('cai UM nível por janela sem praticar — não volta ao piso', () => {
+    expect(nivelComDecaimento({ nivel: 5, em: diasAtras(14) }, AGORA)).toBe(4);
+    expect(nivelComDecaimento({ nivel: 5, em: diasAtras(30) }, AGORA)).toBe(3);
+  });
+
+  it('nunca desce abaixo do mínimo nem sobe acima do máximo', () => {
+    expect(nivelComDecaimento({ nivel: 2, em: diasAtras(365) }, AGORA)).toBe(1);
+    expect(nivelComDecaimento({ nivel: 9, em: AGORA }, AGORA)).toBe(5);
+  });
+
+  it('registro do futuro (relógio torto) não sobe o nível', () => {
+    expect(nivelComDecaimento({ nivel: 3, em: AGORA + 86400000 }, AGORA)).toBe(3);
+  });
+});

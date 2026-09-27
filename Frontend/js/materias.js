@@ -2476,12 +2476,26 @@ function responderProbe(estado, resposta) {
     esconderProbe();
     let resolvido = false;
     const seguir = () => { if (!resolvido) { resolvido = true; aoFechar?.(); } };
-    setTimeout(seguir, 2500);                       // rede lenta não pode travar a questão
+    // A espera era de 2,5 s e NENHUM card apareceu nas sessões reais, embora o backend
+    // tenha achado sinal contrário em 4 dos 6 probes. A resposta do probe não é um
+    // insert simples: monta as 27 features e varre o histórico do mouse, com 0.1 de CPU
+    // no Render. Esperar mais custa uma tela parada; esperar de menos custa o dado
+    // central do beta, que é o aluno rever o próprio relato diante do fato.
+    const ESPERA_SINAL_MS = 8000;
+    const pedidoEm = performance.now();
+    setTimeout(seguir, ESPERA_SINAL_MS);
     envio.then((r) => {
-        if (resolvido || !r?.probe_sinal) return seguir();
+        const demorou = Math.round(performance.now() - pedidoEm);
+        if (resolvido) {
+            // chegou tarde demais: registra para saber se 8 s também é pouco
+            return logEvent('probe_sinal_tardio', { demorou_ms: demorou,
+                                                    tinha_sinal: !!r?.probe_sinal });
+        }
+        if (!r?.probe_sinal) return seguir();
         resolvido = true;
         mostrarRevisaoProbe(r.probe_sinais?.length ? r.probe_sinais : [r.probe_sinal],
-                            { estado, resposta, motivo: r.probe_sinal_motivo }, aoFechar);
+                            { estado, resposta, motivo: r.probe_sinal_motivo,
+                              demorou_ms: demorou }, aoFechar);
     }).catch(seguir);
 }
 
@@ -2535,6 +2549,9 @@ function mostrarRevisaoProbe(sinais, original, aoFechar) {
             motivo: original.motivo ?? null,         // qual fato foi mostrado
             mudou,                                   // null = ignorou
             latencia_ms: Math.round(performance.now() - mostradoEm),
+            // quanto o backend levou para devolver o sinal: distingue "o aluno ignorou"
+            // de "o card quase não apareceu"
+            espera_backend_ms: original.demorou_ms ?? null,
         });
         aoFechar?.();
     };

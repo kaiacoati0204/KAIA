@@ -3466,7 +3466,7 @@ async function pedirApoioDaPausa() {
         // diz por quê (sem consentimento, reativa recente, risco baixo...). Sem isto só dava
         // para descobrir abrindo a aba Network.
         console.log('[KaIA Pausa]', d);
-        if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx, d.plano);
+        if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx, d.plano, d.opcoes);
         else if (d?.apoio === 'pausa_curta') mostrarOfertaDePausa(cx);
     } catch (e) {
         console.warn('[KaIA Pausa] falhou:', e);   // apoio é opcional: o aluno segue sem nada
@@ -3477,7 +3477,7 @@ async function pedirApoioDaPausa() {
 // "se acontecer Y, então faço X", dito antes. Meta comum morre na hora de agir; o plano
 // se-então automatiza a resposta no gatilho (d = 0,65). O servidor escolhe QUAL plano a
 // partir do que está pesando mais para este aluno agora.
-function mostrarPacoteFoco(cx, plano) {
+function mostrarPacoteFoco(cx, plano, opcoes) {
     // Devolução: fala do ATO de se observar, não de uma nota. Com TEA/TDAH, um placar baixo
     // pode virar vergonha em vez de consciência — por isso a frase final quando foi pouco.
     const devolucao = probesRespondidos
@@ -3488,10 +3488,36 @@ function mostrarPacoteFoco(cx, plano) {
         : '';
     const texto = plano?.texto || 'Se eu pensar em pegar o celular, então termino a questão aberta primeiro.';
     _planoAtual = plano?.id || 'celular';
+    _planoSugerido = _planoAtual;
+    _planoOpcoes = Array.isArray(opcoes) && opcoes.length ? opcoes : null;
     // a decisão do bandit vai junto: retomar é a MESMA decisão, não uma nova — contar
     // duas vezes daria ao braço mais evidência do que ele tem
     guardarPlanoPendente({ id: _planoAtual, texto, aceito: false,
                            decisao_session_id: sessionId });
+    // Passo 1: o ALUNO diz qual é o obstáculo dele. O plano se-então só funciona
+    // quando a pessoa reconhece a própria situação crítica — frase pronta é outra
+    // intervenção, sem a evidência que sustenta esta. O que o servidor calculou vira
+    // sugestão (fica no topo), não decisão.
+    if (_planoOpcoes) {
+        const ordenadas = [..._planoOpcoes].sort(
+            (a, b) => (b.id === _planoSugerido) - (a.id === _planoSugerido));
+        cx.innerHTML = `
+            ${devolucao}
+            <p class="apoio-pergunta">O que mais atrapalha você agora?</p>
+            <div class="apoio-opcoes">
+                ${ordenadas.map((o) => `
+                    <button type="button" class="apoio-opcao"
+                            onclick="escolherObstaculo('${o.id}')">${o.texto}</button>`).join('')}
+            </div>
+            <div class="apoio-botoes">
+                <button type="button" class="apoio-pular"
+                        onclick="escolherPlano(false)">Agora não</button>
+            </div>`;
+        cx.hidden = false;
+        logEvent('plano_opcoes', { sugerido: _planoSugerido,
+                                   quantas: ordenadas.length });
+        return;
+    }
     cx.innerHTML = `
         ${devolucao}
         <p class="apoio-pergunta">Um plano para a próxima rodada:</p>
@@ -3504,6 +3530,30 @@ function mostrarPacoteFoco(cx, plano) {
 }
 
 let _planoAtual = null;
+let _planoSugerido = null;     // o que o servidor calculou — palpite, não decisão
+let _planoOpcoes = null;
+
+// Passo 2: escolhido o obstáculo, mostra o plano correspondente para confirmar.
+// Separado de propósito: reconhecer o obstáculo e assumir a resposta são dois atos,
+// e é o primeiro que a literatura aponta como o ingrediente que falta quando o plano
+// vem pronto.
+function escolherObstaculo(id) {
+    const op = (_planoOpcoes || []).find((o) => o.id === id);
+    if (!op) return;
+    _planoAtual = id;
+    logEvent('plano_obstaculo', { escolhido: id, sugerido: _planoSugerido,
+                                  seguiu_sugestao: id === _planoSugerido });
+    const cx = $('retomada-apoio')?.hidden === false ? $('retomada-apoio') : $('resumo-apoio');
+    if (!cx) return;
+    cx.innerHTML = `
+        <p class="apoio-pergunta">Então o combinado é:</p>
+        <p class="apoio-plano">“${op.texto}”</p>
+        <div class="apoio-botoes">
+            <button type="button" onclick="escolherPlano(true)">Combinado</button>
+            <button type="button" class="apoio-pular"
+                    onclick="escolherPlano(false)">Agora não</button>
+        </div>`;
+}
 
 // ==== O PLANO SOBREVIVE À SAÍDA ====
 // A oferta aparecia no fim da rodada e morria ali: quem saía para outra matéria

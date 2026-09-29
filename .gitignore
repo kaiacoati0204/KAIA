@@ -75,3 +75,7 @@ ml/artifacts/comparar_llms.json
 ml/artifacts/temas_que_caem.json
 ml/artifacts/base_b_*.json
 ml/artifacts/itens_*.csv
+
+# backups do .env (tem a chave da API dentro)
+*.env.bak
+.env.*.bak

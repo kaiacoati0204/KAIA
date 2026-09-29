@@ -2128,7 +2128,12 @@ async def job_agregacao(app):
 # 2020: tempo de resposta anomalo E queda de acerto). Sem ela, so adapta em silencio.
 CORROB_MIN_RESPOSTAS = 4     # abaixo disso nao ha base de comparacao dentro da sessao
 CORROB_RECENTES = 3          # tamanho da janela recente
-CORROB_ACERTO_MAX = 0.34     # no maximo 1 de 3 certas
+# Calibrado no dado real (51 respostas de 6 sessoes): com 0.34 a regra NUNCA dispara,
+# nem baixando o sigma para 2.0 -- exigir 2 erros em 3 nao e "queda", e desempenho ruim,
+# e quem esta indo bem e se distrai fica invisivel. Com 0.67 (errou ao menos 1 das 3
+# ultimas) a regra passa a disparar em ~3% das respostas, junto com o ritmo a 3 sigma.
+# A CONJUNCAO continua: e ela que da o respaldo (DTS) e segura o falso positivo.
+CORROB_ACERTO_MAX = 0.67     # errou ao menos 1 das 3 ultimas
 # 3 sigma, nao 2: falso positivo de 0,03% contra 5% (DTS, Chen et al., 2021, p.6).
 # Alarme falso interrompe quem estava concentrado, e isso pesa mais em TEA/TDAH.
 CORROB_RT_SIGMAS = 3.0
@@ -3436,6 +3441,21 @@ PLANOS = {
 PLANO_PADRAO = ("celular",
                 "Se eu pensar em pegar o celular, então termino a questão aberta primeiro.")
 
+# O ingrediente ativo do plano se-então é a pessoa reconhecer o PRÓPRIO obstáculo e
+# escolher a PRÓPRIA resposta — não receber uma frase pronta. Nas 7 primeiras sessões
+# reais o plano sugerido foi o genérico ("celular") todas as vezes, porque o risco
+# estava baixo: ou seja, o que foi testado até agora não é a intervenção que a
+# literatura valida.
+#
+# Por isso o servidor manda a LISTA e marca a sugestão: a escolha é do aluno, e o que
+# o sistema calculou vira palpite, não decisão. O `sugerido` continua sendo registrado
+# para dar para comparar depois "escolheu o que sugerimos" com "escolheu outro".
+def _planos_para_escolha(feats):
+    sugerido, _ = _plano_do_momento(feats)
+    opcoes = [{"id": pid, "texto": texto} for pid, (_, _, _, texto) in PLANOS.items()]
+    opcoes.append({"id": PLANO_PADRAO[0], "texto": PLANO_PADRAO[1]})
+    return sugerido, opcoes
+
 
 def _plano_do_momento(feats):
     """(id, texto) do plano que fala do que está pesando MAIS para este aluno agora.
@@ -3601,6 +3621,7 @@ async def prevencao_pausa(body: PausaIn, request: Request,
                 await _eventos_da_sessao(conn, body.session_id), inicio,
                 await conn.fetchval("select now()"), await _estudo_dia_min(conn, sub))
             pid, texto = _plano_do_momento(feats_fixo)
+            _, opcoes_fixo = _planos_para_escolha(feats_fixo)
             # nao decide nada aqui (fixo oferece sempre) — mas sem gravar os dois numeros a
             # fase `fixo` nao produziria dado para comparar Modelo 1 com a regra depois.
             r_regra_f = risco.risco_por_regras(feats_fixo)
@@ -3613,7 +3634,8 @@ async def prevencao_pausa(body: PausaIn, request: Request,
                                "risco_modelo": round(r_modelo_f, 3),
                                "fonte_modelo": fonte_f, "limiar": PREVENCAO_LIMIAR_RISCO})
             return {"apoio": "pacote_foco", "braco": "pacote_foco",
-                    "plano": {"id": pid, "texto": texto}, "modo": "fixo"}
+                    "plano": {"id": pid, "texto": texto}, "opcoes": opcoes_fixo,
+                    "modo": "fixo"}
         agora = await conn.fetchval("select now()")
         feats = risco.features_do_momento(
             await _eventos_da_sessao(conn, body.session_id), inicio, agora,
@@ -3636,11 +3658,12 @@ async def prevencao_pausa(body: PausaIn, request: Request,
 
         braco, prob = bandit.escolher(aluno=sub)
         pid, texto = _plano_do_momento(feats)
+        _, opcoes = _planos_para_escolha(feats)
         await _log_evento(conn, body.session_id, "decisao_prevencao",
                           dict(sombra, risco=round(r, 3), braco=braco, prob=round(prob, 3),
                                acionou=True, limiar=PREVENCAO_LIMIAR_RISCO, plano=pid))
     return {"apoio": None if braco == "nada" else braco, "braco": braco, "risco": round(r, 3),
-            "plano": {"id": pid, "texto": texto}}
+            "plano": {"id": pid, "texto": texto}, "opcoes": opcoes}
 
 
 # ==== CONSENTIMENTO DO RESPONSÁVEL (LGPD art. 14) ====

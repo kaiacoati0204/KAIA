@@ -5658,3 +5658,29 @@ body.mc-page .railnav {
     font-size: .95rem;
     line-height: 1.5;
 }
+
+/* Escolha do obstáculo (prevenção). Lista vertical: são frases, não rótulos curtos —
+   botão lado a lado cortaria o texto e o aluno precisa LER para reconhecer a própria
+   situação, que é o ponto da intervenção. */
+.apoio-opcoes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+.apoio-opcao {
+    padding: 10px 12px;
+    border: 1px solid rgba(43, 42, 38, .18);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--tinta);
+    font-family: inherit;
+    font-size: .92rem;
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .2s ease;
+}
+.apoio-opcao:hover {
+    border-color: var(--gravata-kinrou);
+}

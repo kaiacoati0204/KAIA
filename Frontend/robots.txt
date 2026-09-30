@@ -1,0 +1,42 @@
+# KaIA — o que o buscador pode indexar.
+#
+# Fica em Frontend/ porque é essa a raiz que o Render publica
+# (render.yaml: staticPublishPath: ./Frontend). Aqui ele responde em
+# /robots.txt, que é o único lugar onde o Google procura.
+#
+# A regra: só entra no índice o que um visitante deslogado consegue ver.
+# O resto vive atrás do login — indexar essas URLs não traz ninguém (a
+# página redireciona para o login) e ainda expõe o mapa interno do produto.
+
+User-agent: *
+
+# --- Privado: tudo atrás de login ---
+Disallow: /pages/perfil.html
+Disallow: /pages/materias.html
+Disallow: /pages/avaliacao.html
+Disallow: /pages/responsaveis.html
+Disallow: /pages/meu-coati.html
+Disallow: /pages/dashboard.html
+Disallow: /pages/escola.html
+Disallow: /pages/cadastro-escola.html
+Disallow: /pages/hobbies.html
+
+# O link de consentimento carrega um TOKEN na query. Indexar um desses
+# tornaria público um link de autorização de responsável — por isso a
+# página inteira fica fora, com ou sem parâmetro.
+Disallow: /pages/consentimento.html
+
+# --- Não é conteúdo: nada a indexar ---
+Disallow: /js/
+Disallow: /css/
+Disallow: /tests/
+Disallow: /config.js
+
+# --- Público: landing, entrada e os documentos ---
+Allow: /pages/index.html
+Allow: /pages/login.html
+Allow: /pages/cadastro.html
+Allow: /pages/termos.html
+Allow: /pages/privacidade.html
+
+Sitemap: https://kaia-gemb.onrender.com/sitemap.xml

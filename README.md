@@ -24,12 +24,19 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 - **Caderno de anotações**: canvas livre por tema (texto no Supabase, imagens só no dispositivo).
 - **Perfil com estatísticas**: desempenho semanal + sinais da última sessão + análise por regras.
 - **Painéis internos**: dashboard da equipe (acesso restrito por `role`) e painel de responsáveis.
+- **Vínculo aluno ↔ responsável**: quando o responsável autoriza o consentimento, o backend
+  grava a ligação em `pai_aluno` — é o que faz o painel dele listar os próprios filhos.
+- **Temas de fundo**: 4 opções no perfil (Padrão, Neutro, Azul suave, Cinza-pedra), com
+  contraste de texto conferido par a par.
+- **Avaliação do beta**: `pages/avaliacao.html` com o formulário do Tally embutido, alcançada
+  por um botão no fim do perfil.
+- **Assinatura**: tabela, rotas e trial prontos, **esperando a chave do Mercado Pago**.
 - **Apoio ao foco, em duas camadas** (o core, definido em 17/09/2026):
   - **Reativa** — sensores no front (troca de aba, ociosidade, trajetória do mouse, tempo de resposta) detectam desengajamento por **evidência medida**: saída da KaIA ≥ 30 s, regra DTS (bom na sessão + acerto caiu + tempo fora do próprio ritmo) ou pausa incomum na questão aberta. Um bandit Thompson escolhe qual das 7 intervenções mostrar. O gatilho **nunca** depende de modelo.
   - **Preventiva** — na pausa entre rodadas de 10, o sistema estima o **risco** de perda de foco nas próximas questões e oferece um plano "se-então" antes que ela aconteça. Um segundo bandit aprende qual apoio ajuda, com o braço `nada` como controle.
   - Um **probe de autorrelato** (o aluno declara o próprio estado, 1×/rodada) coleta rótulo real e é devolvido a ele. Sinais de foco/atenção — **não é diagnóstico**.
 
-  > O core anterior (detectar mente vagando e intervir em tempo real) foi abandonado em 15/09/2026 — o alvo não tem gabarito. O Random Forest v2 segue no repositório como **pesquisa**: não decide nada. Por quê e o que não reabrir: [`docs/CONTEXTO.md`](docs/CONTEXTO.md).
+  > O core anterior (detectar mente vagando e intervir em tempo real) foi abandonado em 15/09/2026 — o alvo não tem gabarito. O Random Forest v2 segue no repositório como **pesquisa**: não decide nada. Por quê e o que não reabrir: [`ml/core_e_evidencias.md`](ml/core_e_evidencias.md) e [`ml/metodo_beta.md`](ml/metodo_beta.md).
 
 ---
 
@@ -56,8 +63,14 @@ Frontend/
                   materias.js (missões/sensores/pomodoro), hobbies.js, perfil.js, dashboard.js
   assets/       → Coati.jpg, Coati_3d.glb
   config.js     → API_URL + Supabase (NÃO vai pro Git — copie de config.example.js)
+Frontend/ (continuação)
+  robots.txt, sitemap.xml, llms.txt → SEO. Ficam AQUI e não na raiz do repo porque
+                  `staticPublishPath: ./Frontend` (render.yaml) faz de Frontend/ a raiz
+                  servida — é daqui que respondem em /robots.txt, /sitemap.xml, /llms.txt
 Backend/
   app.py                → backend FastAPI (IA, sessões, /events, /diagnose, painéis)
+  pagamento.py          → regras de assinatura: valida a assinatura do webhook do Mercado
+                          Pago, janela do trial, decisão de acesso (sem banco, sem rede)
   auth.py               → validação do JWT do Supabase Auth (JWKS)
   risco.py              → Modelo 1: features e regras de risco de perda de foco (camada preventiva)
   bandit_prevencao.py   → Modelo 2: Thompson Sampling autoral do apoio da pausa (hierárquico)
@@ -78,10 +91,6 @@ ml/
   medir_dano_probe.py         → o probe atrapalha a questão seguinte? (descritivo)
   core_e_evidencias.md  → o core com a fonte ao lado de cada afirmação
   metodo_beta.md        → método do beta, protocolo-piloto e critérios de abandono (datados)
-docs/
-  CONTEXTO.md           → por que as coisas são assim; decisões fechadas; armadilhas. LEIA ANTES
-  ARQUITETURA_COMPLETA.md → passeio linha a linha pelo código
-  pesquisas-uteis.md    → literatura que sustenta as decisões
 supabase/
   migrations/           → schema versionado (snapshot de produção); ÚNICO SQL que o CI aplica
   README.md             → recriar o banco, regenerar o snapshot, criar migration nova
@@ -155,9 +164,38 @@ KAIA_CONSENTIMENTO_ESTRITO=0
 
 # Opcional — SANDBOX: aponta o backend para o schema isolado `teste` (mesmo projeto
 # Supabase), sem tocar em produção nem nos modelos. Deixe FORA em produção.
-# Para testar de forma isolada, veja o GUIA_TESTE.md.
+# Para testar de forma isolada, veja supabase/README.md.
 KAIA_DB_SCHEMA=teste
+
+# ---- Verificação das questões geradas ----
+# Depois de gerar, um segundo modelo confere o gabarito antes de a questão sair da
+# quarentena. PROVEDOR: `gemini` (padrão) ou `groq`.
+KAIA_VERIF_PROVEDOR=gemini
+KAIA_MODELO_VERIFICADOR=gemini-3.6-flash   # quando o provedor é gemini
+KAIA_VERIF_MODELO_GROQ=openai/gpt-oss-20b  # quando é groq
+GROQ_API_KEY=                              # OBRIGATÓRIA se KAIA_VERIF_PROVEDOR=groq
+KAIA_VERIF_LOTE=10                         # questões por chamada de verificação
+KAIA_VERIF_LOTE_RODADA=12                  # teto de questões verificadas por rodada
+KAIA_VERIF_PAUSA_S=0                       # pausa entre chamadas (contorna rate limit)
+KAIA_QUARENTENA_ALUNOS=3                   # alunos em paralelo no mutirão de quarentena
+
+# Opcional — modelo de embedding do few-shot dinâmico (pgvector).
+GEMINI_EMBED_MODEL=gemini-embedding-001
+
+# ---- Pagamento (Mercado Pago) — SEMI-PRONTO, ver a seção "Pagamento" ----
+# Sem MP_ACCESS_TOKEN o pagamento fica indisponível e NINGUÉM é barrado: as rotas
+# respondem 503 e o acesso ao estudo segue liberado. O site não cai por falta de chave.
+# Chave começada em TEST- = sandbox (o backend detecta sozinho e sinaliza no /assinatura).
+MP_ACCESS_TOKEN=
+MP_PUBLIC_KEY=
+MP_WEBHOOK_SECRET=      # painel do MP → Webhooks → "Segredo". Sem ele o webhook RECUSA tudo.
+APP_URL=                # URL pública do site; entra no back_url do checkout
 ```
+
+> Duas variáveis que não entram no `.env` normal: `CHAVE_ACESSO` é apelido de `API_KEY`
+> (o código aceita as duas), e `HOST` só vale ao rodar `python app.py` direto —
+> o padrão `127.0.0.1` serve para desenvolvimento. `KAIA_GROQ_MODELO` é usada só pelo
+> script offline `ml/temas_que_caem.py`, não pelo backend.
 
 > [!WARNING]
 > **`KAIA_DB_SCHEMA=teste` é só para máquina de teste local.** Em produção (Render) essa
@@ -219,6 +257,23 @@ Login OK = cai na tela do aluno. Conferência técnica: DevTools → Network →
 
 ### 7. Banco de dados
 
+> [!CAUTION]
+> **3 MIGRATIONS AINDA NÃO APLICADAS NO SUPABASE DE PRODUÇÃO.** Elas estão
+> versionadas e passam no CI, mas ninguém as rodou no projeto real ainda:
+>
+> | Migration | Cria |
+> |---|---|
+> | `20260927120000_isencao_testers.sql` | `perfis.isento` |
+> | `20260927130000_email_do_responsavel.sql` | `consentimentos.responsavel_email` |
+> | `20260927140000_assinaturas.sql` | tabelas `assinaturas` e `mp_webhooks` |
+>
+> **Sem aplicar, o backend quebra** com erro de coluna/tabela inexistente assim que
+> alguém tocar em: consentimento (grava `responsavel_email`), qualquer rota de
+> assinatura, ou a checagem de isenção (`_conta_isenta` lê `perfis.isento`).
+> O `_conta_isenta` falha aberto e devolve `True` no erro — o site não cai, mas todo
+> mundo passa como isento, o que não é o comportamento desejado.
+
+
 O banco (schema **e** dados) vive no **Supabase, na nuvem**. Usando o **mesmo projeto**
 (mesma `DATABASE_URL`) — o caso normal, inclusive numa máquina nova — **o banco já está
 pronto: não precisa rodar nada aqui.** As contas de teste do passo 6 já existem, com as
@@ -239,14 +294,12 @@ Você só mexe no banco nestes casos:
 Limpeza (antes de produção / quando entrarem alunos reais): `Backend/limpar_sintetico.sql`
 e `python Backend/limpar_contas_teste.py --commit`.
 
-> [!WARNING]
-> **O schema base NÃO está versionado no repositório.** Não há `CREATE TABLE` de
-> `perfis`, `escolas`, `turmas`, `professores`, `coordenadores`, `sessions`, `events`
-> etc. — essas tabelas existem só no projeto Supabase atual (a migration `0001` faz
-> `ALTER TABLE`, assume que `perfis` já existe). Enquanto todos usarem **o mesmo
-> projeto**, tudo funciona. Mas para **recriar o projeto do zero** (um Supabase novo)
-> faltaria exportar o schema — ex.: `pg_dump --schema-only` — e versioná-lo aqui.
-> Pendência conhecida; não bloqueia o uso atual.
+> [!NOTE]
+> **O schema base está versionado** em `supabase/migrations/20260809203146_remote_schema.sql`
+> — o snapshot traz o `CREATE TABLE` de `perfis`, `escolas`, `turmas`, `professores`,
+> `coordenadores`, `sessions`, `session_events`, `pai_aluno` e companhia. O CI aplica todas
+> as migrations num Postgres limpo a cada push, então um projeto Supabase novo pode ser
+> recriado a partir daqui.
 
 ---
 
@@ -270,6 +323,109 @@ e `python Backend/limpar_contas_teste.py --commit`.
 | `/consentimento/{token}` | GET/POST | Página do responsável: lê o pedido e registra o aceite |
 | `/dashboard/dados` | GET | Dados do dashboard interno (acesso restrito por `role`) |
 | `/responsavel/aluno`, `/responsavel/painel` | GET | Painel de responsáveis |
+| `/assinatura` | GET | Estado da assinatura da conta (acesso, status, planos, se é sandbox) |
+| `/assinatura/criar` | POST | Abre a assinatura e devolveria o link do Mercado Pago — **503 sem chave** |
+| `/webhook/mercadopago` | POST | Confirmação do MP. Exige `x-signature` válida; idempotente |
+
+---
+
+## 💳 Pagamento e isenção (SEMI-PRONTO)
+
+Estrutura pronta, **esperando a chave do Mercado Pago**. O que já funciona hoje:
+
+- `Backend/pagamento.py` — planos, trial de 7 dias, validação da assinatura do webhook
+  (HMAC-SHA256 do header `x-signature`, com `compare_digest` e janela de 5 min contra
+  replay) e a decisão de acesso. Tudo sem banco e sem rede, então dá para testar sem chave.
+- Tabela `assinaturas` (`trial | ativa | suspensa | cancelada`) com `mp_id` **UNIQUE** e
+  tabela `mp_webhooks` — as duas camadas de idempotência, porque o MP reenvia a mesma
+  notificação por timeout e por reentrega manual.
+- Suspender **não apaga nada**: bloqueia o acesso ao estudo; caderno, histórico e progresso ficam.
+
+**Isenção (não-retroativa).** Quem já testava a KaIA de graça não é empurrado para pagar:
+
+| Fonte | O que cobre |
+|---|---|
+| `perfis.isento` | Coluna comum, preenchida por `UPDATE` único no corte de 2026-09-27 — os testers com e-mail pessoal. O conjunto nasce congelado; conta nova nasce `false`. |
+| `perfis.conta_de_teste` | Coluna **gerada** (`lower(email) like '%@teste.kaia'`) — vale também para contas da equipe criadas depois. |
+
+O backend checa `isento OR conta_de_teste` (`_conta_isenta` no `app.py`). Ela falha
+**aberto**: se o Postgres cair, libera — barrar quem já pagou por causa de infraestrutura
+seria pior. E **sem `MP_ACCESS_TOKEN` ninguém é barrado**: esquecer de configurar não pode
+virar "o site caiu".
+
+### O que falta (marcado como `PENDENTE (Bia)` no código)
+
+1. `pip install mercadopago` + somar ao `Backend/requirements.txt`
+2. Preencher `MP_ACCESS_TOKEN`, `MP_PUBLIC_KEY`, `MP_WEBHOOK_SECRET` e `APP_URL` no `.env`
+3. Trocar os dois blocos comentados em `app.py` pela chamada real: `preapproval().create()`
+   em `/assinatura/criar` e `preapproval().get()` em `/webhook/mercadopago`. O código de
+   exemplo já está escrito nos comentários, com o `free_trial` de 7 dias e o
+   `external_reference` (o elo entre o pagamento e a linha em `assinaturas`).
+4. Conferir os preços em `pagamento.py` antes de cobrar de verdade.
+
+Hoje o webhook **valida e registra, mas não ativa nada** — de propósito. Sem confirmar o
+estado real na API do MP, confiar no corpo da notificação seria confiar em quem chamou.
+
+> **Menor de 18:** quem paga é o responsável vinculado. `_assinatura_da_conta` procura a
+> assinatura do próprio aluno e, não achando, a do responsável via `pai_aluno`.
+
+---
+
+## 🎨 Detalhes da interface
+
+**Caderno** (`materias.js`, só aparece com o caderno aberto)
+- **Alça de redimensionar** entre a questão e o caderno: arrasta para decidir quanto cada
+  lado ocupa, com mínimo de 28% para nenhum dos dois sumir. Some abaixo de 820px, onde o
+  split vira coluna. A preferência fica no `localStorage`.
+  Durante o arrasto a flag `redimensionandoSplit` faz o sensor de `mousemove` pular a
+  amostragem — sem isso o traço horizontal do arrasto entraria no `mouse_track` como
+  trajeto de estudo, que não é.
+- **Paleta de símbolos** (27 caracteres Unicode: π √ ∑ ∫ ≤ ± ² ½ Δ θ → …) num `<details>`
+  recolhido, **só em MAT e FIS**. Clica e o símbolo entra no ponto do cursor. É texto puro:
+  salva no caderno como qualquer letra, sem mudar o armazenamento. Sem biblioteca de
+  fórmula — fração montável exigiria trocar o caderno de texto para conteúdo rico.
+
+**Temas de fundo** (perfil → Configurações; tokens em `style.css`, blocos `html[data-luz]`)
+
+| # | Tema | Fundo | Observação |
+|---|---|---|---|
+| 1 | Padrão | `#f4ecdd` | o marfim da marca; não redeclara nada |
+| 2 | Neutro | `#f1eee9` | mesmo papel, menos amarelo |
+| 3 | Azul suave | `#8897ba` | *skin* — não segue o 60-30-10 |
+| 4 | Cinza-pedra | `#a9a29a` | *skin* |
+
+Nos dois *skins* o fundo da página é médio, então os tokens de TEXTO também mudam (o
+`#7d5f45` original dava 1,8:1 sobre o azul). Todos os pares texto × superfície foram
+medidos: o pior fica em **4,60:1**, acima do 4,5:1 da WCAG AA. Aplica em toda página
+(`aplicarLuzFundo` no `comum.js`).
+
+**Barra de teste das intervenções** — **escondida por padrão**, inclusive nas contas
+`@teste.kaia`. Era automática nesses e-mails, mas os testers do beta usam justamente essas
+contas: uma intervenção disparada à mão entrava na sessão como se fosse do modelo. Para
+ligar: `kaiaGatilhoTeste(true)` no console (persiste; `false` desliga).
+
+**Avaliação** — `pages/avaliacao.html` com o formulário do Tally, alcançada pelo botão no
+fim do perfil. O iframe usa `data-tally-src` **sem** `src`: o `loadEmbeds()` do Tally
+procura por `iframe[data-tally-src]:not([src])` e cresce o iframe até a altura total, então
+quem rola é a página. Se o `embed.js` for bloqueado, o `onerror` preenche o `src` na mão e
+o formulário aparece mesmo assim.
+
+---
+
+## 🔍 SEO
+
+`robots.txt`, `sitemap.xml` e `llms.txt` ficam em **`Frontend/`**, não na raiz do repo.
+O `render.yaml` define `staticPublishPath: ./Frontend`, então `Frontend/` **é** a raiz
+servida — é dali que eles respondem em `/robots.txt`, `/sitemap.xml` e `/llms.txt`, os
+únicos lugares onde o Google procura. Na raiz do repo nunca seriam publicados.
+
+- **robots.txt** bloqueia as 10 páginas atrás de login. `consentimento.html` fica de fora
+  com destaque: o link carrega um **token de autorização** na query.
+- **sitemap.xml** lista só as 5 públicas (index, login, cadastro, termos, privacidade).
+  A raiz `/` fica de fora: é só um redirect para `/pages/index.html`, e sitemap lista URL
+  canônica.
+- As 5 públicas têm `title`, `description`, `canonical` e `og:*` (sem os `og:` o link
+  colado no WhatsApp saía sem texto).
 
 ---
 
@@ -323,6 +479,25 @@ para preencher.
 
 ---
 
+## ⏳ Semi-pronto, esperando algo
+
+| O quê | Esperando | Onde |
+|---|---|---|
+| **Pagamento (Mercado Pago)** | chave no `.env` + `pip install mercadopago` + trocar os 2 blocos comentados | `PENDENTE (Bia)` no `app.py`; ver a seção "Pagamento e isenção" |
+| **3 migrations** | serem aplicadas no Supabase de produção | aviso em "7. Banco de dados" |
+| **Confirmação de e-mail** | ligar no painel do Supabase (Auth → Providers → Email) **e** corrigir o front antes | ver abaixo |
+| **`og:image`** | uma arte 1200×630 para o preview de compartilhamento | as 5 páginas públicas têm os outros `og:*` |
+
+> [!WARNING]
+> **Não ligue a confirmação de e-mail do Supabase sem mexer no front primeiro.** O
+> `login.js` já trata os dois casos, mas o ramo "confirmação ligada" é **uma linha só**:
+> ele mostra a mensagem e **não** chama `POST /perfil` (que grava `versao_termos`,
+> `data_nascimento` e o aceite dos termos) nem `mostrarLinkResponsavel()`. Ligar hoje
+> faria: aceite de termos **não registrado** e menor de idade **sem link do responsável**.
+> Quebra silenciosamente o registro de LGPD.
+
+---
+
 ## 🧭 Problemas conhecidos / próximos passos
 
 > [!NOTE]
@@ -332,4 +507,4 @@ para preencher.
 - [ ] **Validar o modelo v2 com dado real**: hoje é 100% sintético (hipótese). Coletar probes → rodar `python ml/treinar_com_probe.py` (dá a acurácia real e re-treina híbrido). Vale como pesquisa: o v2 não decide nada.
 - [ ] **Rodar o beta do Fluxo B** com `KAIA_PREVENCAO_MODO=fixo` e medir a aceitação do plano. Só então ligar o `bandit`, e só depois promover o Modelo 1 de sombra para gatilho.
 - [ ] **Teto de intervenções reativas é por sessão inteira** (5, sem reset por rodada): em sessão longa as últimas questões ficam sem a camada reativa. Medir quantos batem no teto antes de trocar por uma janela de tempo.
-- [ ] Versionar o schema base do banco (`pg_dump --schema-only`) — hoje só existe no projeto Supabase.
+- [ ] **Aplicar as 3 migrations pendentes no Supabase de produção** (ver o aviso em "7. Banco de dados").

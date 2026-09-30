@@ -62,6 +62,7 @@ async function responder(aceito) {
             return;
         }
         corpo.responsavel_nome = $('cons-nome').value.trim();
+        corpo.responsavel_email = $('cons-email')?.value.trim() || '';
         corpo.cpf = $('cons-cpf').value;
         corpo.parentesco = $('cons-parentesco').value;
     }

@@ -20,6 +20,7 @@ from statistics import mean, median, pstdev, stdev
 from thompson import ThompsonSampling, INTERVENCOES, PARAMS_PATH
 from auth import usuario_autenticado, usuario_identidade
 import consentimento as consent
+import pagamento
 import risco
 from bandit_prevencao import (BanditPrevencao, recompensa_rodada,
                               PARAMS_PREVENCAO_PATH, MIN_RESPONDIDAS)
@@ -683,6 +684,28 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
     # qual é o melhor tema e qual pede reforço.
     return {"desempenho": desempenho, "ultima_sessao": ultima_sessao,
             "analise": analise, "por_materia": materias}
+
+
+# ================== ISENÇÃO (testers anteriores à cobrança) ==================
+# Quem já usava a KaIA de graça não passa por pagamento nem por verificação de e-mail
+# obrigatória. Duas fontes, de propósito (ver migration 20260927120000_isencao_testers):
+#   - `isento`: conjunto CONGELADO no corte — os testers com e-mail pessoal.
+#   - `conta_de_teste`: coluna GERADA de `@teste.kaia` — vale também para contas da
+#     equipe criadas depois, sem precisar de UPDATE novo a cada uma.
+# Sem banco responde True: numa queda do Postgres é melhor deixar estudar do que barrar
+# quem já pagou (ou quem é isento) por causa de infraestrutura.
+async def _conta_isenta(conn, user_id) -> bool:
+    if not user_id:
+        return False
+    try:
+        linha = await conn.fetchrow(
+            "select isento, conta_de_teste from perfis where user_id = $1::uuid", user_id)
+    except Exception as e:
+        print("[KaIA] não deu para ler a isenção:", e)
+        return True
+    if linha is None:
+        return False           # conta que ainda não existe em perfis não é isenta
+    return bool(linha["isento"] or linha["conta_de_teste"])
 
 
 # ================== API: GERAR QUESTÃO objetiva =============================
@@ -3651,6 +3674,7 @@ async def prevencao_pausa(body: PausaIn, request: Request,
 
 class AceiteIn(BaseModel):
     responsavel_nome: Optional[str] = None
+    responsavel_email: Optional[str] = None   # é por ele que o vínculo acha a conta
     cpf: Optional[str] = None
     parentesco: Optional[str] = None
     aceito: bool = True
@@ -3720,6 +3744,33 @@ async def consentimento_ver(token: str, request: Request):
             "expirado": expirado, "versao": linha["documento_versao"]}
 
 
+# Liga o aluno ao responsável que acabou de autorizar. Grava em `pai_aluno`, que JÁ
+# existia no schema (PK composta pai_id+aluno_id, FK para perfis) e é de onde o ramo
+# "pai" do /responsavel/painel já lia — ela só nunca era preenchida por ninguém.
+#
+# role='pai': é o valor que o CHECK de `perfis` aceita (aluno, professor, coordenador,
+# pai, admin). 'responsavel' derrubaria o insert.
+# Não sobrescreve nome nem role de quem já tem conta: o responsável pode já ser um
+# professor da escola, e o aceite de um filho não pode rebaixar o papel dele.
+async def _vincular_responsavel(conn, aluno_id, email, nome):
+    resp = await conn.fetchrow(
+        "select user_id from perfis where lower(email) = lower($1)", email)
+    if resp is None:
+        resp_id = uuid.uuid4()
+        await conn.execute(
+            "insert into perfis (user_id, email, nome, role) values ($1::uuid, $2, $3, 'pai') "
+            "on conflict (user_id) do nothing",
+            resp_id, email, nome)
+    else:
+        resp_id = resp["user_id"]
+    # PK composta: reenvio do mesmo aceite não duplica.
+    await conn.execute(
+        "insert into pai_aluno (pai_id, aluno_id) values ($1::uuid, $2::uuid) "
+        "on conflict do nothing",
+        resp_id, aluno_id)
+    return resp_id
+
+
 @app.post("/consentimento/{token}")
 async def consentimento_aceitar(token: str, body: AceiteIn, request: Request):
     """Aceite ou recusa do responsável. Grava nome, HMAC do CPF, parentesco, data/hora e IP."""
@@ -3748,16 +3799,24 @@ async def consentimento_aceitar(token: str, body: AceiteIn, request: Request):
         ok, erro = consent.validar_aceite(body.responsavel_nome, body.cpf, body.parentesco)
         if not ok:
             return JSONResponse({"erro": erro}, status_code=400)
+        email_resp = (body.responsavel_email or "").strip().lower() or None
+        if email_resp and "@" not in email_resp:
+            return JSONResponse({"erro": "E-mail do responsável inválido."}, status_code=400)
         async with conn.transaction():
             await conn.execute(
                 "update consentimentos set status = 'aprovado', responsavel_nome = $2, "
                 "responsavel_cpf_hash = $3, responsavel_parentesco = $4, aceite_ts = now(), "
-                "aceite_ip = $5 where id = $1",
+                "aceite_ip = $5, responsavel_email = $6 where id = $1",
                 linha["id"], body.responsavel_nome.strip(),
                 consent.hash_cpf(body.cpf) if (body.cpf or "").strip() else None,
-                body.parentesco, _ip_do_pedido(request))
+                body.parentesco, _ip_do_pedido(request), email_resp)
             await conn.execute("update perfis set consentimento_status = 'aprovado' "
                                "where user_id = $1::uuid", linha["aluno_id"])
+            # Dentro da MESMA transação do aceite: consentimento aprovado sem vínculo
+            # deixaria o painel cego justamente para quem autorizou.
+            if email_resp:
+                await _vincular_responsavel(conn, linha["aluno_id"], email_resp,
+                                            body.responsavel_nome.strip())
     return {"status": "aprovado"}
 
 
@@ -4954,3 +5013,200 @@ if __name__ == "__main__":
     # e alcancavel de fora do container) e a porta vem na env PORT, sorteada por eles.
     uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"),
                 port=int(os.getenv("PORT", "5000")))
+
+
+# ============================================================
+#  ASSINATURA (Mercado Pago)
+# ============================================================
+# As regras puras (validação de assinatura do webhook, janela do trial, decisão de
+# acesso) moram em Backend/pagamento.py — testáveis sem chave e sem banco.
+# Aqui ficam só as rotas e o que toca o Postgres.
+
+class AssinaturaIn(BaseModel):
+    plano: str
+
+
+async def _assinatura_da_conta(conn, user_id):
+    """A assinatura que vale para esta conta. Menor de idade não assina: se o próprio
+    aluno não tem linha, procura a do responsável vinculado (pai_aluno) — é ele quem paga.
+    Pega a mais recente: quem cancelou e reassinou tem duas linhas."""
+    linha = await conn.fetchrow(
+        "select status, fim from assinaturas where user_id = $1::uuid "
+        "order by criado_em desc limit 1", user_id)
+    if linha is not None:
+        return linha
+    return await conn.fetchrow(
+        "select a.status, a.fim from assinaturas a "
+        "join pai_aluno pa on pa.pai_id = a.user_id "
+        "where pa.aluno_id = $1::uuid order by a.criado_em desc limit 1", user_id)
+
+
+async def _acesso_liberado(conn, user_id):
+    """(liberado, motivo). Ordem importa: a isenção vem ANTES de qualquer cobrança —
+    é o que garante que tester antigo não seja empurrado para pagar."""
+    if await _conta_isenta(conn, user_id):
+        return True, "isento"
+    # Sem chave do MP configurada, ninguém consegue assinar. Bloquear todo mundo aqui
+    # transformaria "esqueci de configurar" em "o site caiu".
+    if not pagamento.pagamento_configurado():
+        return True, "pagamento_nao_configurado"
+    linha = await _assinatura_da_conta(conn, user_id)
+    if linha is None:
+        return False, "sem_assinatura"
+    if pagamento.assinatura_valida(linha["status"], linha["fim"]):
+        return True, linha["status"]
+    return False, "vencida" if linha["status"] == "trial" else linha["status"]
+
+
+@app.get("/assinatura")
+async def ver_assinatura(request: Request, ident: dict = Depends(usuario_identidade)):
+    """Estado da assinatura desta conta — alimenta a tela 'minha assinatura' no perfil."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    user_id = (ident.get("sub") or "").strip()
+    if not user_id:
+        return JSONResponse({"erro": "identidade ausente no token."}, status_code=400)
+    async with pool.acquire() as conn:
+        liberado, motivo = await _acesso_liberado(conn, user_id)
+        linha = await _assinatura_da_conta(conn, user_id)
+    return {
+        "acesso": liberado,
+        "motivo": motivo,
+        "status": linha["status"] if linha else None,
+        "fim": linha["fim"].isoformat() if linha and linha["fim"] else None,
+        "planos": pagamento.PLANOS,
+        "dias_trial": pagamento.DIAS_TRIAL,
+        "sandbox": pagamento.modo_sandbox(),
+    }
+
+
+@app.post("/assinatura/criar")
+async def criar_assinatura(body: AssinaturaIn, request: Request,
+                           ident: dict = Depends(usuario_identidade)):
+    """Abre a assinatura e devolve o link de pagamento do Mercado Pago."""
+    pool = request.app.state.pool
+    if pool is None:
+        return _SEM_BANCO
+    user_id = (ident.get("sub") or "").strip()
+    if not user_id:
+        return JSONResponse({"erro": "identidade ausente no token."}, status_code=400)
+    if not pagamento.plano_valido(body.plano):
+        return JSONResponse({"erro": "Plano desconhecido."}, status_code=400)
+    if not pagamento.pagamento_configurado():
+        # Elegante de propósito: 503 + mensagem, não stack trace. O resto do site segue.
+        return JSONResponse(
+            {"erro": "Pagamento indisponível no momento.", "codigo": "mp_nao_configurado"},
+            status_code=503)
+
+    inicio = datetime.now(timezone.utc)
+    async with pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            """insert into assinaturas (user_id, plano, status, inicio, fim)
+               values ($1::uuid, $2, 'trial', $3, $4) returning id""",
+            user_id, body.plano, inicio, pagamento.fim_do_trial(inicio))
+
+    # ______________________ PENDENTE (Bia) ______________________
+    # AQUI entra a chamada real ao Mercado Pago. O que falta:
+    #
+    #   1. Instalar o SDK:            pip install mercadopago
+    #      (e somar `mercadopago` ao Backend/requirements.txt)
+    #   2. Cadastrar no .env (NUNCA no código, NUNCA no git):
+    #        MP_ACCESS_TOKEN=TEST-xxxx    <- sandbox; a de produção não tem o "TEST-"
+    #        MP_PUBLIC_KEY=TEST-xxxx
+    #        MP_WEBHOOK_SECRET=xxxx       <- painel do MP > Webhooks > "Segredo"
+    #   3. Trocar o bloco abaixo por algo como:
+    #
+    #        import mercadopago
+    #        sdk = mercadopago.SDK(os.getenv("MP_ACCESS_TOKEN"))
+    #        pref = sdk.preapproval().create({
+    #            "reason": f"KaIA {pagamento.PLANOS[body.plano]['nome']}",
+    #            "external_reference": str(linha["id"]),   # volta no webhook: é o elo
+    #            "auto_recurring": {
+    #                "frequency": 1, "frequency_type": "months",
+    #                "transaction_amount": pagamento.PLANOS[body.plano]["preco"],
+    #                "currency_id": "BRL",
+    #                "free_trial": {"frequency": pagamento.DIAS_TRIAL,
+    #                               "frequency_type": "days"},
+    #            },
+    #            "back_url": f"{os.getenv('APP_URL','')}/pages/perfil.html",
+    #            "payer_email": ident.get("email"),
+    #        })
+    #        link = pref["response"]["init_point"]
+    #
+    #      O `external_reference` é o que amarra o pagamento à linha em `assinaturas` —
+    #      sem ele o webhook chega sem saber de quem é.
+    #      O trial de 7 dias com meio de pagamento cadastrado é o `free_trial` do
+    #      preapproval: o MP guarda o cartão e cobra sozinho quando o prazo acaba.
+    # ____________________________________________________________
+    link = None
+
+    return {
+        "assinatura_id": str(linha["id"]),
+        "plano": body.plano,
+        "status": "trial",
+        "fim_trial": pagamento.fim_do_trial(inicio).isoformat(),
+        "link_pagamento": link,
+        "sandbox": pagamento.modo_sandbox(),
+        "pendente_integracao": link is None,   # o front mostra "em breve" enquanto for True
+    }
+
+
+@app.post("/webhook/mercadopago")
+async def webhook_mercadopago(request: Request):
+    """Confirmação do Mercado Pago. SEM autenticação de usuário (quem chama é o MP),
+    então a assinatura do header é a ÚNICA barreira — e ela é obrigatória."""
+    pool = request.app.state.pool
+    corpo = {}
+    try:
+        corpo = await request.json()
+    except Exception:
+        pass
+
+    data_id = str((corpo.get("data") or {}).get("id") or corpo.get("id") or "")
+    _, _, segredo = pagamento.credenciais()
+    ok, motivo = pagamento.validar_webhook(
+        request.headers.get("x-signature"),
+        request.headers.get("x-request-id"),
+        data_id, segredo)
+    if not ok:
+        # 401 e nada mais: não conta o que falhou, para não virar oráculo de quem tenta.
+        print(f"[KaIA] webhook MP recusado: {motivo}")
+        return JSONResponse({"erro": "assinatura inválida"}, status_code=401)
+
+    if pool is None:
+        return _SEM_BANCO
+    async with pool.acquire() as conn:
+        # Idempotência: o MP reenvia por timeout e por reentrega manual do painel.
+        # O insert é a trava — se já existe, este webhook já foi processado.
+        try:
+            novo = await conn.fetchval(
+                "insert into mp_webhooks (mp_id, tipo) values ($1, $2) "
+                "on conflict (mp_id) do nothing returning mp_id",
+                data_id, corpo.get("type") or corpo.get("action"))
+        except Exception as e:
+            print("[KaIA] erro ao registrar webhook:", e)
+            return JSONResponse({"erro": "falha ao registrar"}, status_code=500)
+        if novo is None:
+            return {"status": "ja_processado"}
+
+        # ______________________ PENDENTE (Bia) ______________________
+        # AQUI entra a consulta ao MP para saber o que aconteceu de fato. O corpo do
+        # webhook só traz o id — o estado verdadeiro se lê na API deles (o corpo pode
+        # estar defasado, e confiar nele é confiar em quem chamou).
+        #
+        #        sdk = mercadopago.SDK(os.getenv("MP_ACCESS_TOKEN"))
+        #        info = sdk.preapproval().get(data_id)["response"]
+        #        ref    = info["external_reference"]       # o id da linha em assinaturas
+        #        estado = info["status"]                   # authorized | paused | cancelled
+        #        novo_status = {"authorized": "ativa", "paused": "suspensa",
+        #                       "cancelled": "cancelada"}.get(estado)
+        #        await conn.execute(
+        #            "update assinaturas set status = $2, mp_id = $3, atualizado_em = now() "
+        #            "where id = $1::uuid", ref, novo_status, data_id)
+        #
+        # Enquanto isso não existe, o webhook só registra que chegou (e a idempotência
+        # já está valendo). Nada é ativado sem confirmação real — de propósito.
+        # ____________________________________________________________
+
+    return {"status": "recebido", "mp_id": data_id}

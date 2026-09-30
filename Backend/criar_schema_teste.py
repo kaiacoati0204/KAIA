@@ -6,6 +6,7 @@ Idempotente (create ... if not exists).
     python Backend/criar_schema_teste.py            # cria/atualiza o schema teste
     python Backend/criar_schema_teste.py --refazer  # dropa e recria o schema teste
 """
+import re
 import os
 import sys
 import asyncio
@@ -34,6 +35,10 @@ async def main():
 
         tabs = [r["tablename"] for r in await conn.fetch(
             "select tablename from pg_tables where schemaname='public' order by tablename")]
+        # O nome da tabela entra no SQL por interpolacao (identificador nao aceita $1).
+        # Hoje vem do catalogo, mas se um dia vier de outro lugar isto barra: so nome
+        # simples de tabela passa.
+        tabs = [t for t in tabs if re.fullmatch(r"[a-z_][a-z0-9_]*", t or "")]
         print(f"{len(tabs)} tabelas no public:", tabs)
 
         criadas, falhas = [], []

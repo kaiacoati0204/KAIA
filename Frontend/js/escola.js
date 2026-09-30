@@ -60,7 +60,15 @@
 
     // ---- utilidades -----------------------------------------------------------
     const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // sem 0/O e 1/I: código é ditado em sala
-    const sufixo = () => Array.from({ length: 4 }, () => ALFABETO[Math.floor(Math.random() * ALFABETO.length)]).join('');
+    // crypto.getRandomValues, não Math.random: isto é credencial de acesso (PROF-xxxx
+    // entra como professor, 7A-xxxx entra na turma), e Math.random é previsível a partir
+    // de alguns valores observados. O % ALFABETO.length tem viés desprezível aqui
+    // (256 mod 32 = 0), mas o descarte deixa explícito que foi conferido.
+    const sufixo = () => {
+        const bytes = new Uint8Array(4);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, (b) => ALFABETO[b % ALFABETO.length]).join('');
+    };
 
     const el = (tag, classe, texto) => {
         const e = document.createElement(tag);

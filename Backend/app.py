@@ -2328,9 +2328,15 @@ async def rodar_intervencao(app, session_id):
                     return
                 gatilho = "ociosidade"
             estado_alvo = _estado_por_eliminacao(fora_s, res["feats"])
-        # Freio (warm-up): só depois da 1ª questão respondida E de um tempo mínimo.
-        # Questões de vestibular são longas — a leitura inicial não pode virar "distração";
-        # o timer segura caso a 1ª seja respondida rápido demais.
+        # Freio (warm-up) POR GATILHO: a exigência de 1ª resposta não vale para `medicao`.
+        # `regra` e `ociosidade` comparam o aluno com a régua dele mesmo (blocos de 2 corretas),
+        # que não existe antes da 1ª resposta — sem ela "parado 50s" não é rápido nem lento.
+        # `medicao` é fato absoluto do navegador (saiu da aba >= AUSENCIA_MEDIDA_S) e não
+        # consulta régua nenhuma, então exigir resposta ali barrava justamente o caso que a
+        # camada existe para atender: 30/09, 19 bloqueios seguidos com 95s fora da aba e
+        # respondidas=0 (18 deles só por isso, a duração já havia passado).
+        # O tempo mínimo de sessão continua para TODOS: segura a leitura inicial da questão e
+        # evita intervir nos primeiros segundos, que em TEA/TDAH custa caro.
         async def _barrado(motivo, **extra):
             await conn.execute(
                 "insert into session_events (session_id, event_type, payload, ts) "
@@ -2345,7 +2351,8 @@ async def rodar_intervencao(app, session_id):
         # A janela e limitada pelo inicio da sessao, entao no comeco ela vale
         # min(duracao_da_sessao, JANELA_MIN) — o que mantem o warm-up funcionando.
         duracao_min = float(res["feats"].get("duracao_janela_min") or 0)
-        if respondidas < 1 or duracao_min < INTERV_WARMUP_MIN:
+        exige_resposta = gatilho != "medicao"
+        if (exige_resposta and respondidas < 1) or duracao_min < INTERV_WARMUP_MIN:
             await _barrado("warmup", respondidas=respondidas, duracao_min=round(duracao_min, 1))
             return
 

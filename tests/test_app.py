@@ -1119,6 +1119,42 @@ async def test_rodar_intervencao_warmup_sem_questao(monkeypatch):
     assert conn.executed == []                          # sem 1ª questão -> não intervém
 
 
+async def test_medicao_dispensa_a_primeira_resposta(monkeypatch):
+    """Caso real de 30/09: 95s fora da aba, respondidas=0 -> 19 bloqueios seguidos por
+    warm-up. A exigencia de 1a resposta existe para as regras que comparam o aluno com a
+    regua dele mesmo; saida de aba e medida absoluta e nao consulta regua, entao aluno que
+    abre, sai e nunca responde e exatamente quem a camada reativa precisa alcancar."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "muito_distraido", "score": 0.58, "feats": _feats_ok(),
+                "confiavel": True}
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 0},            # nenhuma resposta, como a Sophie
+                    fetch={"tab_change": _aba(95.0)})           # o navegador mediu 95s fora
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert any("insert into interventions" in q for q, _ in conn.executed)
+
+
+async def test_medicao_ainda_respeita_o_tempo_minimo(monkeypatch):
+    """O que `medicao` dispensa e so a 1a resposta. O timer continua: sair da aba nos
+    primeiros segundos de sessao nao vira intervencao (falso positivo pesa em TEA/TDAH)."""
+    async def fake_pred(m, s, conn, sid):
+        return {"estado": "muito_distraido", "score": 0.58,
+                "feats": {"duracao_janela_min": 1.0}, "confiavel": True}   # < 3 min
+    monkeypatch.setattr(app_mod, "predizer_estado", fake_pred)
+    conn = FakeConn(fetchrow={"from interventions": {"n": 0, "ultima": None}},
+                    fetchval={"question_answer": 0},
+                    fetch={"tab_change": _aba(95.0)})
+    thompson = SimpleNamespace(select=lambda e, s, evitar=(): "checkpoint")
+    fake_app = SimpleNamespace(state=SimpleNamespace(
+        thompson=thompson, modelo=1, scaler=1, pool=FakePool(conn)))
+    await app_mod.rodar_intervencao(fake_app, "sid")
+    assert not any("insert into interventions" in q for q, _ in conn.executed)
+
+
 async def test_rodar_intervencao_warmup_cedo(monkeypatch):
     async def fake_pred(m, s, conn, sid):
         return {"estado": "distraido", "score": 0.9, "feats": {"duracao_janela_min": 1.0}, "confiavel": True}  # < 3 min

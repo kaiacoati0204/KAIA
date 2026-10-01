@@ -5021,14 +5021,21 @@ html:has(body.lp-page) {
 /* =========================
    PAINEL DA ESCOLA (escola.html) — namespace ep-
 ========================= */
-/* Céu coati sem as manchas do login (área logada, leitura longa): só a base.
+/* Sem as manchas do login (área logada, leitura longa): só a base.
    Dourado só no "Copiar código" do professor; o resto é azul-coati ou neutro. */
 /* Fundo UNIFORME na página toda: o degradê mora na raiz (cobre rail e rodapé em qualquer
    altura) e o body/.conteudo ficam transparentes. Com a textura de papel ligada, o grão
    vem do body inteiro — antes só a coluna do .conteudo o recebia e o fundo rachava em dois. */
+/* SEM o azul-névoa, pelo mesmo motivo do mc-page: num degradê de 160deg a parada 0% cai
+   no canto superior ESQUERDO — justo onde o olho entra e onde a rail encosta — e o azul
+   virava uma mancha fria contra o resto da página. Só marfim -> creme: os dois são tons
+   de papel, então o fundo lê como uma superfície só.
+   Também conserta os temas: --marfim e --creme-bg são redefinidos nos QUATRO data-luz,
+   mas --azul-nevoa não existe no [data-luz="2"] (Neutro) — ali ele caía no #dfe6f5 do
+   :root e o canto continuava azul num tema que é todo neutro. */
 html:has(body.ep-page) {
   min-height: 100%;
-  background: linear-gradient(160deg, var(--azul-nevoa) 0%, var(--marfim) 45%, var(--creme-bg) 100%);
+  background: linear-gradient(160deg, var(--marfim) 0%, var(--creme-bg) 100%);
 }
 body.ep-page { background-color: transparent; }
 body.ep-page .conteudo.ep-conteudo {

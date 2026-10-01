@@ -59,6 +59,14 @@
                 <label for="cons-nome">Nome completo do responsável</label>
                 <input id="cons-nome" type="text" autocomplete="name" placeholder="Nome completo">
             </div>
+            <!-- E-mail: é por ele que a autorização vira VÍNCULO — o backend acha (ou cria)
+                 a conta do responsável e liga ao aluno, e é assim que o painel de
+                 acompanhamento passa a mostrar esse filho. Opcional pela mesma razão do
+                 CPF: sem ele o aceite continua válido, só não gera o vínculo. -->
+            <div class="grupo-input">
+                <label for="cons-email">E-mail <small>(opcional — para acompanhar o estudo)</small></label>
+                <input id="cons-email" type="email" autocomplete="email" placeholder="voce@exemplo.com">
+            </div>
             <div class="grupo-input">
                 <label for="cons-cpf">CPF <small>(opcional)</small></label>
                 <input id="cons-cpf" type="text" inputmode="numeric" placeholder="000.000.000-00">

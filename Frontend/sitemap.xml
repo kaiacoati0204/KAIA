@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  KaIA — mapa do site.
+
+  Só as páginas PÚBLICAS, as mesmas que o robots.txt libera. Listar uma URL aqui e
+  bloqueá-la lá seria pedir para o Google indexar e proibir ao mesmo tempo.
+
+  A raiz "/" fica de fora de propósito: ela é só um redirect para /pages/index.html
+  (ver Frontend/index.html). Sitemap lista URL canônica, não redirecionamento.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- Landing: a porta de entrada -->
+  <url>
+    <loc>https://kaia-gemb.onrender.com/pages/index.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Criar conta: é para cá que a landing empurra -->
+  <url>
+    <loc>https://kaia-gemb.onrender.com/pages/cadastro.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <url>
+    <loc>https://kaia-gemb.onrender.com/pages/login.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- Documentos: mudam pouco, mas precisam ser achados por quem procura -->
+  <url>
+    <loc>https://kaia-gemb.onrender.com/pages/termos.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <url>
+    <loc>https://kaia-gemb.onrender.com/pages/privacidade.html</loc>
+    <lastmod>2026-09-29</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+</urlset>

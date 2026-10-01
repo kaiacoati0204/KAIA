@@ -1,0 +1,29 @@
+# KaIA
+
+> Plataforma brasileira de estudos para o ENEM e vestibulares que detecta quando o
+> estudante se distrai e age no momento certo, em vez de só contar o tempo gasto.
+
+A KaIA gera questões com apoio de IA, adapta a dificuldade ao desempenho e acompanha
+sinais de foco durante o estudo (tempo de resposta, troca de aba, períodos sem
+interação). Quando a atenção cai, ela oferece um apoio curto — uma pausa, uma
+reancoragem, uma troca de tema — e pergunta ao próprio estudante como ele estava.
+
+Para quem é: estudantes do Ensino Médio se preparando para o ENEM e vestibulares.
+Menores de 18 anos precisam da autorização de um responsável legal antes de qualquer
+registro de dados de estudo (LGPD, art. 14).
+
+O que a KaIA não faz: não garante aprovação nem nota, e não é avaliação clínica,
+psicológica ou pedagógica. A leitura de atenção é uma estimativa a partir do uso da
+plataforma. Conteúdo gerado por IA pode conter erro — existe botão de reportar questão.
+
+Status: beta, com um grupo pequeno de estudantes. Uso gratuito nesta fase.
+
+## Páginas públicas
+
+- [Início](https://kaia-gemb.onrender.com/pages/index.html): o que a plataforma faz e para quem
+- [Criar conta](https://kaia-gemb.onrender.com/pages/cadastro.html): cadastro do estudante
+- [Entrar](https://kaia-gemb.onrender.com/pages/login.html): acesso de quem já tem conta
+- [Termos de Uso](https://kaia-gemb.onrender.com/pages/termos.html): regras de uso e limites do serviço
+- [Política de Privacidade](https://kaia-gemb.onrender.com/pages/privacidade.html): quais dados são coletados, por quê e por quanto tempo
+
+Contato: privacidade@kaia.com.br

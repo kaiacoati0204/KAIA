@@ -39,6 +39,24 @@ def test_recompensa_nao_premia_encurtar_nem_maratonar():
     assert bp.recompensa_rodada(eventos_objetivos=0, respondidas=2, abandonou=False) is None
 
 
+def test_chute_nao_vale_questao_feita():
+    """Responder sem ler nao pode render o mesmo que estudar.
+
+    `resposta_por_chute` entra na recompensa somada aos eventos objetivos: a rodada toda
+    chutada (10 de 10 rapidas) cai a 0, e uma unica rapida custa o mesmo que uma perda de
+    foco. Sem isto, 10 chutes sem sair da aba davam nota maxima."""
+    import risco
+    rapida = {"tempo_resposta_ms": 900, "limite_leitura_ms": 30}      # 0,9s de 30s esperados
+    lida = {"tempo_resposta_ms": 25000, "limite_leitura_ms": 30}
+    assert risco.resposta_por_chute(rapida) is True
+    assert risco.resposta_por_chute(lida) is False
+    # a recompensa ve chute e perda de foco pelo mesmo contador
+    limpa = bp.recompensa_rodada(eventos_objetivos=0, respondidas=10, abandonou=False)
+    chutada = bp.recompensa_rodada(eventos_objetivos=10, respondidas=10, abandonou=False)
+    uma_rapida = bp.recompensa_rodada(eventos_objetivos=1, respondidas=10, abandonou=False)
+    assert limpa == 1.0 and chutada == 0.0 and uma_rapida == 0.8
+
+
 def test_o_que_aprendeu_sobrevive_ao_reinicio(tmp_path):
     """sem persistência o bandit voltava a Beta(1,1) a cada restart e nunca aprendia nada"""
     caminho = tmp_path / "params.json"

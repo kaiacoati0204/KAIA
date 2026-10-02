@@ -629,13 +629,40 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
                 """,
                 aluno_id,
             )
-            # COMPLEMENTO: última sessão ao vivo (ou nada)
+            # COMPLEMENTO: última SESSÃO (ou nada)
+            # Vinha da ultima JANELA de session_features (10 min, reagregada a cada 30 s): o
+            # numero mudava sozinho e nao era o da sessao — sair da aba no inicio e voltar
+            # zerava o "tempo fora de foco" que o aluno via. Tester reclamou disso em 30/09.
+            # Somar as janelas seria pior: elas se sobrepoem (janela de 10 min a cada 30 s),
+            # entao o mesmo tempo entraria varias vezes. Aqui vem dos EVENTOS da sessao, que
+            # nao se sobrepoem. velocidade_scroll fica na media das janelas: nao tem evento
+            # proprio, e media de janelas sobrepostas distorce menos que soma.
             ult = await conn.fetchrow(
                 """
-                select sf.tempo_resposta_ms, sf.velocidade_scroll_px_s, sf.mudancas_aba,
-                       sf.tempo_fora_foco_s, sf.cliques_fora_area_estudo, sf.window_ts
-                from session_features sf join sessions s on s.session_id = sf.session_id
-                where s.user_id = $1::uuid order by sf.window_ts desc limit 1
+                with u as (
+                    select session_id, session_start_ts from sessions
+                     where user_id = $1::uuid order by session_start_ts desc limit 1
+                )
+                select u.session_start_ts as window_ts,
+                       (select avg((e.payload->>'tempo_resposta_ms')::float)
+                          from session_events e
+                         where e.session_id = u.session_id
+                           and e.event_type = 'question_answer') as tempo_resposta_ms,
+                       (select avg(sf.velocidade_scroll_px_s) from session_features sf
+                         where sf.session_id = u.session_id) as velocidade_scroll_px_s,
+                       (select count(*) from session_events e
+                         where e.session_id = u.session_id and e.event_type = 'tab_change'
+                           and coalesce((e.payload->>'interno')::bool, false) = false
+                        ) as mudancas_aba,
+                       (select coalesce(sum((e.payload->>'tempo_fora_foco_s')::float), 0)
+                          from session_events e
+                         where e.session_id = u.session_id and e.event_type = 'tab_change'
+                           and coalesce((e.payload->>'interno')::bool, false) = false
+                        ) as tempo_fora_foco_s,
+                       (select count(*) from session_events e
+                         where e.session_id = u.session_id
+                           and e.event_type = 'click_outside') as cliques_fora_area_estudo
+                  from u
                 """,
                 aluno_id,
             )
@@ -671,7 +698,9 @@ async def perfil_estatisticas(request: Request, ident: dict = Depends(usuario_id
     ultima_sessao = None
     if ult:
         ultima_sessao = {
-            "tempo_resposta_ms": ult["tempo_resposta_ms"],
+            # 0 e nao None: a sessao pode nao ter resposta nenhuma (abriu e saiu) e o front
+            # divide este campo por 1000 sem checar.
+            "tempo_resposta_ms": ult["tempo_resposta_ms"] or 0,
             "velocidade_scroll_px_s": ult["velocidade_scroll_px_s"],
             "mudancas_aba": ult["mudancas_aba"],
             "tempo_fora_foco_s": ult["tempo_fora_foco_s"],
@@ -1307,10 +1336,15 @@ async def _gerar_calculo_pot(n, materia, nome, tema, hobbie, nivel, exemplos=Non
             + chr(10))
     regra_hobbie = ""
     if hobbie:
-        regra_hobbie = (f'- Em ~{max(1, round(n_pedir * 0.6))} das {n_pedir}, use "{hobbie}" como contexto '
-                        f'central do enunciado: a cena É a do hobbie e os números saem dela (a conta '
-                        f'continua a mesma). Não basta citar o nome — se der para trocar "{hobbie}" por '
-                        f'qualquer palavra sem mudar nada, não vale.\n')
+        regra_hobbie = (
+            f'- Em ~{max(1, round(n_pedir * 0.6))} das {n_pedir}, ambiente a questão em "{hobbie}": '
+            f'quem é a pessoa, onde ela está e de onde saem os dados. O hobbie é o CENÁRIO.\n'
+            f'- O que a questão AVALIA continua sendo só o tema da matéria. O hobbie nunca é o '
+            f'assunto da pergunta: se para responder o aluno precisar saber algo sobre "{hobbie}", '
+            f'a questão está errada e não serve.\n'
+            f'- Cuidado com hobbie que puxa para OUTRA matéria. Erro real já gerado: hobbie '
+            f'"Poesia" numa questão de História virou pergunta sobre Romantismo e soneto, que é '
+            f'Literatura. O cenário pode ter um poeta; o que se pergunta tem de ser História.\n')
     bloco_ex = ""
     if exemplos:
         refs = "\n---\n".join(
@@ -1372,7 +1406,11 @@ Regras:
             # as erradas passam a ser contas erradas de verdade, e o "por que errou"
             # nomeia o erro em vez de descrever a opção
             opts = [certa] + [t for t, _ in derivados]
-            porques = [""] + [f"Esse é o valor de quem {m}." for _, m in derivados]
+            conta = _pot_limpar_formula(q["formula"])
+            # a conta entra só se couber na frase; longa demais atrapalha mais do que ajuda
+            certo_txt = (f" A conta certa é {conta} = {certa}."
+                         if conta and len(conta) <= 60 else f" O resultado certo é {certa}.")
+            porques = [""] + [f"Esse é o valor de quem {m}.{certo_txt}" for _, m in derivados]
             ordem = list(range(len(opts)))
             random.shuffle(ordem)                      # gabarito não pode ficar sempre no A
             opts = [opts[i] for i in ordem]
@@ -1398,8 +1436,12 @@ Regras:
 # velha e nova ficam indistinguiveis no banco.
 # v5: distratores derivados da formula (erro de procedimento em vez de alternativa
 # inventada), rubrica separada por caminho (conta x conceito), regra de tema vizinho,
-# hobbie como cenario e nao assunto, variedade de formato forcada.
-VERSAO_PROMPT = "v5-2026-09"
+# variedade de formato forcada.
+# v6: hobbie e CENARIO e nunca o assunto avaliado -- o texto do prompt da v5 dizia o
+# contrario ("a cena E a do hobbie") e deixava o hobbie puxar a questao para outra materia
+# (Poesia levando Historia para Literatura); e o "por que errou" das de calculo passou a
+# dizer a conta certa, nao so nomear o erro.
+VERSAO_PROMPT = "v6-2026-10"
 
 # Gera mais do que precisa e fica com as que passam nas barreiras (como o Duolingo).
 # Encarece ~50% a geracao (fracao de centavo) e evita lote curto; o aluno continua vendo n.
@@ -3447,6 +3489,10 @@ class PausaIn(BaseModel):
 # TAMANHO ESPERADO, sem inflar: d = 0,65 e o geral (Gollwitzer & Sheeran, 94 testes, adultos).
 # Em CRIANCAS a meta-analise de 2026 da g = 0,31 (42 estudos, N=12.957, idade media 10,7), com
 # efeito MAIOR nos mais novos. Adolescente fica entre os dois - espere ~0,3, nao 0,65.
+# E MENOS que isso em escala: a replicacao do HarvardX pelos mesmos autores (PNAS 2020, 250 mil
+# alunos, ~250 cursos) achou o beneficio do prompt de planejamento SUBINDO engajamento mas
+# dissipando ao longo do curso, e eficacia media caindo uma ordem de magnitude ao escalar. Medir
+# efeito por NUMERO DE EXPOSICOES, nao pela media: o padrao e sumir depois de 2-3 telas.
 # Qual plano mostrar sai de uma REGRA sobre a feature dominante, nao do modelo: com ~20
 # observacoes por braco, variar o texto dentro do braco so somaria ruido.
 # (feature, corte, teto, texto). O "se" e um evento que o aluno RECONHECE acontecendo, nao um
@@ -3558,7 +3604,7 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
             "and event_type = 'recompensa_prevencao' and ts > $2", session_id, dec["ts"]):
         return None                                  # já fechada
 
-    respondidas, acertos, eventos, lentidao_ignorada, reativas = 0, 0, 0, 0, 0
+    respondidas, acertos, eventos, lentidao_ignorada, reativas, rapidas = 0, 0, 0, 0, 0, 0
     for r in await conn.fetch(
             "select event_type, payload from session_events "
             "where session_id = $1::uuid and ts > $2", session_id, dec["ts"]):
@@ -3566,6 +3612,8 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
         if r["event_type"] == "question_answer":
             respondidas += 1
             acertos += 1 if pay.get("acertou") else 0
+            if risco.resposta_por_chute(pay):
+                rapidas += 1
         elif r["event_type"] == "decisao_intervencao":
             reativas += 1                 # a outra camada agiu nesta janela: separavel depois
         elif risco.regra_por_lentidao(r["event_type"], pay):
@@ -3578,8 +3626,9 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
         # enviesaria o aprendizado (o braco foi imposto, nao sorteado).
         await _log_evento(conn, session_id, "recompensa_prevencao",
                           {"braco": braco, "prob": None, "modo": "fixo",
-                           "recompensa": recompensa_rodada(eventos, respondidas, False),
-                           "respondidas": respondidas, "eventos_objetivos": eventos})
+                           "recompensa": recompensa_rodada(eventos + rapidas, respondidas, False),
+                           "respondidas": respondidas, "eventos_objetivos": eventos,
+                           "rapidas": rapidas})
         return None
     if fim_de_sessao and respondidas == 0:
         # parou EXATAMENTE na pausa, sem responder nada: acabou o tempo de estudo, não é
@@ -3588,7 +3637,7 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
         return None
     # começou a rodada e largou no meio = abandono; parar após um bom trecho é estudo normal
     abandonou = fim_de_sessao and respondidas < MIN_RESPONDIDAS
-    rec = recompensa_rodada(eventos, respondidas, abandonou)
+    rec = recompensa_rodada(eventos + rapidas, respondidas, abandonou)
     if rec is None:
         return None                                  # rodada curta demais: não avalia
     # alem da recompensa (que e o que o bandit otimiza), grava os desfechos separados: se o
@@ -3596,6 +3645,7 @@ async def _fechar_recompensa_prevencao(conn, session_id, fim_de_sessao=False):
     await _log_evento(conn, session_id, "recompensa_prevencao",
                       {"braco": braco, "prob": p.get("prob"), "recompensa": rec,
                        "respondidas": respondidas, "eventos_objetivos": eventos,
+                       "rapidas": rapidas,
                        "abandonou": abandonou, "acertos": acertos,
                        "completou_rodada": respondidas >= MIN_RESPONDIDAS and not abandonou,
                        "lentidao_ignorada": lentidao_ignorada, "reativas_na_janela": reativas})

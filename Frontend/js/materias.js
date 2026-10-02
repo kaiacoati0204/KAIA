@@ -1957,6 +1957,7 @@ async function iniciarSessaoEstudo(subject, tema) {
         idioma: navigator.language || null,
         fuso_min: new Date().getTimezoneOffset(),
     } });
+    marcarInicioRodada('sessao');       // 1a rodada: depois do session_start, que cria a sessao
     // Sessão de ESTADO INDUZIDO (estudo controlado): ?induzido=engajado|distraido|
     // muito_distraido marca o rótulo dado por INSTRUÇÃO. É a única âncora que não
     // depende do aluno saber o que sentiu — serve p/ medir o erro do próprio probe.
@@ -2660,11 +2661,20 @@ function abrirModalRodada() {
     $('resumo-overlay').hidden = false;
 }
 
+// Marco de INICIO de rodada. Sem ele, "o aluno comecou o bloco?" so dava para inferir pela 1a
+// resposta — e some justo em quem abre e nao responde nada (caso real de 30/09). E o desfecho
+// que a tela de apoio no inicio da sessao precisaria medir, entao o evento vem antes dela.
+function marcarInicioRodada(origem) {
+    logEvent('rodada_inicio', { origem, questoes_na_sessao: questoesRespondidas,
+                                nivel: nivelDificuldade });
+}
+
 // "Continuar estudando": nova rodada — zera contador/barra, mantém sessão e sensores.
 function continuarRodada() {
     $('resumo-overlay').hidden = true;
     questoesNaRodada = 0;
     sortearAlvoProbe();
+    marcarInicioRodada('continuar');
     atualizarContador();       // "Questão 1 de 10", barra zerada
     carregarQuestao(currentSubject, currentTema);
 }
@@ -3466,8 +3476,13 @@ async function pedirApoioDaPausa() {
         // diz por quê (sem consentimento, reativa recente, risco baixo...). Sem isto só dava
         // para descobrir abrindo a aba Network.
         console.log('[KaIA Pausa]', d);
-        if (d?.apoio === 'pacote_foco') mostrarPacoteFoco(cx, d.plano, d.opcoes);
-        else if (d?.apoio === 'pausa_curta') mostrarOfertaDePausa(cx);
+        if (d?.apoio === 'pacote_foco') {
+            mostrarPacoteFoco(cx, d.plano, d.opcoes);
+            logEvent('apoio_exibido', { apoio: 'pacote_foco', plano: d.plano || null });
+        } else if (d?.apoio === 'pausa_curta') {
+            mostrarOfertaDePausa(cx);
+            logEvent('apoio_exibido', { apoio: 'pausa_curta', plano: null });
+        }
     } catch (e) {
         console.warn('[KaIA Pausa] falhou:', e);   // apoio é opcional: o aluno segue sem nada
     }
@@ -3475,7 +3490,9 @@ async function pedirApoioDaPausa() {
 
 // Plano se-então + devolução do autorrelato. O plano NÃO é uma meta ("vou fazer 10"): é
 // "se acontecer Y, então faço X", dito antes. Meta comum morre na hora de agir; o plano
-// se-então automatiza a resposta no gatilho (d = 0,65). O servidor escolhe QUAL plano a
+// se-então automatiza a resposta no gatilho. NÃO escrever d = 0,65 aqui: esse é o geral de
+// adultos; em crianças é g = 0,31, e a replicação em escala (PNAS 2020, 250 mil alunos) achou o
+// benefício dissipando ao longo do tempo. Espere menos que 0,3. O servidor escolhe QUAL plano a
 // partir do que está pesando mais para este aluno agora.
 function mostrarPacoteFoco(cx, plano, opcoes) {
     // Devolução: fala do ATO de se observar, não de uma nota. Com TEA/TDAH, um placar baixo
@@ -3647,10 +3664,17 @@ function mostrarOfertaDePausa(cx) {
         <p class="apoio-pergunta">Que tal uma pausa curta antes de seguir?</p>
         <div class="apoio-botoes">
             <button type="button" onclick="aceitarPausaDaOferta()">Pausar um pouco</button>
-            <button type="button" class="apoio-pular" onclick="$('resumo-apoio').hidden = true">
+            <button type="button" class="apoio-pular" onclick="dispensarOfertaDePausa()">
                 Prefiro continuar</button>
         </div>`;
     cx.hidden = false;
+}
+
+// Dispensa EXPLICITA da oferta de pausa. Antes o botao so escondia a tela, então recusar e
+// fechar a aba ficavam indistinguiveis — e recusa e desfecho, nao dado faltante.
+function dispensarOfertaDePausa() {
+    $('resumo-apoio').hidden = true;
+    logEvent('apoio_dispensado', { apoio: 'pausa_curta' });
 }
 
 function aceitarPausaDaOferta() {
@@ -3658,6 +3682,7 @@ function aceitarPausaDaOferta() {
     $('resumo-overlay').hidden = true;
     questoesNaRodada = 0;
     sortearAlvoProbe();
+    marcarInicioRodada('pos_pausa');
     atualizarContador();
     _entrarPausa();
 }

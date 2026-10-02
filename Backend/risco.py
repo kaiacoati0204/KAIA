@@ -70,6 +70,16 @@ def _rapida(p):
     return bool(rt and lim and rt > 0 and lim > 0 and rt < RAPIDA_FRACAO * lim * 1000)
 
 
+def resposta_por_chute(p):
+    """A resposta veio rapida demais para ter sido lida? (= `_rapida`, exposto para a recompensa)
+
+    A recompensa do bandit contava qualquer `question_answer` como questao feita, então chutar
+    10 sem sair da aba dava nota maxima. A regra DTS cobre o lado rapido, mas exige as tres
+    condicoes juntas e escapa de quem chuta desde a primeira.
+    """
+    return _rapida(p)
+
+
 def _tempo_relativo(p):
     rt, lim = p.get("tempo_resposta_ms"), p.get("limite_leitura_ms")
     return math.log(rt / (lim * 1000)) if rt and lim and rt > 0 and lim > 0 else None

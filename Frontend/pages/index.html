@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KaIA — estude para o ENEM com foco</title>
-    <meta name="description" content="Plataforma de estudos com IA que detecta a distração e te ajuda a manter o foco. Questões personalizadas e apoio no momento certo.">
+    <meta name="description" content="Plataforma de estudos com IA que repara quando o estudo é interrompido e oferece apoio no momento certo. Questões personalizadas para o ENEM.">
     <link rel="canonical" href="https://kaia-gemb.onrender.com/pages/index.html">
     <!-- og:*: é o que o WhatsApp e as redes leem ao colar o link. Sem isso o
          compartilhamento sai com o nome do arquivo e nenhum texto. -->
@@ -13,7 +13,7 @@
     <meta property="og:site_name" content="KaIA">
     <meta property="og:locale" content="pt_BR">
     <meta property="og:title" content="KaIA — estude para o ENEM com foco">
-    <meta property="og:description" content="Plataforma de estudos com IA que detecta a distração e te ajuda a manter o foco. Questões personalizadas e apoio no momento certo.">
+    <meta property="og:description" content="Plataforma de estudos com IA que repara quando o estudo é interrompido e oferece apoio no momento certo. Questões personalizadas para o ENEM.">
     <meta property="og:url" content="https://kaia-gemb.onrender.com/pages/index.html">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,8 +47,8 @@
             <div class="lp-hero-inner">
                 <h1 class="lp-hero-titulo">Estude com foco. Chegue preparado.</h1>
                 <p class="lp-hero-sub">
-                    A KaIA detecta quando você se distrai e age — para que cada hora de estudo
-                    valha de verdade.
+                    A KaIA repara quando o estudo é interrompido e oferece apoio no momento
+                    certo — para que cada hora de estudo valha de verdade.
                 </p>
                 <!-- Só "Ver planos": não existe plano gratuito, e um "Começar
                      grátis" levando ao login prometia o que a tabela abaixo
@@ -88,10 +88,11 @@
                         </svg>
                     </span>
                     <span class="lp-passo-num">Passo 2</span>
-                    <h3>A KaIA observa seu foco</h3>
+                    <h3>A KaIA acompanha seu ritmo</h3>
                     <p>
-                        Sem câmera e sem nada invasivo: só sinais de comportamento na própria tela —
-                        mouse parado, troca de aba, scroll rápido demais para ter lido.
+                        Sem câmera e sem nada invasivo: só o que acontece na própria tela — quanto
+                        tempo você passa fora da aba e quando uma questão fica parada muito além
+                        do seu ritmo de sempre.
                     </p>
                 </article>
 
@@ -138,22 +139,27 @@
                     </p>
                 </article>
 
-                <!-- ===================== A IA QUE OBSERVA ===================== -->
+                <!-- ===================== A IA QUE OBSERVA =====================
+                     LINGUAGEM: nao dizer que a KaIA "detecta distracao" ou "percebe quando voce
+                     se perde". Detectar mente vagando foi ABANDONADO em 15/09/2026 (sem camera o
+                     teto publicado e kappa ~0,21) e o CLAUDE.md proibe linguagem de diagnostico.
+                     Os sinais listados abaixo tem de ser os gatilhos REAIS — ver app.py, secao
+                     "QUEM PODE DISPARAR": medicao (fora da aba >= 30s), regra DTS e ociosidade.
+                     Mouse parado e scroll rapido NAO disparam nada; so alimentam features. -->
                 <article class="question-wrapper">
-                    <h2>A parte mais inovadora: a plataforma percebe quando você se perde</h2>
+                    <h2>A parte mais inovadora: apoio no momento certo, sem vigiar você</h2>
                     <p>
-                        Enquanto o aluno estuda, a KaIA <strong>observa silenciosamente o comportamento dele na tela</strong> — não por câmera, sem nada invasivo. Ela presta atenção em sinais simples que, com certa confiabilidade, indicam perda de foco:
+                        Enquanto o aluno estuda, a KaIA <strong>acompanha o que acontece na própria tela</strong> — não por câmera, sem nada invasivo. Ela não tenta adivinhar o que você está pensando: age sobre o que dá para medir.
                     </p>
 
                     <ul class="lista-planejamento">
-                        <li><strong>Parou de mover o mouse?</strong> A atenção pode ter migrado para fora da tela.</li>
-                        <li><strong>Ficou muito tempo sem digitar?</strong> A sessão travou em algum ponto.</li>
-                        <li><strong>Trocou de aba?</strong> O clássico "só vou dar uma olhadinha".</li>
-                        <li><strong>Fez scroll muito rápido sem ler?</strong> Os olhos passaram, o conteúdo não entrou.</li>
+                        <li><strong>Saiu da aba e ficou mais de meio minuto fora?</strong> O estudo parou — isso o navegador registra, não é palpite.</li>
+                        <li><strong>A questão ficou aberta e parada muito além do seu ritmo?</strong> A régua é a sua, não a de outro aluno.</li>
+                        <li><strong>O acerto caiu e o tempo saiu do normal ao mesmo tempo?</strong> Os dois juntos dizem mais do que cada um sozinho.</li>
                     </ul>
 
                     <p>
-                        Quando isso acontece, a plataforma pode <strong>intervir</strong>: com um aviso, uma pausa guiada ou uma mudança no tipo de questão — tentando trazer o aluno de volta ao estado de concentração.
+                        Quando isso acontece, a plataforma oferece <strong>um apoio curto</strong>: retomar de onde parou, uma pausa guiada ou uma mudança no tipo de questão. E quando você está indo bem, ela não interrompe.
                     </p>
 
                     <div class="coati-container">
@@ -180,7 +186,7 @@
                 <article class="question-wrapper">
                     <h2>Ao final de cada sessão, um relatório</h2>
                     <p>
-                        O aluno vê quantas questões respondeu, quais temas foram mais fracos e <strong>quanto tempo ficou realmente focado</strong>. É como ter um professor particular que não só passa o conteúdo, mas acompanha se o aluno está presente de verdade.
+                        O aluno vê quantas questões respondeu, quais temas foram mais fracos e <strong>em que pontos o estudo foi interrompido</strong>. É como ter um professor particular que não só passa o conteúdo, mas acompanha como a sessão realmente aconteceu.
                     </p>
                 </article>
 
@@ -191,7 +197,7 @@
                         É um problema que qualquer estudante conhece: você senta para estudar duas horas, mas na prática passa quarenta minutos olhando o celular, vinte minutos relendo a mesma linha sem absorver nada, e só uma pequena fração estudando de verdade.
                     </p>
                     <p>
-                        A KaIA <strong>não elimina a distração</strong> — isso seria impossível. Mas ela <strong>detecta, registra e age</strong> sobre ela, tornando cada hora de estudo mais produtiva.
+                        A KaIA <strong>não elimina a distração</strong> — isso seria impossível, e ela não afirma saber o que se passa na sua cabeça. Mas ela <strong>repara quando o estudo para, registra e oferece apoio</strong>, tornando cada hora de estudo mais produtiva.
                     </p>
                 </article>
 

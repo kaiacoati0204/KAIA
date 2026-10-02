@@ -85,10 +85,32 @@ efeito maior nos mais novos. **Expectativa honesta para adolescente: ~0,3, não 
 antemão torna a resposta automática quando a situação chega. É por isso que funciona no momento em
 que a força de vontade já acabou: ela deixa de ser necessária.
 
-**Funciona entregue por TELA, sem adulto.** Experimento de campo em três cursos da HarvardX:
-prompt de planejamento aumentou a conclusão em **29%** e o pagamento por certificado em 40% — com
-efeito **maior em alunos matriculados em escolas tradicionais**. Era a hipótese mais frágil do
-desenho, e é o achado mais importante do documento.
+**Funciona entregue por TELA, sem adulto — mas NÃO em escala.** Experimento de campo em três
+cursos da HarvardX (n = 2.053): prompt de planejamento aumentou a conclusão em **29% relativos**
+(13,8% → 17,7%, ou seja **3,9 pontos**) e o pagamento por certificado em 40%.
+
+> **Correção (01/10/2026) — a replicação dos MESMOS autores derruba a leitura forte.** Kizilcec,
+> Reich, Yeomans et al., *Scaling up behavioral science interventions in online education*, PNAS
+> 2020: **250 mil alunos, ~250 cursos** (Harvard/MIT/Stanford), 2,5 anos. Três achados:
+> (1) escalar estas intervenções pode **reduzir a eficácia média em uma ordem de magnitude**;
+> (2) os prompts de planejamento **subiram engajamento mas o benefício se dissipou** ao longo do
+> curso — não aumentaram conclusão; (3) tentaram **ML para prever qual intervenção para qual
+> aluno, e o algoritmo não foi melhor que dar a mesma intervenção para todos**.
+>
+> Consequências para a KaIA, sem rodeio:
+> - **Não citar os 29% sem a replicação.** Citar o estudo de 2.053 e omitir o de 250 mil, dos
+>   mesmos autores, é o que derruba a alegação numa banca.
+> - O número honesto esperado é **menor que 0,3**, não igual.
+> - **Medir efeito por número de exposições**, não a média: o padrão publicado é efeito nas
+>   primeiras semanas que desaparece depois. Um bandit fixa no braço favorecido pela novidade.
+> - O achado (3) atinge o **Modelo 2** em cheio: personalizar apoio por aluno é a aposta mais
+>   frágil do desenho, não a mais forte. O degrau 4 da escada (`VALIDACAO.md`) é uma aposta
+>   **contra** o maior experimento publicado da área — o que não a proíbe, mas exige dizê-lo.
+> - "Funciona por tela sem adulto" **continua de pé** para engajamento inicial. O que caiu foi
+>   "e isso leva a concluir o curso".
+
+Diferenças a favor da KaIA, que não anulam o acima: sessão de 10–15 min com feedback imediato não é
+curso de três meses, e beta de escola com alunos conhecidos não é população global anônima.
 
 **Planos que especificam QUANDO preveem conclusão** — e só 25% dos alunos fazem isso
 espontaneamente, o que justifica a tela induzir especificidade.
@@ -182,6 +204,7 @@ mostrando transferência de um plano feito num app para uma prova. Hipótese, n�
 | **efeito modesto (~0,3)** | o custo de entrega é ~zero; pequeno entregue centenas de vezes num semestre soma, e você **mede o tamanho** |
 | **habituação** | o bandit varia por construção (nenhum braço trava em 100%) e o relatório detecta queda por ordem de exposição |
 | **o aluno pode não aceitar** | medido em 1–2 semanas, e existe rota de fuga com evidência **melhor**: assistência/dificuldade adaptativa (d = 0,505 / −0,428) e sinalização (g = 0,53), nenhuma das duas pedindo nada ao aluno |
+| **o efeito some com a repetição** | é o padrão do PNAS 2020 (ver seção 4): medir por **número de exposições**, não pela média — se cai após 2–3 telas, é resultado negativo de produto mesmo que o 1º teste pareça bom |
 | **quem mais precisa é quem menos clica** | o menos resolvido; resposta parcial é registrar quem descarta e tratar diferente, e a rota que não pede nada |
 | **preventiva só age na fronteira** | o meio da rodada é coberto pela camada reativa, que usa **fato**, não previsão |
 | **a recompensa é proxy** | inspecionável: dois buracos já achados e corrigidos (premiava estudar menos; punia o plano por pedir lentidão) |

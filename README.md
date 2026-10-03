@@ -36,6 +36,32 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
   - **Preventiva** — na pausa entre rodadas de 10, o sistema estima o **risco** de perda de foco nas próximas questões e oferece um plano "se-então" antes que ela aconteça. Um segundo bandit aprende qual apoio ajuda, com o braço `nada` como controle.
   - Um **probe de autorrelato** (o aluno declara o próprio estado, 1×/rodada) coleta rótulo real e é devolvido a ele. Sinais de foco/atenção — **não é diagnóstico**.
 
+  **Duas camadas, dois padrões de evidência, dois momentos:**
+
+  | | reativa | preventiva |
+  |---|---|---|
+  | dispara com | evidência **medida** (fato) | **previsão** de evento observável |
+  | age quando | na hora, no meio da rodada | na pausa entre rodadas de 10 |
+  | custo de errar | moderado (interrompe) | ~zero (tela opcional) |
+  | papel | recuperar | prevenir, e aprender o que ajuda |
+
+  **A regra que organiza as duas: quanto mais cara a ação, mais certa a evidência precisa
+  ser.** O gatilho reativo **nunca** usa modelo — age sobre o que o navegador registrou
+  (saída da aba ≥ 30 s, regra DTS, ociosidade incomum). O preventivo admite previsão porque
+  a tela é opcional e cai numa fronteira, onde não há raciocínio para quebrar.
+
+  **Coordenação:** se a reativa agiu nos últimos `PREVENCAO_APOS_REATIVA_MIN` (5) minutos, a
+  pausa seguinte passa em branco; e a recompensa da preventiva grava `reativas_na_janela`.
+
+  **Escada de promoção do gatilho preventivo: `fixo` → `regra` → `modelo`.** Cada degrau só
+  sobe se o anterior mostrar que vale; o Modelo 1 roda em **sombra** até vencer as regras no
+  dado real — o que ainda não aconteceu. Especificação dos modelos, como reproduzir e
+  limitações declaradas: [`ml/LEIA-ME.md`](ml/LEIA-ME.md).
+
+  **Linguagem (texto que o aluno vê):** nunca dizer que a IA "diagnostica" nem que "detecta
+  a distração"; usar **leitura de atenção/foco**. Não é avaliação clínica, e detectar mente
+  vagando foi abandonado — ver o aviso abaixo.
+
   > O core anterior (detectar mente vagando e intervir em tempo real) foi abandonado em 15/09/2026 — o alvo não tem gabarito. O Random Forest v2 segue no repositório como **pesquisa**: não decide nada. Por quê e o que não reabrir: [`ml/core_e_evidencias.md`](ml/core_e_evidencias.md) e [`ml/metodo_beta.md`](ml/metodo_beta.md).
 
 ---

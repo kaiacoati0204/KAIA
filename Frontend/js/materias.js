@@ -1880,7 +1880,8 @@ let validadasNaRodada = 0;   // dessas, quantas NÃO estavam em quarentena
 let rodadaId = 0;           // muda a cada rodada: resposta atrasada do /events não mexe na rodada seguinte
 const NIVEL_MIN = 1, NIVEL_MAX = 5;
 
-// Fecha a rodada: a nota das META questões desloca o centro em ±1. Retorna se mudou.
+// Fecha a rodada: a nota das META questões desloca o centro (passoDoNivel, em puros.js:
+// sobe até 2 quando a nota é >= 9, desce 1). Retorna se mudou.
 function fecharNivelDaRodada() {
     const antigo = nivelDificuldade;
     // Simulado mede, não treina: a nota dele não desloca o centro.
@@ -1889,8 +1890,7 @@ function fecharNivelDaRodada() {
     const MIN_VALIDADAS = Math.ceil(META_QUESTOES * 0.6);
     if (validadasNaRodada >= MIN_VALIDADAS) {
         const nota = Math.round(acertosNaRodada / validadasNaRodada * META_QUESTOES);
-        if (nota >= 7 && nivelDificuldade < NIVEL_MAX) nivelDificuldade++;
-        else if (nota <= 4 && nivelDificuldade > NIVEL_MIN) nivelDificuldade--;
+        nivelDificuldade = passoDoNivel(nivelDificuldade, nota, NIVEL_MIN, NIVEL_MAX);
         _dbg(`fim da rodada: ${acertosNaRodada}/${validadasNaRodada} verificadas -> nota ${nota} -> centro ${antigo}${nivelDificuldade !== antigo ? '→' + nivelDificuldade : ' (mantém)'}`);
     } else {
         _dbg(`fim da rodada: só ${validadasNaRodada} verificadas (< ${MIN_VALIDADAS}) -> mantém ${antigo}`);

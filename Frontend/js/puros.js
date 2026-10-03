@@ -48,8 +48,29 @@
         return Math.max(min, Math.min(reg.nivel - quedas, max));
     }
 
+    // Passo do centro de dificuldade ao fim da rodada. Pura de propósito: é a regra que
+    // decide se o aluno vai ver questão fácil ou difícil amanhã, e tem de ser testável.
+    //
+    // O passo CRESCE com a nota em vez de ser sempre ±1. Com uma rodada por sessão (o uso
+    // real medido), ±1 significa que quem entra no nível 1 e acerta tudo leva TRÊS sessões
+    // para chegar ao 4 — três dias de questão fácil demais, e tédio é empurrão conhecido
+    // para a mente vagar. Caso real de 27/09: 11 de 11 acertos no centro 1.
+    //
+    // Assimétrico de propósito: sobe até 2, desce 1. Nota baixa também sai de questão com
+    // gabarito ruim ou tema que o aluno nunca viu, e derrubar dois níveis de uma vez pune
+    // o aluno por um defeito nosso. Subir rápido só o expõe a uma rodada mais difícil.
+    function passoDoNivel(nivelAtual, nota, min = 1, max = 5) {
+        const n = Math.max(min, Math.min(nivelAtual, max));
+        if (!Number.isFinite(nota)) return n;
+        if (nota >= 9) return Math.min(max, n + 2);   // acertou quase tudo: o nível está longe
+        if (nota >= 7) return Math.min(max, n + 1);
+        if (nota <= 4) return Math.max(min, n - 1);
+        return n;                                      // 5-6: calibrado, não mexe
+    }
+
     raiz.calculateReadingTime = calculateReadingTime;
     raiz.bytesDataUrl = bytesDataUrl;
     raiz.renderBotoes = renderBotoes;
     raiz.nivelComDecaimento = nivelComDecaimento;
+    raiz.passoDoNivel = passoDoNivel;
 })(globalThis);

@@ -1,0 +1,83 @@
+{
+  "fonte": "sintetico",
+  "metricas": {
+    "auc_modelo": 0.7761757450353987,
+    "auc_regras": 0.7108651092914251,
+    "brier": 0.17351680634173117,
+    "precisao_top20": 0.7315818080827625,
+    "taxa_eventos": 0.3462824391020538
+  },
+  "coeficientes": {
+    "minutos_sessao": 0.5201226386266463,
+    "estudo_dia_min": 0.19647595158460882,
+    "n_respondidas": -0.1984215652312748,
+    "frac_rapidas_recentes": 0.3679599025818163,
+    "irregularidade_recente": 0.5067898885051038,
+    "queda_acerto_recente": 0.13561432743902696,
+    "eventos_na_sessao": 0.18972182389331393,
+    "min_desde_ultimo_evento": 0.08731463155446262,
+    "dificuldade_recente": -0.03350240745238025
+  },
+  "sinais_ok": true,
+  "vence_regras": true,
+  "parametros": {
+    "logit_base": [
+      -3.6,
+      "hipótese; calibrar com a taxa real de eventos do controle"
+    ],
+    "por_5min": [
+      0.18,
+      "Farley et al. 2013; Zanesco et al. 2025"
+    ],
+    "por_hora_estudo_dia": [
+      0.35,
+      "hipótese: cansaço acumulado no dia"
+    ],
+    "evento_anterior": [
+      0.45,
+      "Mills et al. 2014: desistências anteriores entraram no modelo final"
+    ],
+    "dificuldade_u": [
+      0.2,
+      "Mills et al. 2013; Seli et al. 2018; Dias da Silva 2020"
+    ],
+    "chance_rapida_desengajando": [
+      0.55,
+      "Mills et al. 2014: páginas lidas em < 5 s"
+    ],
+    "irregularidade_desengajando": [
+      0.75,
+      "Bastian & Sackur 2013: variabilidade antes do relato"
+    ],
+    "saida_consulta_por_questao": [
+      0.02,
+      "Wilcox & Pollock 2019: saídas curtas e de consulta"
+    ],
+    "rapida_legitima": [
+      0.05,
+      "hipótese: questão fácil ou conhecida"
+    ]
+  },
+  "features": [
+    "minutos_sessao",
+    "estudo_dia_min",
+    "n_respondidas",
+    "frac_rapidas_recentes",
+    "irregularidade_recente",
+    "queda_acerto_recente",
+    "eventos_na_sessao",
+    "min_desde_ultimo_evento",
+    "dificuldade_recente"
+  ],
+  "procedencia": {
+    "treinado_em": "2026-09-19 17:35 (hora local, America/Sao_Paulo)",
+    "commit_mais_recente_no_treino": "86fe500 o fato confere o relato",
+    "script": "ml/gerar_risco.py",
+    "artefato": "ml/models/modelo_risco.pkl — NAO versionado; reproduza com o script acima (seed fixa)",
+    "python": "3.11.9",
+    "scikit_learn": "1.7.1",
+    "numpy": "2.2.6",
+    "pandas": "3.0.3",
+    "AVISO": "base SINTETICA. Acuracia/AUC/kappa aqui medem se o modelo recuperou a funcao do proprio gerador, NAO desempenho com aluno real. Conferir n_real (RF v2) e fonte (Modelo 1)."
+  }
+}

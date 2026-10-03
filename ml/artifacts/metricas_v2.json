@@ -1,0 +1,139 @@
+{
+  "versao": "v2",
+  "acuracia": 0.8863636363636364,
+  "n": 660,
+  "n_real": 0,
+  "n_real_teste": 0,
+  "feature_order": [
+    "variabilidade_tempo_resposta",
+    "contagem_lapsos_rt",
+    "tempo_resposta_ms",
+    "tempo_iniciacao_resposta_ms",
+    "tempo_dwell_sem_responder_s",
+    "tempo_ocioso_s",
+    "velocidade_mouse_media",
+    "variabilidade_velocidade_mouse",
+    "flips_cursor_xy",
+    "entropia_trajetoria_mouse",
+    "erros_sem_offtask",
+    "tendencia_desempenho_sessao",
+    "queda_acerto",
+    "contagem_rapidas_rt",
+    "rapido_colado_lento",
+    "tempo_relativo_leitura",
+    "mudancas_aba",
+    "tempo_fora_foco_s",
+    "maior_ausencia_unica_s",
+    "cliques_fora_area_estudo",
+    "taxa_abandono_sessao",
+    "maior_bloco_parado_s",
+    "n_blocos_parados",
+    "nivel_dificuldade_atividade",
+    "duracao_janela_min",
+    "hora_do_dia",
+    "tempo_estudo_acumulado_dia_min"
+  ],
+  "cv_agrupada_por_aluno": {
+    "media": 0.838945598742759,
+    "desvio": 0.0387624209883065,
+    "por_fold": [
+      0.8758620689655172,
+      0.85,
+      0.8382352941176471,
+      0.7657657657657657,
+      0.8648648648648649
+    ]
+  },
+  "holdout": {
+    "n": 132,
+    "acuracia": 0.8863636363636364,
+    "baseline_majoritario": 0.3333333333333333,
+    "kappa": 0.8295454545454546,
+    "matriz_confusao": [
+      [
+        40,
+        4,
+        0
+      ],
+      [
+        10,
+        33,
+        1
+      ],
+      [
+        0,
+        0,
+        44
+      ]
+    ],
+    "classification_report": {
+      "engajado": {
+        "precision": 0.8,
+        "recall": 0.9090909090909091,
+        "f1-score": 0.851063829787234,
+        "support": 44.0
+      },
+      "distraido": {
+        "precision": 0.8918918918918919,
+        "recall": 0.75,
+        "f1-score": 0.8148148148148148,
+        "support": 44.0
+      },
+      "muito_distraido": {
+        "precision": 0.9777777777777777,
+        "recall": 1.0,
+        "f1-score": 0.9887640449438202,
+        "support": 44.0
+      },
+      "accuracy": 0.8863636363636364,
+      "macro avg": {
+        "precision": 0.8898898898898899,
+        "recall": 0.8863636363636364,
+        "f1-score": 0.8848808965152898,
+        "support": 132.0
+      },
+      "weighted avg": {
+        "precision": 0.8898898898898898,
+        "recall": 0.8863636363636364,
+        "f1-score": 0.8848808965152897,
+        "support": 132.0
+      }
+    },
+    "brier": 0.21198636965193965,
+    "na_proporcao_tipica": {
+      "proporcao": {
+        "engajado": 0.6,
+        "distraido": 0.3,
+        "muito_distraido": 0.1
+      },
+      "por_classe": {
+        "engajado": {
+          "precision": 0.889,
+          "recall": 0.909,
+          "f1-score": 0.899
+        },
+        "distraido": {
+          "precision": 0.805,
+          "recall": 0.75,
+          "f1-score": 0.776
+        },
+        "muito_distraido": {
+          "precision": 0.936,
+          "recall": 1.0,
+          "f1-score": 0.967
+        }
+      }
+    }
+  },
+  "procedencia": {
+    "treinado_em": "2026-09-20 21:00 (hora local, America/Sao_Paulo)",
+    "commit_mais_recente_no_treino": "d0a49f6 perguntar depois da explicação",
+    "script": "ml/gerar_base_v2.py",
+    "artefato": "ml/models/modelo_rf_v2.pkl — NAO versionado; reproduza com o script acima (seed fixa)",
+    "python": "3.11.9",
+    "scikit_learn": "1.7.1",
+    "numpy": "2.2.6",
+    "pandas": "3.0.3",
+    "AVISO": "base SINTETICA. Acuracia/AUC/kappa aqui medem se o modelo recuperou a funcao do proprio gerador, NAO desempenho com aluno real. Conferir n_real (RF v2) e fonte (Modelo 1)."
+  }
+}

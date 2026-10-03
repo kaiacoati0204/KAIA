@@ -83,6 +83,7 @@ Backend/
   limpar_*.{py,sql}     → desfazem os seeds
   .env                  → variáveis de ambiente (NÃO vai pro Git — veja "2. Configuração")
 ml/
+  LEIA-ME.md            → GUIA DOS MODELOS: o que cada um decide, como reproduzir, limitações
   gerar_base_v2.py      → gera a base sintética + treina o modelo v2 (seed fixa; .pkl NÃO versionado)
   gerar_risco.py        → gera a base sintética + treina o Modelo 1 (só salva se vencer as regras)
   treinar_com_probe.py  → valida/re-treina o modelo v2 com os rótulos reais do probe

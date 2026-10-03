@@ -1,0 +1,28 @@
+# Versões em uso no desenvolvimento e no treino dos modelos (conferidas em 02/10/2026).
+# Python 3.11.9.
+#
+# scikit-learn está PINADO na versão exata de propósito: ler um .pkl salvo por outra
+# versão emite InconsistentVersionWarning e pode falhar. Os modelos em ml/models/ não
+# são versionados no git — reproduza com `python ml/gerar_base_v2.py` (RF v2) e
+# `python ml/gerar_risco.py` (Modelo 1), que usam seed fixa.
+
+# ---- modelos ----
+scikit-learn==1.7.1
+pandas==3.0.3
+numpy==2.2.6
+scipy==1.16.1
+joblib==1.5.2
+
+# ---- backend ----
+fastapi==0.136.3
+uvicorn==0.49.0
+asyncpg==0.31.0
+pydantic==2.13.4
+APScheduler==3.11.2
+httpx==0.28.1
+PyJWT==2.13.0
+python-dotenv==1.2.2
+
+# ---- testes ----
+pytest
+pytest-asyncio

@@ -31,11 +31,12 @@ ml/artifacts/thompson_params.json
 ml/artifacts/thompson_params_*.json
 ml/artifacts/bandit_prevencao_params*.json
 # v2 é regenerável pelo gerador (seed fixa) — versiona só o gerador, não os artefatos.
+# Os .pkl ficam FORA (binario, reproduzivel por ml/gerar_base_v2.py e ml/gerar_risco.py).
+# Ja as metricas_*.json ENTRAM de proposito: sao o resultado, tem 2-3 KB de texto, e quem
+# audita os modelos precisa le-las sem ter de rodar o treino.
 ml/models/modelo_rf_v2.pkl
-ml/artifacts/metricas_v2.json
 # Modelo 1 (risco de perda de foco): regerável com `python ml/gerar_risco.py`
 ml/models/modelo_risco.pkl
-ml/artifacts/metricas_risco.json
 # Saídas das medições de questões (verificar_cache, teste_impostor) — o impostor traz gabarito
 ml/artifacts/defeitos/
 ml/artifacts/impostor/

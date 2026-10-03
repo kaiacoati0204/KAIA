@@ -10,6 +10,18 @@ INTERNAS. Mouse: simula o BRUTO, passa pela MESMA features_mouse da produção e
 pelo baseline de mouse do aluno.
 
 NÃO mexe na produção: salva como modelo_rf_v2.pkl / scaler_v2.pkl / metricas_v2.json.
+
+Uso (na raiz do projeto):
+    python ml/gerar_base_v2.py
+
+É o PRIMEIRO script a rodar num clone novo: sem modelo_rf_v2.pkl + scaler_v2.pkl o
+backend sobe, mas /diagnose responde 503. A seed é fixa, então a base e o modelo saem
+iguais em qualquer máquina com as versões de requirements.txt.
+
+ATENÇÃO ao ler metricas_v2.json: a base é SINTÉTICA. Acurácia e kappa ali medem se o
+modelo recuperou a função do próprio gerador — não que ele leia atenção de um aluno
+real. O campo `n_real` registra quantos rótulos reais entraram (hoje 0). Para medir no
+real, use ml/treinar_com_probe.py contra a tabela probe_labels.
 """
 import os, sys, json, math, random, statistics
 import numpy as np

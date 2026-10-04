@@ -2008,7 +2008,9 @@ canvas {
   align-items: center;
   gap: 4px;
   margin-bottom: 7px;
-  color: var(--bege);
+  /* era var(--bege): 1,85 a 2,22:1. O bege puro nao serve como texto — --bege-tinta
+     e o mesmo bege escurecido, 5,42 a 10,48. */
+  color: var(--bege-tinta);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -2067,7 +2069,8 @@ canvas {
   align-items: center;
   gap: 4px;
   font-size: 10px;
-  color: #555;
+  /* era #555. Passava, mas e cinza de fora da paleta: --muted segue os 4 temas. */
+  color: var(--muted);
 }
 .dashboard-page .ls {
   flex-shrink: 0;
@@ -2109,14 +2112,14 @@ canvas {
   padding: 0 6px 8px;
   text-align: left;
   border-bottom: 1px solid var(--sep);
-  color: var(--bege);
+  color: var(--bege-tinta);   /* era var(--bege): 1,85 a 2,22:1 como texto */
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.07em;
 }
 .dashboard-page .tbl td {
   padding: 6px;
-  border-bottom: 1px solid #f8f5f1;
+  border-bottom: 1px solid var(--sep);   /* era #f8f5f1 fixo */
   color: var(--profundo);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2153,7 +2156,8 @@ canvas {
   gap: 8px;
   padding: 8px 9px;
   border-radius: 9px;
-  background: #faf7f2;
+  /* era #faf7f2 fixo: num tema escuro virava retangulo branco. */
+  background: var(--surface);
 }
 .dashboard-page .aico {
   flex-shrink: 0;
@@ -2179,7 +2183,8 @@ canvas {
 .dashboard-page .ats {
   margin-top: 1px;
   font-size: 9px;
-  color: #bbb;
+  /* era #bbb: 1,49 a 1,78:1, o pior da tela. --muted da 4,69 a 10,63. */
+  color: var(--muted);
 }
 
 /* --- BARRAS (eventos e metas) --- */
@@ -2199,7 +2204,8 @@ canvas {
 .dashboard-page .elb {
   flex-shrink: 0;
   width: 110px;
-  color: #666;
+  /* era #666: 4,46:1 nos temas 3 e 4, abaixo do minimo. --muted da 4,69 a 10,63. */
+  color: var(--muted);
 }
 .dashboard-page .etr,
 .dashboard-page .ptr {
@@ -2222,7 +2228,8 @@ canvas {
   text-align: right;
   font-size: 9px;
   font-weight: 700;
-  color: #999;
+  /* era #999: 2,21 a 2,64:1 — reprova nos 4 temas. --muted da 4,69 a 10,63. */
+  color: var(--muted);
 }
 .dashboard-page .pdot {
   flex-shrink: 0;
@@ -3771,7 +3778,9 @@ body.kaia-reancorar .option-btn {
 }
 /* Selo "✓ revisada" — questão que o aluno acertou na revisão (Fase 1.1). */
 .acc-tag--ok {
-  color: #2e7d4f;
+  /* era #2e7d4f: sobre o VEU verde (nao sobre o card) da 3,64 a 4,24:1 e reprova
+     nos 4 temas. --acerto-tx da 6,31 a 9,73. */
+  color: var(--acerto-tx);
   background: rgba(var(--vd-uniao-rgb), 0.18);   /* --vd-uniao suave */
 }
 .acc-chevron {
@@ -3808,7 +3817,7 @@ body.kaia-reancorar .option-btn {
 .acc-linha--ok   { background: rgba(var(--vd-uniao-rgb), 0.18); }   /* --vd-uniao suave */
 .acc-ic { flex: none; font-weight: 800; }
 .acc-linha--erro .acc-ic { color: var(--erro-tx); }
-.acc-linha--ok   .acc-ic { color: #2e7d4f; }                 /* verde escuro p/ contraste */
+.acc-linha--ok   .acc-ic { color: var(--acerto-tx); }   /* mesmo verde da .acc-tag--ok */
 .acc-rot {
   flex: none;
   min-width: 96px;

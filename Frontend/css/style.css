@@ -1925,9 +1925,10 @@ canvas {
   gap: 6px;
   padding: 12px 18px 10px;
   border: none;
-  border-bottom: 2.5px solid transparent;
+  border-bottom: 3px solid transparent;
   background: transparent;
-  color: color-mix(in srgb, var(--tinta) 55%, transparent);
+  /* era color-mix(--tinta 55%): 2,29 a 3,37:1, reprovava nos 4 temas. */
+  color: var(--muted);
   font-family: inherit;
   font-size: 10px;
   font-weight: 700;
@@ -1935,10 +1936,15 @@ canvas {
   cursor: pointer;
   transition: 0.18s;
 }
-/* Ativo: texto legível em --profundo; o AMARELO é só o traço (acento). */
+/* Ativo: traço AZUL-COATI, não o ouro. O estado não pode depender de distinguir
+   dois tons escuros de texto (--profundo x --muted dão 1,13:1 no tema 3), então o
+   traço tem de carregar sozinho — e o ouro dá 1,29 a 1,93:1 contra o marfim,
+   abaixo dos 3:1 da WCAG 1.4.11. O azul-coati dá 4,61 a 6,82 nos quatro temas.
+   Não é cor de fora: azul-coati já é o "selecionado" do projeto (.th-ord.ativo,
+   .botao-hobbies.selecionado, .caderno-toggle[aria-pressed]). */
 .dashboard-page .tab.on {
   color: var(--profundo);
-  border-bottom-color: var(--gravata-kinrou);
+  border-bottom-color: var(--azul-coati);
 }
 .dashboard-page .tab:hover:not(.on) {
   color: var(--profundo);

@@ -141,11 +141,27 @@
                  embutido, ele dobrava a altura do perfil e empurrava a análise para longe.
                  Fica no fim de propósito — quem chega até aqui já viu o próprio
                  desempenho e tem o que dizer. -->
+            <!-- Minha assinatura: montada por perfil.js a partir do GET /assinatura.
+                 Nasce [hidden] — sem resposta do backend, nada é afirmado sobre a conta
+                 do aluno. Fica ANTES do convite de avaliar porque é informação da conta,
+                 não um pedido nosso. -->
+            <div class="secao-perfil" id="secaoAssinatura" hidden>
+                <h2>Minha assinatura</h2>
+                <div class="assinatura-estado">
+                    <span class="assinatura-selo" id="assinaturaSelo"></span>
+                    <div class="assinatura-texto">
+                        <p class="assinatura-titulo" id="assinaturaTitulo"></p>
+                        <p class="secao-sub" id="assinaturaDetalhe"></p>
+                    </div>
+                    <a href="index.html#planos" class="btn-assinatura" id="assinaturaLink">Ver planos</a>
+                </div>
+            </div>
+
             <div class="secao-perfil secao-avaliar">
                 <div class="avaliar-texto">
                     <h2>Como está sendo a KaIA?</h2>
                     <p class="secao-sub">Sua experiência ajuda a gente a melhorar de verdade.
-                        Leva 2 minutinhos 💛</p>
+                        Leva 2 minutinhos 💙</p>
                 </div>
                 <a href="avaliacao.html" class="btn-avaliar">Contar como foi 💛</a>
             </div>

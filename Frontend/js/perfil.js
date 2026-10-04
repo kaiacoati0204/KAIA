@@ -27,6 +27,10 @@ async function carregarPerfil() {
 
     // 2) Estatísticas (Etapa 4.1 C híbrida).
     await carregarEstatisticasPerfil();
+
+    // 3) Assinatura: independente das estatísticas — uma falha ali não pode
+    //    esconder o estado da conta, e vice-versa.
+    await carregarAssinatura();
 }
 
 // Hobbies do aluno — o dado sempre veio no /perfil e era descartado aqui.
@@ -494,3 +498,108 @@ function montarAnalise(D, falhou) {
 
 // Init da página: comum.js já monta rail + textura; aqui só o Perfil.
 document.addEventListener('DOMContentLoaded', carregarPerfil);
+
+// ============================================================
+//  MINHA ASSINATURA (seção do perfil)
+// ============================================================
+// Lê o GET /assinatura. O tom muda com o `motivo`, e isso não é enfeite: uma conta
+// isenta NÃO pode ler "sem assinatura" — ela não está devendo nada, é tester do beta
+// e foi quem segurou o produto antes de existir cobrança.
+
+// motivo -> como a seção fala. `acao` null = nem mostra o link de planos (quem já tem
+// acesso vitalício ou não pode comprar não precisa de vitrine).
+const ASSINATURA_TEXTO = {
+    isento: {
+        selo: '💙', classe: 'ok',
+        titulo: 'Você é tester do beta',
+        detalhe: 'Acesso liberado, sem assinatura. Obrigada por estar aqui desde o começo.',
+        acao: null,
+    },
+    pagamento_nao_configurado: {
+        selo: '🌱', classe: 'neutro',
+        titulo: 'Acesso liberado',
+        detalhe: 'A assinatura ainda está sendo finalizada.',
+        acao: null,
+    },
+    trial: {
+        selo: '✨', classe: 'ok',
+        titulo: 'Período de teste',
+        detalhe: 'Você está experimentando a KaIA.',
+        acao: 'Ver planos',
+    },
+    ativa: {
+        selo: '💙', classe: 'ok',
+        titulo: 'Assinatura ativa',
+        detalhe: 'Tudo certo por aqui.',
+        acao: 'Ver planos',
+    },
+    sem_assinatura: {
+        selo: '🌱', classe: 'neutro',
+        titulo: 'Sem assinatura',
+        detalhe: 'Escolha um plano para continuar estudando.',
+        acao: 'Ver planos',
+    },
+    vencida: {
+        selo: '⏳', classe: 'atencao',
+        titulo: 'Seu período de teste terminou',
+        detalhe: 'Seus dados continuam guardados — caderno, progresso e histórico.',
+        acao: 'Escolher plano',
+    },
+    suspensa: {
+        selo: '⏳', classe: 'atencao',
+        titulo: 'Assinatura suspensa',
+        detalhe: 'Nada foi apagado: caderno, progresso e histórico seguem aqui.',
+        acao: 'Reativar',
+    },
+    cancelada: {
+        selo: '🌱', classe: 'neutro',
+        titulo: 'Assinatura cancelada',
+        detalhe: 'Seus dados continuam guardados. Volte quando quiser.',
+        acao: 'Ver planos',
+    },
+};
+
+const _dataBr = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null
+        : d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+};
+
+async function carregarAssinatura() {
+    const secao = $('secaoAssinatura');
+    if (!secao) return;
+
+    let d = null;
+    try {
+        const r = await apiFetch('/assinatura');
+        if (r.ok) d = await r.json();
+    } catch (e) {
+        console.warn('[KaIA] /assinatura indisponível:', e);
+    }
+    // Sem resposta a seção não aparece. Melhor calar do que afirmar errado sobre a
+    // conta de alguém — e o resto do perfil (que é o que importa) segue inteiro.
+    if (!d) return;
+
+    const t = ASSINATURA_TEXTO[d.motivo] || ASSINATURA_TEXTO.sem_assinatura;
+    $('assinaturaSelo').textContent = t.selo;
+    $('assinaturaSelo').dataset.estado = t.classe;
+    $('assinaturaTitulo').textContent = t.titulo;
+
+    let detalhe = t.detalhe;
+    // A data só entra quando o backend manda e ainda significa algo: em conta isenta
+    // ou cancelada, "renova em…" seria promessa falsa.
+    if (d.fim && (d.motivo === 'trial' || d.motivo === 'ativa')) {
+        const quando = _dataBr(d.fim);
+        if (quando) {
+            detalhe += d.motivo === 'trial' ? ` Vai até ${quando}.` : ` Renova em ${quando}.`;
+        }
+    }
+    if (d.sandbox) detalhe += ' (ambiente de teste)';
+    $('assinaturaDetalhe').textContent = detalhe;
+
+    const link = $('assinaturaLink');
+    link.hidden = !t.acao;
+    if (t.acao) link.textContent = t.acao;
+
+    secao.hidden = false;
+}

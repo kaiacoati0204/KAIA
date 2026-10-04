@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KaIA | Sua assinatura</title>
+    <link rel="icon" type="image/png" href="../assets/logo-coati.png">
+    <link rel="apple-touch-icon" href="../assets/logo-coati.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../css/style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" integrity="sha384-WgXwGL6fUsYJWNaKJgVbrJKGRQwc1vieh2oy4kw9nXqpNDz3tdSsqEYUgeHD/NuF" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="../config.js"></script>
+    <!-- Proteção de rota: sem login no sessionStorage, volta para o login. -->
+    <script>
+        const usuario = JSON.parse(sessionStorage.getItem('kaia_usuario') || 'null');
+        if (!usuario) window.location.href = 'login.html';
+    </script>
+</head>
+
+<!-- data-rail: a barra fica. Perder o acesso ao estudo não é perder a conta — o aluno
+     continua navegando pelo perfil, pelo coati e pelo caderno. -->
+<body data-rail>
+
+    <main class="conteudo">
+        <section class="perfil">
+
+            <!-- O tom aqui é deliberado: quem chega nesta tela não fez nada errado.
+                 A primeira informação é que NADA foi apagado — antes de qualquer
+                 convite a pagar. Público TEA/TDAH: medo de perder o trabalho feito
+                 é um custo real, e a tela existe para tirá-lo da frente. -->
+            <div class="secao-perfil tela-vencida">
+                <span class="vencida-icone" aria-hidden="true">⏳</span>
+                <h2 id="vencidaTitulo">Seu acesso ao estudo está pausado</h2>
+                <p class="vencida-sub" id="vencidaSub">
+                    Seu período de teste terminou.
+                </p>
+
+                <div class="vencida-guardado">
+                    <p class="vencida-guardado-titulo">Está tudo guardado 💙</p>
+                    <ul>
+                        <li>Seu caderno, com todas as anotações</li>
+                        <li>Seu progresso e o nível de cada matéria</li>
+                        <li>Seu histórico, streak e o seu coati</li>
+                    </ul>
+                    <p class="vencida-guardado-nota">
+                        Nada foi apagado. Assim que voltar, continua de onde parou.
+                    </p>
+                </div>
+
+                <div class="vencida-acoes">
+                    <a href="index.html#planos" class="btn-vencida-principal">Escolher um plano</a>
+                    <a href="perfil.html" class="btn-vencida-secundario">Voltar ao perfil</a>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script src="../js/comum.js"></script>
+    <!-- Ajusta o texto conforme o motivo real (vencida / suspensa / cancelada) e manda
+         de volta quem tem acesso e caiu aqui por engano. -->
+    <script>
+        (function () {
+            const TEXTO = {
+                vencida:   ['Seu acesso ao estudo está pausado', 'Seu período de teste terminou.'],
+                suspensa:  ['Seu acesso ao estudo está pausado', 'Não conseguimos confirmar o pagamento desta vez.'],
+                cancelada: ['Sua assinatura foi cancelada', 'Você pode voltar quando quiser.'],
+            };
+            document.addEventListener('DOMContentLoaded', async () => {
+                try {
+                    const r = await apiFetch('/assinatura');
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    // Tem acesso e chegou aqui? Volta pro estudo — não prende ninguém
+                    // numa tela de cobrança por engano.
+                    if (d.acesso) { window.location.replace('materias.html'); return; }
+                    const t = TEXTO[d.motivo];
+                    if (t) {
+                        document.getElementById('vencidaTitulo').textContent = t[0];
+                        document.getElementById('vencidaSub').textContent = t[1];
+                    }
+                } catch (e) {
+                    // Sem backend a tela fica no texto padrão: nada quebra.
+                    console.warn('[KaIA] /assinatura indisponível:', e);
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>

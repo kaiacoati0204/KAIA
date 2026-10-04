@@ -17,7 +17,17 @@
   --azul-coati-rgb: 45, 75, 165;
   --gravata-rgb: 243, 208, 9;
   --vd-uniao-rgb: 87, 217, 121;
+  --tinta-rgb: 43, 42, 38;     /* espelha --tinta */
   --card-rgb: 251, 246, 236;   /* espelha --card: superfícies translúcidas SEM branco puro */
+
+  /* BEGE derivado: o --bege puro dá ~2:1 sobre o --card e reprova em AA como
+     texto — use estes no lugar dele em texto. --bege-tinta: texto (5,4:1);
+     --bege-forte: acento sólido/filete; --bege-linha: bordas; --bege-veu:
+     preenchimento suave. Os temas 3 e 4 sobrescrevem tinta e forte. */
+  --bege-tinta: #7d5f45;
+  --bege-forte: #b08a68;
+  --bege-linha: rgba(var(--bege-rgb), 0.55);
+  --bege-veu:   rgba(var(--bege-rgb), 0.14);
   /* Azul-coati bem diluído: base do fundo claro do login (Fase 3). */
   --azul-nevoa: #dfe6f5;
   /* largura da barra lateral (rail): colapsada e aberta */
@@ -28,11 +38,7 @@
      (confortável é 45–75). 1100px é a largura que a coluna já tinha em 1280
      (60 rail + 60 + 1100 + 60), então do notebook para baixo nada muda. */
   --col-estudo: 1100px;
-  /* ONDE a coluna está agora — as três medidas derivadas (--estudo-*), declaradas
-     no body mais abaixo, não aqui. Com a coluna centrada, as intervenções se ancoram nela e não na janela
-     (senão, em 3440, o card de canto nasce a >1.000px do texto). Mesma conta do
-     layout: 60px de padding de cada lado + sobra dividida igual. Em 1280
-     --estudo-esq dá 120px, como antes. */
+  /* Largura da rail AGORA. As medidas derivadas (--estudo-*) moram no body. */
   --rail-atual: var(--rail-col);
   /* Fundo marfim (acessibilidade TEA/TDAH): off-white no lugar do bege escuro.
      Regra fixa do projeto: nunca #fff/#000 puros — off-white e quase-preto. */
@@ -65,6 +71,27 @@
   --muted: #635e56;
   --raio: 12px;
 }
+
+/* =========================
+   ESCALA DE CAMADAS (z-index)
+========================= */
+/* Referência do PROJETO INTEIRO — mora aqui porque não se reconstrói sem caçar
+   todos os z-index do arquivo. De baixo para cima:
+      40/41  véu e questão da reancoragem (dentro do #quiz-view)
+        50   .lp-header · .ep-aviso
+        60   .paleta-painel
+      1000   .resumo-overlay · .mc-fantasma
+      5000   #overlay — inatividade
+    → 5500   overlays centrais das 7 + probe de autorrelato
+    → 5600   barra do micro_refoco (acima dos centrais: pode conviver com eles)
+      7000   #kaia-pausa — pausa do pomodoro
+      8000   #kaia-preloader
+      9999   pilha de cards
+
+   POR QUE 5500/5600 e não 60/70: abaixo do #overlay de inatividade (5000) as 7
+   eram cobertas — o gatilho dispara aos 9s parado e o overlay sobe aos 10s
+   (dynamicLimit). Mexeu numa camada? Confira a vizinha aqui antes. */
+
 
 /* =========================
    RESET
@@ -409,7 +436,7 @@ html {
 }
 .botao-login:hover {
   transform: translateY(-4px);
-  box-shadow: 0 15px 30px rgba(243, 208, 9, 0.35);
+  box-shadow: 0 15px 30px rgba(var(--gravata-rgb), 0.35);
 }
 .link-secundario {
   text-align: center;
@@ -1017,7 +1044,7 @@ html[data-luz="4"] {
 }
 .botao-proxima:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(243, 208, 9, 0.35);
+  box-shadow: 0 10px 22px rgba(var(--gravata-rgb), 0.35);
 }
 
 /* Simulado: alternativa aos temas, não concorrente deles -> secundário (o amarelo
@@ -1027,7 +1054,7 @@ html[data-luz="4"] {
   width: 100%;
   margin: 18px 0 0;
   padding: 14px 20px;
-  border: 1px solid rgba(43, 42, 38, 0.18);
+  border: 1px solid rgba(var(--tinta-rgb), 0.18);
   border-radius: 14px;
   background: var(--card);
   color: var(--profundo);
@@ -1053,7 +1080,7 @@ html[data-luz="4"] {
   justify-content: center;
   /* Veu de TINTA translucida, nao preto: a regra do projeto nao admite #000, e a
      0,95 a tela sumia por completo -- volta dela custa caro no TEA/TDAH. */
-  background: rgba(43, 42, 38, 0.72);
+  background: rgba(var(--tinta-rgb), 0.72);
   opacity: 0;
   pointer-events: none;
   transition: opacity 1s ease;
@@ -1101,7 +1128,7 @@ html[data-luz="4"] {
   padding: 30px;
   border-radius: 20px;
   border: 1px solid rgba(var(--bege-rgb), 0.2);
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(var(--card-rgb), 0.25);
 }
 .coati-texto {
   flex: 1.2;
@@ -1278,7 +1305,7 @@ html[data-luz="4"] {
 }
 .plano-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 22px rgba(243, 208, 9, 0.4);
+  box-shadow: 0 10px 22px rgba(var(--gravata-rgb), 0.4);
 }
 /* Planos escolares: mesma estrutura, identidade azul */
 .plano-escolar .plano-preco {
@@ -1341,7 +1368,7 @@ html[data-luz="4"] {
   padding: 5px;
   border-radius: 50%;
   background: var(--profundo);
-  box-shadow: 0 8px 20px rgba(45, 75, 165, 0.15);
+  box-shadow: 0 8px 20px rgba(var(--azul-coati-rgb), 0.15);
   overflow: hidden;
 }
 .perfil-avatar img {
@@ -1391,7 +1418,7 @@ html[data-luz="4"] {
 }
 .card-perfil:hover {
   transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(45, 75, 165, 0.08);
+  box-shadow: 0 12px 30px rgba(var(--azul-coati-rgb), 0.08);
 }
 .card-perfil h2 {
   font-size: 2.6rem;
@@ -2020,7 +2047,8 @@ canvas {
 }
 .dashboard-page .chint {
   font-size: 9px;
-  color: #ccc;
+  /* era #ccc: 1,49:1 sobre o card, ilegivel nos 4 temas. --muted da 5,5:1. */
+  color: var(--muted);
 }
 .dashboard-page .cw {
   position: relative;
@@ -2853,18 +2881,19 @@ body.textura-papel .conteudo {
 }
 #kaia-notificacoes > * { pointer-events: auto; }
 
-/* ---- SEIS zonas na metade de baixo, alternadas em rotação pelo materias.js -
-   Canto fixo vira invisível (dispensar sem ler = dado falso no Thompson);
-   posição aleatória cobra varredura cara para atenção comprometida. Acordo:
-   poucas zonas fixas e rotação que nunca repete o ponto seguido.
-   Metade de baixo porque, em 1280x900, a questão vai até y512 (rail aberta) e
-   a faixa de cima tem só 63px para um card de ~170px. São 3 colunas x 2 linhas;
-   as da esquerda partem depois da rail e a acompanham. */
-/* Com a rail aberta a coluna toda desloca 120px — trocar UM token reposiciona
-   as três zonas e a barra de uma vez. */
-/* As três medidas derivadas moram no BODY, não no :root: var() em custom
-   property resolve onde é DECLARADA, e no :root congelariam com a rail fechada.
-   No body, o body.rail-aberta troca o --rail-atual e as três recalculam. */
+/* ---- SEIS zonas na metade de baixo, em rotação pelo materias.js -------------
+   Canto fixo vira invisível (dispensar sem ler = dado falso no Thompson) e
+   posição aleatória cobra varredura cara de quem já está com a atenção
+   comprometida — daí poucas zonas fixas que nunca repetem o ponto seguido.
+   3 colunas x 2 linhas, só na metade de baixo: em 1280x900 a questão vai até
+   y512 com a rail aberta, e a faixa de cima tem 63px para um card de ~170px. */
+
+/* COLUNA DE ESTUDO: as zonas seguem a coluna, não a janela — senão, em 3440, o
+   card de canto nasceria a >1.000px do texto. A conta é a do layout: 60px de
+   padding de cada lado + sobra dividida igual (em 1280, --estudo-esq = 120px,
+   como antes). Ficam no BODY e não no :root porque var() em custom property
+   resolve onde é DECLARADA: no :root congelariam com a rail fechada; aqui, o
+   body.rail-aberta troca o --rail-atual e as três recalculam de uma vez. */
 body {
   --estudo-larg: min(var(--col-estudo), calc(100vw - var(--rail-atual) - 120px));
   --estudo-esq: calc(
@@ -2906,17 +2935,6 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
    Ordem: card de notificação → strip de feedback (compartilhado) →
    micro_refoco → pausa_ativa → troca_atividade → checkpoint → reancoragem.
    ============================================================ */
-
-/* ---- BEGE: os tokens que dão presença à marca nas 7 ----------------------
-   Existem porque o --bege puro dá ~2:1 sobre o --card e reprova em AA como
-   texto. --bege-tinta: texto (5,4:1); --bege-forte: acento sólido/filete;
-   --bege-linha: bordas; --bege-veu: preenchimento suave. As 7 leem só daqui. */
-:root {
-  --bege-tinta: #7d5f45;
-  --bege-forte: #b08a68;
-  --bege-linha: rgba(var(--bege-rgb), 0.55);
-  --bege-veu:   rgba(var(--bege-rgb), 0.14);
-}
 
 /* ---- Ícone de identidade das 7 -------------------------------------------
    SVG de traço com currentColor no lugar de emoji (que muda por sistema e não é
@@ -3058,7 +3076,7 @@ body.rail-aberta { --rail-atual: var(--rail-col-aberta); }
      --rail-atual cobre a rail aberta, e a transição de `left` segue os 0.25s dela. */
   left: var(--rail-atual);
   right: 0;
-  z-index: 5600;   /* ver a escala de camadas abaixo */
+  z-index: 5600;   /* ver a escala de camadas no topo do arquivo */
   padding: 18px 16px 16px;
   background: var(--card);
   /* Mesmo filete de bege do card de notificação, agora na aresta por onde a
@@ -3153,22 +3171,7 @@ body.kaia-mr-aberta #kaia-notificacoes {
 #kaia-probe,
 #kaia-notificacoes { transition: bottom 0.35s ease; }
 
-/* ---- AS CAMADAS DAS 7 (por que 5500/5600 e não 60/70) --------------------
-   Abaixo do #overlay de inatividade (5000) elas eram cobertas: o gatilho
-   dispara aos 9s parado e o overlay sobe aos 10s (dynamicLimit).
-   A escala do projeto, de baixo para cima:
-      40/41  véu e questão da reancoragem (dentro do #quiz-view)
-      1000   .resumo-overlay
-      5000   #overlay — inatividade
-    → 5500   overlays centrais das 7 + probe de autorrelato
-    → 5600   barra do micro_refoco (acima dos centrais: pode conviver com eles)
-      7000   #kaia-pausa — pausa do pomodoro
-      8000   #kaia-preloader
-      9999   pilha de cards
-
-   Exit-intent e fim do pomodoro são estados mais fortes e cobrem a intervenção.
-   Checkpoint é INLINE, sem camada; para ele e a reancoragem a proteção é o
-   idle-monitor não subir o overlay com intervenção na tela (_intervencaoNaTela()). */
+/* z-index: ver a escala de camadas no topo do arquivo. */
 
 /* ---- pausa_ativa: overlay da sequência guiada (90s) ---------------------- */
 #kaia-seq {
@@ -3269,7 +3272,7 @@ body.kaia-mr-aberta #kaia-notificacoes {
 #kaia-troca {
   position: fixed;
   inset: 0;
-  z-index: 5500;   /* ver a escala de camadas acima */
+  z-index: 5500;   /* ver a escala de camadas no topo do arquivo */
   display: grid;
   place-items: center;
   background: rgba(var(--profundo-rgb), 0.45);
@@ -3589,7 +3592,7 @@ body.kaia-reancorar .option-btn {
   border: 1px solid var(--acerto-tx);
   font-size: 0.9rem;
   font-weight: 600;
-  box-shadow: 0 6px 20px rgba(26, 43, 76, 0.12);
+  box-shadow: 0 6px 20px rgba(var(--profundo-rgb), 0.12);
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 0.4s ease, transform 0.4s ease;
@@ -3642,7 +3645,7 @@ body.kaia-reancorar .option-btn {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(26, 43, 76, 0.35);   /* véu suave (profundo translúcido) */
+  background: rgba(var(--profundo-rgb), 0.35);   /* véu suave (profundo translúcido) */
 }
 .resumo-overlay[hidden] { display: none; }
 .resumo-card {
@@ -3661,7 +3664,7 @@ body.kaia-reancorar .option-btn {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(26, 43, 76, 0.18);
+  box-shadow: 0 12px 40px rgba(var(--profundo-rgb), 0.18);
 }
 .resumo-card h2 {
   color: var(--profundo);
@@ -3769,7 +3772,7 @@ body.kaia-reancorar .option-btn {
 /* Selo "✓ revisada" — questão que o aluno acertou na revisão (Fase 1.1). */
 .acc-tag--ok {
   color: #2e7d4f;
-  background: rgba(87, 217, 121, 0.18);   /* --vd-uniao suave */
+  background: rgba(var(--vd-uniao-rgb), 0.18);   /* --vd-uniao suave */
 }
 .acc-chevron {
   flex: none;
@@ -3802,7 +3805,7 @@ body.kaia-reancorar .option-btn {
   border-radius: 8px;
 }
 .acc-linha--erro { background: var(--erro-bg); }
-.acc-linha--ok   { background: rgba(87, 217, 121, 0.18); }   /* --vd-uniao suave */
+.acc-linha--ok   { background: rgba(var(--vd-uniao-rgb), 0.18); }   /* --vd-uniao suave */
 .acc-ic { flex: none; font-weight: 800; }
 .acc-linha--erro .acc-ic { color: var(--erro-tx); }
 .acc-linha--ok   .acc-ic { color: #2e7d4f; }                 /* verde escuro p/ contraste */
@@ -3921,7 +3924,6 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
   color: var(--erro-tx);
 }
 
-/* Fundo pontilhado BEGE: pontos discretos de --tinta sobre --card. */
 /* ---- paleta de símbolos (caderno, só MAT/FIS) ---- */
 /* Recolhida por padrão: quem não precisa de símbolo não perde área de escrita. */
 .cad-simbolos {
@@ -3978,6 +3980,7 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
   .cad-simbolos > summary::before, .cad-simbolo { transition: none; }
 }
 
+/* Fundo pontilhado: pontos discretos de --tinta sobre --card. */
 .caderno-canvas {
   position: relative;
   flex: 1 1 auto;
@@ -4196,7 +4199,7 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
   --ail-media2:  #3a5cb8;
   --ail-funda:   #1a2b4c;
   --ail-halo:    rgba(111, 151, 232, 0.3);
-  --ail-halo2:   rgba(45, 75, 165, 0.2);
+  --ail-halo2:   rgba(var(--azul-coati-rgb), 0.2);
 
   position: absolute;
   inset: 0;
@@ -4270,14 +4273,11 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  /* TRÊS camadas, de cima para baixo na declaração:
-     1) grão de papel, mesmo feTurbulence do body.textura-papel. ▼ AJUSTE DO
-        GRÃO: slope 0.07 (o perfil usa 0.15); mexa no data URI daqui, NÃO no do
-        perfil. Estático de propósito (TEA/TDAH).
-     2) véu claro de marfim — só unifica.
-     3) as mesmas quatro cores nos mesmos cantos do .tela-login, mais fortes (aqui
-        a tela é vazia), para abertura e login lerem como o mesmo ambiente. Mudou
-        os cantos no .tela-login, mude aqui junto. */
+  /* Camadas, de cima para baixo: grão de papel → véu de marfim → as quatro
+     manchas de canto → base. Estático de propósito (TEA/TDAH).
+     ▼ AJUSTE DO GRÃO: slope 0.07 no data URI daqui — NÃO no do perfil, que usa 0.15.
+     As manchas repetem os cantos do .tela-login, só mais fortes (aqui a tela é
+     vazia): mudou lá, mude aqui junto. */
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.25' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.07'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E"),
     linear-gradient(rgba(var(--card-rgb), var(--pre-veu)), rgba(var(--card-rgb), var(--pre-veu))),
@@ -4566,7 +4566,7 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-passo-ic svg { width: 24px; height: 24px; }
 .lp-passo-num {
   margin-bottom: 6px;
-  /* cor: --bege-legivel, no bloco de contraste mais abaixo */
+  /* cor: --bege-tinta, no bloco de contraste mais abaixo */
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -4654,17 +4654,14 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 
 /* ---- Contraste dos rótulos bege ------------------------------------------
    --bege sobre --card dá ~2:1 e reprova em AA nos textos menores (0,7–0,9rem).
-   Mesmo bege escurecido até 5,4:1, só em .lp-page (apagar o bloco desfaz).
-   SE ISTO SUBIR PARA O TOKEN --bege, apague daqui e ajuste lá. */
-.lp-page {
-  --bege-legivel: #7d5f45;
-}
+   --bege-tinta é o mesmo bege escurecido até 5,4:1, e acompanha os 4 temas —
+   antes havia aqui um --bege-legivel com o mesmo hex, que não acompanhava. */
 .lp-page .plano-tipo,
 .lp-page .plano-alvo,
 .lp-page .plano-nome-desc,
 .lp-page .plano-preco span,
 .lp-page .coati-imagem figcaption,
-.lp-passo-num { color: var(--bege-legivel); }
+.lp-passo-num { color: var(--bege-tinta); }
 
 /* ---- Landing sem bordas -------------------------------------------------
    Separa por espaçamento e sombra. Zera as bordas das classes compartilhadas só
@@ -5026,7 +5023,7 @@ html:has(body.lp-page) {
 /* Fundo UNIFORME na página toda: o degradê mora na raiz (cobre rail e rodapé em qualquer
    altura) e o body/.conteudo ficam transparentes. Com a textura de papel ligada, o grão
    vem do body inteiro — antes só a coluna do .conteudo o recebia e o fundo rachava em dois. */
-/* SEM o azul-névoa, pelo mesmo motivo do mc-page: num degradê de 160deg a parada 0% cai
+/* SEM o azul-névoa (vale também para o mc-page): num degradê de 160deg a parada 0% cai
    no canto superior ESQUERDO — justo onde o olho entra e onde a rail encosta — e o azul
    virava uma mancha fria contra o resto da página. Só marfim -> creme: os dois são tons
    de papel, então o fundo lê como uma superfície só.
@@ -5315,10 +5312,9 @@ body.ep-page .railnav {
 /* =========================
    MEU COATI — economia (meu-coati.html) — namespace mc-
 ========================= */
-/* SEM o azul-névoa do Céu coati aqui. Num degradê de 160deg a parada 0% cai no canto
-   superior ESQUERDO, e o azul virava uma mancha brilhante contra a textura de papel —
-   justo na tela do mascote, que é pra ser de descanso. Só marfim -> creme: os dois são
-   tons de papel, então o fundo lê como uma superfície só. Dourado segue só no "Comprar". */
+/* SEM o azul-névoa do Céu coati aqui — mesmo degradê e mesmo motivo do ep-page
+   (ver o comentário lá). Aqui pesa ainda mais: é a tela do mascote, que é pra ser
+   de descanso. Dourado segue só no "Comprar". */
 html:has(body.mc-page) {
   min-height: 100%;
   background: linear-gradient(160deg, var(--marfim) 0%, var(--creme-bg) 100%);
@@ -5600,94 +5596,227 @@ body.mc-page .railnav {
 }
 
 /* ==== APOIO DA PAUSA (prevenção) ==== */
-/* Dentro do modal de rodada. Discreto de proposito: publico neurodivergente, e isto aparece
-   quando o aluno ja esta num momento de decisao (continuar ou parar). Sem animacao, sem cor
+/* Dentro do modal de rodada. Discreto de propósito: público neurodivergente, e isto aparece
+   quando o aluno já está num momento de decisão (continuar ou parar). Sem animação, sem cor
    forte, sem nada piscando. */
 .resumo-apoio {
-    margin: 14px 0 4px;
-    padding: 12px 14px;
-    border: 1px solid rgba(43, 42, 38, .12);
-    border-radius: 12px;
-    background: var(--marfim);
-    text-align: left;
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--tinta-rgb), .12);
+  border-radius: 12px;
+  background: var(--marfim);
+  text-align: left;
 }
 
 .resumo-apoio .apoio-devolucao {
-    margin: 0 0 8px;
-    color: var(--tinta);
-    font-size: .95rem;
-    line-height: 1.45;
+  margin: 0 0 8px;
+  color: var(--tinta);
+  font-size: .95rem;
+  line-height: 1.45;
 }
 
 .resumo-apoio .apoio-pergunta {
-    margin: 0 0 10px;
-    color: var(--profundo);
-    font-weight: 700;
-    font-size: 1rem;
+  margin: 0 0 10px;
+  color: var(--profundo);
+  font-weight: 700;
+  font-size: 1rem;
 }
 
 .resumo-apoio .apoio-botoes {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .resumo-apoio .apoio-botoes button {
-    padding: 8px 14px;
-    border: 1px solid var(--profundo);
-    border-radius: 999px;
-    background: var(--card);
-    color: var(--profundo);
-    font: inherit;
-    font-size: .9rem;
-    cursor: pointer;
+  padding: 8px 14px;
+  border: 1px solid var(--profundo);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--profundo);
+  font: inherit;
+  font-size: .9rem;
+  cursor: pointer;
 }
 
 .resumo-apoio .apoio-botoes button:hover {
-    border-color: var(--gravata-kinrou);
+  border-color: var(--gravata-kinrou);
 }
 
 .resumo-apoio .apoio-botoes .apoio-pular {
-    border-color: transparent;
-    background: none;
-    color: var(--tinta);
-    text-decoration: underline;
+  border-color: transparent;
+  background: none;
+  color: var(--tinta);
+  text-decoration: underline;
 }
 
 /* A frase do plano se-entao: destacada do resto, mas sem cor forte - e para ser LIDA com
-   atencao, nao para chamar atencao. */
+   atenção, nao para chamar atenção. */
 .resumo-apoio .apoio-plano {
-    margin: 0 0 12px;
-    padding: 10px 12px;
-    border-left: 3px solid var(--gravata-kinrou);
-    background: var(--card);
-    color: var(--tinta);
-    font-size: .95rem;
-    line-height: 1.5;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--gravata-kinrou);
+  background: var(--card);
+  color: var(--tinta);
+  font-size: .95rem;
+  line-height: 1.5;
 }
 
 /* Escolha do obstáculo (prevenção). Lista vertical: são frases, não rótulos curtos —
    botão lado a lado cortaria o texto e o aluno precisa LER para reconhecer a própria
    situação, que é o ponto da intervenção. */
 .apoio-opcoes {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
 }
 .apoio-opcao {
-    padding: 10px 12px;
-    border: 1px solid rgba(43, 42, 38, .18);
-    border-radius: 10px;
-    background: var(--card);
-    color: var(--tinta);
-    font-family: inherit;
-    font-size: .92rem;
-    line-height: 1.4;
-    text-align: left;
-    cursor: pointer;
-    transition: border-color .2s ease;
+  padding: 10px 12px;
+  border: 1px solid rgba(var(--tinta-rgb), .18);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--tinta);
+  font-family: inherit;
+  font-size: .92rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .2s ease;
 }
 .apoio-opcao:hover {
     border-color: var(--gravata-kinrou);
+}
+
+
+/* =========================
+   ASSINATURA
+========================= */
+/* Só tokens, nenhum hex: as duas telas ("minha assinatura" no perfil e assinatura
+   vencida) precisam atravessar os 4 temas data-luz, e uma cor cravada aqui viraria
+   mancha no Azul suave e no Cinza-pedra.
+   A vitrine de planos NÃO mora aqui: ela é a seção #planos da landing (.lp-planos),
+   e os botões destas telas apontam para lá — uma fonte só para preço e nome. */
+
+/* ---- minha assinatura (seção do perfil) ---- */
+.assinatura-estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+.assinatura-selo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  font-size: 1.3rem;
+}
+.assinatura-selo[data-estado="ok"]      { background: var(--acerto-bg); }
+.assinatura-selo[data-estado="atencao"] { background: var(--alerta-bg); }
+.assinatura-selo[data-estado="neutro"]  { background: var(--bege-veu); }
+
+.assinatura-texto { flex: 1 1 220px; }
+.assinatura-titulo {
+  margin: 0 0 2px;
+  color: var(--profundo);
+  font-weight: 700;
+}
+.assinatura-texto .secao-sub { margin: 0; }
+
+/* Contorno, não preenchido: quem já tem acesso não precisa de um botão gritando
+   "pague" no meio do perfil. */
+.btn-assinatura {
+  flex: none;
+  padding: 10px 18px;
+  border: 1px solid var(--azul-coati);
+  border-radius: 999px;
+  background: none;
+  color: var(--azul-coati);
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-assinatura:hover { background: var(--azul-coati); color: var(--card); }
+.btn-assinatura:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 3px; }
+
+/* ---- assinatura vencida ---- */
+.tela-vencida { text-align: center; }
+.vencida-icone { display: block; font-size: 2.6rem; line-height: 1; }
+/* A régua do .secao-perfil h2 atravessa a largura toda; num bloco centrado como este
+   ela cortaria a tela no meio. */
+.tela-vencida h2 { margin: 10px 0 6px; padding-bottom: 0; border-bottom: none; }
+.vencida-sub {
+  margin: 0 auto 22px;
+  max-width: 48ch;
+  color: var(--muted);
+}
+
+/* A caixa do "está guardado" vem ANTES dos botões de propósito: a pessoa precisa ler
+   que não perdeu nada antes de ver qualquer convite a pagar. */
+.vencida-guardado {
+  max-width: 420px;
+  margin: 0 auto 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--bege-linha);
+  border-radius: 14px;
+  background: var(--acerto-bg);
+  text-align: left;
+}
+.vencida-guardado-titulo {
+  margin: 0 0 10px;
+  color: var(--acerto-tx);
+  font-weight: 700;
+}
+.vencida-guardado ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--tinta);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+.vencida-guardado-nota {
+  margin: 10px 0 0;
+  color: var(--tinta);
+  font-size: 0.88rem;
+}
+
+.vencida-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.btn-vencida-principal,
+.btn-vencida-secundario {
+  padding: 13px 24px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.btn-vencida-principal {
+  border: 1px solid var(--azul-coati);
+  background: var(--azul-coati);
+  color: var(--card);
+}
+.btn-vencida-principal:hover { background: var(--profundo); transform: translateY(-2px); }
+.btn-vencida-secundario {
+  border: 1px solid rgba(var(--profundo-rgb), 0.2);
+  background: none;
+  color: var(--profundo);
+}
+.btn-vencida-secundario:hover { background: var(--bege-veu); }
+.btn-vencida-principal:focus-visible,
+.btn-vencida-secundario:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-assinatura,
+  .btn-vencida-principal, .btn-vencida-secundario { transition: none; }
+  .btn-vencida-principal:hover { transform: none; }
 }

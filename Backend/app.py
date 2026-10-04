@@ -729,6 +729,15 @@ async def _conta_isenta(conn, user_id) -> bool:
     try:
         linha = await conn.fetchrow(
             "select isento, conta_de_teste from perfis where user_id = $1::uuid", user_id)
+    except asyncpg.exceptions.UndefinedColumnError:
+        # Migration da isenção aplicada pela METADE: hoje `conta_de_teste` existe e
+        # `isento` não. Lê só a parte que existe em vez de desistir — é ela que
+        # reconhece as contas @teste.kaia, que são a maioria dos testers.
+        # Se nem essa existir, o erro sobe e a rota degrada para "não configurado":
+        # devolver True aqui diria "você é tester do beta" para TODA conta, o que é mentira.
+        linha = await conn.fetchrow(
+            "select false as isento, conta_de_teste from perfis where user_id = $1::uuid",
+            user_id)
     except Exception as e:
         print("[KaIA] não deu para ler a isenção:", e)
         return True
@@ -5087,20 +5096,22 @@ def health():
     }
 
 
-if __name__ == "__main__":
-    import uvicorn
-    # Local: 127.0.0.1:5000. No Render o host TEM de ser 0.0.0.0 (senao a porta nao
-    # e alcancavel de fora do container) e a porta vem na env PORT, sorteada por eles.
-    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"),
-                port=int(os.getenv("PORT", "5000")))
-
-
 # ============================================================
 #  ASSINATURA (Mercado Pago)
 # ============================================================
 # As regras puras (validação de assinatura do webhook, janela do trial, decisão de
 # acesso) moram em Backend/pagamento.py — testáveis sem chave e sem banco.
 # Aqui ficam só as rotas e o que toca o Postgres.
+
+# As migrations de pagamento podem não estar aplicadas ainda (tabela `assinaturas`,
+# coluna `perfis.isento`). Enquanto não estiverem, estas rotas NÃO podem dar 500: sem
+# chave do MP ninguém é barrado mesmo, então o estado honesto é "pagamento não
+# configurado" — e o front inteiro funciona antes do Vitor rodar as migrations.
+# Só estes DOIS códigos contam como schema ausente (42P01 e 42703). Qualquer outro
+# erro de banco continua subindo: mascarar falha real seria trocar um bug por outro.
+SCHEMA_PAGAMENTO_AUSENTE = (asyncpg.exceptions.UndefinedTableError,
+                            asyncpg.exceptions.UndefinedColumnError)
+
 
 class AssinaturaIn(BaseModel):
     plano: str
@@ -5147,9 +5158,17 @@ async def ver_assinatura(request: Request, ident: dict = Depends(usuario_identid
     user_id = (ident.get("sub") or "").strip()
     if not user_id:
         return JSONResponse({"erro": "identidade ausente no token."}, status_code=400)
-    async with pool.acquire() as conn:
-        liberado, motivo = await _acesso_liberado(conn, user_id)
-        linha = await _assinatura_da_conta(conn, user_id)
+    try:
+        async with pool.acquire() as conn:
+            liberado, motivo = await _acesso_liberado(conn, user_id)
+            # Só busca a linha quando ela significa algo na tela. Conta isenta ou
+            # pagamento desligado não têm data para mostrar — e a consulta tocaria
+            # `assinaturas` à toa.
+            linha = (None if motivo in ("isento", "pagamento_nao_configurado")
+                     else await _assinatura_da_conta(conn, user_id))
+    except SCHEMA_PAGAMENTO_AUSENTE as e:
+        print("[KaIA] schema de pagamento ausente, degradando:", e)
+        liberado, motivo, linha = True, "pagamento_nao_configurado", None
     return {
         "acesso": liberado,
         "motivo": motivo,
@@ -5180,11 +5199,19 @@ async def criar_assinatura(body: AssinaturaIn, request: Request,
             status_code=503)
 
     inicio = datetime.now(timezone.utc)
-    async with pool.acquire() as conn:
-        linha = await conn.fetchrow(
-            """insert into assinaturas (user_id, plano, status, inicio, fim)
-               values ($1::uuid, $2, 'trial', $3, $4) returning id""",
-            user_id, body.plano, inicio, pagamento.fim_do_trial(inicio))
+    try:
+        async with pool.acquire() as conn:
+            linha = await conn.fetchrow(
+                """insert into assinaturas (user_id, plano, status, inicio, fim)
+                   values ($1::uuid, $2, 'trial', $3, $4) returning id""",
+                user_id, body.plano, inicio, pagamento.fim_do_trial(inicio))
+    except SCHEMA_PAGAMENTO_AUSENTE as e:
+        # Mesmo 503 do "sem chave": o front já trata esse código com recado calmo, e
+        # para quem está na tela a causa é a mesma — ainda não dá para assinar.
+        print("[KaIA] schema de pagamento ausente no criar:", e)
+        return JSONResponse(
+            {"erro": "Pagamento indisponível no momento.", "codigo": "mp_nao_configurado"},
+            status_code=503)
 
     # ______________________ PENDENTE (Bia) ______________________
     # AQUI entra a chamada real ao Mercado Pago. O que falta:
@@ -5290,3 +5317,18 @@ async def webhook_mercadopago(request: Request):
         # ____________________________________________________________
 
     return {"status": "recebido", "mp_id": data_id}
+
+# ============================================================
+#  SUBIDA LOCAL — TEM DE SER A ÚLTIMA COISA DO ARQUIVO
+# ============================================================
+# uvicorn.run() BLOQUEIA. Toda rota declarada depois dele nunca chega a ser
+# executada e some da API — foi assim que /assinatura virou 404 no local.
+# E o Render não avisa: lá o app sobe por `uvicorn app:app` (import), então
+# __name__ != "__main__", o bloco é pulado e tudo registra. Só quebra aqui.
+# Rota nova vai ACIMA desta linha.
+if __name__ == "__main__":
+    import uvicorn
+    # Local: 127.0.0.1:5000. No Render o host TEM de ser 0.0.0.0 (senao a porta nao
+    # e alcancavel de fora do container) e a porta vem na env PORT, sorteada por eles.
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"),
+                port=int(os.getenv("PORT", "5000")))

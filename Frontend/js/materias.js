@@ -275,7 +275,7 @@ function _stripFeedback(tipo, { compacto = false, rotulo = '', mostradaEm = 0,
                     wrap.textContent = '';
                     const ok = document.createElement('p');
                     ok.className = 'kaia-fb-obrigado';
-                    ok.textContent = 'Valeu! 💛';
+                    ok.textContent = 'Valeu! 💙';
                     wrap.appendChild(ok);
                 }
                 if (onResposta) onResposta(reward);

@@ -5835,3 +5835,154 @@ body.mc-page .railnav {
   .btn-vencida-principal, .btn-vencida-secundario { transition: none; }
   .btn-vencida-principal:hover { transform: none; }
 }
+
+
+/* =========================
+   404 / SEM CONEXÃO (Frontend/404.html)
+========================= */
+/* Página de erro: nenhuma dependência de login e nenhuma de rede. Só tokens,
+   para atravessar os 4 temas data-luz como o resto. */
+.e404-page {
+  min-height: 100vh;
+  background: var(--marfim);
+}
+.e404 {
+  position: relative;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* A logo mora no alto à direita; a caixa é 168x76 e a arte (quadrada) entra
+   proporcional com contain, sem distorcer. */
+.e404-logo {
+  position: absolute;
+  top: 28px;
+  right: 24px;
+  width: 168px;
+  height: 76px;
+  object-fit: contain;
+  object-position: right center;
+}
+
+/* O 404 é o elemento gráfico da página: grande, à esquerda, encostado no texto.
+   O clamp deixa ele caber em 320px sem estourar e crescer no desktop. */
+.e404-num {
+  margin: 0;
+  color: var(--azul-coati);
+  font-size: clamp(7rem, 23vw, 19rem);
+  font-weight: 800;
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  text-align: left;
+}
+/* O leitor de tela ouve "404 — página não encontrada"; o olho vê só o número. */
+.e404-leitor {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Os três pontinhos pulam em sequência (atraso de 0,2s entre eles). */
+.pt {
+  display: inline-block;
+  animation: pula 1.5s cubic-bezier(.33, 0, .3, 1) infinite;
+}
+.pt:nth-of-type(2) { animation-delay: .2s; }
+.pt:nth-of-type(3) { animation-delay: .4s; }
+@keyframes pula {
+  0%, 55%, 100% { transform: translateY(0); }
+  28%           { transform: translateY(-.16em); }
+}
+
+/* Bloco da direita: texto curto e as duas saídas. 48ch é a medida de leitura
+   confortável — acima disso o olho perde a linha. */
+.e404-dir {
+  margin-left: auto;
+  max-width: 48ch;
+  text-align: right;
+}
+.e404-texto {
+  margin: 18px 0 22px;
+  color: var(--tinta);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+.e404-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.e404-btn {
+  padding: 13px 26px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.e404-btn-cheio {
+  border: 1px solid var(--azul-coati);
+  background: var(--azul-coati);
+  color: var(--card);
+}
+.e404-btn-cheio:hover { background: var(--profundo); transform: translateY(-2px); }
+.e404-btn-contorno {
+  border: 1px solid rgba(var(--profundo-rgb), 0.25);
+  background: none;
+  color: var(--profundo);
+}
+.e404-btn-contorno:hover { background: var(--bege-veu); }
+.e404-btn:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 3px; }
+
+.e404-rodape {
+  margin: 40px 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+.e404-rodape a { color: var(--azul-coati); font-weight: 700; }
+
+/* ---- variante sem conexão ---- */
+/* Âmbar e não vermelho: ficar sem internet não é erro de quem está lendo. */
+.e404-icone {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--alerta-bg);
+  color: var(--alerta-tx);
+}
+.e404-icone svg { width: 38px; height: 38px; }
+.e404-titulo-off {
+  margin: 20px 0 0;
+  color: var(--profundo);
+  font-size: clamp(1.9rem, 5vw, 2.8rem);
+  line-height: 1.1;
+}
+
+@media (max-width: 640px) {
+  .e404 { padding-top: 120px; }
+  .e404-logo { width: 132px; height: 60px; top: 24px; }
+  .e404-dir, .e404-rodape { text-align: left; }
+  .e404-acoes { justify-content: flex-start; }
+}
+
+/* OBRIGATÓRIO: quem pediu menos movimento não recebe o pulo nem o salto do botão. */
+@media (prefers-reduced-motion: reduce) {
+  .pt { animation: none; }
+  .e404-btn { transition: none; }
+  .e404-btn-cheio:hover { transform: none; }
+}

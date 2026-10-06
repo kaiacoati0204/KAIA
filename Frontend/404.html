@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Página não encontrada — KaIA</title>
+    <!-- noindex: página de erro não entra no índice (e por isso fica fora do sitemap). -->
+    <meta name="robots" content="noindex">
+    <meta name="description" content="O endereço não existe mais ou mudou de lugar. Volte ao estudo ou ao início da KaIA.">
+    <link rel="icon" type="image/png" href="assets/logo-coati.png">
+    <link rel="apple-touch-icon" href="assets/logo-coati.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<!-- SEM data-rail e SEM guarda de rota, de propósito: esta é a página que aparece
+     quando algo já deu errado. Exigir login aqui deixaria quem está deslogado
+     preso num 404 que manda para o login que manda para o 404. -->
+<body class="e404-page">
+
+    <main class="e404">
+        <img class="e404-logo" src="assets/logo-coati.png"
+             alt="KaIA, um coati de gravata — logotipo" width="168" height="76">
+
+        <!-- NORMAL: endereço que não existe -->
+        <div id="e404Normal">
+            <h1 class="e404-num">404<span class="e404-leitor"> — página não encontrada</span><span
+                class="pt" aria-hidden="true">.</span><span class="pt" aria-hidden="true">.</span><span
+                class="pt" aria-hidden="true">.</span></h1>
+
+            <div class="e404-dir">
+                <p class="e404-texto">
+                    O endereço pode ter mudado de lugar, ou o link que te trouxe até aqui
+                    está desatualizado. Seu progresso e seu caderno continuam guardados.
+                </p>
+                <div class="e404-acoes">
+                    <a href="pages/materias.html" class="e404-btn e404-btn-cheio">Voltar ao estudo</a>
+                    <a href="pages/index.html" class="e404-btn e404-btn-contorno">Ir para o início</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEM INTERNET: trocado por JS quando navigator.onLine é false. Nasce
+             hidden para não piscar na tela de quem está online. -->
+        <div id="e404Offline" hidden>
+            <div class="e404-icone" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 1l22 22"/>
+                    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+                    <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+                    <path d="M10.71 5.05A16 16 0 0 1 22.58 9"/>
+                    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                    <path d="M12 20h.01"/>
+                </svg>
+            </div>
+            <h1 class="e404-titulo-off">Sem conexão por aqui</h1>
+            <div class="e404-dir">
+                <p class="e404-texto">
+                    Seu aparelho está sem internet no momento. Nada se perdeu: seu caderno,
+                    seu progresso e seu histórico seguem guardados, esperando você voltar.
+                </p>
+                <div class="e404-acoes">
+                    <button type="button" class="e404-btn e404-btn-cheio" id="e404Tentar">Tentar de novo</button>
+                    <a href="pages/index.html" class="e404-btn e404-btn-contorno">Ir para o início</a>
+                </div>
+            </div>
+        </div>
+
+        <p class="e404-rodape">
+            Se você chegou aqui por um link nosso, pode
+            <a href="pages/avaliacao.html">nos contar</a> — a gente arruma.
+        </p>
+    </main>
+
+    <!-- comum.js só pelo tema (data-luz) e pela textura. Sem data-rail no body a
+         barra lateral é no-op, e o ping da API já nasce com catch. -->
+    <script src="js/comum.js"></script>
+    <script>
+        (function () {
+            const normal = document.getElementById('e404Normal');
+            const off = document.getElementById('e404Offline');
+
+            // navigator.onLine só é confiável no FALSE: true não garante que a rede
+            // chega à internet. Por isso ele troca a tela, nunca o contrário.
+            function pintar() {
+                const semRede = navigator.onLine === false;
+                normal.hidden = semRede;
+                off.hidden = !semRede;
+                document.title = semRede ? 'Sem conexão — KaIA' : 'Página não encontrada — KaIA';
+            }
+            pintar();
+            addEventListener('online', pintar);
+            addEventListener('offline', pintar);
+
+            document.getElementById('e404Tentar').addEventListener('click', () => location.reload());
+        })();
+    </script>
+</body>
+
+</html>

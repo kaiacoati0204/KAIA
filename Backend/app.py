@@ -977,7 +977,7 @@ def _pot_corte_topo(f):
 
 
 def _formatar_como(valor, modelo):
-    """Escreve `valor` no formato da alternativa correta (casas decimais e unidade).
+    r"""Escreve `valor` no formato da alternativa correta (casas decimais e unidade).
 
     O \s ficava fora do recorte de propósito: com ele o espaço antes da unidade era
     comido e saía "2.0A". E valores pequenos ganham casas extras em vez de arredondar

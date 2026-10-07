@@ -334,14 +334,23 @@
         let gAcertos = null, gFoco = null, gHobbies = null;
 
         // Eixos claros: os gráficos desta página vivem sobre cards brancos.
-        const EIXOS = {
+        // FUNCAO, nao const: os tokens so tem o valor do tema depois que o comum.js
+        // poe o data-luz no <html> (no DOMContentLoaded). Um objeto montado no parse
+        // congelaria as cores do tema 1. Chamado na hora de criar o grafico.
+        const eixos = () => ({
             responsive: true,
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' } },
-                y: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' }, beginAtZero: true },
+                // Vertical (90°) e sem autoSkip: são ~45 hobbies, e o padrão do Chart.js
+                // inclina 50° — aí os nomes longos se cruzam. Em pé cada rótulo ocupa uma
+                // coluna estreita, nenhum se sobrepõe e nenhum é descartado.
+                x: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` },
+                     ticks: { color: tok('--profundo'), maxRotation: 90, minRotation: 90,
+                              autoSkip: false, font: { size: 10 } } },
+                y: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` },
+                     ticks: { color: tok('--profundo'), precision: 0 }, beginAtZero: true },
             },
-        };
+        });
 
         const TREND = {
             melhorando: { txt: '↑ Melhorando', cls: 'bom' },
@@ -524,12 +533,15 @@
                         datasets: [{
                             label: 'Quantidade de Escolhas',
                             data: dados.valores,
-                            backgroundColor: ['#f3d009', '#2d4ba5', '#57d979', '#c4a186'],
-                            borderColor: '#1a2b4c',
+                            // UMA cor: cada barra é um hobby, não uma categoria — ciclar
+                            // 4 cores sugeria um agrupamento que não existe. O ouro volta a
+                            // ser acento da marca, não preenchimento de dado.
+                            backgroundColor: tok('--azul-coati'),
+                            borderColor: tok('--profundo'),
                             borderWidth: 1,
                         }]
                     },
-                    options: EIXOS,
+                    options: eixos(),
                 });
             } catch (erro) {
                 console.error('Erro ao carregar dados para o gráfico:', erro);
@@ -658,7 +670,25 @@
             const sub    = $('painel-sub');
             const corpo  = $('painel-tabela');
 
-            const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; renderGraficos(null); };
+            // A mensagem do backend é escrita para QUEM DEBUGA (cita tabela, usa crase).
+            // Ela vai para o console; a tela recebe uma frase humana numa faixa discreta.
+            // Título de página não é lugar de mensagem de erro.
+            const HUMANO = {
+                vinculo: 'Sua conta ainda não está vinculada a uma escola. Fale com a coordenação.',
+                rede:    'Não foi possível falar com o servidor agora. Tente de novo em instantes.',
+                geral:   'Não foi possível carregar o painel agora.',
+            };
+            const falhar = (chave, tecnica) => {
+                if (tecnica) console.warn('[KaIA] painel do responsável:', tecnica);
+                titulo.textContent = 'Painel';
+                sub.textContent = '';
+                corpo.innerHTML = '';
+                const faixa = document.createElement('p');
+                faixa.className = 'painel-aviso';
+                faixa.textContent = HUMANO[chave] || HUMANO.geral;
+                corpo.appendChild(faixa);
+                renderGraficos(null);
+            };
 
             // Professor + mock: monta local, sem tocar na rede. Coordenador e pai
             // seguem pelo backend nos dois modos — o mock não os alcança.
@@ -671,10 +701,11 @@
             try {
                 const r = await apiFetch(`/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
                 const d = await r.json();
-                if (!r.ok) return falhar(d.erro || 'Não foi possível carregar o painel.');
+                // 404 aqui é 'tem role mas não tem linha na tabela da escola' — falta vínculo.
+                if (!r.ok) return falhar(r.status === 404 ? 'vinculo' : 'geral', d.erro);
 
                 const visao = VISOES[d.role];
-                if (!visao) return falhar(`Sem painel para a role "${d.role}".`);
+                if (!visao) return falhar('geral', `sem visão para a role "${d.role}"`);
 
                 const v = visao(d);
                 titulo.textContent = v.titulo;
@@ -683,7 +714,7 @@
                 renderGraficos(d.graficos);
             } catch (e) {
                 console.error('[KaIA] falha ao carregar o painel:', e);
-                falhar('Não foi possível conectar ao servidor (a API está rodando em :5000?).');
+                falhar('rede', e);
             }
         }
 

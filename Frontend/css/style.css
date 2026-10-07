@@ -5986,3 +5986,16 @@ body.mc-page .railnav {
   .e404-btn { transition: none; }
   .e404-btn-cheio:hover { transform: none; }
 }
+
+/* Faixa de aviso do painel do responsável. Âmbar e discreta: "sua conta ainda não
+   está vinculada" é um recado, não uma falha do sistema — e não é título de página.
+   A mensagem técnica do backend fica no console.warn. */
+.painel-aviso {
+  margin: 4px 0 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--alerta-bg);
+  color: var(--alerta-tx);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}

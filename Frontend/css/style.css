@@ -5999,3 +5999,27 @@ body.mc-page .railnav {
   font-size: 0.92rem;
   line-height: 1.5;
 }
+
+/* Letreiro da marca dentro do h1 (login, cadastro, hobbies, cadastro-escola).
+   Só a variante Profundo: a Bege dá 1,00:1 sobre o marfim do tema Padrão e o ouro
+   da Multicor dá 1,38–1,60:1 nos quatro — o mesmo problema que já tirou o dourado
+   do "IA" (ver o bloco .caixa-login h1 span).
+   width/height no HTML são os pixels reais (540x319) só para o navegador reservar
+   a altura e a caixa não pular ao carregar; quem manda no tamanho é esta regra. */
+.marca-letreiro {
+  display: block;
+  width: min(320px, 70%);
+  height: auto;
+  margin-inline: auto;
+}
+
+/* O 5rem de .caixa-login h1 foi feito para o LOGOTIPO em texto, e continua lá como
+   fallback do alt="KaIA" se o PNG do letreiro não carregar. Este h1 é o único TEXTO
+   que ainda herda a regra, e a 5rem "autorização" estourava a caixa de 400px e saía
+   cortada. Tamanho próprio, mirado pelo id (vence .caixa-login h1 na especificidade
+   sem precisar mexer nela). */
+#cad-responsavel h1 {
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  line-height: 1.15;
+  overflow-wrap: break-word;   /* rede de segurança em tela muito estreita */
+}

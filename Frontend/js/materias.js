@@ -3479,6 +3479,15 @@ async function pedirApoioDaPausa() {
         if (d?.apoio === 'pacote_foco') {
             mostrarPacoteFoco(cx, d.plano, d.opcoes);
             logEvent('apoio_exibido', { apoio: 'pacote_foco', plano: d.plano || null });
+        } else if (d?.apoio === 'ambiente') {
+            mostrarAmbiente(cx);
+            logEvent('apoio_exibido', { apoio: 'ambiente', plano: null });
+        } else if (d?.apoio === 'meta') {
+            mostrarMetaTempo(cx);
+            logEvent('apoio_exibido', { apoio: 'meta', plano: null });
+        } else if (d?.apoio === 'mcii') {
+            mostrarMcii(cx, d.plano, d.opcoes);
+            logEvent('apoio_exibido', { apoio: 'mcii', plano: d.plano || null });
         } else if (d?.apoio === 'pausa_curta') {
             mostrarOfertaDePausa(cx);
             logEvent('apoio_exibido', { apoio: 'pausa_curta', plano: null });
@@ -3659,6 +3668,111 @@ function responderRetomada(funcionou) {
 }
 
 // A pausa já existe (pomodoro). Aqui ela é OFERECIDA, não imposta — quem decide é o aluno.
+// Braço `ambiente`: uma acao no mundo, nao um plano na cabeca. O aluno escolhe qual cabe na
+// situacao dele -- "deixar o celular longe" nao serve para quem estuda NO celular, e impor a
+// acao errada queima o braco. Tres opcoes porque mais que isso pesa em TEA/TDAH (mesma razao
+// das 4 opcoes do probe), e porque escolher ja e parte do mecanismo: a acao sai mais provavel
+// quando a pessoa decide qual e, em vez de receber ordem.
+const ACOES_AMBIENTE = [
+    { id: 'celular_longe', texto: 'Deixar o celular fora de alcance' },
+    { id: 'fechar_abas',   texto: 'Fechar as outras abas' },
+    { id: 'avisar',        texto: 'Avisar que estou estudando agora' },
+];
+
+function mostrarAmbiente(cx) {
+    cx.innerHTML = `
+        <p class="apoio-pergunta">Antes de seguir, uma coisa rápida no ambiente:</p>
+        <div class="apoio-opcoes">
+            ${ACOES_AMBIENTE.map((a) => `
+                <button type="button" class="apoio-opcao"
+                        onclick="escolherAmbiente('${a.id}')">${a.texto}</button>`).join('')}
+        </div>
+        <div class="apoio-botoes">
+            <button type="button" class="apoio-pular"
+                    onclick="escolherAmbiente(null)">Agora não</button>
+        </div>`;
+    cx.hidden = false;
+}
+
+// `acao` null = recusou. Recusa e desfecho do braco, nao dado faltante — mesma razao de
+// `apoio_dispensado` existir na oferta de pausa.
+function escolherAmbiente(acao) {
+    $('resumo-apoio').hidden = true;
+    logEvent('acao_ambiente', { acao, aceitou: !!acao });
+}
+
+// Braço `meta`: compromisso com um ponto de chegada. Esforco com fim visivel se sustenta
+// melhor que esforco aberto, e definicao de meta esta entre as tres estrategias de SRL que
+// mais co-ocorreram com menos distracao digital (n = 530). Opcoes em QUESTOES, nao em
+// minutos: e a unidade que o aluno enxerga na barra, e relogio na tela cobra atencao.
+const METAS_RODADA = [
+    { id: 'meia',    texto: 'Mais 5 questões' },
+    { id: 'rodada',  texto: 'Mais uma rodada de 10' },
+    { id: 'aberta',  texto: 'Sigo até cansar' },
+];
+
+function mostrarMetaTempo(cx) {
+    cx.innerHTML = `
+        <p class="apoio-pergunta">Até onde você quer ir agora?</p>
+        <div class="apoio-opcoes">
+            ${METAS_RODADA.map((m) => `
+                <button type="button" class="apoio-opcao"
+                        onclick="escolherMetaTempo('${m.id}')">${m.texto}</button>`).join('')}
+        </div>
+        <div class="apoio-botoes">
+            <button type="button" class="apoio-pular"
+                    onclick="escolherMetaTempo(null)">Agora não</button>
+        </div>`;
+    cx.hidden = false;
+}
+
+function escolherMetaTempo(meta) {
+    $('resumo-apoio').hidden = true;
+    logEvent('meta_tempo', { meta, aceitou: !!meta });
+}
+
+// Braço `mcii`: contraste mental + plano. E o `pacote_foco` com um passo ANTES — o aluno
+// imagina o resultado que quer, e so depois nomeia o obstaculo e faz o plano. A hipotese e
+// que o resultado desejado da ao plano um motivo; o custo e um passo a mais numa tela que
+// ja compete com a vontade de sair. O bandit existe para dizer se paga.
+let _mciiResultado = null;
+
+const RESULTADOS_MCII = [
+    { id: 'terminar',  texto: 'Terminar o que comecei hoje' },
+    { id: 'entender',  texto: 'Entender um tema que me trava' },
+    { id: 'constante', texto: 'Estudar de novo amanhã' },
+];
+
+function mostrarMcii(cx, plano, opcoes) {
+    _mciiResultado = null;
+    cx.innerHTML = `
+        <p class="apoio-pergunta">O que você quer ter conseguido no fim de hoje?</p>
+        <div class="apoio-opcoes">
+            ${RESULTADOS_MCII.map((r) => `
+                <button type="button" class="apoio-opcao"
+                        onclick="escolherResultadoMcii('${r.id}')">${r.texto}</button>`).join('')}
+        </div>
+        <div class="apoio-botoes">
+            <button type="button" class="apoio-pular"
+                    onclick="escolherResultadoMcii(null)">Agora não</button>
+        </div>`;
+    cx.hidden = false;
+    _mciiOpcoes = { plano, opcoes };
+}
+
+let _mciiOpcoes = null;
+
+// Passo 2: nomeado o resultado, cai no mesmo fluxo do plano se-então — o obstaculo e o
+// plano sao os do `pacote_foco`, para que a UNICA diferenca entre os dois bracos seja o
+// passo do contraste. Se as telas divergissem, a comparacao nao mediria o contraste.
+function escolherResultadoMcii(resultado) {
+    _mciiResultado = resultado;
+    logEvent('mcii_resultado', { resultado, aceitou: !!resultado });
+    const cx = $('resumo-apoio');
+    if (!resultado) { cx.hidden = true; return; }
+    mostrarPacoteFoco(cx, _mciiOpcoes?.plano, _mciiOpcoes?.opcoes);
+}
+
 function mostrarOfertaDePausa(cx) {
     cx.innerHTML = `
         <p class="apoio-pergunta">Que tal uma pausa curta antes de seguir?</p>

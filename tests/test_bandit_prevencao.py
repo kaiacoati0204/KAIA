@@ -140,10 +140,32 @@ def test_personalizacao_sobrevive_ao_reinicio(tmp_path):
     assert novo.params["pausa_curta"] == [2.0, 1.0]
 
 
-def test_beta_roda_com_dois_bracos():
-    """pausa_curta saiu do sorteio: com a nossa régua o número dela seria ilegível
-    (imune ao sensor de aba de um lado, invisível em desempenho do outro)"""
-    assert bp.BRACOS == ["nada", "pacote_foco"]
+def test_bracos_do_beta():
+    """Os tres do beta: controle, cognitivo e situacional.
+
+    pausa_curta segue FORA do sorteio: com a nossa regua o numero dela seria ilegivel
+    (imune ao sensor de aba de um lado, invisivel em desempenho do outro). `ambiente` entrou
+    por ser o primeiro MECANISMO diferente, nao outro texto -- e o controle mantem o piso
+    mesmo com um braco a mais."""
+    assert bp.BRACOS == ["nada", "pacote_foco", "ambiente", "meta", "mcii"]
+    assert "pausa_curta" not in bp.BRACOS
     p = bp.BanditPrevencao(semente=1).probabilidades()
-    assert len(p) == 2 and abs(p.sum() - 1) < 1e-9
+    assert len(p) == 5 and abs(p.sum() - 1) < 1e-9
     assert p[bp.BRACOS.index("nada")] >= bp.PISO_CONTROLE - 1e-9
+    # nenhum braco de apoio some: o efeito de cada um continua mensuravel ate o fim
+    for b in ("pacote_foco", "ambiente", "meta", "mcii"):
+        assert p[bp.BRACOS.index(b)] >= bp.PROB_MIN - 1e-9
+
+
+def test_braco_novo_entra_limpo_em_params_antigo(tmp_path):
+    """O JSON em producao tem 2 bracos. Ao subir o terceiro, ele precisa comecar em Beta(1,1)
+    sem apagar o que os outros ja aprenderam -- senao adicionar braco custaria o historico."""
+    caminho = tmp_path / "p.json"
+    antigo = bp.BanditPrevencao(["nada", "pacote_foco"], params_path=caminho)
+    antigo.atualizar("pacote_foco", 1.0, aluno="ana")
+    antigo.salvar()
+
+    novo = bp.BanditPrevencao(params_path=caminho)          # agora com 3 bracos
+    assert novo.params["pacote_foco"] == [2.0, 1.0]         # o aprendido sobreviveu
+    assert novo.params["ambiente"] == [1.0, 1.0]            # o novo nasce neutro
+    assert novo.params_aluno["ana"]["pacote_foco"] == [2.0, 1.0]

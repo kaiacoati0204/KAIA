@@ -2483,14 +2483,16 @@ body.rail-aberta .rail-tx { opacity: 1; }
   gap: 12px;
   margin-bottom: 24px;
 }
+/* Tom de alerta, não de erro: a faixa lista quem estudou pouco na semana, e
+   pouco estudo não é falta grave — vermelho aqui vira cobrança. */
 .risco-card {
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 14px 16px;
-  border: 1px solid var(--erro-tx);
+  border: 1px solid var(--alerta-tx);
   border-radius: var(--raio);
-  background: var(--erro-bg);
+  background: var(--alerta-bg);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -2498,8 +2500,8 @@ body.rail-aberta .rail-tx { opacity: 1; }
 }
 .risco-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(var(--profundo-rgb), .12); }
 .risco-card:focus-visible { outline: 2px solid var(--profundo); outline-offset: 2px; }
-.risco-nome   { color: var(--erro-tx); font-size: 15px; font-weight: 800; }
-.risco-num    { color: var(--erro-tx); font-size: 13px; font-weight: 700; }
+.risco-nome   { color: var(--alerta-tx); font-size: 15px; font-weight: 800; }
+.risco-num    { color: var(--alerta-tx); font-size: 13px; font-weight: 700; }
 .risco-motivo { color: var(--tinta); font-size: 12px; line-height: 1.35; opacity: .85; }
 
 .risco-vazio {
@@ -2592,8 +2594,8 @@ body.rail-aberta .rail-tx { opacity: 1; }
 .th-seta { opacity: .55; font-size: 10px; }
 .th-ord.ativo .th-seta { opacity: 1; }
 
-/* Célula de atenção: a barra dá a comparação que o número sozinho não dá. */
-.atencao-cel { display: flex; align-items: center; gap: 8px; }
+/* Célula de acerto: a barra dá a comparação que o número sozinho não dá. */
+.metrica-cel { display: flex; align-items: center; gap: 8px; }
 .mini-barra {
   flex: 0 0 56px;
   height: 8px;
@@ -2601,11 +2603,11 @@ body.rail-aberta .rail-tx { opacity: 1; }
   background: var(--sep);
   overflow: hidden;
 }
-.mini-barra i { display: block; height: 100%; border-radius: 99px; }
-.mini-bem     i { background: var(--acerto-tx); }
-.mini-atencao i { background: var(--alerta-tx); }
-.mini-risco   i { background: var(--erro-tx); }
-.atencao-num { font-variant-numeric: tabular-nums; }
+/* Cor única, não faixa de cor: a barra mede ACERTO, e pintar de vermelho quem
+   erra mais transforma desempenho em acusação. A faixa de cor fica só no badge
+   de ritmo, que fala de esforço — o que o aluno controla. */
+.mini-barra i { display: block; height: 100%; border-radius: 99px; background: var(--azul-coati); }
+.metrica-num { font-variant-numeric: tabular-nums; }
 
 /* Nome do aluno = link para o relatório individual. */
 .aluno-link {

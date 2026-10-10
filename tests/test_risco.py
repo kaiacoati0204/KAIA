@@ -50,6 +50,25 @@ def test_features_rapidas_e_queda_de_acerto():
     assert list(f) == risco.FEATURES_RISCO
 
 
+def test_rotulo_censurado_quando_a_sessao_acaba_antes():
+    """Sessao que acaba antes do horizonte, sem evento, NAO e "nao desengajou" — e censura.
+
+    Antes devolvia 0, e o modelo aprendia que o fim da sessao e seguro: justo o momento em
+    que a prevencao o consulta, porque ela age na fronteira entre rodadas."""
+    from datetime import datetime, timedelta, timezone
+    t0 = datetime(2026, 10, 10, 20, 0, tzinfo=timezone.utc)
+    resp = lambda n: (t0 + timedelta(minutes=n), "question_answer", {})
+    agora = t0 + timedelta(seconds=1)
+
+    # so 2 respostas depois de `agora` e a sessao termina: horizonte (3) nao se completa
+    assert risco.rotulo_futuro([resp(1), resp(2)], agora) is None
+    # com 3, ha resposta para a pergunta
+    assert risco.rotulo_futuro([resp(1), resp(2), resp(3)], agora) == 0
+    # evento antes do fim continua valendo 1, mesmo sem completar o horizonte
+    fora = (t0 + timedelta(seconds=30), "tab_change", {"tempo_fora_foco_s": 99})
+    assert risco.rotulo_futuro([fora, resp(1)], agora) == 1
+
+
 def test_rotulo_futuro_so_dentro_do_horizonte():
     agora = T0 + timedelta(minutes=10)
     evs = [_resp(11, 30000), _resp(12, 30000), _resp(13, 30000),

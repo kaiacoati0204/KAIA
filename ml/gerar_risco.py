@@ -138,9 +138,12 @@ def construir_base():
             respostas = [ts for ts, tipo, _ in evs if tipo == "question_answer"]
             for ts in respostas[1:]:                             # momento de decidir = logo após cada resposta
                 agora = ts + timedelta(milliseconds=1)
+                alvo = risco.rotulo_futuro(evs, agora)
+                if alvo is None:        # censurado: sessao acabou antes do horizonte
+                    continue
                 f = risco.features_do_momento(evs, inicio, agora, estudo_dia)
                 X.append([f[k] for k in risco.FEATURES_RISCO])
-                y.append(risco.rotulo_futuro(evs, agora))
+                y.append(alvo)
                 grupos.append(gi)
     return np.array(X), np.array(y), np.array(grupos)
 

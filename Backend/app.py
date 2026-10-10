@@ -61,7 +61,14 @@ PREVENCAO_ATIVA = os.getenv("KAIA_PREVENCAO_ATIVA", "0") == "1"
 # Limiar medido no sintetico: 0,6 dispara em 13,6% das pausas (~10 ofertas num beta pequeno,
 # pouco demais para comparar), 0,4 em 32% com taxa de evento 59% contra 35% da base. No beta o
 # recurso escasso e DADO, entao 0,4.
-PREVENCAO_LIMIAR_RISCO = float(os.getenv("KAIA_PREVENCAO_LIMIAR", "0.4"))
+# 0.0 = sem porteiro: toda pausa vai ao sorteio, e quem decide NAO oferecer e o braco
+# `nada` (piso de 30%). O limiar de 0,4 contradizia o principio da casa -- so evidencia cara
+# justifica barrar, e a tela e opcional, numa fronteira, de custo ~zero. Na pratica ele nunca
+# deixou o modelo decidir: em 9 sessoes reais o risco ficou entre 0,18 e 0,32, sempre abaixo.
+# O risco continua calculado e gravado (regra E modelo), agora como MODERADOR: serve para
+# perguntar depois "o apoio rende mais quando o risco previsto era alto?", que e uma pergunta
+# melhor do que "quem merece ver a tela?". Subir de novo e uma variavel de ambiente.
+PREVENCAO_LIMIAR_RISCO = float(os.getenv("KAIA_PREVENCAO_LIMIAR", "0.0"))
 # Quem decide SE oferece. "regra": o escore de regras decide e o Modelo 1 roda em MODO SOMBRA -
 # calcula, registra e nao afeta ninguem. Assim da para comparar os dois no dado real sem expor
 # o aluno a um modelo ainda nao validado. "modelo": so depois de ele vencer a regra no real.
@@ -4256,13 +4263,15 @@ def _demo_aluno(email):
             "tempo_fora_foco_s": round((distracao - 1) * 8.0, 1),
             "cliques_fora": 1 if distracao > 0 else 0,
             "distracao": distracao,
-            "janelas": 5,
+            "janelas": round(20 + frac * 40),
+            "minutos": round((20 + frac * 40) / 2),
         })
     resumo = {
         "dias_com_dados": len(series),
         "total_acertos": sum(s["acertos"] for s in series),
+        "minutos": sum(s["minutos"] for s in series),
         "tendencia_acertos": _tendencia([s["acertos"] for s in series], "sobe"),
-        "tendencia_foco": _tendencia([s["distracao"] for s in series], "desce"),
+        "tendencia_minutos": _tendencia([s["minutos"] for s in series], "sobe"),
     }
     return {
         "demo": True,
@@ -4288,8 +4297,8 @@ RESPONSAVEL_ROLES = {"professor", "coordenador", "pai", "admin"}
 async def stats_aluno(request: Request, ident: dict = Depends(usuario_identidade),
                       email: Optional[str] = None, user_id: Optional[str] = None):
     """Painel do responsável: resolve o aluno por e-mail (ou user_id) e devolve a
-    evolução diária das features de atenção/desempenho + uma leitura de tendência
-    (o filho está melhorando?)."""
+    evolução diária de esforço (minutos), progresso (acertos) e constância (dias),
+    mais a tendência de acertos. Nada de leitura de atenção — ver `_status_ritmo`."""
     if not email and not user_id:
         return JSONResponse({"erro": "Informe o e-mail (ou user_id) do aluno."}, status_code=400)
 
@@ -4355,6 +4364,11 @@ async def stats_aluno(request: Request, ident: dict = Depends(usuario_identidade
             "cliques_fora": int(r["cliques_fora"] or 0),
             "distracao": distracao,
             "janelas": int(r["janelas"] or 0),
+            # Minutos do dia derivados das janelas: o job de agregacao grava uma
+            # linha a cada 30 s de sessao aberta, logo janelas/2 = minutos em estudo.
+            # Aproximado para cima/baixo em meio minuto, e so existe enquanto a sessao
+            # esta aberta -- que e exatamente o tempo que conta como esforco.
+            "minutos": round(int(r["janelas"] or 0) / 2),
         })
 
     hobbies = aluno["hobbies"]
@@ -4367,8 +4381,9 @@ async def stats_aluno(request: Request, ident: dict = Depends(usuario_identidade
     resumo = {
         "dias_com_dados": len(series),
         "total_acertos": sum(s["acertos"] for s in series),
+        "minutos": sum(s["minutos"] for s in series),
         "tendencia_acertos": _tendencia([s["acertos"] for s in series], "sobe"),
-        "tendencia_foco": _tendencia([s["distracao"] for s in series], "desce"),
+        "tendencia_minutos": _tendencia([s["minutos"] for s in series], "sobe"),
     }
 
     return {
@@ -4826,14 +4841,23 @@ def _turma_rotulo(ano, turno):
     return f"{ano}º ano · {turno}" if ano is not None else "—"
 
 
-# Faixas por % de atenção, cortes fixos validados na distribuição real (mediana ~0.65): < 50%
-# risco · 50–70% atenção · ≥ 70% bem. Espalha ~30/25/45 (cortes de 20/30% punham 82% em "bem").
-def _status_atencao(media):
-    if media is None:
+# RITMO DE ESTUDO, por minutos na semana: < 60 pouco estudo · 60–179 irregular · >= 180
+# constante. Contagem pura, sem modelo.
+#
+# Por que NAO e mais a leitura de atencao: (1) ela nao tem validacao em dado real, e aqui
+# viraria um numero com cara de medida; (2) um "% de atencao" por aluno na mao de professor
+# ou pai vira cobranca em casa, e o publico inclui TEA/TDAH. O painel mostra o que o aluno
+# controla -- esforco, progresso e constancia. A leitura de foco segue existindo para
+# decidir apoio DENTRO do estudo, para o proprio aluno, e nao sai em relatorio de adulto.
+#
+# Cortes: 180 min/semana ~ 30 min em 6 dias, o habito que a plataforma propoe; 60 min marca
+# quem praticamente nao abriu. Espelhados no front (responsaveis.html:statusRitmo).
+def _status_ritmo(minutos):
+    if minutos is None:
         return None
-    if media < 0.50:
+    if minutos < 60:
         return "risco"
-    if media < 0.70:
+    if minutos < 180:
         return "atencao"
     return "bem"
 
@@ -4841,7 +4865,7 @@ def _status_atencao(media):
 def _distribuicao_status(valores):
     d = {"bem": 0, "atencao": 0, "risco": 0}
     for v in valores:
-        s = _status_atencao(v)
+        s = _status_ritmo(v)
         if s:
             d[s] += 1
     return d
@@ -4886,20 +4910,20 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
             linhas = await conn.fetch(
                 """
                 select p.nome, t.ano, t.turno,
-                       d.media_atencao, d.taxa_acerto, d.minutos_estudados
+                       d.taxa_acerto, d.minutos_estudados
                 from desempenho_semanal d
                 join perfis p on p.user_id  = d.aluno_id
                 join turmas t on t.turma_id = d.turma_id
                 where d.escola_id = $1 and d.materia = $2 and d.semana = $3
-                order by d.media_atencao asc          -- quem mais precisa de atenção primeiro
+                order by d.minutos_estudados asc      -- quem estudou menos primeiro
                 """,
                 prof["escola_id"], prof["materia"], semana,
             )
-            # Gráficos: barras de atenção por turma (na matéria do professor) e
-            # evolução semanal (média de atenção por semana, 1..8).
+            # Gráficos: acerto medio por turma (na materia do professor) e evolucao
+            # semanal do acerto (1..8). Progresso, nao atencao.
             turmas_rows = await conn.fetch(
                 """
-                select t.ano, t.turno, avg(r.media_atencao_turma) as atencao
+                select t.ano, t.turno, avg(r.media_taxa_acerto_turma) as acerto
                 from resumo_turma_semanal r
                 join turmas t on t.turma_id = r.turma_id
                 where r.escola_id = $1 and r.materia = $2 and r.semana = $3
@@ -4910,14 +4934,14 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
             )
             evo_rows = await conn.fetch(
                 """
-                select semana, avg(media_atencao) as atencao
+                select semana, avg(taxa_acerto) as acerto
                 from desempenho_semanal
                 where escola_id = $1 and materia = $2
                 group by semana order by semana
                 """,
                 prof["escola_id"], prof["materia"],
             )
-            atencoes = [float(r["media_atencao"]) for r in linhas]
+            minutos_alunos = [int(r["minutos_estudados"]) for r in linhas]
             return {
                 "role": "professor",
                 "semana": semana,
@@ -4926,21 +4950,20 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
                     {
                         "nome": r["nome"],
                         "turma": _turma_rotulo(r["ano"], r["turno"]),
-                        "media_atencao": round(float(r["media_atencao"]), 3),
                         "taxa_acerto": round(float(r["taxa_acerto"]), 3),
                         "minutos": int(r["minutos_estudados"]),
-                        "status": _status_atencao(float(r["media_atencao"])),
+                        "status": _status_ritmo(int(r["minutos_estudados"])),
                     }
                     for r in linhas
                 ],
                 "graficos": {
-                    "status": _distribuicao_status(atencoes),
-                    "atencao_turma": [
-                        {"turma": _turma_rotulo(r["ano"], r["turno"]), "atencao": round(float(r["atencao"]), 3)}
+                    "status": _distribuicao_status(minutos_alunos),
+                    "acerto_turma": [
+                        {"turma": _turma_rotulo(r["ano"], r["turno"]), "acerto": round(float(r["acerto"]), 3)}
                         for r in turmas_rows
                     ],
                     "evolucao": [
-                        {"semana": int(r["semana"]), "atencao": round(float(r["atencao"]), 3)}
+                        {"semana": int(r["semana"]), "acerto": round(float(r["acerto"]), 3)}
                         for r in evo_rows
                     ],
                 },
@@ -4964,9 +4987,8 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
             linhas = await conn.fetch(
                 """
                 select t.ano, t.turno,
-                       avg(r.media_atencao_turma)     as media_atencao,
                        avg(r.media_taxa_acerto_turma) as taxa_acerto,
-                       sum(r.alunos_em_risco)         as casos_risco,
+                       sum(r.alunos_abaixo_media)     as casos_abaixo,
                        count(*)                       as materias,
                        (select count(*) from perfis p where p.turma_id = t.turma_id) as alunos
                 from resumo_turma_semanal r
@@ -4977,11 +4999,12 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
                 """,
                 coord["escola_id"], semana,
             )
-            # Gráficos: status por ALUNO da escola (média entre matérias),
-            # barras por turma (reaproveita `linhas`) e evolução semanal.
+            # Gráficos: ritmo por ALUNO da escola (minutos SOMADOS entre materias --
+            # esforco da semana e o total, nao a media), barras por turma (reaproveita
+            # `linhas`) e evolucao semanal do acerto.
             status_rows = await conn.fetch(
                 """
-                select aluno_id, avg(media_atencao) as atencao
+                select aluno_id, sum(minutos_estudados) as minutos
                 from desempenho_semanal
                 where escola_id = $1 and semana = $2
                 group by aluno_id
@@ -4990,7 +5013,7 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
             )
             evo_rows = await conn.fetch(
                 """
-                select semana, avg(media_atencao) as atencao
+                select semana, avg(taxa_acerto) as acerto
                 from desempenho_semanal
                 where escola_id = $1
                 group by semana order by semana
@@ -5005,23 +5028,22 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
                     {
                         "turma": _turma_rotulo(r["ano"], r["turno"]),
                         "alunos": int(r["alunos"]),
-                        "media_atencao": round(float(r["media_atencao"]), 3),
                         "taxa_acerto": round(float(r["taxa_acerto"]), 3),
-                        # soma dos alertas nas N matérias — um mesmo aluno pode
-                        # estar em risco em mais de uma, então isto são CASOS.
-                        "casos_risco": int(r["casos_risco"]),
+                        # soma nas N matérias — um mesmo aluno abaixo da média em
+                        # mais de uma conta uma vez por matéria, então isto são CASOS.
+                        "casos_abaixo": int(r["casos_abaixo"]),
                         "materias": int(r["materias"]),
                     }
                     for r in linhas
                 ],
                 "graficos": {
-                    "status": _distribuicao_status([float(r["atencao"]) for r in status_rows]),
-                    "atencao_turma": [
-                        {"turma": _turma_rotulo(r["ano"], r["turno"]), "atencao": round(float(r["media_atencao"]), 3)}
+                    "status": _distribuicao_status([int(r["minutos"]) for r in status_rows]),
+                    "acerto_turma": [
+                        {"turma": _turma_rotulo(r["ano"], r["turno"]), "acerto": round(float(r["taxa_acerto"]), 3)}
                         for r in linhas
                     ],
                     "evolucao": [
-                        {"semana": int(r["semana"]), "atencao": round(float(r["atencao"]), 3)}
+                        {"semana": int(r["semana"]), "acerto": round(float(r["acerto"]), 3)}
                         for r in evo_rows
                     ],
                 },
@@ -5032,7 +5054,6 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
             linhas = await conn.fetch(
                 """
                 select p.nome, t.ano, t.turno,
-                       avg(d.media_atencao)      as media_atencao,
                        avg(d.taxa_acerto)        as taxa_acerto,
                        sum(d.minutos_estudados)  as minutos
                 from pai_aluno pa
@@ -5055,9 +5076,9 @@ async def painel_responsavel(request: Request, ident: dict = Depends(usuario_ide
                         "nome": r["nome"],
                         "turma": _turma_rotulo(r["ano"], r["turno"]),
                         # left join: filho ainda sem desempenho na semana → None
-                        "media_atencao": round(float(r["media_atencao"]), 3) if r["media_atencao"] is not None else None,
                         "taxa_acerto": round(float(r["taxa_acerto"]), 3) if r["taxa_acerto"] is not None else None,
                         "minutos": int(r["minutos"]) if r["minutos"] is not None else 0,
+                        "status": _status_ritmo(int(r["minutos"]) if r["minutos"] is not None else 0),
                     }
                     for r in linhas
                 ],

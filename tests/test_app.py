@@ -122,11 +122,11 @@ def test_analise_regras_faixas():
 
 
 def test_status_e_distribuicao():
-    assert app_mod._status_atencao(None) is None
-    assert app_mod._status_atencao(0.3) == "risco"
-    assert app_mod._status_atencao(0.6) == "atencao"
-    assert app_mod._status_atencao(0.9) == "bem"
-    d = app_mod._distribuicao_status([0.3, 0.6, 0.9, None])
+    assert app_mod._status_ritmo(None) is None
+    assert app_mod._status_ritmo(30) == "risco"
+    assert app_mod._status_ritmo(120) == "atencao"
+    assert app_mod._status_ritmo(300) == "bem"
+    d = app_mod._distribuicao_status([30, 120, 300, None])
     assert d == {"bem": 1, "atencao": 1, "risco": 1}
 
 
@@ -167,15 +167,17 @@ def test_turma_rotulo():
     assert app_mod._turma_rotulo(None, "x") == "—"
 
 
-def test_status_atencao():
-    assert app_mod._status_atencao(None) is None
-    assert app_mod._status_atencao(0.3) == "risco"
-    assert app_mod._status_atencao(0.6) == "atencao"
-    assert app_mod._status_atencao(0.8) == "bem"
+def test_status_ritmo():
+    """O status do painel sai de MINUTOS estudados, nao de leitura de atencao."""
+    assert app_mod._status_ritmo(None) is None
+    assert app_mod._status_ritmo(59) == "risco"
+    assert app_mod._status_ritmo(60) == "atencao"
+    assert app_mod._status_ritmo(179) == "atencao"
+    assert app_mod._status_ritmo(180) == "bem"
 
 
 def test_distribuicao_status():
-    assert app_mod._distribuicao_status([0.3, 0.6, 0.8, None]) == {"bem": 1, "atencao": 1, "risco": 1}
+    assert app_mod._distribuicao_status([30, 120, 300, None]) == {"bem": 1, "atencao": 1, "risco": 1}
 
 
 # ---------------------------------------------- helpers de cache de questões

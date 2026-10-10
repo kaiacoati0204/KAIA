@@ -31,7 +31,22 @@ PARAMS_PREVENCAO_PATH = (Path(__file__).resolve().parent.parent
 # aba fica suspenso, e ela fica imune ao evento mais pesado da recompensa. Vantagem falsa num
 # eixo, desvantagem falsa no outro, e nao da para saber qual domina. Somado a isso, 3 bracos
 # dividem as mesmas pausas escassas. A pausa continua existindo no pomodoro; so saiu do sorteio.
-BRACOS = ["nada", "pacote_foco"]
+# `ambiente` (08/10/2026) e o primeiro braco com MECANISMO diferente, nao outro texto.
+# `pacote_foco` e cognitivo: prepara a resposta para quando a vontade chegar. `ambiente` e
+# situacional: tira o gatilho do alcance antes, e por isso nao depende de autocontrole na hora.
+# A revisao de distracao digital separa as duas familias (cognitiva x situacional) e aponta que
+# as intervencoes bem-sucedidas combinaram AS DUAS; estruturacao de ambiente esta entre as tres
+# estrategias de SRL que mais co-ocorreram com menos distracao (n = 530). Entra agora porque o
+# custo de adicionar braco e diluir o aprendizado acumulado -- e nao ha nenhum: as 5 decisoes
+# ate hoje foram em modo `fixo`, que o proprio codigo descarta do bandit.
+# `meta` e `mcii` (08/10/2026) fecham as familias de mecanismo que a literatura separa:
+# compromisso com um ponto de chegada, e contraste mental antes do plano. O MCII e o
+# `pacote_foco` com UM passo a mais (imaginar o resultado antes do obstaculo) -- entra como
+# braco proprio justamente para o bandit dizer se o passo extra paga o custo de pedi-lo.
+#
+# CUSTO ACEITO: com 5 bracos e piso de 30% no controle, sobram ~17% para cada apoio. O
+# aprendizado por braco fica lento e so compensa com uso bem maior que o de hoje.
+BRACOS = ["nada", "pacote_foco", "ambiente", "meta", "mcii"]
 BRACOS_COM_PAUSA = ["nada", "pacote_foco", "pausa_curta"]   # simulacao e testes do desenho
 PROB_MIN, PROB_MAX = 0.1, 0.8
 # O "nada" e o grupo de comparacao: com piso de 10% sobrariam ~7 pausas de controle num beta

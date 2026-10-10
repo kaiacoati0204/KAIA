@@ -100,19 +100,20 @@
                         <div class="v" id="m-seq">–</div>
                     </div>
                     <div class="card">
+                        <label>Minutos estudados</label>
+                        <div class="v" id="m-minutos">–</div>
+                    </div>
+                    <div class="card">
                         <label>Evolução de acertos</label>
                         <div class="v tag" id="m-tend-acertos">–</div>
                     </div>
-                    <div class="card">
-                        <label>Evolução do foco</label>
-                        <div class="v tag" id="m-tend-foco">–</div>
-                    </div>
                 </div>
 
-                <!-- Evolução individual: só aparece quando a série traz atenção.
-                     O backend hoje NÃO devolve esse campo — é mock-only. -->
+                <!-- Taxa de acerto semana a semana: só aparece quando a série traz
+                     `acerto`. O backend hoje NÃO devolve esse campo (manda acertos
+                     ABSOLUTOS por dia, no gráfico abaixo) — é mock-only. -->
                 <div class="graf-card" id="bloco-evolucao" hidden>
-                    <h4>Evolução individual — atenção e acerto (%)</h4>
+                    <h4>Evolução da taxa de acerto (%)</h4>
                     <div class="graf-wrap"><canvas id="g-evolucao"></canvas></div>
                 </div>
 
@@ -124,8 +125,8 @@
                         <div class="graf-wrap"><canvas id="g-acertos"></canvas></div>
                     </div>
                     <div class="graf-card">
-                        <h4>Distrações por dia — trocas de aba + cliques fora (quanto mais baixo, melhor)</h4>
-                        <div class="graf-wrap"><canvas id="g-foco"></canvas></div>
+                        <h4>Minutos estudados por dia (quanto mais alto, melhor)</h4>
+                        <div class="graf-wrap"><canvas id="g-minutos"></canvas></div>
                     </div>
                 </div>
 
@@ -145,141 +146,150 @@
         // Dados reais: false + o payload trazer aluno_id (hoje não traz).
         const PAINEL_DEMO = true;
 
-        // Espelha o payload real. MOCK-ONLY (backend não devolve): aluno_id, turma_id, motivo, serie[].atencao/.acerto.
-        // `status` sai de statusAtencao(), mesmos cortes do app.py, pro mock não divergir.
+        // Espelha o payload real. MOCK-ONLY (backend não devolve): aluno_id, turma_id,
+        // motivo, dias, serie[].acerto. `status` sai de statusRitmo(), mesmos cortes do
+        // app.py, pro mock não divergir.
+        //
+        // Esforço (minutos), progresso (acerto) e constância (dias) — e nada de atenção:
+        // o painel de adulto não mostra leitura de foco (ver statusRitmo abaixo).
         const ALUNOS_DEMO = [
             { aluno_id: 'demo-01', nome: 'Ana Beatriz Rocha', turma_id: 't-7m', turma: '7º ano · manhã',
-              media_atencao: 0.38, taxa_acerto: 0.52, minutos: 22,
-              motivo: 'caiu 12 pontos desde a semana passada',
+              minutos: 22, dias: 1, taxa_acerto: 0.52,
+              motivo: 'estudou 22 min em 1 dia nesta semana',
               hobbies: ['Música', 'Desenho'],
-              resumo: { total_acertos: 128, dias_com_dados: 9, sequencia_dias: 1,
-                        tendencia_acertos: 'piorando', tendencia_foco: 'piorando' },
-              serie: [ { dia: '02/06', acertos: 18, distracao: 6,  atencao: 0.62, acerto: 0.71 },
-                       { dia: '09/06', acertos: 16, distracao: 8,  atencao: 0.58, acerto: 0.66 },
-                       { dia: '16/06', acertos: 14, distracao: 11, atencao: 0.55, acerto: 0.63 },
-                       { dia: '23/06', acertos: 11, distracao: 14, atencao: 0.50, acerto: 0.58 },
-                       { dia: '30/06', acertos: 9,  distracao: 17, atencao: 0.44, acerto: 0.55 },
-                       { dia: '07/07', acertos: 8,  distracao: 19, atencao: 0.38, acerto: 0.52 } ] },
+              resumo: { total_acertos: 128, dias_com_dados: 9, sequencia_dias: 1, minutos: 22,
+                        tendencia_acertos: 'piorando', tendencia_minutos: 'piorando' },
+              serie: [ { dia: '02/06', acertos: 18, minutos: 70, acerto: 0.71 },
+                       { dia: '09/06', acertos: 16, minutos: 58, acerto: 0.66 },
+                       { dia: '16/06', acertos: 14, minutos: 46, acerto: 0.63 },
+                       { dia: '23/06', acertos: 11, minutos: 35, acerto: 0.58 },
+                       { dia: '30/06', acertos: 9,  minutos: 28, acerto: 0.55 },
+                       { dia: '07/07', acertos: 8,  minutos: 22, acerto: 0.52 } ] },
 
             { aluno_id: 'demo-02', nome: 'Caio Ferraz Lima', turma_id: 't-7m', turma: '7º ano · manhã',
-              media_atencao: 0.41, taxa_acerto: 0.61, minutos: 35,
-              motivo: '3ª semana seguida em queda',
+              minutos: 35, dias: 2, taxa_acerto: 0.61,
+              motivo: '3ª semana seguida estudando menos',
               hobbies: ['Futebol', 'Videogames'],
-              resumo: { total_acertos: 154, dias_com_dados: 11, sequencia_dias: 2,
-                        tendencia_acertos: 'piorando', tendencia_foco: 'piorando' },
-              serie: [ { dia: '02/06', acertos: 19, distracao: 5,  atencao: 0.66, acerto: 0.74 },
-                       { dia: '09/06', acertos: 18, distracao: 7,  atencao: 0.61, acerto: 0.72 },
-                       { dia: '16/06', acertos: 16, distracao: 9,  atencao: 0.56, acerto: 0.69 },
-                       { dia: '23/06', acertos: 14, distracao: 12, atencao: 0.51, acerto: 0.66 },
-                       { dia: '30/06', acertos: 12, distracao: 15, atencao: 0.46, acerto: 0.63 },
-                       { dia: '07/07', acertos: 11, distracao: 16, atencao: 0.41, acerto: 0.61 } ] },
+              resumo: { total_acertos: 154, dias_com_dados: 11, sequencia_dias: 2, minutos: 35,
+                        tendencia_acertos: 'piorando', tendencia_minutos: 'piorando' },
+              serie: [ { dia: '02/06', acertos: 19, minutos: 88, acerto: 0.74 },
+                       { dia: '09/06', acertos: 18, minutos: 76, acerto: 0.72 },
+                       { dia: '16/06', acertos: 16, minutos: 64, acerto: 0.69 },
+                       { dia: '23/06', acertos: 14, minutos: 52, acerto: 0.66 },
+                       { dia: '30/06', acertos: 12, minutos: 42, acerto: 0.63 },
+                       { dia: '07/07', acertos: 11, minutos: 35, acerto: 0.61 } ] },
 
             { aluno_id: 'demo-03', nome: 'Lia Moreira Costa', turma_id: 't-7m', turma: '7º ano · manhã',
-              media_atencao: 0.47, taxa_acerto: 0.58, minutos: 18,
-              motivo: 'só 18 minutos de estudo na semana',
+              minutos: 18, dias: 1, taxa_acerto: 0.58,
+              motivo: 'não abriu a plataforma desde segunda',
               hobbies: ['Leitura', 'Anime'],
-              resumo: { total_acertos: 96, dias_com_dados: 6, sequencia_dias: 1,
-                        tendencia_acertos: 'estavel', tendencia_foco: 'piorando' },
-              serie: [ { dia: '02/06', acertos: 13, distracao: 8,  atencao: 0.59, acerto: 0.60 },
-                       { dia: '09/06', acertos: 12, distracao: 9,  atencao: 0.57, acerto: 0.59 },
-                       { dia: '16/06', acertos: 13, distracao: 10, atencao: 0.54, acerto: 0.61 },
-                       { dia: '23/06', acertos: 12, distracao: 12, atencao: 0.52, acerto: 0.58 },
-                       { dia: '30/06', acertos: 11, distracao: 13, atencao: 0.49, acerto: 0.57 },
-                       { dia: '07/07', acertos: 12, distracao: 14, atencao: 0.47, acerto: 0.58 } ] },
+              resumo: { total_acertos: 96, dias_com_dados: 6, sequencia_dias: 1, minutos: 18,
+                        tendencia_acertos: 'estavel', tendencia_minutos: 'piorando' },
+              serie: [ { dia: '02/06', acertos: 13, minutos: 40, acerto: 0.60 },
+                       { dia: '09/06', acertos: 12, minutos: 34, acerto: 0.59 },
+                       { dia: '16/06', acertos: 13, minutos: 30, acerto: 0.61 },
+                       { dia: '23/06', acertos: 12, minutos: 26, acerto: 0.58 },
+                       { dia: '30/06', acertos: 11, minutos: 22, acerto: 0.57 },
+                       { dia: '07/07', acertos: 12, minutos: 18, acerto: 0.58 } ] },
 
             { aluno_id: 'demo-04', nome: 'Bruno Sales Aguiar', turma_id: 't-7m', turma: '7º ano · manhã',
-              media_atencao: 0.63, taxa_acerto: 0.70, minutos: 52,
+              minutos: 95, dias: 3, taxa_acerto: 0.70,
               hobbies: ['Basquete', 'Programação'],
-              resumo: { total_acertos: 210, dias_com_dados: 13, sequencia_dias: 4,
-                        tendencia_acertos: 'estavel', tendencia_foco: 'estavel' },
-              serie: [ { dia: '02/06', acertos: 20, distracao: 6, atencao: 0.61, acerto: 0.68 },
-                       { dia: '09/06', acertos: 21, distracao: 5, atencao: 0.64, acerto: 0.70 },
-                       { dia: '16/06', acertos: 19, distracao: 7, atencao: 0.62, acerto: 0.69 },
-                       { dia: '23/06', acertos: 22, distracao: 6, atencao: 0.65, acerto: 0.72 },
-                       { dia: '30/06', acertos: 20, distracao: 6, atencao: 0.63, acerto: 0.70 },
-                       { dia: '07/07', acertos: 21, distracao: 5, atencao: 0.63, acerto: 0.70 } ] },
+              resumo: { total_acertos: 210, dias_com_dados: 13, sequencia_dias: 4, minutos: 95,
+                        tendencia_acertos: 'estavel', tendencia_minutos: 'estavel' },
+              serie: [ { dia: '02/06', acertos: 20, minutos: 90,  acerto: 0.68 },
+                       { dia: '09/06', acertos: 21, minutos: 98,  acerto: 0.70 },
+                       { dia: '16/06', acertos: 19, minutos: 92,  acerto: 0.69 },
+                       { dia: '23/06', acertos: 22, minutos: 100, acerto: 0.72 },
+                       { dia: '30/06', acertos: 20, minutos: 94,  acerto: 0.70 },
+                       { dia: '07/07', acertos: 21, minutos: 95,  acerto: 0.70 } ] },
 
             { aluno_id: 'demo-05', nome: 'Marina Duarte Pires', turma_id: 't-7m', turma: '7º ano · manhã',
-              media_atencao: 0.78, taxa_acerto: 0.84, minutos: 66,
+              minutos: 240, dias: 6, taxa_acerto: 0.84,
               hobbies: ['Yoga', 'Escrita'],
-              resumo: { total_acertos: 288, dias_com_dados: 15, sequencia_dias: 7,
-                        tendencia_acertos: 'melhorando', tendencia_foco: 'melhorando' },
-              serie: [ { dia: '02/06', acertos: 22, distracao: 5, atencao: 0.68, acerto: 0.75 },
-                       { dia: '09/06', acertos: 24, distracao: 4, atencao: 0.71, acerto: 0.78 },
-                       { dia: '16/06', acertos: 25, distracao: 4, atencao: 0.73, acerto: 0.80 },
-                       { dia: '23/06', acertos: 26, distracao: 3, atencao: 0.75, acerto: 0.81 },
-                       { dia: '30/06', acertos: 27, distracao: 3, atencao: 0.77, acerto: 0.83 },
-                       { dia: '07/07', acertos: 28, distracao: 2, atencao: 0.78, acerto: 0.84 } ] },
+              resumo: { total_acertos: 288, dias_com_dados: 15, sequencia_dias: 7, minutos: 240,
+                        tendencia_acertos: 'melhorando', tendencia_minutos: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 22, minutos: 160, acerto: 0.75 },
+                       { dia: '09/06', acertos: 24, minutos: 182, acerto: 0.78 },
+                       { dia: '16/06', acertos: 25, minutos: 200, acerto: 0.80 },
+                       { dia: '23/06', acertos: 26, minutos: 215, acerto: 0.81 },
+                       { dia: '30/06', acertos: 27, minutos: 228, acerto: 0.83 },
+                       { dia: '07/07', acertos: 28, minutos: 240, acerto: 0.84 } ] },
 
             { aluno_id: 'demo-06', nome: 'Téo Nakamura Alves', turma_id: 't-7m', turma: '7º ano · manhã',
-              media_atencao: 0.81, taxa_acerto: 0.77, minutos: 71,
+              minutos: 265, dias: 6, taxa_acerto: 0.77,
               hobbies: ['Xadrez', 'Astronomia'],
-              resumo: { total_acertos: 265, dias_com_dados: 14, sequencia_dias: 6,
-                        tendencia_acertos: 'estavel', tendencia_foco: 'melhorando' },
-              serie: [ { dia: '02/06', acertos: 23, distracao: 4, atencao: 0.74, acerto: 0.76 },
-                       { dia: '09/06', acertos: 22, distracao: 4, atencao: 0.76, acerto: 0.75 },
-                       { dia: '16/06', acertos: 24, distracao: 3, atencao: 0.78, acerto: 0.78 },
-                       { dia: '23/06', acertos: 23, distracao: 3, atencao: 0.79, acerto: 0.76 },
-                       { dia: '30/06', acertos: 24, distracao: 2, atencao: 0.80, acerto: 0.77 },
-                       { dia: '07/07', acertos: 25, distracao: 2, atencao: 0.81, acerto: 0.77 } ] },
+              resumo: { total_acertos: 265, dias_com_dados: 14, sequencia_dias: 6, minutos: 265,
+                        tendencia_acertos: 'estavel', tendencia_minutos: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 23, minutos: 210, acerto: 0.76 },
+                       { dia: '09/06', acertos: 22, minutos: 225, acerto: 0.75 },
+                       { dia: '16/06', acertos: 24, minutos: 238, acerto: 0.78 },
+                       { dia: '23/06', acertos: 23, minutos: 250, acerto: 0.76 },
+                       { dia: '30/06', acertos: 24, minutos: 258, acerto: 0.77 },
+                       { dia: '07/07', acertos: 25, minutos: 265, acerto: 0.77 } ] },
 
             { aluno_id: 'demo-07', nome: 'Helena Prado Vieira', turma_id: 't-8t', turma: '8º ano · tarde',
-              media_atencao: 0.68, taxa_acerto: 0.72, minutos: 48,
+              minutos: 120, dias: 4, taxa_acerto: 0.72,
               hobbies: ['Dança', 'Fotografia'],
-              resumo: { total_acertos: 198, dias_com_dados: 12, sequencia_dias: 3,
-                        tendencia_acertos: 'melhorando', tendencia_foco: 'estavel' },
-              serie: [ { dia: '02/06', acertos: 17, distracao: 7, atencao: 0.64, acerto: 0.66 },
-                       { dia: '09/06', acertos: 18, distracao: 6, atencao: 0.66, acerto: 0.68 },
-                       { dia: '16/06', acertos: 19, distracao: 6, atencao: 0.67, acerto: 0.70 },
-                       { dia: '23/06', acertos: 20, distracao: 5, atencao: 0.68, acerto: 0.71 },
-                       { dia: '30/06', acertos: 21, distracao: 5, atencao: 0.69, acerto: 0.72 },
-                       { dia: '07/07', acertos: 21, distracao: 5, atencao: 0.68, acerto: 0.72 } ] },
+              resumo: { total_acertos: 198, dias_com_dados: 12, sequencia_dias: 3, minutos: 120,
+                        tendencia_acertos: 'melhorando', tendencia_minutos: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 17, minutos: 100, acerto: 0.66 },
+                       { dia: '09/06', acertos: 18, minutos: 106, acerto: 0.68 },
+                       { dia: '16/06', acertos: 19, minutos: 112, acerto: 0.70 },
+                       { dia: '23/06', acertos: 20, minutos: 118, acerto: 0.71 },
+                       { dia: '30/06', acertos: 21, minutos: 122, acerto: 0.72 },
+                       { dia: '07/07', acertos: 21, minutos: 120, acerto: 0.72 } ] },
 
             { aluno_id: 'demo-08', nome: 'Igor Sampaio Rezende', turma_id: 't-8t', turma: '8º ano · tarde',
-              media_atencao: 0.74, taxa_acerto: 0.69, minutos: 55,
+              minutos: 150, dias: 4, taxa_acerto: 0.69,
               hobbies: ['Ciclismo', 'RPG'],
-              resumo: { total_acertos: 221, dias_com_dados: 13, sequencia_dias: 5,
-                        tendencia_acertos: 'estavel', tendencia_foco: 'melhorando' },
-              serie: [ { dia: '02/06', acertos: 19, distracao: 6, atencao: 0.69, acerto: 0.68 },
-                       { dia: '09/06', acertos: 18, distracao: 5, atencao: 0.70, acerto: 0.67 },
-                       { dia: '16/06', acertos: 20, distracao: 5, atencao: 0.72, acerto: 0.70 },
-                       { dia: '23/06', acertos: 19, distracao: 4, atencao: 0.73, acerto: 0.69 },
-                       { dia: '30/06', acertos: 20, distracao: 4, atencao: 0.74, acerto: 0.70 },
-                       { dia: '07/07', acertos: 20, distracao: 3, atencao: 0.74, acerto: 0.69 } ] },
+              resumo: { total_acertos: 221, dias_com_dados: 13, sequencia_dias: 5, minutos: 150,
+                        tendencia_acertos: 'estavel', tendencia_minutos: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 19, minutos: 130, acerto: 0.68 },
+                       { dia: '09/06', acertos: 18, minutos: 136, acerto: 0.67 },
+                       { dia: '16/06', acertos: 20, minutos: 142, acerto: 0.70 },
+                       { dia: '23/06', acertos: 19, minutos: 146, acerto: 0.69 },
+                       { dia: '30/06', acertos: 20, minutos: 150, acerto: 0.70 },
+                       { dia: '07/07', acertos: 20, minutos: 150, acerto: 0.69 } ] },
 
             { aluno_id: 'demo-09', nome: 'Júlia Antunes Barros', turma_id: 't-8t', turma: '8º ano · tarde',
-              media_atencao: 0.83, taxa_acerto: 0.88, minutos: 62,
+              minutos: 280, dias: 7, taxa_acerto: 0.88,
               hobbies: ['Culinária', 'Idiomas'],
-              resumo: { total_acertos: 302, dias_com_dados: 15, sequencia_dias: 9,
-                        tendencia_acertos: 'melhorando', tendencia_foco: 'estavel' },
-              serie: [ { dia: '02/06', acertos: 26, distracao: 3, atencao: 0.81, acerto: 0.84 },
-                       { dia: '09/06', acertos: 27, distracao: 3, atencao: 0.82, acerto: 0.85 },
-                       { dia: '16/06', acertos: 28, distracao: 2, atencao: 0.82, acerto: 0.86 },
-                       { dia: '23/06', acertos: 29, distracao: 2, atencao: 0.83, acerto: 0.87 },
-                       { dia: '30/06', acertos: 29, distracao: 2, atencao: 0.84, acerto: 0.88 },
-                       { dia: '07/07', acertos: 30, distracao: 2, atencao: 0.83, acerto: 0.88 } ] },
+              resumo: { total_acertos: 302, dias_com_dados: 15, sequencia_dias: 9, minutos: 280,
+                        tendencia_acertos: 'melhorando', tendencia_minutos: 'melhorando' },
+              serie: [ { dia: '02/06', acertos: 26, minutos: 250, acerto: 0.84 },
+                       { dia: '09/06', acertos: 27, minutos: 258, acerto: 0.85 },
+                       { dia: '16/06', acertos: 28, minutos: 265, acerto: 0.86 },
+                       { dia: '23/06', acertos: 29, minutos: 272, acerto: 0.87 },
+                       { dia: '30/06', acertos: 29, minutos: 276, acerto: 0.88 },
+                       { dia: '07/07', acertos: 30, minutos: 280, acerto: 0.88 } ] },
 
             { aluno_id: 'demo-10', nome: 'Rafael Nunes Cardoso', turma_id: 't-8t', turma: '8º ano · tarde',
-              media_atencao: 0.71, taxa_acerto: 0.65, minutos: 44,
+              minutos: 185, dias: 5, taxa_acerto: 0.65,
               hobbies: ['Natação', 'Séries'],
-              resumo: { total_acertos: 187, dias_com_dados: 11, sequencia_dias: 3,
-                        tendencia_acertos: 'estavel', tendencia_foco: 'estavel' },
-              serie: [ { dia: '02/06', acertos: 17, distracao: 6, atencao: 0.70, acerto: 0.64 },
-                       { dia: '09/06', acertos: 18, distracao: 6, atencao: 0.71, acerto: 0.66 },
-                       { dia: '16/06', acertos: 17, distracao: 5, atencao: 0.70, acerto: 0.64 },
-                       { dia: '23/06', acertos: 18, distracao: 6, atencao: 0.72, acerto: 0.66 },
-                       { dia: '30/06', acertos: 18, distracao: 5, atencao: 0.71, acerto: 0.65 },
-                       { dia: '07/07', acertos: 19, distracao: 5, atencao: 0.71, acerto: 0.65 } ] },
+              resumo: { total_acertos: 187, dias_com_dados: 11, sequencia_dias: 3, minutos: 185,
+                        tendencia_acertos: 'estavel', tendencia_minutos: 'estavel' },
+              serie: [ { dia: '02/06', acertos: 17, minutos: 170, acerto: 0.64 },
+                       { dia: '09/06', acertos: 18, minutos: 176, acerto: 0.66 },
+                       { dia: '16/06', acertos: 17, minutos: 180, acerto: 0.64 },
+                       { dia: '23/06', acertos: 18, minutos: 182, acerto: 0.66 },
+                       { dia: '30/06', acertos: 18, minutos: 186, acerto: 0.65 },
+                       { dia: '07/07', acertos: 19, minutos: 185, acerto: 0.65 } ] },
         ];
 
         const SEMANA_DEMO = 8;
         const PROFESSOR_DEMO = { nome: 'Prof. demonstração', materia: 'Matemática', escola: 'Escola demonstração' };
 
-        // Cortes de status: MESMOS do backend (app.py:_status_atencao) — <50 risco,
-        // 50-70 atenção, >=70 bem. Duplicar aqui é o preço de o mock não ter banco;
-        // se mudarem lá, mudam aqui.
-        const statusAtencao = (m) =>
-            m == null ? null : m < 0.50 ? 'risco' : m < 0.70 ? 'atencao' : 'bem';
+        // RITMO DE ESTUDO, não leitura de atenção: o painel de professor/responsável
+        // mostra esforço, progresso e constância, e nada que saia de modelo de atenção.
+        // Motivo: a leitura de foco da KaIA não tem validação em dado real, e um "% de
+        // atenção" por aluno na mão de um adulto vira cobrança em casa (o público inclui
+        // TEA/TDAH). A leitura de foco continua existindo para decidir apoio DENTRO do
+        // estudo, para o próprio aluno — não sai em relatório de adulto.
+        // Cortes: MESMOS do backend (app.py:_status_ritmo) — <60 min na semana pouco
+        // estudo, 60-179 irregular, >=180 constante. Mudou lá, mude aqui.
+        const statusRitmo = (min) =>
+            min == null ? null : min < 60 ? 'risco' : min < 180 ? 'atencao' : 'bem';
 
         // Lê um token de cor do :root — evita hex solto que envelhece à parte da paleta.
         const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -331,7 +341,7 @@
             },
         };
 
-        let gAcertos = null, gFoco = null, gHobbies = null;
+        let gAcertos = null, gMinutos = null, gHobbies = null;
 
         // Eixos claros: os gráficos desta página vivem sobre cards brancos.
         const EIXOS = {
@@ -375,24 +385,25 @@
             $('m-acertos').textContent = r.resumo.total_acertos ?? '–';
             $('m-dias').textContent    = r.resumo.dias_com_dados ?? '–';
             $('m-seq').textContent     = r.resumo.sequencia_dias ?? 0;
+            $('m-minutos').textContent = r.resumo.minutos ?? '–';
             aplicarTend('m-tend-acertos', r.resumo.tendencia_acertos);
-            aplicarTend('m-tend-foco',    r.resumo.tendencia_foco);
 
             $('hobbies').textContent = r.hobbies?.length
                 ? `Hobbies usados na personalização: ${r.hobbies.join(', ')}` : '';
 
-            desenhar(r.serie.map(s => s.dia), r.serie.map(s => s.acertos), r.serie.map(s => s.distracao));
+            desenhar(r.serie.map(s => s.dia), r.serie.map(s => s.acertos), r.serie.map(s => s.minutos));
             desenharEvolucao(r.serie);
             $('painel').style.display = 'block';
         }
 
-        // Evolução individual (Fase 4). MOCK-ONLY: só desenha se a série traz `atencao`.
-        // /responsavel/aluno devolve só {dia, acertos, distracao}, então na busca por
-        // e-mail o bloco fica escondido em vez de inventar linha.
+        // Taxa de acerto semana a semana. MOCK-ONLY: só desenha se a série traz
+        // `acerto`. /responsavel/aluno devolve acertos ABSOLUTOS por dia (gráfico de
+        // baixo), não a taxa — então na busca por e-mail o bloco fica escondido em
+        // vez de inventar linha.
         let gEvolucao = null;
         function desenharEvolucao(serie) {
             gEvolucao?.destroy(); gEvolucao = null;
-            const tem = serie.length > 0 && serie[0].atencao != null;
+            const tem = serie.length > 0 && serie[0].acerto != null;
             $('bloco-evolucao').hidden = !tem;
             if (!tem) return;
 
@@ -402,29 +413,15 @@
                 data: {
                     labels: serie.map(s => s.dia),
                     datasets: [
-                        { ...LINHA_BASE, label: 'Atenção',
-                          data: serie.map(s => Math.round(s.atencao * 100)),
-                          borderColor: tok('--azul-coati'),
-                          pointBorderColor: tok('--azul-coati'),
-                          backgroundColor: degrade('--azul-coati-rgb') },
-                        // Tracejada e sem preenchimento: separa as duas linhas sem
-                        // depender só da cor, e deixa a de atenção como protagonista.
                         { ...LINHA_BASE, label: 'Acerto',
                           data: serie.map(s => Math.round(s.acerto * 100)),
                           borderColor: tok('--acerto-tx'),
                           pointBorderColor: tok('--acerto-tx'),
-                          borderDash: [6, 4], fill: false },
+                          backgroundColor: degrade('--vd-uniao-rgb', .35) },
                     ],
                 },
                 options: {
                     ...EIXOS_LIMPOS,
-                    plugins: {
-                        ...EIXOS_LIMPOS.plugins,
-                        legend: { display: true, position: 'bottom', align: 'center',
-                                  labels: { color: tok('--profundo'), usePointStyle: true,
-                                            pointStyle: 'line', boxWidth: 26, padding: 18,
-                                            font: { size: 12, weight: '700' } } },
-                    },
                     scales: { ...EIXOS_LIMPOS.scales,
                               y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } },
                 },
@@ -456,16 +453,16 @@
                 const _pronto = {
                     nome: data.aluno.email || email,
                     sub: `Busca por e-mail · ${data.resumo.dias_com_dados} dias com dados`,
-                    status: null,                       // a busca não traz média de atenção
+                    status: statusRitmo(data.resumo.minutos),
                     hobbies: data.aluno.hobbies || [],
                     resumo: {
                         total_acertos: data.resumo.total_acertos,
                         dias_com_dados: data.resumo.dias_com_dados,
                         sequencia_dias: data.aluno.sequencia_dias_estudo ?? 0,
+                        minutos: data.resumo.minutos,
                         tendencia_acertos: data.resumo.tendencia_acertos,
-                        tendencia_foco: data.resumo.tendencia_foco,
                     },
-                    serie: data.series,                 // sem `atencao` → sem gráfico de evolução
+                    serie: data.series,                 // sem `acerto` → sem gráfico de taxa
                 };
                 _veioDaLista = false;
                 mostrarVista('aluno');                  // antes de desenhar: canvas precisa de tamanho
@@ -476,7 +473,7 @@
             }
         }
 
-        function desenhar(labels, acertos, distracao) {
+        function desenhar(labels, acertos, minutos) {
             const cvA = document.getElementById('g-acertos');
             gAcertos?.destroy();
             gAcertos = new Chart(cvA, {
@@ -490,15 +487,13 @@
                 options: EIXOS_LIMPOS,
             });
 
-            gFoco?.destroy();
-            gFoco = new Chart(document.getElementById('g-foco'), {
+            gMinutos?.destroy();
+            gMinutos = new Chart(document.getElementById('g-minutos'), {
                 type: 'bar',
                 data: { labels, datasets: [{
-                    // --erro-bg/-tx no lugar do vermelho vivo: mesma família suave
-                    // dos badges, sem tom de alarme.
-                    label: 'Distrações', data: distracao,
-                    backgroundColor: tok('--erro-bg'),
-                    borderColor: tok('--erro-tx'), borderWidth: 1, borderRadius: 6,
+                    label: 'Minutos', data: minutos,
+                    backgroundColor: tok('--acerto-bg'),
+                    borderColor: tok('--acerto-tx'), borderWidth: 1, borderRadius: 6,
                 }] },
                 options: EIXOS_LIMPOS,
             });
@@ -542,8 +537,8 @@
         // `usuario` vem da guarda de rota no <head> (sessionStorage.kaia_usuario).
         const pct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
 
-        // Status por aluno (mesmos cortes/cores do backend: <50 risco, 50-70 atenção, ≥70 bem)
-        const STATUS_ROT = { bem: 'Bem', atencao: 'Atenção', risco: 'Em risco' };
+        // Ritmo por aluno (mesmos cortes do backend: <60 min pouco, 60-179 irregular, ≥180 constante)
+        const STATUS_ROT = { bem: 'Constante', atencao: 'Irregular', risco: 'Pouco estudo' };
         const STATUS_COR = { bem: '#2f5d3a', atencao: '#8a6d1e', risco: '#8a3b3b' };
         const badge = (s) => s ? `<span class="status-badge status-${s}">${STATUS_ROT[s] || '—'}</span>` : '—';
 
@@ -561,14 +556,13 @@
             professor: (d) => ({
                 titulo: `Turmas de ${d.professor.materia}`,
                 sub: `${d.professor.nome} · ${d.professor.escola} · semana ${d.semana} · `
-                   + `${d.alunos.length} alunos (ordenados por menor atenção)`,
+                   + `${d.alunos.length} alunos (ordenados por quem estudou menos)`,
                 html: tabela([
                     { rotulo: 'Aluno',   campo: 'nome' },
                     { rotulo: 'Turma',   campo: 'turma' },
-                    { rotulo: 'Status',  campo: 'status', fmt: badge },
-                    { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
-                    { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
+                    { rotulo: 'Ritmo',   campo: 'status', fmt: badge },
                     { rotulo: 'Minutos', campo: 'minutos' },
+                    { rotulo: 'Acerto',  campo: 'taxa_acerto', fmt: pct },
                 ], d.alunos),
             }),
 
@@ -578,10 +572,9 @@
                 html: tabela([
                     { rotulo: 'Turma',   campo: 'turma' },
                     { rotulo: 'Alunos',  campo: 'alunos' },
-                    { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
-                    { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
-                    // soma por matéria: um aluno em risco em 3 matérias conta 3x
-                    { rotulo: 'Casos de risco', campo: 'casos_risco' },
+                    { rotulo: 'Acerto',  campo: 'taxa_acerto', fmt: pct },
+                    // soma por matéria: um aluno abaixo da média em 3 matérias conta 3x
+                    { rotulo: 'Casos abaixo da média', campo: 'casos_abaixo' },
                 ], d.turmas),
             }),
 
@@ -591,9 +584,9 @@
                 html: tabela([
                     { rotulo: 'Aluno',   campo: 'nome' },
                     { rotulo: 'Turma',   campo: 'turma' },
-                    { rotulo: 'Atenção', campo: 'media_atencao', fmt: pct },
-                    { rotulo: 'Acerto',  campo: 'taxa_acerto',   fmt: pct },
+                    { rotulo: 'Ritmo',   campo: 'status', fmt: badge },
                     { rotulo: 'Minutos', campo: 'minutos' },
+                    { rotulo: 'Acerto',  campo: 'taxa_acerto', fmt: pct },
                 ], d.filhos),
             }),
         };
@@ -617,14 +610,14 @@
 
             box.innerHTML =
                 `<div class="graf-linha">
-                    <div class="graf-card"><h4>Distribuição por status</h4><div class="graf-wrap"><canvas id="gf-status"></canvas></div></div>
-                    <div class="graf-card"><h4>Atenção média por turma (%)</h4><div class="graf-wrap"><canvas id="gf-turma"></canvas></div></div>
+                    <div class="graf-card"><h4>Distribuição por ritmo de estudo</h4><div class="graf-wrap"><canvas id="gf-status"></canvas></div></div>
+                    <div class="graf-card"><h4>Acerto médio por turma (%)</h4><div class="graf-wrap"><canvas id="gf-turma"></canvas></div></div>
                  </div>
-                 <div class="graf-card"><h4>Evolução da atenção por semana (%)</h4><div class="graf-wrap"><canvas id="gf-evo"></canvas></div></div>`;
+                 <div class="graf-card"><h4>Evolução do acerto por semana (%)</h4><div class="graf-wrap"><canvas id="gf-evo"></canvas></div></div>`;
 
             gStatus = new Chart($('gf-status'), {
                 type: 'doughnut',
-                data: { labels: ['Bem', 'Atenção', 'Em risco'], datasets: [{
+                data: { labels: [STATUS_ROT.bem, STATUS_ROT.atencao, STATUS_ROT.risco], datasets: [{
                     data: [g.status.bem, g.status.atencao, g.status.risco],
                     backgroundColor: [STATUS_COR.bem, STATUS_COR.atencao, STATUS_COR.risco],
                     borderColor: '#fbf6ec', borderWidth: 2,
@@ -635,8 +628,8 @@
 
             gTurma = new Chart($('gf-turma'), {
                 type: 'bar',
-                data: { labels: g.atencao_turma.map(t => t.turma), datasets: [{
-                    data: g.atencao_turma.map(t => Math.round(t.atencao * 100)),
+                data: { labels: g.acerto_turma.map(t => t.turma), datasets: [{
+                    data: g.acerto_turma.map(t => Math.round(t.acerto * 100)),
                     backgroundColor: '#2d4ba5', borderRadius: 6,
                 }] },
                 options: OPT_BARRA,
@@ -645,7 +638,7 @@
             gEvo = new Chart($('gf-evo'), {
                 type: 'line',
                 data: { labels: g.evolucao.map(e => 'Sem ' + e.semana), datasets: [{
-                    data: g.evolucao.map(e => Math.round(e.atencao * 100)),
+                    data: g.evolucao.map(e => Math.round(e.acerto * 100)),
                     borderColor: '#2d4ba5', backgroundColor: 'rgba(45,75,165,.12)',
                     fill: true, tension: .3, pointRadius: 3,
                 }] },
@@ -694,7 +687,7 @@
         // LGPD pede (cada professor vê a turma dele). Hoje o backend agrega por
         // escola+matéria — quando conectar, isto vira um filtro por turma_id.
         let _turmaAtual = null;
-        let _ordem = { campo: 'media_atencao', dir: 'asc' };   // menor atenção primeiro
+        let _ordem = { campo: 'minutos', dir: 'asc' };   // quem estudou menos primeiro
 
         const turmasDemo = () => {
             const m = new Map();
@@ -704,7 +697,7 @@
 
         const alunosDaTurma = () => ALUNOS_DEMO
             .filter(a => a.turma_id === _turmaAtual)
-            .map(a => ({ ...a, status: statusAtencao(a.media_atencao) }));
+            .map(a => ({ ...a, status: statusRitmo(a.minutos) }));
 
         function renderFiltro() {
             const turmas = turmasDemo();
@@ -722,16 +715,18 @@
         }
 
         // A faixa que responde "quem precisa de mim AGORA" — antes de qualquer
-        // tabela. Sem ninguém em risco, mensagem calma em vez de espaço vazio.
+        // tabela. Quem quase não estudou na semana, por ESFORÇO, não por acerto: um
+        // aluno que erra muito mas aparece todo dia não é o caso urgente aqui.
+        // Sem ninguém na faixa, mensagem calma em vez de espaço vazio.
         function renderRisco(alunos) {
             const risco = alunos.filter(a => a.status === 'risco')
-                                .sort((a, b) => a.media_atencao - b.media_atencao);
+                                .sort((a, b) => a.minutos - b.minutos);
             const box = $('painel-risco');
 
             if (!risco.length) {
                 box.innerHTML =
                     `<div class="risco-vazio">
-                       <strong>Ninguém em risco nesta turma esta semana.</strong>
+                       <strong>Todo mundo desta turma estudou nesta semana.</strong>
                        <span>A lista completa continua abaixo, se quiser olhar de perto.</span>
                      </div>`;
                 return;
@@ -742,8 +737,8 @@
                  <div class="risco-lista">${risco.map(a =>
                    `<button type="button" class="risco-card" data-aluno="${esc(a.aluno_id)}">
                       <span class="risco-nome">${esc(a.nome)}</span>
-                      <span class="risco-num">atenção ${pct(a.media_atencao)}</span>
-                      <span class="risco-motivo">${esc(a.motivo || 'atenção abaixo de 50%')}</span>
+                      <span class="risco-num">${a.minutos} min · ${a.dias} ${a.dias === 1 ? 'dia' : 'dias'} na semana</span>
+                      <span class="risco-motivo">${esc(a.motivo || 'menos de 1 h de estudo na semana')}</span>
                     </button>`).join('')}</div>`;
 
             $$('#painel-risco .risco-card').forEach(b =>
@@ -758,9 +753,9 @@
 
             $('painel-visao').innerHTML =
                 `<div class="cards visao-contagens">
-                   <div class="card visao-bem"><label>Bem</label><div class="v">${cont.bem}</div></div>
-                   <div class="card visao-atencao"><label>Atenção</label><div class="v">${cont.atencao}</div></div>
-                   <div class="card visao-risco"><label>Em risco</label><div class="v">${cont.risco}</div></div>
+                   <div class="card visao-bem"><label>${STATUS_ROT.bem}</label><div class="v">${cont.bem}</div></div>
+                   <div class="card visao-atencao"><label>${STATUS_ROT.atencao}</label><div class="v">${cont.atencao}</div></div>
+                   <div class="card visao-risco"><label>${STATUS_ROT.risco}</label><div class="v">${cont.risco}</div></div>
                  </div>`;
             return cont;
         }
@@ -773,7 +768,7 @@
             gStatusDemo?.destroy();
             gStatusDemo = new Chart($('gf-status-demo'), {
                 type: 'doughnut',
-                data: { labels: ['Bem', 'Atenção', 'Em risco'], datasets: [{
+                data: { labels: [STATUS_ROT.bem, STATUS_ROT.atencao, STATUS_ROT.risco], datasets: [{
                     data: [cont.bem, cont.atencao, cont.risco],
                     backgroundColor: [tok('--acerto-bg'), tok('--alerta-bg'), tok('--erro-bg')],
                     borderColor:     [tok('--acerto-tx'), tok('--alerta-tx'), tok('--erro-tx')],
@@ -795,29 +790,29 @@
             });
         }
 
-        // Célula de atenção: barra + número. A barra é decorativa (aria-hidden) —
+        // Célula de acerto: barra + número. A barra é decorativa (aria-hidden) —
         // quem lê por leitor de tela recebe o número, que está logo ao lado.
-        const celAtencao = (v) =>
-            `<span class="atencao-cel">
-               <span class="mini-barra mini-${statusAtencao(v)}" aria-hidden="true">
+        const celAcerto = (v) =>
+            `<span class="metrica-cel">
+               <span class="mini-barra" aria-hidden="true">
                  <i style="width:${Math.round(v * 100)}%"></i></span>
-               <span class="atencao-num">${pct(v)}</span>
+               <span class="metrica-num">${pct(v)}</span>
              </span>`;
 
         // Tabela própria da visão de professor: a tabela() genérica segue intacta
         // para coordenador e pai, que não têm ordenação, mini-barra nem link.
         const COLS_ALUNO = [
-            { campo: 'nome',          rotulo: 'Aluno' },
-            { campo: 'turma',         rotulo: 'Turma' },
-            { campo: 'status',        rotulo: 'Status' },
-            { campo: 'media_atencao', rotulo: 'Atenção' },
-            { campo: 'taxa_acerto',   rotulo: 'Acerto' },
-            { campo: 'minutos',       rotulo: 'Minutos' },
+            { campo: 'nome',        rotulo: 'Aluno' },
+            { campo: 'turma',       rotulo: 'Turma' },
+            { campo: 'status',      rotulo: 'Ritmo' },
+            { campo: 'minutos',     rotulo: 'Minutos' },
+            { campo: 'dias',        rotulo: 'Dias na semana' },
+            { campo: 'taxa_acerto', rotulo: 'Acerto' },
         ];
 
         function ordenarAlunos(linhas) {
-            // Ordenar por "status" é ordenar pela atenção — o badge é só a faixa dela.
-            const c = _ordem.campo === 'status' ? 'media_atencao' : _ordem.campo;
+            // Ordenar por "ritmo" é ordenar pelos minutos — o badge é só a faixa deles.
+            const c = _ordem.campo === 'status' ? 'minutos' : _ordem.campo;
             const s = [...linhas].sort((a, b) => typeof a[c] === 'string'
                 ? String(a[c]).localeCompare(String(b[c]), 'pt-BR')
                 : a[c] - b[c]);
@@ -840,9 +835,9 @@
                    <td><button type="button" class="aluno-link" data-aluno="${esc(a.aluno_id)}">${esc(a.nome)}</button></td>
                    <td>${esc(a.turma)}</td>
                    <td>${badge(a.status)}</td>
-                   <td>${celAtencao(a.media_atencao)}</td>
-                   <td>${pct(a.taxa_acerto)}</td>
                    <td>${a.minutos}</td>
+                   <td>${a.dias}</td>
+                   <td>${celAcerto(a.taxa_acerto)}</td>
                  </tr>`).join('');
 
             $('painel-tabela').innerHTML =
@@ -858,30 +853,30 @@
         }
 
         // Gráficos da turma, separado de renderGraficos() (payload do backend, coordenador/pai).
-        // Barras POR ALUNO: com uma turma por vez, "atenção por turma" viraria uma barra só.
+        // Barras POR ALUNO: com uma turma por vez, "minutos por turma" viraria uma barra só.
         let gAluno = null, gEvoTurma = null;
         function renderGraficosTurma(alunos, cont) {
             gAluno?.destroy(); gEvoTurma?.destroy();
             $('painel-graficos').innerHTML =
                 `<div class="graf-linha graf-linha-3">
-                   <div class="graf-card"><h4>Distribuição por status</h4>
+                   <div class="graf-card"><h4>Distribuição por ritmo de estudo</h4>
                      <div class="graf-wrap"><canvas id="gf-status-demo"></canvas></div></div>
-                   <div class="graf-card"><h4>Atenção por aluno (%)</h4>
+                   <div class="graf-card"><h4>Minutos estudados por aluno</h4>
                      <div class="graf-wrap"><canvas id="gf-aluno"></canvas></div></div>
-                   <div class="graf-card"><h4>Evolução da turma (%)</h4>
+                   <div class="graf-card"><h4>Acerto médio da turma (%)</h4>
                      <div class="graf-wrap"><canvas id="gf-evo-turma"></canvas></div></div>
                  </div>`;
             desenharRosca(cont);
 
-            const ord = [...alunos].sort((a, b) => a.media_atencao - b.media_atencao);
+            const ord = [...alunos].sort((a, b) => a.minutos - b.minutos);
             gAluno = new Chart($('gf-aluno'), {
                 type: 'bar',
                 data: { labels: ord.map(a => a.nome.split(' ')[0]), datasets: [{
-                    data: ord.map(a => Math.round(a.media_atencao * 100)),
-                    // Barra na cor do status: quem está em risco se destaca sem
-                    // precisar de vermelho de alarme.
-                    backgroundColor: ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : a.status === 'atencao' ? 'alerta' : 'erro'}-bg`)),
-                    borderColor:     ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : a.status === 'atencao' ? 'alerta' : 'erro'}-tx`)),
+                    data: ord.map(a => a.minutos),
+                    // Barra na cor do ritmo: quem estudou pouco se destaca sem
+                    // precisar de vermelho de alarme (alerta, não erro).
+                    backgroundColor: ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : 'alerta'}-bg`)),
+                    borderColor:     ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : 'alerta'}-tx`)),
                     borderWidth: 1, borderRadius: 6,
                 }] },
                 options: EIXOS_LIMPOS,
@@ -892,14 +887,14 @@
             const base = alunos[0]?.serie || [];
             const evo = base.map((p, i) => ({
                 dia: p.dia,
-                atencao: alunos.reduce((s, a) => s + (a.serie[i]?.atencao ?? 0), 0) / alunos.length,
+                acerto: alunos.reduce((s, a) => s + (a.serie[i]?.acerto ?? 0), 0) / alunos.length,
             }));
             const cvE = $('gf-evo-turma');
             gEvoTurma = new Chart(cvE, {
                 type: 'line',
                 data: { labels: evo.map(e => e.dia), datasets: [{
-                    ...LINHA_BASE, label: 'Atenção média',
-                    data: evo.map(e => Math.round(e.atencao * 100)),
+                    ...LINHA_BASE, label: 'Acerto médio',
+                    data: evo.map(e => Math.round(e.acerto * 100)),
                     borderColor: tok('--azul-coati'),
                     pointBorderColor: tok('--azul-coati'),
                     backgroundColor: degrade('--azul-coati-rgb'),
@@ -954,8 +949,9 @@
             mostrarVista('aluno');
             preencherRelatorio({
                 nome: aluno.nome,
-                sub: `${aluno.turma} · semana ${SEMANA_DEMO} · ${aluno.minutos} min estudados`,
-                status: statusAtencao(aluno.media_atencao),
+                sub: `${aluno.turma} · semana ${SEMANA_DEMO} · ${aluno.minutos} min em `
+                   + `${aluno.dias} ${aluno.dias === 1 ? 'dia' : 'dias'}`,
+                status: statusRitmo(aluno.minutos),
                 hobbies: aluno.hobbies || [],
                 resumo: aluno.resumo,
                 serie: aluno.serie,

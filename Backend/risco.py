@@ -116,8 +116,16 @@ def features_do_momento(eventos, inicio_sessao, agora, estudo_dia_min=0.0):
 
 
 def rotulo_futuro(eventos, agora, horizonte=HORIZONTE_QUESTOES):
-    """1 se houver perda de foco a partir de `agora` até a `horizonte`-ésima resposta seguinte
-    (ou o fim da sessão, se ela acabar antes). É o rótulo do treino — nunca vira feature."""
+    """1 = houve perda de foco até a `horizonte`-ésima resposta seguinte; 0 = não houve;
+    None = a sessão acabou antes de completar o horizonte, sem evento.
+
+    O None é CENSURA, no sentido estatístico: a pergunta "vai acontecer nas próximas 3
+    questões?" não tem resposta quando não existem próximas 3. Antes isto devolvia 0, e o
+    efeito era ensinar o modelo de que o fim da sessão é seguro — justamente o momento em
+    que ele é consultado, porque a prevenção age na fronteira entre rodadas. Custo aceito:
+    perdem-se os exemplos do fim de sessão sem evento, e o modelo passa a extrapolar ali em
+    vez de ter visto o contexto. Rotular errado é pior que não rotular.
+    """
     futuros = sorted((e for e in eventos if e[0] >= agora), key=lambda e: e[0])
     respostas = 0
     for _, t, p in futuros:
@@ -127,7 +135,7 @@ def rotulo_futuro(eventos, agora, horizonte=HORIZONTE_QUESTOES):
             respostas += 1
             if respostas >= horizonte:
                 return 0
-    return 0
+    return None
 
 
 # ==== REGRAS DE RESERVA ====

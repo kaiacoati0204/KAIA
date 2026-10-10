@@ -6,19 +6,18 @@
    TOKENS
 ========================= */
 :root {
+  /* =========== HEX ================================================================== */
+
   /* marca */
-  --profundo: #1a2b4c;
-  --azul-coati: #2d4ba5;
-  --bege: #c4a186;
+  --profundo: #1a2b4c;        /* espelhado em --profundo-rgb */
+  --azul-coati: #2d4ba5;      /* espelhado em --azul-coati-rgb */
+  --bege: #c4a186;            /* espelhado em --bege-rgb */
   --creme-bg: #eae0d2;
-  /* RGB base para rgba() com alpha variável (mesma cor de --profundo/--bege) */
-  --profundo-rgb: 26, 43, 76;
-  --bege-rgb: 196, 161, 134;
-  --azul-coati-rgb: 45, 75, 165;
-  --gravata-rgb: 243, 208, 9;
-  --vd-uniao-rgb: 87, 217, 121;
-  --tinta-rgb: 43, 42, 38;     /* espelha --tinta */
-  --card-rgb: 251, 246, 236;   /* espelha --card: superfícies translúcidas SEM branco puro */
+  --gravata-kinrou: #f3d009;  /* espelhado em --gravata-rgb */
+  --vd-uniao: #57d979;        /* espelhado em --vd-uniao-rgb */
+  --vermelho: #e8606b;
+  /* Azul-coati bem diluído: base do fundo claro do login (Fase 3). */
+  --azul-nevoa: #dfe6f5;
 
   /* BEGE derivado: o --bege puro dá ~2:1 sobre o --card e reprova em AA como
      texto — use estes no lugar dele em texto. --bege-tinta: texto (5,4:1);
@@ -26,28 +25,18 @@
      preenchimento suave. Os temas 3 e 4 sobrescrevem tinta e forte. */
   --bege-tinta: #7d5f45;
   --bege-forte: #b08a68;
-  --bege-linha: rgba(var(--bege-rgb), 0.55);
-  --bege-veu:   rgba(var(--bege-rgb), 0.14);
-  /* Azul-coati bem diluído: base do fundo claro do login (Fase 3). */
-  --azul-nevoa: #dfe6f5;
-  /* largura da barra lateral (rail): colapsada e aberta */
-  --rail-col: 60px;
-  --rail-col-aberta: 180px;
-  /* --- COLUNA DE ESTUDO (responsividade em telas largas) -------------------
-     Teto de largura: sem ele a pergunta passava de 145 caracteres por linha
-     (confortável é 45–75). 1100px é a largura que a coluna já tinha em 1280
-     (60 rail + 60 + 1100 + 60), então do notebook para baixo nada muda. */
-  --col-estudo: 1100px;
-  /* Largura da rail AGORA. As medidas derivadas (--estudo-*) moram no body. */
-  --rail-atual: var(--rail-col);
+  /* (--bege-linha e --bege-veu são rgba — ficam no bloco DERIVADOS abaixo.) */
+
   /* Fundo marfim (acessibilidade TEA/TDAH): off-white no lugar do bege escuro.
      Regra fixa do projeto: nunca #fff/#000 puros — off-white e quase-preto. */
   --marfim: #f4ecdd;   /* fundo das páginas */
-  --tinta: #2b2a26;    /* texto corrido — quase-preto, nunca #000 */
-  --gravata-kinrou: #f3d009;
+  --tinta: #2b2a26;    /* texto corrido — quase-preto, nunca #000; espelhado em --tinta-rgb */
   --prox-br: #e6e1da;
-  --vd-uniao: #57d979;
-  --vermelho: #e8606b;
+  /* Escurecido de #8b8b8b (Fase 4): dava 3.16:1 sobre o marfim e reprovava em
+     texto secundário pequeno (13px e 10px). Agora 5.5:1; secundário pelo
+     tamanho/peso, não por estar apagado. */
+  --muted: #635e56;
+
   /* Status SUAVE (fundo claro + texto escuro da mesma família) — usados no
      feedback do quiz e, depois, nas etiquetas de status. Verde DEDICADO. */
   --acerto-bg: #e4efe3;
@@ -61,17 +50,45 @@
   --alerta-tx: #7a5f14;
 
   /* superfícies (dashboard e cards) */
-  --card: #fbf6ec;   /* marfim mais claro — nunca branco puro */
+  --card: #fbf6ec;   /* marfim mais claro — nunca branco puro; espelhado em --card-rgb */
   --surface: #f6f2ec;
-  --border: rgba(var(--profundo-rgb), 0.08);
   --sep: #f0ebe3;
-  /* Escurecido de #8b8b8b (Fase 4): dava 3.16:1 sobre o marfim e reprovava em
-     texto secundário pequeno (13px e 10px). Agora 5.5:1; secundário pelo
-     tamanho/peso, não por estar apagado. */
-  --muted: #635e56;
+  /* (--border é rgba — fica no bloco DERIVADOS abaixo.) */
+
+  /* ===== RGB — Mesma q o HEX =============================== */
+  --profundo-rgb: 26, 43, 76;      /* espelha --profundo */
+  --bege-rgb: 196, 161, 134;       /* espelha --bege */
+  --azul-coati-rgb: 45, 75, 165;   /* espelha --azul-coati */
+  --gravata-rgb: 243, 208, 9;      /* espelha --gravata-kinrou (o nome foge da família) */
+  --vd-uniao-rgb: 87, 217, 121;    /* espelha --vd-uniao */
+  --tinta-rgb: 43, 42, 38;         /* espelha --tinta */
+  --card-rgb: 251, 246, 236;       /* espelha --card: superfícies translúcidas SEM branco puro */
+
+  /* ======================================================================
+     DERIVADOS — montados a partir dos de cima (rgba ou var). Não têm hex
+     próprio para copiar: o valor sai do token que eles referenciam.
+     ====================================================================== */
+  /* Do bloco BEGE derivado (a explicação e as medições estão lá, nos hex). */
+  --bege-linha: rgba(var(--bege-rgb), 0.55);
+  --bege-veu:   rgba(var(--bege-rgb), 0.14);
+  /* Do bloco superfícies (ver lá em cima). */
+  --border: rgba(var(--profundo-rgb), 0.08);
+  /* Largura da rail AGORA. As medidas derivadas (--estudo-*) moram no body. */
+  --rail-atual: var(--rail-col);
+
+  /* ======================================================================
+     MEDIDAS — o que não é cor.
+     ====================================================================== */
+  /* largura da barra lateral (rail): colapsada e aberta */
+  --rail-col: 60px;
+  --rail-col-aberta: 180px;
+  /* --- COLUNA DE ESTUDO (responsividade em telas largas) -------------------
+     Teto de largura: sem ele a pergunta passava de 145 caracteres por linha
+     (confortável é 45–75). 1100px é a largura que a coluna já tinha em 1280
+     (60 rail + 60 + 1100 + 60), então do notebook para baixo nada muda. */
+  --col-estudo: 1100px;
   --raio: 12px;
 }
-
 /* =========================
    ESCALA DE CAMADAS (z-index)
 ========================= */

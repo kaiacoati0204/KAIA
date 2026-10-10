@@ -244,15 +244,23 @@ html {
   background: rgba(var(--gravata-rgb), 0.16);
   filter: blur(30px);
 }
+/* Título da caixa. Era 5rem porque o h1 ERA o logotipo em texto ("Ka<span>IA</span>");
+   hoje a marca é uma <img> fora do h1 e isto aqui é o título da tela, que a 5rem
+   estourava a caixa de 400px. O clamp vem do antigo #cad-responsavel h1, onde já
+   estava medido e provado com "Falta a autorização". */
 .caixa-login h1,
 .caixa-hobbies h1 {
-  font-size: 5rem;
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  line-height: 1.15;
   text-align: center;
   color: var(--profundo);
+  overflow-wrap: break-word;   /* rede de segurança em tela muito estreita */
 }
-/* O "IA" era dourado; sobre o vidro claro isso dá 1.3:1 — ilegível mesmo em
-   5rem (texto grande ainda exige 3:1). Vai de --azul-coati: mantém o contraste
-   de duas cores da marca no logotipo, agora com 6.7:1. */
+/* ÓRFÃ DE PROPÓSITO: nenhum h1 destas caixas tem mais <span> (a marca virou imagem).
+   Fica como REGISTRO da medição — é o motivo de o letreiro Multicor, cujo ouro dá
+   1,38–1,60:1 nos quatro temas, ter sido rejeitado. Apagar aqui perde o porquê.
+   O "IA" era dourado; sobre o vidro claro isso dava 1,3:1 — ilegível mesmo em 5rem
+   (texto grande ainda exige 3:1). Virou --azul-coati, com 6,7:1. */
 .caixa-login h1 span,
 .caixa-hobbies h1 span {
   color: var(--azul-coati);
@@ -5892,12 +5900,23 @@ body.mc-page .railnav {
 }
 
 /* Os três pontinhos pulam em sequência (atraso de 0,2s entre eles). */
+/* Pontos DESENHADOS, nao o caractere ".": o ponto final da Plus Jakarta Sans e
+   quadrado, e a 19rem isso vira um bloco. Em em para acompanharem o tamanho do
+   "404"; currentColor para seguirem a cor dele nos 4 temas. */
 .pt {
   display: inline-block;
+  width: .13em;
+  height: .13em;
+  margin-left: .07em;
+  border-radius: 50%;
+  background: currentColor;
   animation: pula 1.5s cubic-bezier(.33, 0, .3, 1) infinite;
 }
-.pt:nth-of-type(2) { animation-delay: .2s; }
-.pt:nth-of-type(3) { animation-delay: .4s; }
+/* Irmao adjacente, nao :nth-of-type: o <span class="e404-leitor"> vem antes dos
+   pontos e entrava na contagem de spans, jogando os atrasos nos pontos errados
+   (a onda corria 3o, 1o, 2o). Assim a conta e so entre os .pt. */
+.pt + .pt { animation-delay: .2s; }
+.pt + .pt + .pt { animation-delay: .4s; }
 @keyframes pula {
   0%, 55%, 100% { transform: translateY(0); }
   28%           { transform: translateY(-.16em); }
@@ -6011,15 +6030,4 @@ body.mc-page .railnav {
   width: min(320px, 70%);
   height: auto;
   margin-inline: auto;
-}
-
-/* O 5rem de .caixa-login h1 foi feito para o LOGOTIPO em texto, e continua lá como
-   fallback do alt="KaIA" se o PNG do letreiro não carregar. Este h1 é o único TEXTO
-   que ainda herda a regra, e a 5rem "autorização" estourava a caixa de 400px e saía
-   cortada. Tamanho próprio, mirado pelo id (vence .caixa-login h1 na especificidade
-   sem precisar mexer nela). */
-#cad-responsavel h1 {
-  font-size: clamp(1.6rem, 4vw, 2.1rem);
-  line-height: 1.15;
-  overflow-wrap: break-word;   /* rede de segurança em tela muito estreita */
 }

@@ -48,7 +48,11 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
     <!-- ===================== HEADER DA LANDING ===================== -->
     <header class="lp-header">
         <div class="lp-header-inner">
-            <a href="index.html" class="lp-logo" aria-label="KaIA — página inicial">Ka<span>IA</span></a>
+            <!-- alt="" VAZIO de propósito: o <a> já carrega o aria-label. Com alt
+                 preenchido o leitor de tela anunciaria a marca duas vezes. -->
+            <a href="index.html" class="lp-logo" aria-label="KaIA — página inicial"><img
+                src="../assets/KaIA_Letreiro_Profundo.png" alt="" class="lp-logo-img"
+                width="540" height="319"></a>
             <a href="login.html" class="lp-btn lp-btn-ghost lp-btn-entrar">Entrar</a>
         </div>
     </header>

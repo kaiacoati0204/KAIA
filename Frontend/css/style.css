@@ -4470,9 +4470,35 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
   letter-spacing: -0.01em;
   text-decoration: none;
 }
-/* O "IA" em azul-coati é a leitura da marca: Ka(iá) + IA. */
+/* O "IA" em azul-coati é a leitura da marca: Ka(iá) + IA. Vale para o rodapé,
+   que ainda é texto; o header virou imagem (.lp-logo-img). */
 .lp-logo span { color: var(--azul-coati); }
 .lp-logo-peq { font-size: 1.15rem; }
+
+/* Letreiro do header (PNG 540x319).
+   ALTURA 46px: passa dos 38px do botão "Entrar", então o header cresce de 66
+   para 74px. Decisão consciente — a 38px o letreiro virava mancha.
+
+   AJUSTE ÓTICO, medido no canal alfa, não chutado. Dois centros possíveis:
+     extremos da tinta (y 3..303)  -> centro 153,0  -> corrige 1,88%
+     centro de MASSA (alfa)        -> centro 145,3  -> corrige 4,31%
+   Vale o de massa. A cauda do coati desce abaixo das letras, mas é FINA: os
+   11px finais carregam 1% da tinta. Ela estica a caixa para baixo sem somar
+   peso, então a correção pelos extremos fica curta e o bloco das letras ainda
+   lê alto. Em % porque o translateY lê a altura do próprio elemento. */
+.lp-logo-img {
+  display: block;
+  height: 46px;
+  width: auto;
+  transform: translateY(4.31%);
+}
+
+/* DÍVIDA — a logo parou de seguir o tema. Em texto, o .lp-logo era
+   color: var(--profundo), que vira #1a2340 no tema 3 e #1f1d18 no tema 4, e
+   casava com o "Entrar" ao lado. O PNG tem #1a2b4c assado dentro e não muda:
+   no tema 4 a logo fica azul-marinho ao lado de um "Entrar" quase-preto.
+   Some junto o "IA" em azul-coati (a leitura Ka-iá + IA).
+   A saída é um SVG com fill: currentColor — aí volta a herdar o token. */
 
 /* ---- Botões --------------------------------------------------------------
    Três pesos: primário (dourado, a ação principal), secundário (contorno) e

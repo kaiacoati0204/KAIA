@@ -254,8 +254,11 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
             </div>
 
             <!-- Fora do zigue-zague de proposito: sao fechamentos de argumento, sem
-                 visual proprio. Seguem na coluna central, na ordem em que estavam. -->
-            <div class="quiz-container">
+                 visual proprio. Contentor PROPRIO (.zz-fecho) e nao .quiz-container:
+                 aquele e o #quiz-view da materias.html, com teto de --col-estudo.
+                 Aqui o teto tem de ser o mesmo 1440px das fileiras, para os tres
+                 alinharem com a grade do zigue-zague logo acima. -->
+            <div class="zz-fecho">
                 <article class="question-wrapper">
                     <h3>Ao final de cada sessão, um relatório</h3>
                     <p>

@@ -4914,6 +4914,20 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
    no zigue-zague ela ficou solta e o tracejado virou risco órfão. */
 .lp-page .coati-imagem { border-left: 0; border-top: 0; }
 
+/* O cabeçalho "Conheça a KaIA" na MESMA grade do zigue-zague. A regra base
+   (.app-wrapper .content-header) o prende em 860px, e com isso ele começava
+   290px à direita das fileiras em 2560 — título que não nasce na vertical do
+   conteúdo que encabeça. 1440px + o mesmo padding-inline da .zz-fileira fazem
+   as duas bordas coincidirem.
+   O text-align vira EXPLÍCITO porque quem centralizava era o `margin: auto`
+   dos 860px: com teto maior que o texto, o auto não centraliza mais nada.
+   Escopado em .lp-page — materias.html e meu-coati.html seguem com os 860. */
+.lp-page .content-header {
+  max-width: 1440px;
+  padding-inline: clamp(20px, 4vw, 48px);
+  text-align: center;
+}
+
 /* Polegar da rolagem discreto só na landing (amarelo vira traço de ponta a
    ponta no fundo liso); não some, é a pista de quanto falta. `html:has(...)`
    porque a barra do documento lê os pseudo-elementos do <html>. */

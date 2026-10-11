@@ -2774,7 +2774,7 @@ body.textura-papel .conteudo {
   color: color-mix(in srgb, var(--tinta) 60%, transparent);
 }
 
-/* ---- convite para avaliar (card no fim do perfil) ---- */
+/* ---- convite para avaliar (card do perfil) ---- */
 /* Card de UMA ação: texto à esquerda, botão à direita. Em tela estreita empilha e o
    botão ocupa a largura toda, que é o alvo de toque confortável. */
 .secao-avaliar {

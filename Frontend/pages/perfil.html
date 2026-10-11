@@ -89,6 +89,18 @@
                     Nenhuma sessão registrada ainda. Comece uma missão em Matérias para ver seus sinais.
                 </p>
             </div>
+            <!-- Convite para avaliar. O formulário vive em avaliacao.html e não aqui:
+                 embutido, ele dobrava a altura do perfil e empurrava a análise para longe.
+                 Logo depois da última sessão: no fim da página ninguém rolava até ele, e
+                 aqui o aluno acabou de ver os próprios sinais — tem o que dizer. -->
+            <div class="secao-perfil secao-avaliar">
+                <div class="avaliar-texto">
+                    <h2>Como está sendo a KaIA?</h2>
+                    <p class="secao-sub">Sua experiência ajuda a gente a melhorar de verdade.
+                        Leva 2 minutinhos 💙</p>
+                </div>
+                <a href="avaliacao.html" class="btn-avaliar">Contar como foi 💛</a>
+            </div>
 
             <div class="secao-perfil">
                 <h2>Configurações</h2>
@@ -137,14 +149,9 @@
                 </div>
             </div>
 
-            <!-- Convite para avaliar. O formulário vive em avaliacao.html e não aqui:
-                 embutido, ele dobrava a altura do perfil e empurrava a análise para longe.
-                 Fica no fim de propósito — quem chega até aqui já viu o próprio
-                 desempenho e tem o que dizer. -->
             <!-- Minha assinatura: montada por perfil.js a partir do GET /assinatura.
                  Nasce [hidden] — sem resposta do backend, nada é afirmado sobre a conta
-                 do aluno. Fica ANTES do convite de avaliar porque é informação da conta,
-                 não um pedido nosso. -->
+                 do aluno. -->
             <div class="secao-perfil" id="secaoAssinatura" hidden>
                 <h2>Minha assinatura</h2>
                 <div class="assinatura-estado">
@@ -155,15 +162,6 @@
                     </div>
                     <a href="index.html#planos" class="btn-assinatura" id="assinaturaLink">Ver planos</a>
                 </div>
-            </div>
-
-            <div class="secao-perfil secao-avaliar">
-                <div class="avaliar-texto">
-                    <h2>Como está sendo a KaIA?</h2>
-                    <p class="secao-sub">Sua experiência ajuda a gente a melhorar de verdade.
-                        Leva 2 minutinhos 💙</p>
-                </div>
-                <a href="avaliacao.html" class="btn-avaliar">Contar como foi 💛</a>
             </div>
 
         </section>

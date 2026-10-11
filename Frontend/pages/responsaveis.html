@@ -299,7 +299,10 @@
             return g;
         };
 
-        const LINHA_BASE = {
+        // FUNÇÃO, não const — vale para todas as opções de gráfico daqui para baixo:
+        // o tok() só devolve a cor do tema depois que o comum.js põe o data-luz no
+        // <html> (no DOMContentLoaded). Um objeto montado no parse congela o tema 1.
+        const linhaBase = () => ({
             borderWidth: 2.5,
             tension: .35,
             pointRadius: 3,
@@ -307,11 +310,11 @@
             pointBorderWidth: 2,
             pointBackgroundColor: tok('--card'),   // miolo claro: o ponto "recorta" a linha
             fill: true,
-        };
+        });
 
         // Eixos limpos: sem grade vertical (ela cortava as linhas sem informar
         // nada), sem moldura, e tooltip encostada no ponto.
-        const EIXOS_LIMPOS = {
+        const eixosLimpos = () => ({
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
@@ -329,14 +332,12 @@
                      ticks: { color: tok('--tinta'), font: { size: 11 }, maxTicksLimit: 6 },
                      beginAtZero: true },
             },
-        };
+        });
 
         let gAcertos = null, gFoco = null, gHobbies = null;
 
         // Eixos claros: os gráficos desta página vivem sobre cards brancos.
-        // FUNCAO, nao const: os tokens so tem o valor do tema depois que o comum.js
-        // poe o data-luz no <html> (no DOMContentLoaded). Um objeto montado no parse
-        // congelaria as cores do tema 1. Chamado na hora de criar o grafico.
+        // Função pelo mesmo motivo das de cima: chamada na hora de criar o gráfico.
         const eixos = () => ({
             responsive: true,
             plugins: { legend: { display: false } },
@@ -406,19 +407,21 @@
             if (!tem) return;
 
             const cv = $('g-evolucao');
+            // Uma chamada só por gráfico: o espalhamento abaixo reusa o mesmo objeto.
+            const base = linhaBase(), eixo = eixosLimpos();
             gEvolucao = new Chart(cv, {
                 type: 'line',
                 data: {
                     labels: serie.map(s => s.dia),
                     datasets: [
-                        { ...LINHA_BASE, label: 'Atenção',
+                        { ...base, label: 'Atenção',
                           data: serie.map(s => Math.round(s.atencao * 100)),
                           borderColor: tok('--azul-coati'),
                           pointBorderColor: tok('--azul-coati'),
                           backgroundColor: degrade('--azul-coati-rgb') },
                         // Tracejada e sem preenchimento: separa as duas linhas sem
                         // depender só da cor, e deixa a de atenção como protagonista.
-                        { ...LINHA_BASE, label: 'Acerto',
+                        { ...base, label: 'Acerto',
                           data: serie.map(s => Math.round(s.acerto * 100)),
                           borderColor: tok('--acerto-tx'),
                           pointBorderColor: tok('--acerto-tx'),
@@ -426,16 +429,16 @@
                     ],
                 },
                 options: {
-                    ...EIXOS_LIMPOS,
+                    ...eixo,
                     plugins: {
-                        ...EIXOS_LIMPOS.plugins,
+                        ...eixo.plugins,
                         legend: { display: true, position: 'bottom', align: 'center',
                                   labels: { color: tok('--profundo'), usePointStyle: true,
                                             pointStyle: 'line', boxWidth: 26, padding: 18,
                                             font: { size: 12, weight: '700' } } },
                     },
-                    scales: { ...EIXOS_LIMPOS.scales,
-                              y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } },
+                    scales: { ...eixo.scales,
+                              y: { ...eixo.scales.y, suggestedMax: 100 } },
                 },
             });
         }
@@ -491,12 +494,12 @@
             gAcertos = new Chart(cvA, {
                 type: 'line',
                 data: { labels, datasets: [{
-                    ...LINHA_BASE, label: 'Acertos', data: acertos,
+                    ...linhaBase(), label: 'Acertos', data: acertos,
                     borderColor: tok('--acerto-tx'),
                     pointBorderColor: tok('--acerto-tx'),
                     backgroundColor: degrade('--vd-uniao-rgb', .35),
                 }] },
-                options: EIXOS_LIMPOS,
+                options: eixosLimpos(),
             });
 
             gFoco?.destroy();
@@ -509,7 +512,7 @@
                     backgroundColor: tok('--erro-bg'),
                     borderColor: tok('--erro-tx'), borderWidth: 1, borderRadius: 6,
                 }] },
-                options: EIXOS_LIMPOS,
+                options: eixosLimpos(),
             });
         }
 
@@ -556,7 +559,12 @@
 
         // Status por aluno (mesmos cortes/cores do backend: <50 risco, 50-70 atenção, ≥70 bem)
         const STATUS_ROT = { bem: 'Bem', atencao: 'Atenção', risco: 'Em risco' };
-        const STATUS_COR = { bem: '#2f5d3a', atencao: '#8a6d1e', risco: '#8a3b3b' };
+        // Lê os tokens em vez de repetir o hex: o âmbar daqui era #8a6d1e, o valor
+        // de ANTES da Fase 4 — o --alerta-tx já tinha escurecido para #7a5f14 e esta
+        // cópia ficou para trás. Função, como as opções de gráfico acima.
+        const statusCor = () => ({
+            bem: tok('--acerto-tx'), atencao: tok('--alerta-tx'), risco: tok('--erro-tx'),
+        });
         const badge = (s) => s ? `<span class="status-badge status-${s}">${STATUS_ROT[s] || '—'}</span>` : '—';
 
         // Uma tabela simples a partir de [{rotulo, campo, fmt}] + as linhas.
@@ -613,14 +621,16 @@
         // Gráficos do painel (rosca de status + barras por turma + evolução).
         // Só professor/coordenador têm `graficos`; para pai, g é undefined e limpa.
         let gStatus = null, gTurma = null, gEvo = null;
-        const OPT_BARRA = {
+        // Era hex cravado (#1a2b4c e rgba(26,43,76,.08)): o mesmo valor do --profundo
+        // no tema 1, mas escrito à mão, então nunca acompanhou os temas 3 e 4.
+        const optBarra = () => ({
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' } },
-                y: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' }, beginAtZero: true, suggestedMax: 100 },
+                x: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` }, ticks: { color: tok('--profundo') } },
+                y: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` }, ticks: { color: tok('--profundo') }, beginAtZero: true, suggestedMax: 100 },
             },
-        };
+        });
 
         function renderGraficos(g) {
             const box = $('painel-graficos');
@@ -634,12 +644,13 @@
                  </div>
                  <div class="graf-card"><h4>Evolução da atenção por semana (%)</h4><div class="graf-wrap"><canvas id="gf-evo"></canvas></div></div>`;
 
+            const sc = statusCor();
             gStatus = new Chart($('gf-status'), {
                 type: 'doughnut',
                 data: { labels: ['Bem', 'Atenção', 'Em risco'], datasets: [{
                     data: [g.status.bem, g.status.atencao, g.status.risco],
-                    backgroundColor: [STATUS_COR.bem, STATUS_COR.atencao, STATUS_COR.risco],
-                    borderColor: '#fbf6ec', borderWidth: 2,
+                    backgroundColor: [sc.bem, sc.atencao, sc.risco],
+                    borderColor: tok('--card'), borderWidth: 2,
                 }] },
                 options: { responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { position: 'bottom', labels: { color: '#1a2b4c' } } } },
@@ -651,7 +662,7 @@
                     data: g.atencao_turma.map(t => Math.round(t.atencao * 100)),
                     backgroundColor: '#2d4ba5', borderRadius: 6,
                 }] },
-                options: OPT_BARRA,
+                options: optBarra(),
             });
 
             gEvo = new Chart($('gf-evo'), {
@@ -661,7 +672,7 @@
                     borderColor: '#2d4ba5', backgroundColor: 'rgba(45,75,165,.12)',
                     fill: true, tension: .3, pointRadius: 3,
                 }] },
-                options: OPT_BARRA,
+                options: optBarra(),
             });
         }
 
@@ -915,7 +926,7 @@
                     borderColor:     ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : a.status === 'atencao' ? 'alerta' : 'erro'}-tx`)),
                     borderWidth: 1, borderRadius: 6,
                 }] },
-                options: EIXOS_LIMPOS,
+                options: eixosLimpos(),
             });
 
             // Média da turma ponto a ponto — derivada das séries, sem campo extra
@@ -926,18 +937,19 @@
                 atencao: alunos.reduce((s, a) => s + (a.serie[i]?.atencao ?? 0), 0) / alunos.length,
             }));
             const cvE = $('gf-evo-turma');
+            const eixoT = eixosLimpos();
             gEvoTurma = new Chart(cvE, {
                 type: 'line',
                 data: { labels: evo.map(e => e.dia), datasets: [{
-                    ...LINHA_BASE, label: 'Atenção média',
+                    ...linhaBase(), label: 'Atenção média',
                     data: evo.map(e => Math.round(e.atencao * 100)),
                     borderColor: tok('--azul-coati'),
                     pointBorderColor: tok('--azul-coati'),
                     backgroundColor: degrade('--azul-coati-rgb'),
                 }] },
-                options: { ...EIXOS_LIMPOS,
-                           scales: { ...EIXOS_LIMPOS.scales,
-                                     y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } } },
+                options: { ...eixoT,
+                           scales: { ...eixoT.scales,
+                                     y: { ...eixoT.scales.y, suggestedMax: 100 } } },
             });
         }
 

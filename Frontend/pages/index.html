@@ -22,8 +22,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../css/style.css">
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" integrity="sha384-WgXwGL6fUsYJWNaKJgVbrJKGRQwc1vieh2oy4kw9nXqpNDz3tdSsqEYUgeHD/NuF" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="../config.js"></script>
+    <!-- TEMA ANTES DA PINTURA. Inline e no topo de propósito: os três scripts
+         abaixo são defer, então o navegador pinta antes de eles rodarem. Sem esta
+         linha quem usa tema 2/3/4 via a landing no tema 1 e ela virava de cor —
+         medido: 24 ms em rede boa, 2,9 s com o CDN do supabase lento.
+         O comum.js reaplica o mesmo valor no DOMContentLoaded (aplicarLuzFundo);
+         não brigam, ele só grava de novo o que já está aqui. Valor inválido ou
+         ausente não escreve nada: o tema 1 é o :root puro, sem [data-luz].
+         A faixa 1-4 espelha o LUZ_MAX do comum.js — mudou a escala lá, mude aqui. -->
+    <script>try{var n=parseInt(localStorage.getItem('kaia_luz_fundo'),10);
+if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" integrity="sha384-WgXwGL6fUsYJWNaKJgVbrJKGRQwc1vieh2oy4kw9nXqpNDz3tdSsqEYUgeHD/NuF" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script defer src="../config.js"></script>
     <!-- SEM guarda de rota: esta página é a LANDING PÚBLICA. Quem chega aqui
          ainda não tem conta — mandar para o login seria fechar a porta da rua.
          A home de quem JÁ está logado é materias.html (ver login.js/hobbies.js). -->
@@ -328,8 +339,11 @@
     </footer>
 
     <!-- Só comum.js: textura vem do init compartilhado. Sem data-rail no body, o
-         montarRail() é no-op — o mesmo caminho já usado por login/cadastro. -->
-    <script src="../js/comum.js"></script>
+         montarRail() é no-op — o mesmo caminho já usado por login/cadastro.
+         defer para acompanhar os dois do <head>: entre scripts defer a ordem do
+         documento é garantida, então a corrente supabase → config → comum segue
+         valendo, e os três baixam em paralelo com o parse. -->
+    <script defer src="../js/comum.js"></script>
 </body>
 
 </html>

@@ -140,76 +140,130 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
                 <p>O refúgio inteligente contra a dispersão digital no Ensino Médio.</p>
             </header>
 
-            <div class="quiz-container">
+            <!-- ZIGUE-ZAGUE: fileiras alternadas, texto de um lado e visual do outro.
+                 Era uma coluna estreita de texto corrido encostada à esquerda — em tela
+                 larga sobrava metade da tela e parecia erro de layout. Os visuais das tres
+                 primeiras sao ABSTRATOS (bloco e barra em CSS), nunca captura de tela:
+                 desenhar uma tela que o produto nao tem seria prometer o que nao existe. -->
+            <div class="zz">
 
-                <!-- ===================== O QUE É ===================== -->
-                <article class="question-wrapper">
-                    <h2>O que é a KaIA?</h2>
-                    <p>
-                        A KaIA é uma <strong>plataforma de estudos online</strong> feita para alunos do Ensino Médio que estão se preparando para o <strong>ENEM</strong>, a <strong>FUVEST</strong> ou a <strong>UNICAMP</strong>.
-                    </p>
-                    <p>
-                        A ideia central é simples: em vez de abrir um livro ou assistir a uma videoaula genérica, o aluno entra na plataforma, escolhe o tema que quer estudar — Matemática, Biologia, Redação, qualquer coisa — e a inteligência artificial <strong>gera questões sob medida para ele, na hora</strong>, com gabarito e explicação inclusos.
-                    </p>
-                    <p>
-                        Não é um banco de questões prontas: cada pergunta é criada do zero pelo sistema, usando o <strong>Google Gemini</strong> — o mesmo modelo de IA do Google que responde perguntas no seu celular.
-                    </p>
-                </article>
+                <!-- ===================== 1. O QUE É ===================== -->
+                <div class="zz-fileira">
+                    <div class="zz-texto">
+                        <h3>O que é a KaIA?</h3>
+                        <p>
+                            A KaIA é uma <strong>plataforma de estudos online</strong> feita para alunos do Ensino Médio que estão se preparando para o <strong>ENEM</strong>, a <strong>FUVEST</strong> ou a <strong>UNICAMP</strong>.
+                        </p>
+                        <p>
+                            A ideia central é simples: em vez de abrir um livro ou assistir a uma videoaula genérica, o aluno entra na plataforma, escolhe o tema que quer estudar — Matemática, Biologia, Redação, qualquer coisa — e a inteligência artificial <strong>gera questões sob medida para ele, na hora</strong>, com gabarito e explicação inclusos.
+                        </p>
+                        <p>
+                            Não é um banco de questões prontas: cada pergunta é criada do zero pelo sistema, usando o <strong>Google Gemini</strong> — o mesmo modelo de IA do Google que responde perguntas no seu celular.
+                        </p>
+                    </div>
+                    <div class="zz-visual" aria-hidden="true">
+                        <div class="zz-moldura">
+                            <div class="zz-pontos"><span></span><span></span><span></span></div>
+                            <div class="zz-corpo">
+                                <div class="zz-linha zz-linha--t"></div>
+                                <div class="zz-linha zz-linha--c"></div>
+                                <div class="zz-alt"></div>
+                                <div class="zz-alt zz-alt--on"></div>
+                                <div class="zz-alt"></div>
+                                <div class="zz-alt"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- ===================== A IA QUE OBSERVA =====================
+                <!-- ===================== 2. A IA QUE ACOMPANHA =====================
                      LINGUAGEM: nao dizer que a KaIA "detecta distracao" ou "percebe quando voce
                      se perde". Detectar mente vagando foi ABANDONADO em 15/09/2026 (sem camera o
                      teto publicado e kappa ~0,21) e o CLAUDE.md proibe linguagem de diagnostico.
                      Os sinais listados abaixo tem de ser os gatilhos REAIS — ver app.py, secao
                      "QUEM PODE DISPARAR": medicao (fora da aba >= 30s), regra DTS e ociosidade.
                      Mouse parado e scroll rapido NAO disparam nada; so alimentam features. -->
-                <article class="question-wrapper">
-                    <h2>A parte mais inovadora: apoio no momento certo, sem vigiar você</h2>
-                    <p>
-                        Enquanto o aluno estuda, a KaIA <strong>acompanha o que acontece na própria tela</strong> — não por câmera, sem nada invasivo. Ela não tenta adivinhar o que você está pensando: age sobre o que dá para medir.
-                    </p>
-
-                    <ul class="lista-planejamento">
-                        <li><strong>Saiu da aba e ficou mais de meio minuto fora?</strong> O estudo parou — isso o navegador registra, não é palpite.</li>
-                        <li><strong>A questão ficou aberta e parada muito além do seu ritmo?</strong> A régua é a sua, não a de outro aluno.</li>
-                        <li><strong>O acerto caiu e o tempo saiu do normal ao mesmo tempo?</strong> Os dois juntos dizem mais do que cada um sozinho.</li>
-                    </ul>
-
-                    <p>
-                        Quando isso acontece, a plataforma oferece <strong>um apoio curto</strong>: retomar de onde parou, uma pausa guiada ou uma mudança no tipo de questão. E quando você está indo bem, ela não interrompe.
-                    </p>
-
-                    <div class="coati-container">
-                        <div class="coati-texto">
-                            <h3>O Coati e a nossa Filosofia</h3>
-                            <p>
-                                O nome <strong>KaIA</strong> une a nossa proposta tecnológica à nossa identidade brasileira: o nome vem do tupi <strong>"kaiá"</strong> que vem da língua Tupi e significa lugar de refúgio, enquanto a terminação <strong>"IA"</strong> vem da Inteligência Artificial que calibra o sistema, e a sonoridade homenageia o nosso mascote, o <strong>Coati</strong> (também grafado como Quati) — um animal curioso, ágil e típico da nossa fauna.
-                            </p>
-                            <p>
-                                Diferente de plataformas com mascotes barulhentos e notificações persistentes, o nosso Coati representa a <strong>curiosidade silenciosa</strong> e o <strong>foco direcionado</strong>. Quando o foco é mantido, ele prospera; quando há dispersão, ele convida sutilmente o aluno a voltar.
-                            </p>
+                <div class="zz-fileira">
+                    <div class="zz-texto">
+                        <h3>A parte mais inovadora: apoio no momento certo, sem vigiar você</h3>
+                        <p>
+                            Enquanto o aluno estuda, a KaIA <strong>acompanha o que acontece na própria tela</strong> — não por câmera, sem nada invasivo. Ela não tenta adivinhar o que você está pensando: age sobre o que dá para medir.
+                        </p>
+                        <ul class="lista-planejamento">
+                            <li><strong>Saiu da aba e ficou mais de meio minuto fora?</strong> O estudo parou — isso o navegador registra, não é palpite.</li>
+                            <li><strong>A questão ficou aberta e parada muito além do seu ritmo?</strong> A régua é a sua, não a de outro aluno.</li>
+                            <li><strong>O acerto caiu e o tempo saiu do normal ao mesmo tempo?</strong> Os dois juntos dizem mais do que cada um sozinho.</li>
+                        </ul>
+                    </div>
+                    <div class="zz-visual" aria-hidden="true">
+                        <div class="zz-painel">
+                            <ul class="zz-sinais">
+                                <li><span class="zz-marca"></span><span class="zz-tra zz-tra--a"></span></li>
+                                <li><span class="zz-marca"></span><span class="zz-tra zz-tra--b"></span></li>
+                                <li><span class="zz-marca"></span><span class="zz-tra zz-tra--c"></span></li>
+                            </ul>
+                            <div class="zz-barras">
+                                <span class="zz-b1"></span><span class="zz-b2"></span><span class="zz-b3"></span>
+                                <span class="zz-b4"></span><span class="zz-b5"></span><span class="zz-b6"></span>
+                            </div>
                         </div>
+                    </div>
+                </div>
 
+                <!-- ===================== 3. O APOIO =====================
+                     O cartao abaixo e copy REAL do produto: titulo e texto do banco
+                     INTERVENCOES_MSG.alerta_fadiga e o unico botao que o card tem ("Ok"),
+                     os dois em materias.js. Mudou la, mude aqui. -->
+                <div class="zz-fileira">
+                    <div class="zz-texto">
+                        <h3>Um apoio curto, e silêncio quando você está bem</h3>
+                        <p>
+                            Quando isso acontece, a plataforma oferece <strong>um apoio curto</strong>: retomar de onde parou, uma pausa guiada ou uma mudança no tipo de questão. E quando você está indo bem, ela não interrompe.
+                        </p>
+                    </div>
+                    <div class="zz-visual">
+                        <div class="zz-pausa">
+                            <p class="zz-pausa-titulo">Hora de desacelerar?</p>
+                            <p class="zz-pausa-texto">Você já estudou bastante hoje — que tal uma pausa maior?</p>
+                            <span class="zz-pausa-ok">Ok</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===================== 4. O COATI ===================== -->
+                <div class="zz-fileira">
+                    <div class="zz-texto">
+                        <h3>O Coati e a nossa Filosofia</h3>
+                        <p>
+                            O nome <strong>KaIA</strong> une a nossa proposta tecnológica à nossa identidade brasileira: o nome vem do tupi <strong>"kaiá"</strong> que vem da língua Tupi e significa lugar de refúgio, enquanto a terminação <strong>"IA"</strong> vem da Inteligência Artificial que calibra o sistema, e a sonoridade homenageia o nosso mascote, o <strong>Coati</strong> (também grafado como Quati) — um animal curioso, ágil e típico da nossa fauna.
+                        </p>
+                        <p>
+                            Diferente de plataformas com mascotes barulhentos e notificações persistentes, o nosso Coati representa a <strong>curiosidade silenciosa</strong> e o <strong>foco direcionado</strong>. Quando o foco é mantido, ele prospera; quando há dispersão, ele convida sutilmente o aluno a voltar.
+                        </p>
+                    </div>
+                    <div class="zz-visual">
                         <div class="coati-imagem">
                             <figure>
-                                <img src="../assets/Coati.jpg" alt="Mascote Coati">
+                                <img src="../assets/Coati.jpg" alt="Mascote Coati" width="600" height="450">
                                 <figcaption>Nosso mascote: o Coati</figcaption>
                             </figure>
                         </div>
                     </div>
-                </article>
+                </div>
 
-                <!-- ===================== RELATÓRIO ===================== -->
+            </div>
+
+            <!-- Fora do zigue-zague de proposito: sao fechamentos de argumento, sem
+                 visual proprio. Seguem na coluna central, na ordem em que estavam. -->
+            <div class="quiz-container">
                 <article class="question-wrapper">
-                    <h2>Ao final de cada sessão, um relatório</h2>
+                    <h3>Ao final de cada sessão, um relatório</h3>
                     <p>
                         O aluno vê quantas questões respondeu, quais temas foram mais fracos e <strong>em que pontos o estudo foi interrompido</strong>. É como ter um professor particular que não só passa o conteúdo, mas acompanha como a sessão realmente aconteceu.
                     </p>
                 </article>
-
-                <!-- ===================== O PROBLEMA ===================== -->
                 <article class="question-wrapper">
-                    <h2>O problema que a KaIA resolve</h2>
+                    <h3>O problema que a KaIA resolve</h3>
                     <p>
                         É um problema que qualquer estudante conhece: você senta para estudar duas horas, mas na prática passa quarenta minutos olhando o celular, vinte minutos relendo a mesma linha sem absorver nada, e só uma pequena fração estudando de verdade.
                     </p>
@@ -217,15 +271,12 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
                         A KaIA <strong>não elimina a distração</strong> — isso seria impossível, e ela não afirma saber o que se passa na sua cabeça. Mas ela <strong>repara quando o estudo para, registra e oferece apoio</strong>, tornando cada hora de estudo mais produtiva.
                     </p>
                 </article>
-
-                <!-- ===================== NEGÓCIO ===================== -->
                 <article class="question-wrapper">
-                    <h2>Uma alternativa acessível ao cursinho presencial</h2>
+                    <h3>Uma alternativa acessível ao cursinho presencial</h3>
                     <p>
                         Um cursinho em São Paulo pode custar entre <strong>R$ 800 e R$ 2.500 por mês</strong>. A KaIA cobra entre <strong>R$ 26,90 e R$ 35,90</strong> — entregando personalização e acompanhamento que um cursinho tradicional, com turmas de cinquenta alunos, simplesmente não consegue oferecer.
                     </p>
                 </article>
-
             </div>
 
         </section>

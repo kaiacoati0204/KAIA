@@ -957,7 +957,11 @@ html[data-luz="4"] {
   border-color: var(--gravata-kinrou);
   color: var(--gravata-kinrou);
 }
-.question-wrapper h2 {
+/* h3 junto: na landing os artigos desta classe descem para h3, porque a seção
+   já tem um h2 ("Conheça a KaIA") e eles são filhos dele. Em materias.html
+   continuam h2 — por isso os dois seletores. */
+.question-wrapper h2,
+.question-wrapper h3 {
   font-size: 1.5rem;
   margin-bottom: 30px;
   color: var(--profundo);
@@ -4704,6 +4708,149 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-rodape-link:hover { border-bottom-color: var(--azul-coati); }
 .lp-rodape-link:focus-visible { outline: 3px solid var(--azul-coati); outline-offset: 3px; }
 
+/* ---- ZIGUE-ZAGUE de "Conheça a KaIA" -------------------------------------
+   Fileiras alternadas: texto de um lado, visual do outro. Antes era uma coluna
+   estreita de texto corrido encostada à esquerda — em tela larga sobrava metade
+   da tela e lia como erro de layout. */
+.zz-fileira {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(32px, 5vw, 64px);
+  align-items: center;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 48px clamp(20px, 4vw, 48px);
+}
+/* Pares invertidas (2ª e 4ª), que são as que levam a lista de sinais e o Coati. */
+.zz-fileira:nth-of-type(even) { flex-direction: row-reverse; }
+
+/* O TETO DE 520px É O PONTO DA MUDANÇA. Em porcentagem a linha de leitura
+   voltaria a crescer junto com a tela e em 2560px passaria dos ~75 caracteres
+   confortáveis — exatamente o defeito que esta seção veio consertar. Com teto
+   fixo, toda a largura extra sobra para o visual e a linha não muda nunca. */
+.zz-texto { flex: 1 1 400px; max-width: 520px; }
+/* flex-grow 999 e não 1: o visual precisa absorver TODA a sobra. Com 1 os dois
+   dividiriam o excedente e o texto encostaria no teto só em telas enormes. */
+.zz-visual { flex: 999 1 420px; min-width: 0; }
+
+.zz-texto h3 {
+  margin-bottom: 18px;
+  color: var(--profundo);
+  font-size: 1.5rem;
+  line-height: 1.25;
+}
+.zz-texto p { margin-bottom: 14px; line-height: 1.65; color: var(--profundo); }
+.zz-texto > p:last-child, .zz-texto > ul:last-child { margin-bottom: 0; }
+
+/* --- visuais abstratos: bloco e barra em CSS, nunca captura de tela -------
+   TETO DE 640px nos painéis. A coluna do visual tem flex-grow 999, então em
+   2560px ela passa de 1000px: sem teto as "barras" ficariam com 170px cada e
+   parariam de ler como gráfico. Centrados na coluna, como o cartão de apoio. */
+/* --- visual 1: moldura de questão --- */
+.zz-moldura {
+  overflow: hidden;
+  max-width: 640px;
+  margin-inline: auto;
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.05);
+}
+.zz-pontos {
+  display: flex;
+  gap: 6px;
+  padding: 13px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(var(--bege-rgb), 0.25);
+}
+.zz-pontos span {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: rgba(var(--profundo-rgb), 0.2);
+}
+.zz-corpo { display: grid; gap: 10px; padding: 22px; }
+.zz-linha { height: 10px; border-radius: 5px; background: rgba(var(--profundo-rgb), 0.12); }
+.zz-linha--t { width: 74%; }
+.zz-linha--c { width: 46%; margin-bottom: 10px; }
+.zz-alt {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--bege-rgb), 0.32);
+  background: var(--surface);
+}
+.zz-alt--on {
+  border-color: var(--azul-coati);
+  background: rgba(var(--azul-coati-rgb), 0.12);
+}
+
+/* --- visual 2: os três sinais + barras --- */
+.zz-painel {
+  max-width: 640px;
+  margin-inline: auto;
+  padding: 26px;
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 8px 24px rgba(var(--profundo-rgb), 0.05);
+}
+.zz-sinais { display: grid; gap: 14px; margin: 0 0 24px; padding: 0; list-style: none; }
+.zz-sinais li { display: flex; align-items: center; gap: 12px; }
+.zz-marca { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--azul-coati); }
+.zz-tra { height: 10px; border-radius: 5px; background: rgba(var(--profundo-rgb), 0.12); }
+.zz-tra--a { width: 76%; }
+.zz-tra--b { width: 62%; }
+.zz-tra--c { width: 84%; }
+.zz-barras {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 108px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(var(--bege-rgb), 0.25);
+}
+.zz-barras span { flex: 1; border-radius: 6px 6px 0 0; background: var(--azul-coati); }
+.zz-b1 { height: 40%; }
+.zz-b2 { height: 56%; }
+.zz-b3 { height: 34%; }
+.zz-b4 { height: 70%; }
+.zz-b5 { height: 62%; }
+.zz-b6 { height: 88%; }
+
+/* --- visual 3: o cartão de apoio (copy real, ver o HTML) --- */
+.zz-pausa {
+  max-width: 420px;
+  margin-inline: auto;
+  padding: 24px 26px;
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 10px 28px rgba(var(--profundo-rgb), 0.07);
+}
+.zz-pausa-titulo {
+  margin: 0 0 8px;
+  color: var(--profundo);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.zz-pausa-texto { margin: 0 0 20px; color: var(--profundo); font-size: 0.95rem; line-height: 1.55; }
+.zz-pausa-ok {
+  display: inline-block;
+  padding: 9px 22px;
+  border-radius: 999px;
+  background: var(--azul-coati);
+  color: var(--card);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+/* Celular: a inversão das pares deixaria o visual ANTES do título, e a ordem de
+   leitura passaria a não bater com a do código. Empilha sempre texto primeiro. */
+@media (max-width: 860px) {
+  .zz-fileira,
+  .zz-fileira:nth-of-type(even) { flex-direction: column; align-items: stretch; }
+  .zz-fileira { padding: 32px clamp(20px, 4vw, 48px); gap: 28px; }
+  .zz-texto { max-width: none; }
+}
+
 /* ---- Hover unificado dos cards ------------------------------------------
    Os três sobem 4px (o .plano sobe 6px fora da landing): card que sobe mais lê
    como "mais importante". */
@@ -4737,7 +4884,11 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 .lp-page .plano-destaque,
 .lp-page .coati-container { border: 0; }
 .lp-page .plano-alvo { border-bottom: 0; }
-.lp-page .coati-imagem { border-left: 0; }
+/* Os dois lados: abaixo de 900px a regra compartilhada troca o filete da
+   esquerda por um em cima, e só o da esquerda estava zerado aqui. Passava
+   despercebido enquanto a figura morava dentro do card do .coati-container;
+   no zigue-zague ela ficou solta e o tracejado virou risco órfão. */
+.lp-page .coati-imagem { border-left: 0; border-top: 0; }
 
 /* Polegar da rolagem discreto só na landing (amarelo vira traço de ponta a
    ponta no fundo liso); não some, é a pista de quanto falta. `html:has(...)`

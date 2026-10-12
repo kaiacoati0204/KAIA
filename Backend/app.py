@@ -159,11 +159,6 @@ def _eh_calculo(materia, tema):
     return tema in TEMAS_CALCULO.get(materia, ())
 
 
-def _exatas_natureza(materia):
-    # Area em que a estrutura da questao muda por tema. NAO decide mais o few-shot
-    # (ver _montar_banda): ficou para ml/teste_impostor.py.
-    return materia in ("MAT", "FIS", "QUI", "BIO")
-
 # Resposta padrão quando o servidor está sem banco (pool = None).
 _SEM_BANCO = JSONResponse(
     {"erro": "Banco de dados indisponível. Configure DATABASE_URL no .env (string do Supabase)."},

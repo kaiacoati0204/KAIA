@@ -294,11 +294,16 @@ Login OK = cai na tela do aluno. Conferência técnica: DevTools → Network →
 > | `20260927130000_email_do_responsavel.sql` | `consentimentos.responsavel_email` |
 > | `20260927140000_assinaturas.sql` | tabelas `assinaturas` e `mp_webhooks` |
 >
-> **Sem aplicar, o backend quebra** com erro de coluna/tabela inexistente assim que
-> alguém tocar em: consentimento (grava `responsavel_email`), qualquer rota de
-> assinatura, ou a checagem de isenção (`_conta_isenta` lê `perfis.isento`).
-> O `_conta_isenta` falha aberto e devolve `True` no erro — o site não cai, mas todo
-> mundo passa como isento, o que não é o comportamento desejado.
+> **O consentimento ainda quebra sem elas** (grava `responsavel_email` numa coluna
+> que não existe). **As rotas de assinatura não quebram mais**: desde o conserto de
+> 2026-10-03 elas tratam os dois códigos de schema ausente (42P01 tabela, 42703
+> coluna) e degradam para `pagamento_nao_configurado` — acesso liberado, 200 com os
+> planos, front inteiro funcionando. Qualquer OUTRO erro de banco continua subindo.
+>
+> Estado real hoje: `perfis.conta_de_teste` **existe**, `perfis.isento` **não**. O
+> `_conta_isenta` lê só a metade que existe, então conta `@teste.kaia` é reconhecida
+> como isenta normalmente. Aplicar a migration passa a cobrir também os testers de
+> e-mail pessoal, que hoje não são reconhecidos.
 
 
 O banco (schema **e** dados) vive no **Supabase, na nuvem**. Usando o **mesmo projeto**
@@ -367,6 +372,28 @@ Estrutura pronta, **esperando a chave do Mercado Pago**. O que já funciona hoje
   tabela `mp_webhooks` — as duas camadas de idempotência, porque o MP reenvia a mesma
   notificação por timeout e por reentrega manual.
 - Suspender **não apaga nada**: bloqueia o acesso ao estudo; caderno, histórico e progresso ficam.
+- **Duas telas do front** leem o `GET /assinatura`:
+
+| Tela | Arquivo | O que faz |
+|---|---|---|
+| Minha assinatura | seção em `Frontend/pages/perfil.html` | Estado da conta. Em conta **isenta** diz "você é tester do beta" e **esconde** o link de planos |
+| Assinatura vencida | `Frontend/pages/assinatura-vencida.html` | Lista o que continua guardado antes de qualquer convite a pagar; manda de volta ao estudo quem chegou ali com acesso. **Ainda não é acionada**: nada redireciona para ela (ver abaixo) |
+
+  **Não existe tela de "escolher plano" logada.** A vitrine é a seção `#planos` da
+  landing (`Frontend/pages/index.html`), e os botões das duas telas acima apontam para
+  `index.html#planos`. Duas telas com os mesmos 5 planos seriam duas fontes de verdade
+  para preço e nome — e foi exatamente assim que a landing e o backend já divergiram
+  uma vez. Consequência: **o `POST /assinatura/criar` não tem quem o chame no front**;
+  ele existe e responde, mas só entra em uso quando a assinatura for ligada de verdade.
+
+  Sem backend nenhuma das duas quebra: a seção do perfil simplesmente não aparece
+  (afirmar errado sobre a conta de alguém seria pior que calar) e a de vencida fica no
+  texto padrão.
+
+  **Falta o gatilho da tela de vencida.** Hoje chega-se a ela só pela URL. Para ela
+  aparecer sozinha, o `materias.js` teria de checar o `acesso` do `GET /assinatura`
+  antes de abrir o estudo e redirecionar — mexida no fluxo de estudo, deixada de fora
+  de propósito. Sem chave do MP ninguém é barrado, então hoje não falta nada ao aluno.
 
 **Isenção (não-retroativa).** Quem já testava a KaIA de graça não é empurrado para pagar:
 
@@ -388,7 +415,8 @@ virar "o site caiu".
    em `/assinatura/criar` e `preapproval().get()` em `/webhook/mercadopago`. O código de
    exemplo já está escrito nos comentários, com o `free_trial` de 7 dias e o
    `external_reference` (o elo entre o pagamento e a linha em `assinaturas`).
-4. Conferir os preços em `pagamento.py` antes de cobrar de verdade.
+4. Os preços em `pagamento.py` já batem com os da landing (Mirim 26,90 · Porã 35,90 ·
+   Açu 339,90 · Ara 28,90/aluno · Guará 23,90/aluno). Reconferir antes de cobrar de verdade.
 
 Hoje o webhook **valida e registra, mas não ativa nada** — de propósito. Sem confirmar o
 estado real na API do MP, confiar no corpo da notificação seria confiar em quem chamou.

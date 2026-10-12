@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KaIA | Professor/Responsável</title>
-    <link rel="icon" type="image/png" href="../assets/logo-coati.png">
-    <link rel="apple-touch-icon" href="../assets/logo-coati.png">
+    <link rel="icon" type="image/png" href="../assets/logo-coati-256.png">
+    <link rel="apple-touch-icon" href="../assets/logo-coati-256.png">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
@@ -309,7 +309,10 @@
             return g;
         };
 
-        const LINHA_BASE = {
+        // FUNÇÃO, não const — vale para todas as opções de gráfico daqui para baixo:
+        // o tok() só devolve a cor do tema depois que o comum.js põe o data-luz no
+        // <html> (no DOMContentLoaded). Um objeto montado no parse congela o tema 1.
+        const linhaBase = () => ({
             borderWidth: 2.5,
             tension: .35,
             pointRadius: 3,
@@ -317,11 +320,11 @@
             pointBorderWidth: 2,
             pointBackgroundColor: tok('--card'),   // miolo claro: o ponto "recorta" a linha
             fill: true,
-        };
+        });
 
         // Eixos limpos: sem grade vertical (ela cortava as linhas sem informar
         // nada), sem moldura, e tooltip encostada no ponto.
-        const EIXOS_LIMPOS = {
+        const eixosLimpos = () => ({
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
             plugins: {
@@ -339,19 +342,26 @@
                      ticks: { color: tok('--tinta'), font: { size: 11 }, maxTicksLimit: 6 },
                      beginAtZero: true },
             },
-        };
+        });
 
         let gAcertos = null, gMinutos = null, gHobbies = null;
 
         // Eixos claros: os gráficos desta página vivem sobre cards brancos.
-        const EIXOS = {
+        // Função pelo mesmo motivo das de cima: chamada na hora de criar o gráfico.
+        const eixos = () => ({
             responsive: true,
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' } },
-                y: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' }, beginAtZero: true },
+                // Vertical (90°) e sem autoSkip: são ~45 hobbies, e o padrão do Chart.js
+                // inclina 50° — aí os nomes longos se cruzam. Em pé cada rótulo ocupa uma
+                // coluna estreita, nenhum se sobrepõe e nenhum é descartado.
+                x: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` },
+                     ticks: { color: tok('--profundo'), maxRotation: 90, minRotation: 90,
+                              autoSkip: false, font: { size: 10 } } },
+                y: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` },
+                     ticks: { color: tok('--profundo'), precision: 0 }, beginAtZero: true },
             },
-        };
+        });
 
         const TREND = {
             melhorando: { txt: '↑ Melhorando', cls: 'bom' },
@@ -408,12 +418,14 @@
             if (!tem) return;
 
             const cv = $('g-evolucao');
+            // Uma chamada só por gráfico: o espalhamento abaixo reusa o mesmo objeto.
+            const base = linhaBase(), eixo = eixosLimpos();
             gEvolucao = new Chart(cv, {
                 type: 'line',
                 data: {
                     labels: serie.map(s => s.dia),
                     datasets: [
-                        { ...LINHA_BASE, label: 'Acerto',
+                        { ...base, label: 'Acerto',
                           data: serie.map(s => Math.round(s.acerto * 100)),
                           borderColor: tok('--acerto-tx'),
                           pointBorderColor: tok('--acerto-tx'),
@@ -421,9 +433,9 @@
                     ],
                 },
                 options: {
-                    ...EIXOS_LIMPOS,
-                    scales: { ...EIXOS_LIMPOS.scales,
-                              y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } },
+                    ...eixo,
+                    scales: { ...eixo.scales,
+                              y: { ...eixo.scales.y, suggestedMax: 100 } },
                 },
             });
         }
@@ -479,12 +491,12 @@
             gAcertos = new Chart(cvA, {
                 type: 'line',
                 data: { labels, datasets: [{
-                    ...LINHA_BASE, label: 'Acertos', data: acertos,
+                    ...linhaBase(), label: 'Acertos', data: acertos,
                     borderColor: tok('--acerto-tx'),
                     pointBorderColor: tok('--acerto-tx'),
                     backgroundColor: degrade('--vd-uniao-rgb', .35),
                 }] },
-                options: EIXOS_LIMPOS,
+                options: eixosLimpos(),
             });
 
             gMinutos?.destroy();
@@ -495,7 +507,7 @@
                     backgroundColor: tok('--acerto-bg'),
                     borderColor: tok('--acerto-tx'), borderWidth: 1, borderRadius: 6,
                 }] },
-                options: EIXOS_LIMPOS,
+                options: eixosLimpos(),
             });
         }
 
@@ -519,12 +531,15 @@
                         datasets: [{
                             label: 'Quantidade de Escolhas',
                             data: dados.valores,
-                            backgroundColor: ['#f3d009', '#2d4ba5', '#57d979', '#c4a186'],
-                            borderColor: '#1a2b4c',
+                            // UMA cor: cada barra é um hobby, não uma categoria — ciclar
+                            // 4 cores sugeria um agrupamento que não existe. O ouro volta a
+                            // ser acento da marca, não preenchimento de dado.
+                            backgroundColor: tok('--azul-coati'),
+                            borderColor: tok('--profundo'),
                             borderWidth: 1,
                         }]
                     },
-                    options: EIXOS,
+                    options: eixos(),
                 });
             } catch (erro) {
                 console.error('Erro ao carregar dados para o gráfico:', erro);
@@ -539,7 +554,12 @@
 
         // Ritmo por aluno (mesmos cortes do backend: <60 min pouco, 60-179 irregular, ≥180 constante)
         const STATUS_ROT = { bem: 'Constante', atencao: 'Irregular', risco: 'Pouco estudo' };
-        const STATUS_COR = { bem: '#2f5d3a', atencao: '#8a6d1e', risco: '#8a3b3b' };
+        // Lê os tokens em vez de repetir o hex: uma cópia hardcoded fica para trás quando o
+        // token muda (foi o que houve com o âmbar antes da Fase 4). Função, como as
+        // opções de gráfico acima.
+        const statusCor = () => ({
+            bem: tok('--acerto-tx'), atencao: tok('--alerta-tx'), risco: tok('--erro-tx'),
+        });
         const badge = (s) => s ? `<span class="status-badge status-${s}">${STATUS_ROT[s] || '—'}</span>` : '—';
 
         // Uma tabela simples a partir de [{rotulo, campo, fmt}] + as linhas.
@@ -594,14 +614,16 @@
         // Gráficos do painel (rosca de status + barras por turma + evolução).
         // Só professor/coordenador têm `graficos`; para pai, g é undefined e limpa.
         let gStatus = null, gTurma = null, gEvo = null;
-        const OPT_BARRA = {
+        // Era hex cravado (#1a2b4c e rgba(26,43,76,.08)): o mesmo valor do --profundo
+        // no tema 1, mas escrito à mão, então nunca acompanhou os temas 3 e 4.
+        const optBarra = () => ({
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
-                x: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' } },
-                y: { grid: { color: 'rgba(26,43,76,.08)' }, ticks: { color: '#1a2b4c' }, beginAtZero: true, suggestedMax: 100 },
+                x: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` }, ticks: { color: tok('--profundo') } },
+                y: { grid: { color: `rgba(${tok('--profundo-rgb')}, .08)` }, ticks: { color: tok('--profundo') }, beginAtZero: true, suggestedMax: 100 },
             },
-        };
+        });
 
         function renderGraficos(g) {
             const box = $('painel-graficos');
@@ -615,12 +637,13 @@
                  </div>
                  <div class="graf-card"><h4>Evolução do acerto por semana (%)</h4><div class="graf-wrap"><canvas id="gf-evo"></canvas></div></div>`;
 
+            const sc = statusCor();
             gStatus = new Chart($('gf-status'), {
                 type: 'doughnut',
                 data: { labels: [STATUS_ROT.bem, STATUS_ROT.atencao, STATUS_ROT.risco], datasets: [{
                     data: [g.status.bem, g.status.atencao, g.status.risco],
-                    backgroundColor: [STATUS_COR.bem, STATUS_COR.atencao, STATUS_COR.risco],
-                    borderColor: '#fbf6ec', borderWidth: 2,
+                    backgroundColor: [sc.bem, sc.atencao, sc.risco],
+                    borderColor: tok('--card'), borderWidth: 2,
                 }] },
                 options: { responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { position: 'bottom', labels: { color: '#1a2b4c' } } } },
@@ -632,7 +655,7 @@
                     data: g.acerto_turma.map(t => Math.round(t.acerto * 100)),
                     backgroundColor: '#2d4ba5', borderRadius: 6,
                 }] },
-                options: OPT_BARRA,
+                options: optBarra(),
             });
 
             gEvo = new Chart($('gf-evo'), {
@@ -642,7 +665,7 @@
                     borderColor: '#2d4ba5', backgroundColor: 'rgba(45,75,165,.12)',
                     fill: true, tension: .3, pointRadius: 3,
                 }] },
-                options: OPT_BARRA,
+                options: optBarra(),
             });
         }
 
@@ -651,7 +674,25 @@
             const sub    = $('painel-sub');
             const corpo  = $('painel-tabela');
 
-            const falhar = (msg) => { titulo.textContent = msg; sub.textContent = ''; corpo.innerHTML = ''; renderGraficos(null); };
+            // A mensagem do backend é escrita para QUEM DEBUGA (cita tabela, usa crase).
+            // Ela vai para o console; a tela recebe uma frase humana numa faixa discreta.
+            // Título de página não é lugar de mensagem de erro.
+            const HUMANO = {
+                vinculo: 'Sua conta ainda não está vinculada a uma escola. Fale com a coordenação.',
+                rede:    'Não foi possível falar com o servidor agora. Tente de novo em instantes.',
+                geral:   'Não foi possível carregar o painel agora.',
+            };
+            const falhar = (chave, tecnica) => {
+                if (tecnica) console.warn('[KaIA] painel do responsável:', tecnica);
+                titulo.textContent = 'Painel';
+                sub.textContent = '';
+                corpo.innerHTML = '';
+                const faixa = document.createElement('p');
+                faixa.className = 'painel-aviso';
+                faixa.textContent = HUMANO[chave] || HUMANO.geral;
+                corpo.appendChild(faixa);
+                renderGraficos(null);
+            };
 
             // Professor + mock: monta local, sem tocar na rede. Coordenador e pai
             // seguem pelo backend nos dois modos — o mock não os alcança.
@@ -664,10 +705,11 @@
             try {
                 const r = await apiFetch(`/responsavel/painel?email=${encodeURIComponent(usuario.email)}`);
                 const d = await r.json();
-                if (!r.ok) return falhar(d.erro || 'Não foi possível carregar o painel.');
+                // 404 aqui é 'tem role mas não tem linha na tabela da escola' — falta vínculo.
+                if (!r.ok) return falhar(r.status === 404 ? 'vinculo' : 'geral', d.erro);
 
                 const visao = VISOES[d.role];
-                if (!visao) return falhar(`Sem painel para a role "${d.role}".`);
+                if (!visao) return falhar('geral', `sem visão para a role "${d.role}"`);
 
                 const v = visao(d);
                 titulo.textContent = v.titulo;
@@ -676,7 +718,7 @@
                 renderGraficos(d.graficos);
             } catch (e) {
                 console.error('[KaIA] falha ao carregar o painel:', e);
-                falhar('Não foi possível conectar ao servidor (a API está rodando em :5000?).');
+                falhar('rede', e);
             }
         }
 
@@ -879,7 +921,7 @@
                     borderColor:     ord.map(a => tok(`--${a.status === 'bem' ? 'acerto' : 'alerta'}-tx`)),
                     borderWidth: 1, borderRadius: 6,
                 }] },
-                options: EIXOS_LIMPOS,
+                options: eixosLimpos(),
             });
 
             // Média da turma ponto a ponto — derivada das séries, sem campo extra
@@ -890,18 +932,19 @@
                 acerto: alunos.reduce((s, a) => s + (a.serie[i]?.acerto ?? 0), 0) / alunos.length,
             }));
             const cvE = $('gf-evo-turma');
+            const eixoT = eixosLimpos();
             gEvoTurma = new Chart(cvE, {
                 type: 'line',
                 data: { labels: evo.map(e => e.dia), datasets: [{
-                    ...LINHA_BASE, label: 'Acerto médio',
+                    ...linhaBase(), label: 'Acerto médio',
                     data: evo.map(e => Math.round(e.acerto * 100)),
                     borderColor: tok('--azul-coati'),
                     pointBorderColor: tok('--azul-coati'),
                     backgroundColor: degrade('--azul-coati-rgb'),
                 }] },
-                options: { ...EIXOS_LIMPOS,
-                           scales: { ...EIXOS_LIMPOS.scales,
-                                     y: { ...EIXOS_LIMPOS.scales.y, suggestedMax: 100 } } },
+                options: { ...eixoT,
+                           scales: { ...eixoT.scales,
+                                     y: { ...eixoT.scales.y, suggestedMax: 100 } } },
             });
         }
 

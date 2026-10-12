@@ -80,3 +80,6 @@ ml/artifacts/itens_*.csv
 # backups do .env (tem a chave da API dentro)
 *.env.bak
 .env.*.bak
+
+# Backups do banco (dados de aluno) — NUNCA versionar
+/_backups/

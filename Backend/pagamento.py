@@ -15,16 +15,29 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
+# Os cinco planos, conferidos contra a landing (Frontend/pages/index.html) e o
+# Frontend/js/cadastro-escola.js — que eram a fonte de verdade enquanto isto aqui tinha
+# nomes de rascunho (essencial/foco/turbo/familia/escola, que nunca existiram no produto).
+#
+# `ciclo` existe porque o Açu é anual e os escolares são por aluno/mês: sem ele a tela
+# mostraria "R$ 339,90/mês". `minimo` só vale para B2B — é o piso de alunos do contrato.
+#
 # ______________________ PENDENTE (Bia) ______________________
-# Os preços abaixo são os que já existiam nas telas de plano. Confira antes de cobrar
-# de verdade — daqui para a frente eles viram dinheiro real.
+# Confira os valores antes de ligar a chave do Mercado Pago: daqui para a frente eles
+# viram dinheiro real. A landing diz "valores de referência do MVP", então eles ainda
+# podem mudar — e quando mudarem, mudam nos DOIS lugares.
 # ____________________________________________________________
 PLANOS = {
-    "essencial": {"nome": "Essencial", "preco": 19.90},
-    "foco":      {"nome": "Foco",      "preco": 29.90},
-    "turbo":     {"nome": "Turbo",     "preco": 39.90},
-    "familia":   {"nome": "Família",   "preco": 59.90},
-    "escola":    {"nome": "Escola",    "preco": 0.00},   # sob consulta
+    "mirim": {"nome": "Mirim", "rotulo": "Básico",    "preco": 26.90,
+              "ciclo": "mes", "publico": "b2c"},
+    "pora":  {"nome": "Porã",  "rotulo": "Pro",       "preco": 35.90,
+              "ciclo": "mes", "publico": "b2c", "destaque": "MAIS ESCOLHIDO"},
+    "acu":   {"nome": "Açu",   "rotulo": "Pro Anual", "preco": 339.90,
+              "ciclo": "ano", "publico": "b2c", "destaque": "2 MESES GRÁTIS"},
+    "ara":   {"nome": "Ara",   "rotulo": "Turma",     "preco": 28.90,
+              "ciclo": "aluno_mes", "publico": "b2b", "minimo": 20},
+    "guara": {"nome": "Guará", "rotulo": "Rede",      "preco": 23.90,
+              "ciclo": "aluno_mes", "publico": "b2b", "minimo": 80},
 }
 
 DIAS_TRIAL = 7

@@ -131,7 +131,11 @@ let intervencaoInterval   = null;
 let intervencaoAtual      = null;   // tipo em exibição (evita duplicar)
 let intervencaoMostradaEm = 0;      // p/ calcular tempo_ate_aceitar_s
 let _dockShowTimer        = null;   // atraso pra dock de teste reaparecer
+let _dockDisparoTimer     = null;   // atraso entre o clique e a intervenção
 const DOCK_REAPARECE_MS   = 1500;   // barra volta logo após disparar (teste rápido)
+// Clique -> 5 s -> intervenção, com a barra escondida o tempo todo. É a janela para tirar
+// o cursor e capturar a tela sem a ferramenta de teste aparecendo junto.
+const DOCK_ATRASO_MS      = 5000;
 
 // Sorteia uma variação (usado nas frases das intervenções — evita repetir sempre
 // a mesma, combatendo a habituação).
@@ -581,9 +585,12 @@ function _montarDockTeste() {
         b.innerHTML = ICONES_INTERVENCAO[tipo] || '';
         b.addEventListener('click', () => {
             esconderIntervencao();                                  // fecha o que estiver aberto
-            dispararIntervencaoTeste(tipo);                         // dispara na HORA (sem espera de gravação)
-            clearTimeout(_dockShowTimer);                           // e traz a barra de volta logo, pra testar a próxima
-            _dockShowTimer = setTimeout(() => { const dk = $('kaia-dock-teste'); if (dk) dk.style.display = ''; }, DOCK_REAPARECE_MS);
+            // Some antes de esperar: quem traz a barra de volta é só liberarPolling(), quando a
+            // intervenção se resolve. Reagendar aqui a fazia reaparecer POR CIMA do card.
+            clearTimeout(_dockShowTimer);
+            dock.style.display = 'none';
+            clearTimeout(_dockDisparoTimer);
+            _dockDisparoTimer = setTimeout(() => dispararIntervencaoTeste(tipo), DOCK_ATRASO_MS);
         });
         dock.appendChild(b);
     });
@@ -599,6 +606,7 @@ function iniciarGatilhoTeste() {
 
 function pararGatilhoTeste() {
     clearInterval(_gtInterval); _gtInterval = null;
+    clearTimeout(_dockDisparoTimer); _dockDisparoTimer = null;
     const dk = $('kaia-dock-teste'); if (dk) dk.remove();
 }
 

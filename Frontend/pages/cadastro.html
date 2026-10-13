@@ -31,9 +31,11 @@
     <!-- Preloader de entrada — ver comentário equivalente em login.html. -->
     <div id="kaia-preloader" aria-hidden="true">
         <div class="kaia-pre-saudacoes">
-            <!-- Mesma esfera da espera da IA (.kaia-ail__esfera), variante clara via
-                 .kaia-pre-esfera. Só CSS, sem React: precisa do 1º paint e esta tela
-                 não carrega o ai-loader.js. -->
+            <!-- A esfera é só CSS de propósito: ela precisa estar no 1º paint, e
+                 nenhum script chega a tempo disso. O nome `ail` vem da antiga
+                 espera da IA, que hoje é o coati de js/coati-loader.js — a regra
+                 ficou e este é o único usuário dela. .kaia-pre-esfera só troca os
+                 tokens de cor para a variante clara. -->
             <div class="kaia-pre-esfera kaia-ail__esfera"></div>
             <p class="kaia-pre-item">Olá</p>
             <p class="kaia-pre-item" lang="ja">こんにちは</p>

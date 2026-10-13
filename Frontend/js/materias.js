@@ -1737,25 +1737,25 @@ function mostrarTela(id) {
     });
 }
 
-// Liga/desliga o AI Loader (ilha React, js/ai-loader.js). `alvo` é o container ESTÁVEL onde
-// monta (.question-wrapper / #temas-view), nunca um que a lógica limpe. Devolve true só se
-// montou — aí quem chama apaga o texto de espera. Falha vira aviso no console e a geração
-// segue, fallback incluso.
+// Liga/desliga o coati de espera (js/coati-loader.js). `alvo` é o container ESTÁVEL onde
+// monta (.question-wrapper / #temas-view), nunca um que a lógica limpe. `rotulo` é o que o
+// leitor de tela anuncia, uma vez só. Devolve true só se montou — aí quem chama apaga o
+// texto de espera. Falha vira aviso no console e a geração segue, fallback incluso.
 const areaQuestao = () => document.querySelector('.question-wrapper');
 
-function esperaIA(palavra, rotulo, alvo) {
+function esperaIA(rotulo, alvo) {
     try {
-        return !!(window.KaiaAILoader && window.KaiaAILoader.mostrar(palavra, rotulo, alvo));
+        return !!(window.KaiaCoatiLoader && window.KaiaCoatiLoader.mostrar(rotulo, alvo));
     } catch (e) {
-        console.warn('[KaIA] AI Loader indisponível:', e);
+        console.warn('[KaIA] coati de espera indisponível:', e);
         return false;
     }
 }
 function esperaIAFim() {
     try {
-        if (window.KaiaAILoader) window.KaiaAILoader.esconder();
+        if (window.KaiaCoatiLoader) window.KaiaCoatiLoader.esconder();
     } catch (e) {
-        console.warn('[KaIA] AI Loader não escondeu:', e);
+        console.warn('[KaIA] coati de espera não escondeu:', e);
     }
 }
 
@@ -1767,7 +1767,7 @@ async function abrirMateria(subject) {
     mostrarTela('temas-view');
     temasBox.innerHTML = 'KaIA montando os temas...';
     // Montou a ilha? então ela substitui o texto; senão o texto fica.
-    if (esperaIA('Montando', 'Montando os temas da matéria', $('temas-view'))) temasBox.innerHTML = '';
+    if (esperaIA('Montando os temas da matéria', $('temas-view'))) temasBox.innerHTML = '';
 
     let temas = [];
     try {
@@ -1776,7 +1776,7 @@ async function abrirMateria(subject) {
     } catch (e) {
         console.warn('[KaIA] /temas indisponível:', e);
     } finally {
-        esperaIAFim();   // sai sempre: o overlay é de tela cheia
+        esperaIAFim();   // sai sempre, inclusive se a chamada falhar
     }
     if (!temas.length) {
         temas = TEMAS_FALLBACK[subject] || ['Tema 1', 'Tema 2', 'Tema 3'];
@@ -1976,12 +1976,12 @@ async function carregarQuestao(subject, tema) {
     if (fb) { fb.className = 'feedback-msg'; fb.innerHTML = ''; }
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
-    if (esperaIA('Gerando', 'Preparando sua questão', areaQuestao())) $('question-display').innerText = '';
+    if (esperaIA('Gerando questão', areaQuestao())) $('question-display').innerText = '';
 
     try {
         currentQuestion = await obterProximaQuestao(subject, tema);   // vem da fila (lote); fallback interno
     } finally {
-        esperaIAFim();   // sai sempre: o overlay é de tela cheia
+        esperaIAFim();   // sai sempre, inclusive se a chamada falhar
     }
 
     // zera os sensores para esta questão
@@ -2051,7 +2051,7 @@ async function startMission(subject, tema) {
     mostrarTela('quiz-view');
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
-    if (esperaIA('Gerando', 'Preparando sua questão', areaQuestao())) $('question-display').innerText = '';
+    if (esperaIA('Gerando questão', areaQuestao())) $('question-display').innerText = '';
     try {
         if (!sessaoDeEstudoAberta) await iniciarSessaoEstudo(subject, tema);
         await carregarQuestao(subject, tema);
@@ -3037,7 +3037,11 @@ function _garantirOverlayPausa() {
     el.setAttribute('aria-labelledby', 'kaia-pausa-titulo');
     el.innerHTML =
         `<div class="kaia-pausa-card">`
-        + `<div class="kaia-pausa-tomate" aria-hidden="true">🍅</div>`
+        // MASTER NO AFFINITY: mudança de arte se faz lá e se reexporta neste mesmo
+        // nome. O PNG tem 240px para servir os ~75px de uso em telas 3x — AMPLIAR
+        // este arquivo só borra. aria-hidden porque o <h2> logo abaixo já diz o que é.
+        + `<img class="kaia-pausa-tomate" src="../assets/Tumate.png" alt=""`
+        + ` width="75" height="75" aria-hidden="true">`
         + `<h2 id="kaia-pausa-titulo">Hora de uma pausa</h2>`
         + `<p class="kaia-pausa-sub">Respire um pouco. Você volta rendendo mais.</p>`
         + `<div class="kaia-pausa-contagem"><span id="kaia-pausa-seg">0</span>s</div>`

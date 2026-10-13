@@ -4161,10 +4161,13 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
   text-align: center;
   box-shadow: 0 18px 50px rgba(var(--profundo-rgb), 0.22);
 }
+/* Era o emoji 🍅 em 3,4rem, cujo glifo pintava 74,7x61px. A <img> fica em 75px
+   para o card não mudar de peso visual. */
 .kaia-pausa-tomate {
-  font-size: 3.4rem;
-  line-height: 1;
-  margin-bottom: 10px;
+  display: block;
+  width: 75px;
+  height: auto;
+  margin: 0 auto 10px;
 }
 .kaia-pausa-card h2 {
   margin: 0 0 8px;
@@ -4205,39 +4208,75 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
 }
 
 /* =========================
-   AI LOADER — espera da IA (temas e questão)
-   Porte do "AI Loader" do 21st.dev (@beratberkayg) com a geometria EXATA dos
-   keyframes (box-shadow, 5s da esfera, 3s das letras). Mudou: paleta nos azuis
-   do projeto (--profundo sombra, --azul-coati médio, #6f97e8/#89adf0/#7ba3ec
-   brilho); INLINE no lugar da mensagem, não overlay; letras --profundo (não
-   #fff); reduced-motion para tudo (TEA/TDAH). Markup: ilha React em js/ai-loader.js.
+   COATI DE ESPERA — espera da IA (temas e questão)
+   Entrou no lugar da esfera girante. O coati balança em 1,1s e a frase flutua em
+   3s: ciclos PROPOSITALMENTE diferentes, porque batendo no mesmo ritmo o conjunto
+   fica mecânico. reduced-motion desliga os dois deslocamentos mas NÃO a troca de
+   frase, que é conteúdo. Markup: js/coati-loader.js.
 ========================= */
-.kaia-ail {
+.kaia-cload {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   padding: 20px 0;
 }
-.kaia-ail__palco {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 500;
-  user-select: none;
+.kaia-cload__coati {
+  display: block;
+  width: 140px;
+  height: auto;
+  animation: kaia-cload-balanco 1.1s ease-in-out infinite;
 }
-.kaia-ail__letra {
-  display: inline-block;
-  color: var(--profundo);
-  opacity: 0.4;
-  animation: kaia-ail-letra 3s infinite;
+.kaia-cload__frase {
+  margin: 0;
+  max-width: 34ch;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--tinta);
+  /* Os 450ms são o FADE_MS do coati-loader.js. Mudou um, muda o outro. */
+  transition: opacity 450ms ease;
+  animation: kaia-cload-flutua 3s ease-in-out infinite;
 }
+.kaia-cload__frase--saindo { opacity: 0; }
+/* Anuncia "Gerando questão" uma vez e some do olho. Mesma técnica do
+   .e404-leitor: 1px e clip-path, nunca display:none (que o leitor ignora). */
+.kaia-cload__leitor {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+@keyframes kaia-cload-balanco {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+@keyframes kaia-cload-flutua {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Só o DESLOCAMENTO sai. A frase continua trocando, com o fade de opacidade:
+     troca de texto é conteúdo, não movimento. */
+  .kaia-cload__coati,
+  .kaia-cload__frase { animation: none; transform: none; }
+}
+
+/* =========================
+   ESFERA — hoje só do preloader de entrada (login e cadastro)
+   Veio do "AI Loader" do 21st.dev (@beratberkayg) com a geometria EXATA do
+   keyframe (box-shadow, 5s). Era compartilhada com a espera da IA; desde que o
+   coati assumiu aquela tela, o único usuário é o #kaia-preloader, que entra com
+   as DUAS classes (.kaia-pre-esfera.kaia-ail__esfera) e só troca os tokens de cor.
+   Por isso o nome `ail` continua: renomear mexeria no login.html e no
+   cadastro.html. Os valores abaixo são o default azul, que o preloader sobrescreve.
+========================= */
 .kaia-ail__esfera {
-  /* Cores em TOKENS para o mesmo componente servir dois contextos: aqui a esfera
-     azul da espera da IA; .kaia-pre-esfera (PRELOADER) sobrescreve com a clara.
-     --ail-funda dá o volume, --ail-media o meio-tom, --ail-brilho* o realce. */
+  /* --ail-funda dá o volume, --ail-media o meio-tom, --ail-brilho* o realce. */
   --ail-brilho:  #6f97e8;
   --ail-brilho2: #89adf0;
   --ail-brilho3: #7ba3ec;
@@ -4281,11 +4320,6 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
       0 0 6px 1.8px var(--ail-halo2);
   }
 }
-@keyframes kaia-ail-letra {
-  0%, 100% { opacity: 0.4; transform: translateY(0); }
-  20%      { opacity: 1;   transform: scale(1.15); }
-  40%      { opacity: 0.7; transform: translateY(0); }
-}
 @media (prefers-reduced-motion: reduce) {
   .kaia-ail__esfera {
     animation: none;
@@ -4293,10 +4327,6 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
       0 6px 12px 0 var(--ail-brilho) inset,
       0 12px 18px 0 var(--ail-media) inset,
       0 36px 36px 0 var(--ail-funda) inset;
-  }
-  .kaia-ail__letra {
-    animation: none;
-    opacity: 0.85;
   }
 }
 

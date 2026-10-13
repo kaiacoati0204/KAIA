@@ -61,6 +61,7 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
 
         <!-- ===================== HERO ===================== -->
         <section class="lp-hero">
+            <canvas class="lp-constelacao" aria-hidden="true"></canvas>
             <div class="lp-hero-inner">
                 <h1 class="lp-hero-titulo">Estude com foco. Chegue preparado.</h1>
                 <p class="lp-hero-sub">
@@ -135,10 +136,17 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
 
         <section class="main-content">
 
-            <header class="content-header">
-                <h2>Conheça a KaIA</h2>
-                <p>O refúgio inteligente contra a dispersão digital no Ensino Médio.</p>
-            </header>
+            <!-- Faixa PRÓPRIA (.lp-faixa-titulo), e não a .main-content nem a
+                 .content-header: as duas são compartilhadas com materias.html e
+                 meu-coati.html, e o position/overflow que o canvas precisa iria
+                 junto para lá. O canvas entra como primeiro filho, atrás do texto. -->
+            <div class="lp-faixa-titulo">
+                <canvas class="lp-constelacao" aria-hidden="true"></canvas>
+                <header class="content-header">
+                    <h2>Conheça a KaIA</h2>
+                    <p>O refúgio inteligente contra a dispersão digital no Ensino Médio.</p>
+                </header>
+            </div>
 
             <!-- ZIGUE-ZAGUE: fileiras alternadas, texto de um lado e visual do outro.
                  Era uma coluna estreita de texto corrido encostada à esquerda — em tela
@@ -163,14 +171,17 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
                     </div>
                     <div class="zz-visual" aria-hidden="true">
                         <div class="zz-moldura">
-                            <div class="zz-pontos"><span></span><span></span><span></span></div>
+                            <div class="zz-pontos">
+                                <span></span><span></span><span></span>
+                                <em class="zz-aba">Matemática</em>
+                            </div>
                             <div class="zz-corpo">
-                                <div class="zz-linha zz-linha--t"></div>
-                                <div class="zz-linha zz-linha--c"></div>
-                                <div class="zz-alt"></div>
-                                <div class="zz-alt zz-alt--on"></div>
-                                <div class="zz-alt"></div>
-                                <div class="zz-alt"></div>
+                                <p class="zz-enunciado">Enunciado gerado na hora, no seu nível.</p>
+                                <div class="zz-alt"><b>A</b></div>
+                                <div class="zz-alt zz-alt--on"><b>B</b></div>
+                                <div class="zz-alt"><b>C</b></div>
+                                <div class="zz-alt"><b>D</b></div>
+                                <p class="zz-rodape-ilu">Gabarito e explicação junto.</p>
                             </div>
                         </div>
                     </div>
@@ -197,15 +208,17 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
                     </div>
                     <div class="zz-visual" aria-hidden="true">
                         <div class="zz-painel">
+                            <p class="zz-titulo-ilu">O que ela mede</p>
                             <ul class="zz-sinais">
-                                <li><span class="zz-marca"></span><span class="zz-tra zz-tra--a"></span></li>
-                                <li><span class="zz-marca"></span><span class="zz-tra zz-tra--b"></span></li>
-                                <li><span class="zz-marca"></span><span class="zz-tra zz-tra--c"></span></li>
+                                <li><span class="zz-marca"></span>tempo fora da aba</li>
+                                <li><span class="zz-marca"></span>ritmo na questão</li>
+                                <li><span class="zz-marca"></span>acerto e tempo juntos</li>
                             </ul>
                             <div class="zz-barras">
                                 <span class="zz-b1"></span><span class="zz-b2"></span><span class="zz-b3"></span>
                                 <span class="zz-b4"></span><span class="zz-b5"></span><span class="zz-b6"></span>
                             </div>
+                            <p class="zz-rodape-ilu">ao longo da sessão</p>
                         </div>
                     </div>
                 </div>
@@ -390,9 +403,46 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
     <!-- ===================== RODAPÉ ===================== -->
     <footer class="lp-rodape">
         <div class="lp-rodape-inner">
-            <a href="index.html" class="lp-logo lp-logo-peq" aria-label="KaIA — página inicial">Ka<span>IA</span></a>
-            <p class="lp-rodape-copy">© 2026 KaIA</p>
-            <a href="login.html" class="lp-rodape-link">Entrar na plataforma</a>
+            <!-- alt="" vazio: o aria-label do <a> já nomeia o link; com alt
+                 preenchido o leitor de tela anunciaria a marca duas vezes.
+                 ⚠️ O PNG tem #1a2b4c cozido e NÃO acompanha o --profundo nos
+                 temas 3 e 4 — a mesma dívida do letreiro do header. -->
+            <a href="index.html" class="lp-logo-rodape" aria-label="KaIA — página inicial"><img
+                src="../assets/KaIA_Letreiro_Multicor.png" alt="" width="540" height="319"></a>
+
+            <!-- Termos e Privacidade EXISTEM desde sempre, mas só eram alcançáveis
+                 de dentro do cadastro e do aceite do responsável. Produto que trata
+                 dado de menor precisa dos dois visíveis ANTES de alguém se cadastrar
+                 — é LGPD, não enfeite. -->
+            <!-- Dois grupos, MESMA ordem do HTML de antes: o par de LGPD
+                 (Termos + Privacidade) separado do par de contato. O divisor
+                 entre eles é ::after, nunca caractere de texto — um "|" digitado
+                 seria lido em voz alta pelo leitor de tela. -->
+            <nav class="lp-rodape-links" aria-label="Links do rodapé">
+                <span class="lp-rodape-grupo lp-rodape-grupo--lgpd">
+                    <a href="termos.html">Termos de Uso</a>
+                    <a href="privacidade.html">Política de Privacidade</a>
+                </span>
+                <span class="lp-rodape-grupo">
+                <!-- CONFIRMAR: e-mail de contato ainda não definido pela Bia.
+                     Fica href="#" de propósito, para não publicar endereço inventado. -->
+                <a href="#" class="lp-rodape-pendente">Contato por e-mail</a>
+                <a href="https://www.instagram.com/kaia_coati/" target="_blank"
+                   rel="noopener" aria-label="KaIA no Instagram: @kaia_coati">
+                    <svg class="lp-rodape-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/>
+                        <circle cx="12" cy="12" r="4.2"/>
+                        <circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/>
+                    </svg>@kaia_coati
+                </a>
+                </span>
+            </nav>
+
+            <div class="lp-rodape-conta">
+                <p class="lp-rodape-copy">© 2026 KaIA</p>
+                <a href="login.html" class="lp-rodape-link">Entrar na plataforma</a>
+            </div>
         </div>
     </footer>
 
@@ -402,6 +452,10 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
          documento é garantida, então a corrente supabase → config → comum segue
          valendo, e os três baixam em paralelo com o parse. -->
     <script defer src="../js/comum.js"></script>
+    <!-- DEPOIS do comum.js: a constelação lê --profundo e --azul-coati por
+         getComputedStyle, e esses tokens só têm o valor do tema depois que o
+         data-luz está no <html>. Entre scripts defer a ordem é a do documento. -->
+    <script defer src="../js/constelacao.js"></script>
 </body>
 
 </html>

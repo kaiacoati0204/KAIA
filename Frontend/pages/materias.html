@@ -222,13 +222,12 @@
         </div>
     </div>
 
-    <!-- Ilha React do AI Loader — SÓ a animação de espera da IA, nunca lógica.
-         `defer`: não bloqueia render nem materias.js, e roda antes
-         de qualquer clique. materias.js só chama a ilha se ela existir, então CDN
-         fora do ar = texto simples, sem tela quebrada. -->
-    <script defer src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script defer src="../js/ai-loader.js"></script>
+    <!-- Coati de espera — SÓ a animação da espera da IA, nunca lógica. `defer`:
+         não bloqueia render nem materias.js, e roda antes de qualquer clique.
+         materias.js só chama se ele existir, então arquivo fora do ar = texto
+         simples, sem tela quebrada. Os dois CDNs do React saíram com o loader
+         antigo: ele era a única ilha React do projeto. -->
+    <script defer src="../js/coati-loader.js"></script>
     <script src="../js/comum.js"></script>
     <script src="../js/coati-economia.js"></script>
     <script src="../js/puros.js"></script>

@@ -1,5 +1,5 @@
 """
-seed_contas_teste.py — cria ~6 contas de teste COM senha real no Supabase Auth,
+seed_contas_teste.py — cria as 5 contas de teste COM senha real no Supabase Auth,
 pelo mesmo caminho de uma conta real. Idempotente por e-mail, tudo numa transação.
 
 Uso:
@@ -34,11 +34,19 @@ TOKENS_VAZIOS = [
     "email_change", "email_change_token_current", "reauthentication_token",
 ]
 
-# ---- as 6 contas ----
+# ---- as 5 contas de teste ----
 # escola/turma/materia resolvidos por nome no banco (sem uuid hardcoded).
 # reaproveita: 'professor'/'coordenador' -> UPDATE do slot único existente.
+# A CONTA ADMIN (kaia.coati0204@gmail.com) NÃO ESTÁ AQUI, DE PROPÓSITO.
+# Ela é conta REAL, de role admin — o único papel que abre /dashboard/dados. E
+# escrever() faz delete+insert em auth.users: tê-la nesta lista significava que
+# um seed recriava a conta real com a senha compartilhada. Depois de trocar a
+# senha no Supabase, uma rodada do seed devolveria tudo ao estado vazado.
+# Script de seed de CONTAS DE TESTE não pode ter poder de recriar conta real.
+# O limpar_contas_teste.py já a tratava como exceção ("MANTER ... admin real");
+# agora as duas pontas combinam. A conta segue existindo no banco — o que mudou
+# é que este script não a toca mais.
 CONTAS = [
-    {"email": "kaia.coati0204@gmail.com", "nome": None,                "role": "admin"},
     {"email": "coordenador@teste.kaia",   "nome": "Coordenador Teste",  "role": "coordenador",
         "escola": "Escola Vale Verde", "reaproveita": "coordenador"},
     {"email": "professor@teste.kaia",     "nome": "Professor Teste",    "role": "professor",
@@ -70,7 +78,8 @@ def ler_env(chave):
 def load_db_url():
     v = ler_env("DATABASE_URL")
     if not v:
-        raise SystemExit("DATABASE_URL não encontrado no .env")
+        raise SystemExit("DATABASE_URL não definida — nem no ambiente, "
+                         "nem em Backend/.env")
     return v
 
 
@@ -213,7 +222,9 @@ async def main(commit):
             from perfis p
             left join escolas e on e.escola_id=p.escola_id
             left join turmas  t on t.turma_id=p.turma_id
-            where p.email ilike '%@teste.kaia' or p.email='kaia.coati0204@gmail.com'
+            -- só as contas que este script mexe. A admin saiu junto com a
+            -- entrada dela em CONTAS: conferir o que não se escreve confunde.
+            where p.email ilike '%@teste.kaia'
             order by p.role, p.email
         """)
         for r in rows:

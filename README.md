@@ -341,7 +341,8 @@ Você só mexe no banco nestes casos:
 
 - **Recriar/resetar as contas de teste** (ex.: alguém trocou as senhas e o login parou):
   `python Backend/seed_contas_teste.py --commit` (sem `--commit` = dry-run, só mostra o
-  plano; rode de dentro de `Backend/`). Recria as 6 contas com a senha definida no script.
+  plano; rode de dentro de `Backend/`). Recria as 5 contas `@teste.kaia` com a senha
+  definida na env. **Não** toca na conta admin, que é real.
   ⚠️ **Depende do schema base já existir** (`escolas`, `turmas`, `professores`,
   `coordenadores`) — ele *reaproveita* essas linhas, **não as cria**.
 - **Schema do banco** (inclusive o trigger de consentimento no signup): já vem inteiro no

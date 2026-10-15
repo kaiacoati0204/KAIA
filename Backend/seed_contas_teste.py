@@ -20,7 +20,12 @@ import asyncio, os, re, json, sys
 import asyncpg
 
 ENV = os.path.join(os.path.dirname(__file__), ".env")
-SENHA = "teste1234"
+
+# A SENHA NÃO MORA MAIS AQUI. Este repositório é PÚBLICO e ela estava versionada em
+# texto puro — qualquer pessoa lia, e ela servia também para a conta de role admin.
+# Vem da env SENHA_CONTAS_TESTE (ambiente ou .env ao lado). SEM VALOR PADRÃO de
+# propósito: um padrão é só o literal de volta com outro nome, e ninguém perceberia.
+SENHA_ENV = "SENHA_CONTAS_TESTE"
 INSTANCE = "00000000-0000-0000-0000-000000000000"
 
 # Colunas string de token que precisam ser '' e não NULL (armadilha do GoTrue).
@@ -46,13 +51,41 @@ CONTAS = [
 ]
 
 
+def ler_env(chave):
+    """Ambiente primeiro (CI e shell), .env ao lado depois. None se faltar."""
+    v = os.environ.get(chave)
+    if v:
+        return v.strip()
+    try:
+        with open(ENV, encoding="utf-8") as f:
+            for line in f:
+                m = re.match(r'\s*%s\s*=\s*"?([^"\n]+)"?' % re.escape(chave), line)
+                if m:
+                    return m.group(1).strip()
+    except FileNotFoundError:
+        pass
+    return None
+
+
 def load_db_url():
-    with open(ENV, encoding="utf-8") as f:
-        for line in f:
-            m = re.match(r'\s*DATABASE_URL\s*=\s*"?([^"\n]+)"?', line)
-            if m:
-                return m.group(1).strip()
-    raise SystemExit("DATABASE_URL não encontrado no .env")
+    v = ler_env("DATABASE_URL")
+    if not v:
+        raise SystemExit("DATABASE_URL não encontrado no .env")
+    return v
+
+
+def ler_senha():
+    """Para o script se a senha não estiver definida, dizendo o que fazer."""
+    v = ler_env(SENHA_ENV)
+    if not v:
+        raise SystemExit(
+            f"{SENHA_ENV} não definida.\n"
+            f"  no Backend/.env:  {SENHA_ENV}=<a senha combinada>\n"
+            f"  ou no ambiente:   {SENHA_ENV}=<a senha combinada>\n"
+            "A senha é combinada FORA do repositório — não a escreva em "
+            "arquivo versionado."
+        )
+    return v
 
 
 async def resolver(conn, c):
@@ -97,7 +130,7 @@ async def uid_de(conn, c, v):
             or await conn.fetchval("select gen_random_uuid()"))
 
 
-async def escrever(conn, c, v, uid):
+async def escrever(conn, c, v, uid, senha):
     # --- auth.users + identity (delete+insert por id: idempotente) ---
     await conn.execute("delete from auth.identities where user_id=$1", uid)
     await conn.execute("delete from auth.users where id=$1", uid)
@@ -114,7 +147,7 @@ async def escrever(conn, c, v, uid):
             '{{"provider":"email","providers":["email"]}}'::jsonb, '{{}}'::jsonb,
             {", ".join("''" for _ in TOKENS_VAZIOS)},
             false, false
-        )""", INSTANCE, uid, c["email"], SENHA)
+        )""", INSTANCE, uid, c["email"], senha)
     await conn.execute("""
         insert into auth.identities (user_id, provider, provider_id, identity_data,
                                      last_sign_in_at, created_at, updated_at)
@@ -143,6 +176,9 @@ async def escrever(conn, c, v, uid):
 
 
 async def main(commit):
+    # Antes de abrir conexão: faltando a senha, o erro aparece na hora e vale
+    # também para o dry-run, que serve justamente para conferir o plano.
+    senha = ler_senha()
     conn = await asyncpg.connect(load_db_url(), statement_cache_size=0)
     try:
         print(f"{'e-mail':32} {'role':12} vínculo")
@@ -166,8 +202,10 @@ async def main(commit):
 
         async with conn.transaction():   # tudo-ou-nada
             for c, v, uid in plano:
-                await escrever(conn, c, v, uid)
-        print(f"\n[COMMIT] {len(plano)} contas criadas/atualizadas (senha: {SENHA}).")
+                await escrever(conn, c, v, uid, senha)
+        # A senha NÃO é ecoada: a saída deste script acaba em terminal
+        # compartilhado, log de CI e captura de tela. Quem rodou já a tem.
+        print(f"\n[COMMIT] {len(plano)} contas criadas/atualizadas (senha: a de {SENHA_ENV}).")
 
         print("\n=== conferência em perfis ===")
         rows = await conn.fetch("""

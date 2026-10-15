@@ -221,6 +221,12 @@ KAIA_QUARENTENA_ALUNOS=3                   # alunos em paralelo no mutirão de q
 # Opcional — modelo de embedding do few-shot dinâmico (pgvector).
 GEMINI_EMBED_MODEL=gemini-embedding-001
 
+# Senha das contas de teste, usada SÓ por Backend/seed_contas_teste.py.
+# COMBINADA FORA DO REPOSITÓRIO (não há cofre definido ainda — peça por canal
+# privado). Sem ela o script para com uma mensagem dizendo o que definir; não há
+# valor padrão de propósito, porque padrão é o literal versionado de volta.
+SENHA_CONTAS_TESTE=
+
 # ---- Pagamento (Mercado Pago) — SEMI-PRONTO, ver a seção "Pagamento" ----
 # Sem MP_ACCESS_TOKEN o pagamento fica indisponível e NINGUÉM é barrado: as rotas
 # respondem 503 e o acesso ao estudo segue liberado. O site não cai por falta de chave.

@@ -83,11 +83,20 @@ Plataforma educacional voltada para estudantes do ensino médio — o público i
 
 ```
 Frontend/
-  pages/        → os .html (login, index, hobbies, materias, perfil, meu-coati, dashboard, responsaveis)
+  pages/        → os .html. Entrada pública: index.html (landing) e login.html.
+                  Aluno: materias, hobbies, perfil, meu-coati, avaliacao.
+                  Escola: escola, cadastro-escola, dashboard.
+                  LGPD e contas: cadastro, consentimento, responsaveis, termos,
+                  privacidade, assinatura-vencida.
   css/          → style.css
   js/           → módulos do front: comum.js (base/rail/apiFetch), login.js (auth/cadastro),
-                  materias.js (missões/sensores/pomodoro), hobbies.js, perfil.js, dashboard.js
-  assets/       → Coati.jpg, Coati_3d.glb
+                  materias.js (missões/sensores/pomodoro/caderno), hobbies.js, perfil.js,
+                  dashboard.js, escola.js, cadastro-escola.js, consentimento.js,
+                  meu-coati.js, coati-economia.js, puros.js (funções puras testadas),
+                  constelacao.js (fundo da landing), coati-loader.js (espera da IA)
+  assets/       → Coati.jpg, Coati_3d.glb, logo-coati.png, logo-coati-256.png (favicon),
+                  KaIA_Letreiro_Profundo.png e KaIA_Letreiro_Multicor.png (letreiros),
+                  Correndinho-Coati.png (espera da IA), Tumate.png (pausa do pomodoro)
   config.js     → API_URL + Supabase (NÃO vai pro Git — copie de config.example.js)
 Frontend/ (continuação)
   robots.txt, sitemap.xml, llms.txt → SEO. Ficam AQUI e não na raiz do repo porque
@@ -103,8 +112,11 @@ Backend/
   thompson.py           → bandit das 7 intervenções reativas
   consentimento.py      → tokens, validação e hash do aceite do responsável (LGPD art. 14)
   mouse_features.py     → mouse_track bruto → features de mouse do modelo v2
+  ingerir_questoes_reais.py   → carrega questões reais de prova para a base
+  gerar_exemplos_few_shot.py  → monta os exemplos few-shot do gerador
+  criar_schema_teste.py → cria um schema isolado para rodar testes contra o banco
   requirements.txt      → dependências Python
-  seed_contas_teste.py  → cria as contas @teste.kaia (senha teste1234)
+  seed_contas_teste.py  → cria as contas @teste.kaia (a senha fica no próprio script)
   seed_sintetico.py     → popula sessões sintéticas para os painéis
   limpar_*.{py,sql}     → desfazem os seeds
   .env                  → variáveis de ambiente (NÃO vai pro Git — veja "2. Configuração")
@@ -257,7 +269,8 @@ python Backend/app.py
 ```
 
 Para testar se está no ar, abra: `http://127.0.0.1:5000/`
-Deve aparecer: `{"status": "KaIA backend no ar"}`
+Deve vir um JSON começando por `"status": "KaIA backend no ar"`, seguido das flags do
+experimento e dos modelos carregados (é o healthcheck do Render, não só um ping).
 
 > Use `127.0.0.1`, não `localhost`: no Windows `localhost` pode resolver para IPv6 e o servidor dev só escuta em IPv4.
 
@@ -270,15 +283,18 @@ Rode com um servidor local (ex.: extensão **Live Server** do VS Code). O ponto 
 
 ### 6. Entrar com uma conta de teste
 
-Senha de todas: **`teste1234`**.
+As contas de teste são as `@teste.kaia` criadas por `Backend/seed_contas_teste.py` —
+os e-mails e os papéis estão na lista `CONTAS` dentro do próprio script.
 
-| E-mail | Papel |
-|--------|-------|
-| `aluno1@teste.kaia` | aluno |
-| `aluno2@teste.kaia` | aluno |
-| `aluno.individual@teste.kaia` | aluno (sem escola) |
-| `professor@teste.kaia` | professor |
-| `coordenador@teste.kaia` | coordenador |
+**As credenciais são combinadas fora do repositório.** Ainda **não há um cofre
+definido** para elas: enquanto não houver, peça por um canal privado a quem mantém o
+projeto e não traga a senha de volta para nenhum arquivo versionado.
+
+> [!CAUTION]
+> **A senha antiga das contas de teste está no histórico do git e precisa ser trocada.**
+> Tirá-la deste arquivo não a apaga: ela segue acessível em qualquer commit anterior, e o
+> repositório é público. Enquanto a troca não acontecer, o problema continua existindo —
+> inclusive para a conta `admin`, que usa a mesma senha e tem e-mail real.
 
 Login OK = cai na tela do aluno. Conferência técnica: DevTools → Network → `GET /perfil` retorna **200**.
 
@@ -311,11 +327,15 @@ O banco (schema **e** dados) vive no **Supabase, na nuvem**. Usando o **mesmo pr
 pronto: não precisa rodar nada aqui.** As contas de teste do passo 6 já existem, com as
 senhas certas.
 
+> [!WARNING]
+> Depois de trocar a senha das contas de teste, atualize-a em `Backend/seed_contas_teste.py`
+> — o script a usa para recriar as contas, então as duas pontas têm de andar juntas.
+
 Você só mexe no banco nestes casos:
 
 - **Recriar/resetar as contas de teste** (ex.: alguém trocou as senhas e o login parou):
   `python Backend/seed_contas_teste.py --commit` (sem `--commit` = dry-run, só mostra o
-  plano; rode de dentro de `Backend/`). Recria as 6 contas com senha `teste1234`.
+  plano; rode de dentro de `Backend/`). Recria as 6 contas com a senha definida no script.
   ⚠️ **Depende do schema base já existir** (`escolas`, `turmas`, `professores`,
   `coordenadores`) — ele *reaproveita* essas linhas, **não as cria**.
 - **Schema do banco** (inclusive o trigger de consentimento no signup): já vem inteiro no
@@ -342,7 +362,9 @@ e `python Backend/limpar_contas_teste.py --commit`.
 | `/` | GET | Verifica se o servidor está no ar |
 | `/temas` | POST | Gera subtemas de uma matéria (com cache) |
 | `/gerar-questao` | POST | Cria questão de múltipla escolha com explicação |
-| `/perguntar` | POST | Resposta livre da IA (personalizada por hobbies) |
+| `/gerar-simulado` | POST | Gera um lote de questões de uma vez |
+| `/questoes/hoje` | GET | Fila de questões já preparadas para a sessão |
+| `/questoes/devolver`, `/questoes/reportar` | POST | Devolve à fila e reporta questão com problema |
 | `/anotacoes` | GET/PUT | Lê e grava o caderno de anotações (texto) |
 | `/perfil` | GET/POST | Dados do aluno (login por e-mail; grava hobbies) |
 | `/perfil/estatisticas` | GET | Desempenho semanal + última sessão + análise |
@@ -350,14 +372,17 @@ e `python Backend/limpar_contas_teste.py --commit`.
 | `/events` | POST | Registra os eventos de foco dos sensores (e captura o rótulo do probe) |
 | `/diagnose` | GET | Estima o estado de atenção da sessão (modelo v2) |
 | `/intervencao/pendente`, `/intervencao/feedback` | GET/POST | Intervenções reativas (Fluxo A) |
+| `/intervencao/reancoragem` | POST | Registra a reancoragem depois da intervenção |
 | `/prevencao/pausa` | POST | Decide o apoio da pausa entre rodadas (Fluxo B) |
 | `/consentimento/solicitar`, `/consentimento/status` | POST/GET | Gera e consulta o link de autorização do responsável |
 | `/consentimento/{token}` | GET/POST | Página do responsável: lê o pedido e registra o aceite |
 | `/dashboard/dados` | GET | Dados do dashboard interno (acesso restrito por `role`) |
+| `/api/dados-grafico` | GET | Série do gráfico do dashboard |
 | `/responsavel/aluno`, `/responsavel/painel` | GET | Painel de responsáveis |
 | `/assinatura` | GET | Estado da assinatura da conta (acesso, status, planos, se é sandbox) |
 | `/assinatura/criar` | POST | Abre a assinatura e devolveria o link do Mercado Pago — **503 sem chave** |
 | `/webhook/mercadopago` | POST | Confirmação do MP. Exige `x-signature` válida; idempotente |
+| `/seed/aluno-teste` | POST | Cria um aluno de teste sob demanda (só para desenvolvimento) |
 
 ---
 

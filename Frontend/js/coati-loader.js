@@ -69,8 +69,11 @@
         coati.className = 'kaia-cload__coati';
         coati.src = '../assets/Correndinho-Coati.png';
         coati.alt = '';            // quem nomeia o que acontece é o role="status"
-        coati.width = 140;
-        coati.height = 105;
+        // Só a PROPORÇÃO (4:3, de 420x315): reserva a caixa antes de a imagem
+        // chegar e evita o salto de layout. Quem manda no tamanho é o
+        // `width` do .kaia-cload__coati no style.css, com height:auto.
+        coati.width = 170;
+        coati.height = 128;
 
         frase = document.createElement('p');
         frase.className = 'kaia-cload__frase';

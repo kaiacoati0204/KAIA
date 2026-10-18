@@ -4224,7 +4224,7 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
 }
 .kaia-cload__coati {
   display: block;
-  width: 140px;
+  width: 170px;
   height: auto;
   animation: kaia-cload-balanco 1.1s ease-in-out infinite;
 }

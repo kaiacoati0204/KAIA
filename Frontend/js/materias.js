@@ -3462,6 +3462,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // uma missão (criarSessao em startMission).
 document.addEventListener('DOMContentLoaded', () => {
     // montarRail() e aplicarTexturaPapel() agora rodam no init do comum.js.
+    if (window.KAIA_ESTUDO_BLOQUEADO) return;   // celular: nada de sensores, pomodoro nem meta (estudo-so-computador.js)
     registrarSensores();
     retomarPomodoroSePendente();   // pausa em andamento reaparece ao recarregar/reabrir
     mostrarMetaDiariaMenu();       // "faltam X para a meta de hoje" na tela de matérias

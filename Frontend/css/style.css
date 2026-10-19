@@ -4226,6 +4226,13 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
 .kaia-cload__coati {
   display: block;
   width: 350px;
+  /* A 360px de tela o bloco tem 240px úteis e a imagem pede 350: sem este teto
+     ela transborda 55px de cada lado e a arte sai truncada (some a ponta da
+     cauda e o focinho). Um ancestral corta o excedente, então NÃO há scroll
+     horizontal — o defeito passa batido em teste de estouro e só aparece em
+     print. Com max-width ela encolhe onde não cabe; height:auto preserva a
+     proporção, e no desktop os 350 continuam valendo. */
+  max-width: 100%;
   height: auto;
   animation: kaia-cload-balanco 1.1s ease-in-out infinite;
 }

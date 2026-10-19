@@ -1410,7 +1410,11 @@ html[data-luz="4"] {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;   /* sem isto o item flex não encolhe abaixo do e-mail e o e-mail não quebra */
 }
+/* E-mail quebra em qualquer ponto, nunca ellipsis: a pessoa precisa ler (e poder
+   selecionar) o endereço inteiro para conferir em qual conta está. */
+#emailUsuario { overflow-wrap: anywhere; }
 .perfil-info h1 {
   font-size: 2.6rem;
   font-weight: 800;
@@ -1633,16 +1637,55 @@ html[data-luz="4"] {
   .gauge-principal .gauge-slot { flex: 0 0 auto; width: 150px; }
 }
 
-/* Celular: 2 por linha, fixo. O .secao-perfil come 80px de padding, então num
-   telefone de 390px sobram 233px para a grade — o auto-fit de 155px pediria 324px
-   e despencaria para 1 coluna. Aqui a coluna manda, e o gauge encolhe junto. */
+/* ---- PERFIL NO CELULAR (≤480px, só body.perfil-page) ---- */
+/* Escopo na classe do body: .secao-perfil e .secao-sub também vestem avaliacao,
+   assinatura-vencida, escola e index, que ficam de fora. Medido a 360 com dados:
+   269px de scroll horizontal, 158px úteis de 360 e texto a 11,84px. */
 @media (max-width: 480px) {
-  .materias-grade { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  .materia-card { padding: 12px 8px 16px; }
-  .materia-card .gauge-slot { width: 84px; }
-  .materia-card .gauge-num { font-size: 30px; }   /* unidade do viewBox: sobe p/ compensar o slot menor */
-  .materia-nome { font-size: .86rem; }
-  .materia-recado { font-size: .74rem; }
+  /* padding das seções: 40 → 20. A 360 devolve 198px úteis em vez de 158. Valor do
+     perfil, não regra do projeto. A rail (60px) não entra aqui. */
+  body.perfil-page .perfil-topo,
+  body.perfil-page .secao-perfil { padding: 20px; }
+
+  /* topo empilha: avatar 120 + gap 40 já passavam dos 158 e o nome ficava sem coluna. */
+  body.perfil-page .perfil-topo { flex-direction: column; align-items: flex-start; gap: 16px; }
+  body.perfil-page .perfil-info { align-self: stretch; }   /* coluna toda, senão mede o e-mail e não quebra */
+  /* nome: 2,6rem → 1,7rem ("Albuquerque" media 267px em 198). A REDE fica mesmo
+     assim: um sobrenome mais longo ainda não cabe, e sem ela volta o scroll
+     horizontal. Só quebra a palavra que não cabe; nome que cabe não muda. */
+  body.perfil-page .perfil-info h1 { font-size: 1.7rem; overflow-wrap: anywhere; }
+
+  /* min-width 220 dos cards estourava a seção; aqui um por linha, largura toda. */
+  body.perfil-page .card-perfil { min-width: 0; flex-basis: 100%; }
+
+  /* luz: a escala cede o espaço (148 fixos + 92 do rótulo = 252 em 158). */
+  body.perfil-page .luz-controle { width: 100%; }
+  body.perfil-page .luz-escala { flex: 1 1 auto; min-width: 0; width: auto; }
+  body.perfil-page .luz-nivel { min-width: 0; }
+
+  /* botão já ocupa a linha toda (≤520); o texto pode quebrar em tela mais estreita. */
+  body.perfil-page .btn-avaliar { white-space: normal; }
+
+  /* velocímetro encolhe pela LARGURA do slot (o SVG é width:100%, escala inteiro).
+     NUNCA por GAUGE_ARCO/GAUGE_VOLTA no perfil.js: saem da geometria do arco. */
+  body.perfil-page .gauge-principal .gauge-slot { width: min(150px, 100%); }
+
+  /* grade: 1 coluna, NUNCA 2. Com 2, qualquer número ímpar de matérias deixa card
+     órfão na última linha (medido com 5 e 9). Mesmo precedente dos planos da landing
+     (.lp-planos-grid): de 3 direto para 1, nunca 2, para não ter órfão. Em 1 coluna
+     o card tem a largura toda, então gauge e padding voltam aos do desktop. */
+  body.perfil-page .materias-grade { grid-template-columns: 1fr; gap: 10px; }
+
+  /* PISO DE 15px no texto do perfil. A medição mostrou texto PEQUENO, não grande
+     (recado a 11,84px, subtítulos a 13,6), e isso é inaceitável numa plataforma feita
+     para quem tem dificuldade de atenção. Não "limpe" o piso. Desktop não muda: lá
+     os tamanhos foram escolhidos com o espaço que existe. */
+  body.perfil-page .materia-recado,
+  body.perfil-page .materia-nome,
+  body.perfil-page .secao-sub,
+  body.perfil-page .card-perfil p,
+  body.perfil-page .luz-nivel,      /* "Padrão": em que tema o aluno está */
+  body.perfil-page .secao-quando { font-size: 15px; }   /* "· ontem": quando foi a sessão */
 }
 
 /* ---- PAINEL DE PERSONALIZAÇÃO (cor + textura da matéria) ---- */
@@ -2773,6 +2816,11 @@ body.textura-papel .conteudo {
 }
 
 /* --- Perfil: subtítulo de seção, marcador de "quando" e estado vazio --- */
+/* PENDENTE (Bia): contraste. .secao-sub (color-mix com transparent: 3,59–3,89:1) e
+   .secao-quando (3,15–3,37:1) reprovam o piso de 4,5:1 nos 4 temas, e TAMBÉM no
+   desktop. Caminho provável: misturar com a cor do FUNDO em vez de transparent, ou
+   usar --muted, que já foi escurecido para 5,5:1 por este mesmo motivo. Atenção:
+   .secao-sub mora também na landing e na avaliação — merece prova própria. */
 .secao-sub {
   margin-top: -6px;
   margin-bottom: 14px;

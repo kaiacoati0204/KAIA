@@ -3046,10 +3046,10 @@ function _garantirOverlayPausa() {
     el.innerHTML =
         `<div class="kaia-pausa-card">`
         // MASTER NO AFFINITY: mudança de arte se faz lá e se reexporta neste mesmo
-        // nome. O PNG tem 240px para servir os ~75px de uso em telas 3x — AMPLIAR
+        // nome. O PNG tem 500px para servir os 200px de uso em telas 2,5x — AMPLIAR
         // este arquivo só borra. aria-hidden porque o <h2> logo abaixo já diz o que é.
         + `<img class="kaia-pausa-tomate" src="../assets/Tumate.png" alt=""`
-        + ` width="75" height="75" aria-hidden="true">`
+        + ` width="200" height="200" aria-hidden="true">`
         + `<h2 id="kaia-pausa-titulo">Hora de uma pausa</h2>`
         + `<p class="kaia-pausa-sub">Respire um pouco. Você volta rendendo mais.</p>`
         + `<div class="kaia-pausa-contagem"><span id="kaia-pausa-seg">0</span>s</div>`

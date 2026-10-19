@@ -62,18 +62,21 @@
         leitor.setAttribute('role', 'status');
         leitor.textContent = 'Gerando questão';
 
-        // MASTER NO AFFINITY. Mudança de arte se faz lá e se reexporta neste
-        // mesmo nome e tamanho — este PNG tem 420px de largura para servir os
-        // 140px de uso em telas 3x, e AMPLIÁ-LO só borra.
+        // MASTER NO AFFINITY. Mudança de arte se faz lá e se reexporta — este
+        // arquivo tem 800px de largura para servir os 350px de uso em telas
+        // ~2,3x, e AMPLIÁ-LO só borra.
         const coati = document.createElement('img');
         coati.className = 'kaia-cload__coati';
-        coati.src = '../assets/Correndinho-Coati.png';
+        // WebP e nao PNG: a 800px o PNG dava 213 KB e o WebP da 53 KB, com o
+        // mesmo alfa. Numa TELA DE ESPERA, 160 KB a menos e a diferenca entre
+        // o coati aparecer junto com a espera ou depois dela.
+        coati.src = '../assets/Correndinho-Coati.webp';
         coati.alt = '';            // quem nomeia o que acontece é o role="status"
         // Só a PROPORÇÃO (4:3, de 420x315): reserva a caixa antes de a imagem
         // chegar e evita o salto de layout. Quem manda no tamanho é o
         // `width` do .kaia-cload__coati no style.css, com height:auto.
-        coati.width = 170;
-        coati.height = 128;
+        coati.width = 350;
+        coati.height = 263;
 
         frase = document.createElement('p');
         frase.className = 'kaia-cload__frase';

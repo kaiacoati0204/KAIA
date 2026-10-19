@@ -96,7 +96,8 @@ Frontend/
                   constelacao.js (fundo da landing), coati-loader.js (espera da IA)
   assets/       → Coati.jpg, Coati_3d.glb, logo-coati.png, logo-coati-256.png (favicon),
                   KaIA_Letreiro_Profundo.png e KaIA_Letreiro_Multicor.png (letreiros),
-                  Correndinho-Coati.png (espera da IA), Tumate.png (pausa do pomodoro)
+                  Correndinho-Coati.webp (espera da IA — WebP, não PNG: a 800px o
+                  PNG dava 213 KB contra 53 KB), Tumate.png (pausa do pomodoro)
   config.js     → API_URL + Supabase (NÃO vai pro Git — copie de config.example.js)
 Frontend/ (continuação)
   robots.txt, sitemap.xml, llms.txt → SEO. Ficam AQUI e não na raiz do repo porque

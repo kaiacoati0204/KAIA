@@ -25,6 +25,7 @@ import risco
 from bandit_prevencao import (BanditPrevencao, recompensa_rodada,
                               PARAMS_PREVENCAO_PATH, MIN_RESPONDIDAS)
 from mouse_features import features_mouse, blocos_parados, parado_apos_leitura, LIMIAR_BLOCO_S
+from moleculas import conferir_gabarito, instrucao_eixos, IndiceMoleculas, CONVENCAO
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
@@ -157,6 +158,21 @@ def _tema_canonico(tema):
 
 def _eh_calculo(materia, tema):
     return tema in TEMAS_CALCULO.get(materia, ())
+
+
+# ==== QUÍMICA ORGÂNICA COM MOLÉCULA — ATRÁS DE CHAVE DESLIGADA ====
+# A questão diz "a cadeia representada na figura", e a FIGURA ainda não existe no front:
+# servir agora entregaria enunciado sem figura. Desligada (padrão), Orgânica segue no
+# caminho conceitual de hoje e nada muda — nem o SQL: a coluna `smiles` só é lida e
+# escrita com a chave ligada, porque o deploy pode chegar ao Render antes da migration.
+# PARA LIGAR: aplicar supabase/migrations/20261020120000_smiles_questoes.sql, depois
+# KAIA_ORGANICA_MOLECULA=1. Só faz sentido quando o front desenhar o SMILES.
+ORGANICA_MOLECULA = os.getenv("KAIA_ORGANICA_MOLECULA") == "1"
+TEMAS_MOLECULA = {"QUI": {"Química Orgânica"}}
+
+
+def _eh_molecula(materia, tema):
+    return ORGANICA_MOLECULA and tema in TEMAS_MOLECULA.get(materia, ())
 
 
 # Resposta padrão quando o servidor está sem banco (pool = None).
@@ -1175,11 +1191,13 @@ def _row_para_questao(row):
         "ans": row["resposta_correta"],
         "explicacao": row["explicacao"],
         "porque_erradas": json.loads(row["porque_erradas"]),
+        # questão antiga (ou chave desligada, select sem a coluna) não tem: fica None
+        "smiles": row["smiles"] if "smiles" in row.keys() else None,
     }
 
-# Só os campos que o frontend precisa (tira usa_hobbie e afins).
+# Só os campos que o frontend precisa (tira usa_hobbie, molecula_interna e afins).
 def _frontend_q(q):
-    return {
+    item = {
         # Sem o id, a resposta do aluno nao volta amarrada a QUAL questao — e sem isso
         # nao existe item analysis (ninguem consegue agrupar respostas por questao).
         "questao_id": q.get("questao_id"),
@@ -1193,6 +1211,10 @@ def _frontend_q(q):
         "explicacao": q.get("explicacao", ""),
         "porque_erradas": q.get("porque_erradas", []),
     }
+    # Só quem TEM molécula ganha a chave: questão sem SMILES sai com o payload de sempre.
+    if q.get("smiles"):
+        item["smiles"] = q["smiles"]
+    return item
 
 # Exemplos reais (few-shot) carregados do JSON no repo (curados do ENEM, Apache 2.0).
 # Chaveado por matéria KaIA; matérias de conta (MAT/FIS/QUI) não têm entrada -> [].
@@ -1438,6 +1460,143 @@ Regras:
     return saida[:n]
 
 
+# ==== MOLÉCULA (Química Orgânica, atrás de ORGANICA_MOLECULA) ====
+# Versão PRÓPRIA das regras deste caminho (a global VERSAO_PROMPT rotula o resto e não muda
+# com a chave desligada). Suba ao mudar o prompt da molécula ou a CONVENCAO do moleculas.py.
+VERSAO_PROMPT_MOLECULA = "mol-v1-2026-10"
+# Prompt revisado pela Bia (rodada B1). Ensina a convenção do ensino médio brasileiro e
+# esconde o nome da molécula. Os eixos cobráveis vêm de moleculas.instrucao_eixos(), não
+# copiados aqui. SEM texto de "não repita": medido, o modelo ignorou a lista e repetiu 13
+# de 20 — a repetição é barrada em código (portão c), não pedida.
+_FORMATO_MOLECULA = (
+    '{"q": "enunciado", "opts": ["a","b","c","d","e"], "ans": 0,\n'
+    ' "explicacao": "por que a correta é a correta (1 a 2 frases)",\n'
+    ' "porque_erradas": ["por que a opção 0 erra", "...", "...", "...", "..."],\n'
+    ' "smiles": "SMILES da molécula da figura",\n'
+    ' "classificacao": { só as chaves cobráveis para esta molécula },\n'
+    ' "molecula_interna": "nome da molécula — campo INTERNO, só para conferência; nunca vai ao aluno"}'
+)
+
+
+def _prompt_molecula(n):
+    return f"""
+Crie {n} questões objetivas de múltipla escolha de Química Orgânica para o ensino médio
+brasileiro (ENEM), sobre CLASSIFICAÇÃO DE CADEIAS CARBÔNICAS. Cada questão mostra UMA molécula
+numa FIGURA (desenhada a partir do "smiles") e pede para classificar a cadeia representada nela.
+Responda APENAS com um ARRAY JSON de {n} objetos, cada um no formato EXATO:
+{_FORMATO_MOLECULA}
+
+O NOME DA MOLÉCULA NÃO APARECE:
+- Nem no enunciado, nem nas alternativas, nem na "explicacao", nem no "porque_erradas".
+  Nada de nome comum, nome IUPAC, nome de função ("éter", "amina", "fenol") ou fórmula
+  molecular. O aluno só vê a figura.
+- O enunciado se refere a ela como "a cadeia carbônica representada na figura".
+- O nome vai SÓ no campo "molecula_interna".
+
+CONVENÇÃO DE CLASSIFICAÇÃO (ensino médio brasileiro — siga EXATAMENTE, mesmo que um livro de
+faculdade diga outra coisa):
+{CONVENCAO}
+
+QUAIS EIXOS CADA QUESTÃO COBRA (o gabarito e as alternativas seguem isto):
+{instrucao_eixos()}
+Valores permitidos em cada chave:
+    "aberta_fechada": "aberta" | "fechada" | "mista"
+    "normal_ramificada": "normal" | "ramificada"
+    "saturada_insaturada": "saturada" | "insaturada"
+    "homogenea_heterogenea": "homogenea" | "heterogenea"
+    "aromatica_aliciclica": "aromatica" | "aliciclica"
+
+ENUNCIADO:
+- O enunciado TEM de terminar em PERGUNTA ("?") ou em trecho que as alternativas completam
+  (sem ponto final). NUNCA termine em frase fechada seguida de alternativas soltas.
+  Ex.: "Qual é a classificação da cadeia carbônica representada na figura?" ou
+  "A cadeia carbônica representada na figura é classificada como" (sem ponto).
+  Errado: "Assinale a alternativa que traz a classificação da cadeia." (frase fechada)
+
+FORMATO DAS ALTERNATIVAS:
+- Cada alternativa é uma combinação, em texto corrido, só dos eixos cobráveis daquela cadeia.
+  Ex. para cadeia aberta homogênea: "aberta, ramificada, saturada e homogênea".
+- NUNCA escreva "null", "None", "-", "n/a" ou campo vazio dentro de uma alternativa.
+- As 4 erradas são erros que um aluno cometeria (trocar mista por fechada, achar que OH na
+  ponta torna heterogênea, contar C=O como insaturação, chamar furano de aromático).
+
+SMILES:
+- Aromático SEMPRE em minúscula (c1ccccc1). NUNCA na forma C1=CC=CC=C1.
+- SMILES válido, da mesma molécula que o "classificacao" descreve.
+
+VARIEDADE:
+- As {n} moléculas são TODAS DIFERENTES entre si (nem a mesma molécula escrita de outro jeito).
+- Distribua: abertas normais e ramificadas, saturadas e insaturadas, com heteroátomo na ponta e
+  entre carbonos, fechadas alicíclicas e aromáticas, heterocíclicas e mistas.
+
+Enunciados em texto corrido, sem markdown. Linguagem simples e acolhedora.
+"""
+
+
+def _nome_visivel(q):
+    """O nome interno aparece em algum campo que o aluno vê? Comparação de texto pura."""
+    nome = str(q.get("molecula_interna") or "").strip().casefold()
+    if not nome:
+        return False
+    visivel = " ".join([str(q.get("q") or ""), str(q.get("explicacao") or ""),
+                        *map(str, q.get("opts") or []), *map(str, q.get("porque_erradas") or [])])
+    return nome in visivel.casefold()
+
+
+async def _gerar_molecula(n, materia, nome, tema, hobbie, nivel, conn=None, exemplos=None, evitar=None):
+    """Gera questões de classificação de cadeia com SMILES e passa cada uma por TRÊS portões,
+    nesta ordem; reprovou em um, é DESCARTADA (enunciado que fala de figura sem figura válida
+    é pior que não ter questão):
+      a) gabarito: moleculas.conferir_gabarito (SMILES válido, minúscula, convenção);
+      b) nome: molecula_interna aparecendo em q/opts/explicacao/porque_erradas;
+      c) repetição: a molécula já está no cache deste materia+tema (ou neste lote).
+    SATURAR É O FIM ESPERADO, não falha: o cache é servido antes de gerar, então quando o tema
+    tiver molécula bastante a geração deixa de ser chamada. Não "conserte" o descarte de (c).
+    `exemplos`/`evitar` chegam pela assinatura comum dos geradores e são ignorados."""
+    n_pedir = max(n, math.ceil(n * FATOR_SOBRA_GERACAO))
+    try:
+        itens = extrair_json(await asyncio.to_thread(chamar_gemini, _prompt_molecula(n_pedir)))
+    except Exception as e:
+        print("[KaIA] erro Gemini /molecula:", e)
+        return []
+    if isinstance(itens, dict):
+        itens = itens.get("questoes") or [itens]
+    conhecidas = IndiceMoleculas()
+    if conn is not None:
+        try:
+            for r in await conn.fetch("select smiles from questoes_cache where materia = $1 "
+                                      "and tema = $2 and smiles is not null", materia, tema):
+                conhecidas.adicionar(r["smiles"])
+        except Exception as e:
+            print("[KaIA] AVISO: portão de repetição sem o cache (coluna smiles?):", e)
+    saida, motivos = [], {"estrutura": 0, "gabarito": 0, "nome": 0, "repeticao": 0}
+    for q in itens if isinstance(itens, list) else []:
+        if not isinstance(q, dict) or not q.get("opts"):
+            motivos["estrutura"] += 1
+            continue
+        if not conferir_gabarito(q.get("smiles"), q.get("classificacao") or {})["aprovada"]:
+            motivos["gabarito"] += 1
+            continue
+        if _nome_visivel(q):
+            motivos["nome"] += 1
+            continue
+        if conhecidas.contem(q["smiles"]):
+            motivos["repeticao"] += 1
+            continue
+        pronta = _normalizar_questao(q)
+        if not _questao_utilizavel(pronta):
+            motivos["estrutura"] += 1
+            continue
+        conhecidas.adicionar(q["smiles"])
+        pronta.pop("molecula_interna", None)        # nunca sai daqui: nem front nem banco
+        pronta.pop("classificacao", None)
+        pronta["versao_prompt"] = VERSAO_PROMPT_MOLECULA
+        saida.append(pronta)
+    print(f"[KaIA] molecula: {len(saida)}/{len(itens or [])} aprovadas p/ {materia}/{tema} "
+          f"(descartes: {motivos})")
+    return saida[:n]
+
+
 # ==== VERIFICACAO INDEPENDENTE (2a barreira) =================================
 # Filtro estrutural e PoT nao pegam GABARITO ERRADO, o defeito mais grave achado com
 # professores: um modelo DIFERENTE do gerador resolve a questao sem ver o gabarito (mesma
@@ -1501,6 +1660,16 @@ Responda APENAS com um ARRAY JSON, um objeto por questão, na mesma ordem:
 - "resposta": a alternativa correta. Use "NENHUMA" se a resposta certa NÃO estiver entre
   as alternativas, ou se o enunciado não permitir chegar a uma resposta.
 - "problema": vazio se está tudo bem; senão descreva o defeito em até 15 palavras."""
+
+
+# Questão com molécula: o verificador vê a figura pelo SMILES e recebe a MESMA convenção
+# do gerador (moleculas.CONVENCAO, não uma cópia). Sem isso ele usa química de faculdade,
+# marca 'suspeita' o gabarito que o cálculo provou certo, e 'suspeita' nunca é servida.
+# Só entra no prompt quando o lote TEM molécula: lote sem SMILES sai igual ao de sempre.
+_CONVENCAO_VERIFICADOR = (
+    "Nas questões que mostram uma MOLÉCULA (dada por SMILES), classifique a cadeia pela\n"
+    "convenção do ENSINO MÉDIO BRASILEIRO abaixo — ela vale mesmo onde um livro de faculdade\n"
+    "diria outra coisa:\n" + CONVENCAO + "\n\n")
 
 
 def _letra_para_indice(letra):
@@ -1567,16 +1736,24 @@ def _chamar_verificador(prompt):
 
 
 def verificar_lote(questoes):
-    """[(indice, nota)] para uma lista de (enunciado, opts), UMA chamada só.
-    -1 = "nenhuma alternativa correta"; None = sem resposta do verificador para aquela
-    questao (fica SEM veredito: falha de infra nao e defeito da questao)."""
+    """[(indice, nota)] para uma lista de (enunciado, opts) ou (enunciado, opts, smiles),
+    UMA chamada só. -1 = "nenhuma alternativa correta"; None = sem resposta do verificador
+    para aquela questao (fica SEM veredito: falha de infra nao e defeito da questao)."""
     if not questoes:
         return []
-    blocos = []
-    for i, (enun, opts) in enumerate(questoes, 1):
+    blocos, tem_molecula = [], False
+    for i, item in enumerate(questoes, 1):
+        enun, opts = item[0], item[1]
+        smiles = item[2] if len(item) > 2 else None
         alts = "\n".join(f"{chr(65 + j)}) {o}" for j, o in enumerate(opts))
-        blocos.append(f"### Questão {i}\n{enun}\n{alts}")
+        figura = ""
+        if smiles:
+            tem_molecula = True
+            figura = f"\n(A figura mostra a molécula de SMILES {smiles}.)"
+        blocos.append(f"### Questão {i}\n{enun}{figura}\n{alts}")
     prompt = _PROMPT_VERIFICACAO.format(questoes=("\n\n").join(blocos))
+    if tem_molecula:
+        prompt = _CONVENCAO_VERIFICADOR + prompt
     vazio = [(None, "")] * len(questoes)
     try:
         bruto = _chamar_verificador(prompt).strip()
@@ -1624,7 +1801,7 @@ async def _verificar_entregues(pool, entregues):
         return
     try:
         res = await asyncio.to_thread(
-            verificar_lote, [(q["q"], q["opts"]) for q in alvos])
+            verificar_lote, [(q["q"], q["opts"], q.get("smiles")) for q in alvos])
         async with pool.acquire() as conn:
             for q, (idx, nota) in zip(alvos, res):
                 if idx is None:
@@ -1651,11 +1828,15 @@ async def job_verificar_cache(app):
             # Metade nas MAIS NOVAS (chegam ao aluno agora), metade nas MAIS VELHAS.
             # So `criada_em desc` deixava o estoque antigo parado enquanto houvesse
             # geracao -- foi assim que 625 questoes ficaram sem veredito.
+            # smiles SÓ com a chave ligada: o deploy pode chegar antes da migration, e pedir
+            # a coluna sem ela derrubaria a verificação inteira (mesmo cuidado do _buscar_cache).
+            cols = "questao_id, enunciado, alternativas, resposta_correta" + (
+                ", smiles" if ORGANICA_MOLECULA else "")
             pend = await conn.fetch(
-                "(select questao_id, enunciado, alternativas, resposta_correta "
+                f"(select {cols} "
                 " from questoes_cache where veredito is null order by criada_em desc limit $1) "
                 "union "
-                "(select questao_id, enunciado, alternativas, resposta_correta "
+                f"(select {cols} "
                 " from questoes_cache where veredito is null order by criada_em asc limit $1)",
                 VERIFICA_POR_RODADA // 2)
         except Exception as e:
@@ -1667,7 +1848,8 @@ async def job_verificar_cache(app):
             for q in bloco:
                 alts = q["alternativas"]
                 entradas.append((q["enunciado"],
-                                 json.loads(alts) if isinstance(alts, str) else alts))
+                                 json.loads(alts) if isinstance(alts, str) else alts,
+                                 q["smiles"] if "smiles" in q.keys() else None))
             resultados = await asyncio.to_thread(verificar_lote, entradas)
             for q, (idx, nota) in zip(bloco, resultados):
                 if idx is None:
@@ -1708,9 +1890,10 @@ async def _buscar_cache(conn, user_id, materia, tema, nivel, hobbie, limite, exc
               < ${len(params)}))"""
     params.append(limite)
     lim = len(params)
+    col_smiles = ", c.smiles" if ORGANICA_MOLECULA else ""   # chave desligada: SQL de sempre
     rows = await conn.fetch(f"""
         select c.questao_id, c.enunciado, c.alternativas, c.resposta_correta,
-               c.explicacao, c.porque_erradas, c.veredito
+               c.explicacao, c.porque_erradas, c.veredito{col_smiles}
         from questoes_cache c
         where c.materia = $1 and c.tema = $2 and c.nivel = $3 and {cond_hobbie}
           and not exists (select 1 from questoes_vistas v
@@ -1729,16 +1912,23 @@ async def _salvar_no_cache(conn, materia, tema, nivel, hobbie_sessao, questoes):
         usou = bool(q.get("usa_hobbie")) if hobbie_sessao else False
         hob = hobbie_sessao if usou else None
         item = _frontend_q(q)
+        valores = [materia, tema, nivel, hob, item["q"], json.dumps(item["opts"]),
+                   item["ans"], item["explicacao"], json.dumps(item["porque_erradas"]),
+                   GEMINI_MODEL, q.get("versao_prompt") or VERSAO_PROMPT]
+        # Coluna smiles SÓ com a chave ligada (a migration pode não estar aplicada).
+        # molecula_interna NUNCA entra aqui: é só para o portão de nome.
+        col, val = "", ""
+        if ORGANICA_MOLECULA:
+            valores.append(item.get("smiles"))
+            col, val = ", smiles", f", ${len(valores)}"
         try:
             qid = await conn.fetchval(
-                """insert into questoes_cache
+                f"""insert into questoes_cache
                      (materia, tema, nivel, hobbie, enunciado, alternativas,
-                      resposta_correta, explicacao, porque_erradas, modelo, versao_prompt)
-                   values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb, $10, $11)
+                      resposta_correta, explicacao, porque_erradas, modelo, versao_prompt{col})
+                   values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9::jsonb, $10, $11{val})
                    returning questao_id""",
-                materia, tema, nivel, hob, item["q"], json.dumps(item["opts"]),
-                item["ans"], item["explicacao"], json.dumps(item["porque_erradas"]),
-                GEMINI_MODEL, VERSAO_PROMPT)
+                *valores)
             item["questao_id"] = str(qid)
         except Exception as e:
             print("[KaIA] erro ao salvar no cache:", e)   # entrega mesmo assim
@@ -1863,26 +2053,33 @@ async def _montar_banda(conn, user_id, materia, nome, tema, hobbie, nivel, n):
     if n - len(entregues) > 0:
         calc = _eh_calculo(materia, tema)               # cálculo -> PoT (fórmula executada)
         falta = n - len(entregues)
-        conceituais = round(falta * FRACAO_CONCEITUAL.get(materia, 0.0)) if calc else falta
-        blocos = ([(True, falta - conceituais)] if calc else []) + [(False, conceituais)]
+        if _eh_molecula(materia, tema):                 # Orgânica com SMILES (chave ligada)
+            blocos = [("molecula", falta)]
+        else:
+            conceituais = round(falta * FRACAO_CONCEITUAL.get(materia, 0.0)) if calc else falta
+            blocos = ([("pot", falta - conceituais)] if calc else []) + [("conceitual", conceituais)]
+        geradores = {"pot": _gerar_calculo_pot, "conceitual": _gerar_no_gemini,
+                     "molecula": lambda *a, **k: _gerar_molecula(*a, conn=conn, **k)}
         # o que ESTA chamada já gerou vai na frente do "evitar": o cache sozinho não
         # garante que a volta 2 veja a volta 1, e era aí que saía questão repetida.
         desta_chamada = []
-        for por_pot, alvo in blocos:
+        for modo, alvo in blocos:
             if alvo <= 0:
                 continue
-            gerar = _gerar_calculo_pot if por_pot else _gerar_no_gemini
-            # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo não
+            gerar = geradores[modo]
+            # few-shot dinâmico (pgvector) SE ligado; conceitual cai nos exemplos fixos, cálculo
+            # não; molécula não usa few-shot (o prompt revisado não tem exemplos de questão)
             exemplos = None
-            if FEWSHOT_DINAMICO:
+            if FEWSHOT_DINAMICO and modo != "molecula":
                 # SEMPRE por tema. Antes so as exatas filtravam, e em humanas o few-shot
                 # pescava por semelhanca solta: pedindo "Geopolitica" ele mandava de
                 # exemplo terremoto e macrocefalia urbana, e a questao gerada saia no
                 # tema do exemplo. Medido em GEO: com few-shot 4/6 no tema certo, sem
                 # few-shot 6/6 -- o exemplo estava puxando o conteudo, nao so o estilo.
-                exemplos = await _exemplos_similares(conn, materia, tema, nivel, calculo=por_pot,
-                                                     por_tema=True)
-            exemplos = exemplos or (None if por_pot else _exemplos_few_shot(materia))
+                exemplos = await _exemplos_similares(conn, materia, tema, nivel,
+                                                     calculo=(modo == "pot"), por_tema=True)
+            if modo == "conceitual":
+                exemplos = exemplos or _exemplos_few_shot(materia)
             feitas = 0
             for _ in range(3):
                 if feitas >= alvo or n - len(entregues) <= 0:

@@ -113,6 +113,8 @@ Backend/
   thompson.py           → bandit das 7 intervenções reativas
   consentimento.py      → tokens, validação e hash do aceite do responsável (LGPD art. 14)
   mouse_features.py     → mouse_track bruto → features de mouse do modelo v2
+  moleculas.py          → classifica a cadeia carbônica a partir do SMILES (convenção do
+                          ensino médio) e confere o gabarito; portão da Química Orgânica
   ingerir_questoes_reais.py   → carrega questões reais de prova para a base
   gerar_exemplos_few_shot.py  → monta os exemplos few-shot do gerador
   criar_schema_teste.py → cria um schema isolado para rodar testes contra o banco
@@ -185,6 +187,12 @@ STALE_SESSAO_MIN=15
 # Opcional — few-shot dinâmico (questões reais via pgvector) + Program-of-Thought
 # nas questões de cálculo. Ligue para testar a geração baseada em reais.
 KAIA_FEWSHOT_DINAMICO=1
+
+# Opcional — DESLIGADA por padrão. Liga a Química Orgânica com molécula: a questão traz o
+# SMILES e pede para classificar "a cadeia representada na figura". NÃO ligue em produção
+# enquanto o front não desenhar a molécula (sairia enunciado de figura sem figura).
+# Exige a migration 20261020120000_smiles_questoes.sql (coluna questoes_cache.smiles).
+# KAIA_ORGANICA_MOLECULA=1
 
 # Camada preventiva (Fluxo B). ATIVA=0 desliga tudo. MODO: `fixo` oferece sempre (mede
 # aceitação sem misturar com erro de modelo) e `bandit` sorteia entre `nada` e `pacote_foco`.
@@ -306,6 +314,10 @@ projeto e não traga a senha de volta para nenhum arquivo versionado.
 Login OK = cai na tela do aluno. Conferência técnica: DevTools → Network → `GET /perfil` retorna **200**.
 
 ### 7. Banco de dados
+
+A migration `20261020120000_smiles_questoes.sql` (coluna `questoes_cache.smiles`, nula)
+já foi aplicada em produção e no schema `teste` em 2026-10-20. O backend só a usa com
+`KAIA_ORGANICA_MOLECULA=1`.
 
 > [!CAUTION]
 > **3 MIGRATIONS AINDA NÃO APLICADAS NO SUPABASE DE PRODUÇÃO.** Elas estão

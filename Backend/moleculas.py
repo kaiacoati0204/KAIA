@@ -189,6 +189,137 @@ def classificar_cadeia(smiles):
             "cobraveis": tuple(k for k in CHAVES if k not in fora)}
 
 
+# ---- PORTÃO DE TEXTO: o aluno lê as alternativas, não o campo "classificacao" ----
+# Campo e texto podem DISCORDAR: em COC(C)C e CCOCC o gabarito omitia o eixo certinho, mas as
+# opções diziam "ramificada"/"normal" numa cadeia heterogênea — o portão de gabarito passou e o
+# verificador pegou. Comparação de palavra simples, sem acento e sem caixa.
+PALAVRAS_DO_EIXO = {
+    "normal_ramificada": ("normal", "normais", "ramificada", "ramificadas", "ramificado"),
+    "aromatica_aliciclica": ("aromatica", "aromaticas", "aromatico", "aliciclica",
+                             "aliciclicas", "aliciclico"),
+}
+
+
+def _sem_acento(texto):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", str(texto or "").lower())
+                   if unicodedata.category(c) != "Mn")
+
+
+def alternativas_citam_eixo_nao_cobravel(smiles, opts):
+    """[(eixo, palavra, alternativa)] para cada opção que fala de um eixo que NÃO se cobra
+    nesta molécula. Lista vazia = texto limpo."""
+    r = classificar_cadeia(smiles)
+    if not r["ok"]:
+        return []
+    achados = []
+    for eixo in r["nao_aplicavel"]:
+        for o in opts or []:
+            palavras = set(_sem_acento(o).replace(",", " ").split())
+            for p in PALAVRAS_DO_EIXO.get(eixo, ()):
+                if p in palavras:
+                    achados.append((eixo, p, o))
+    return achados
+
+
+# ---- TEXTO ALTERNATIVO DA FIGURA ----
+# Descreve o que está DESENHADO, não como a cadeia se CHAMA: quem usa leitor de tela faz o
+# mesmo trabalho de classificar que quem vê a figura — nem mais, nem menos. NUNCA usa termo
+# de classificação (aberta, mista, ramificada, saturada, homogênea, aromática...) nem nome.
+# O smiles-drawer desenha anel aromático (minúscula) como hexágono com um CÍRCULO dentro, e é
+# isso que o texto diz. Gerado do SMILES já validado, nunca escrito pelo Gemini.
+_ELEMENTO = {"C": ("carbono", "carbonos"), "O": ("oxigênio", "oxigênios"),
+             "N": ("nitrogênio", "nitrogênios"), "S": ("enxofre", "enxofres"),
+             "P": ("fósforo", "fósforos"), "F": ("flúor", "flúores"), "Cl": ("cloro", "cloros"),
+             "Br": ("bromo", "bromos"), "I": ("iodo", "iodos")}
+_NUM = {1: "um", 2: "dois", 3: "três", 4: "quatro", 5: "cinco", 6: "seis", 7: "sete",
+        8: "oito", 9: "nove", 10: "dez"}
+_NUM_F = {1: "uma", 2: "duas"}
+
+
+def _n(k, fem=False):
+    return (_NUM_F if fem and k in _NUM_F else _NUM).get(k, str(k))
+
+
+def _qtd(k, el):
+    s, p = _ELEMENTO.get(el, (el, el))
+    return f"{_n(k)} {s if k == 1 else p}"
+
+
+def descrever_molecula(smiles):
+    """Texto alternativo da figura, a partir do SMILES. None se o SMILES não for válido."""
+    if not classificar_cadeia(smiles)["ok"]:
+        return None
+    g = read_smiles(str(smiles).strip(), reinterpret_aromatic=False)
+    el = {n: d["element"] for n, d in g.nodes(data=True)}
+    aro = {n for n, d in g.nodes(data=True) if d.get("aromatic")}
+    carbonos = {n for n in g if el[n] == "C"}
+    if len(g) == 1:
+        return "Figura de um único carbono, sem ligação com outro átomo."
+
+    contagem = {}
+    for n in g:
+        contagem[el[n]] = contagem.get(el[n], 0) + 1
+    ordem = ["C"] + sorted(e for e in contagem if e != "C")
+    partes = [_qtd(contagem[e], e) for e in ordem if e in contagem]
+    frases = ["Figura de uma molécula com " + (", ".join(partes[:-1]) + " e " + partes[-1]
+                                                if len(partes) > 1 else partes[0]) + "."]
+
+    aneis = [list(c) for c in nx.cycle_basis(g)]
+    no_anel = set().union(*map(set, aneis)) if aneis else set()
+    if not aneis:
+        frases.append("Não há anel no desenho.")
+    else:
+        if len(aneis) > 1:
+            frases.append(f"Há {_n(len(aneis))} anéis que compartilham um lado.")
+        for c in aneis:
+            comp = {}
+            for n in c:
+                comp[el[n]] = comp.get(el[n], 0) + 1
+            if set(comp) == {"C"}:
+                quem = "todos carbonos"
+            else:
+                outros = [_qtd(k, e) for e, k in comp.items() if e != "C"]
+                quem = f"{_qtd(comp.get('C', 0), 'C')} e {' e '.join(outros)}"
+            if all(n in aro for n in c):
+                traco = "desenhado com um círculo dentro"
+            else:
+                duplas = sum(1 for i, u in enumerate(c) if g.has_edge(u, c[i - 1])
+                             and g.edges[u, c[i - 1]].get("order", 1) == 2)
+                traco = (f"com {_n(duplas, fem=True)} ligaç{'ão dupla' if duplas == 1 else 'ões duplas'}"
+                         if duplas else "só com ligações simples")
+            frases.append(f"Um anel de {_n(len(c))} átomos ({quem}), {traco}.")
+        fora = carbonos - no_anel
+        if fora:
+            frases.append(f"Fora do anel há {_qtd(len(fora), 'C')}.")
+
+    # ligações múltiplas fora de anel aromático desenhado com círculo
+    for u, v, d in g.edges(data=True):
+        o = d.get("order", 1)
+        if o in (2, 3) and not (u in no_anel and v in no_anel):
+            tipo = "dupla" if o == 2 else "tripla"
+            a, b = sorted((_ELEMENTO.get(el[u], (el[u],))[0], _ELEMENTO.get(el[v], (el[v],))[0]))
+            par = "dois carbonos" if a == b == "carbono" else f"um {a} e um {b}"
+            frases.append(f"Há uma ligação {tipo} entre {par}.")
+
+    # cada átomo que não é carbono: a quantos carbonos está ligado
+    for n in sorted(g, key=str):
+        if el[n] == "C":
+            continue
+        k = sum(1 for m in g.neighbors(n) if el[m] == "C")
+        onde = " no anel" if n in no_anel else ""
+        frases.append(f"O {_ELEMENTO.get(el[n], (el[n],))[0]}{onde} está ligado a "
+                      f"{_n(k)} carbono{'s' if k != 1 else ''}.")
+
+    # vértices com três ou mais carbonos vizinhos, fora do anel
+    for n in sorted(carbonos - no_anel, key=str):
+        k = sum(1 for m in g.neighbors(n) if m in carbonos)
+        if k >= 3:
+            onde = " fora do anel" if aneis else ""
+            frases.append(f"Um carbono{onde} está ligado a {_n(k)} outros carbonos.")
+    return " ".join(frases)
+
+
 class IndiceMoleculas:
     """Conjunto de moléculas para o portão de REPETIÇÃO. Compara a MOLÉCULA, não o texto:
     C1CCOC1 e C1COCC1 são a mesma. O hash de Weisfeiler-Lehman separa em baldes; dentro

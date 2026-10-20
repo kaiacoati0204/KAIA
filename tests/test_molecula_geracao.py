@@ -220,3 +220,25 @@ async def test_job_de_verificacao_so_pede_smiles_com_a_chave(monkeypatch, ligada
 
     await app_mod.job_verificar_cache(_App)
     assert ("smiles" in conn.sql[0]) is ligada
+
+
+# ---------------- rodada C: portão de texto e texto alternativo ----------------
+async def test_ligada_portao_de_texto_descarta(monkeypatch):
+    monkeypatch.setattr(app_mod, "ORGANICA_MOLECULA", True)
+    het = {"aberta_fechada": "aberta", "saturada_insaturada": "saturada", "homogenea_heterogenea": "heterogenea"}
+    citam = _q("COC(C)C", het, "metoxipropano",
+               opts=["aberta, ramificada, saturada e heterogênea", "aberta, saturada e heterogênea",
+                     "fechada, saturada e heterogênea", "mista, saturada e homogênea", "aberta, insaturada e homogênea"])
+    limpa = _q("CCOC", het, "metoxietano",
+               opts=["aberta, saturada e heterogênea", "aberta, insaturada e heterogênea",
+                     "fechada, saturada e heterogênea", "mista, saturada e homogênea", "aberta, saturada e homogênea"])
+    monkeypatch.setattr(app_mod, "chamar_gemini", lambda p: json.dumps([citam, limpa]))
+    out = await app_mod._gerar_molecula(5, "QUI", "Química", "Química Orgânica", None, 2, conn=FakeConn())
+    assert [q["smiles"] for q in out] == ["CCOC"]
+
+
+def test_frontend_q_leva_texto_alternativo_so_com_smiles():
+    com = app_mod._frontend_q({"q": "Q?", "opts": list("ABCDE"), "ans": 0, "smiles": "Cc1ccccc1"})
+    sem = app_mod._frontend_q({"q": "Q?", "opts": list("ABCDE"), "ans": 0})
+    assert "círculo dentro" in com["figura_descricao"]
+    assert "figura_descricao" not in sem and "smiles" not in sem

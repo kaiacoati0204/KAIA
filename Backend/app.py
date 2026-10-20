@@ -25,7 +25,8 @@ import risco
 from bandit_prevencao import (BanditPrevencao, recompensa_rodada,
                               PARAMS_PREVENCAO_PATH, MIN_RESPONDIDAS)
 from mouse_features import features_mouse, blocos_parados, parado_apos_leitura, LIMIAR_BLOCO_S
-from moleculas import conferir_gabarito, instrucao_eixos, IndiceMoleculas, CONVENCAO
+from moleculas import (conferir_gabarito, instrucao_eixos, IndiceMoleculas, CONVENCAO,
+                       alternativas_citam_eixo_nao_cobravel, descrever_molecula)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import FastAPI, Body, Depends, Request
@@ -1211,9 +1212,12 @@ def _frontend_q(q):
         "explicacao": q.get("explicacao", ""),
         "porque_erradas": q.get("porque_erradas", []),
     }
-    # Só quem TEM molécula ganha a chave: questão sem SMILES sai com o payload de sempre.
+    # Só quem TEM molécula ganha as chaves: questão sem SMILES sai com o payload de sempre.
+    # figura_descricao = texto alternativo do desenho, gerado do SMILES (moleculas.py), não
+    # do Gemini: descreve o que está desenhado, sem nenhum termo de classificação.
     if q.get("smiles"):
         item["smiles"] = q["smiles"]
+        item["figura_descricao"] = descrever_molecula(q["smiles"])
     return item
 
 # Exemplos reais (few-shot) carregados do JSON no repo (curados do ENEM, Apache 2.0).
@@ -1548,10 +1552,12 @@ async def _gerar_molecula(n, materia, nome, tema, hobbie, nivel, conn=None, exem
     nesta ordem; reprovou em um, é DESCARTADA (enunciado que fala de figura sem figura válida
     é pior que não ter questão):
       a) gabarito: moleculas.conferir_gabarito (SMILES válido, minúscula, convenção);
-      b) nome: molecula_interna aparecendo em q/opts/explicacao/porque_erradas;
-      c) repetição: a molécula já está no cache deste materia+tema (ou neste lote).
+      b) texto: alternativa que fala de eixo que não se cobra nesta molécula (o campo
+         "classificacao" pode omitir o eixo e o texto das opções citá-lo — o aluno lê o texto);
+      c) nome: molecula_interna aparecendo em q/opts/explicacao/porque_erradas;
+      d) repetição: a molécula já está no cache deste materia+tema (ou neste lote).
     SATURAR É O FIM ESPERADO, não falha: o cache é servido antes de gerar, então quando o tema
-    tiver molécula bastante a geração deixa de ser chamada. Não "conserte" o descarte de (c).
+    tiver molécula bastante a geração deixa de ser chamada. Não "conserte" o descarte de (d).
     `exemplos`/`evitar` chegam pela assinatura comum dos geradores e são ignorados."""
     n_pedir = max(n, math.ceil(n * FATOR_SOBRA_GERACAO))
     try:
@@ -1569,13 +1575,16 @@ async def _gerar_molecula(n, materia, nome, tema, hobbie, nivel, conn=None, exem
                 conhecidas.adicionar(r["smiles"])
         except Exception as e:
             print("[KaIA] AVISO: portão de repetição sem o cache (coluna smiles?):", e)
-    saida, motivos = [], {"estrutura": 0, "gabarito": 0, "nome": 0, "repeticao": 0}
+    saida, motivos = [], {"estrutura": 0, "gabarito": 0, "texto": 0, "nome": 0, "repeticao": 0}
     for q in itens if isinstance(itens, list) else []:
         if not isinstance(q, dict) or not q.get("opts"):
             motivos["estrutura"] += 1
             continue
         if not conferir_gabarito(q.get("smiles"), q.get("classificacao") or {})["aprovada"]:
             motivos["gabarito"] += 1
+            continue
+        if alternativas_citam_eixo_nao_cobravel(q["smiles"], q.get("opts")):
+            motivos["texto"] += 1
             continue
         if _nome_visivel(q):
             motivos["nome"] += 1

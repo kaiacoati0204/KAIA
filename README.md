@@ -114,12 +114,14 @@ Backend/
   consentimento.py      → tokens, validação e hash do aceite do responsável (LGPD art. 14)
   mouse_features.py     → mouse_track bruto → features de mouse do modelo v2
   moleculas.py          → classifica a cadeia carbônica a partir do SMILES (convenção do
-                          ensino médio) e confere o gabarito; portão da Química Orgânica
+                          ensino médio), confere o gabarito e o texto das alternativas, e
+                          gera o texto alternativo da figura; portões da Química Orgânica
   ingerir_questoes_reais.py   → carrega questões reais de prova para a base
   gerar_exemplos_few_shot.py  → monta os exemplos few-shot do gerador
   criar_schema_teste.py → cria um schema isolado para rodar testes contra o banco
   requirements.txt      → dependências Python
-  seed_contas_teste.py  → cria as contas @teste.kaia (a senha fica no próprio script)
+  seed_contas_teste.py  → cria as contas @teste.kaia (senha da env SENHA_CONTAS_TESTE;
+                          nunca no código — o repositório é público)
   seed_sintetico.py     → popula sessões sintéticas para os painéis
   limpar_*.{py,sql}     → desfazem os seeds
   .env                  → variáveis de ambiente (NÃO vai pro Git — veja "2. Configuração")
@@ -189,9 +191,10 @@ STALE_SESSAO_MIN=15
 KAIA_FEWSHOT_DINAMICO=1
 
 # Opcional — DESLIGADA por padrão. Liga a Química Orgânica com molécula: a questão traz o
-# SMILES e pede para classificar "a cadeia representada na figura". NÃO ligue em produção
-# enquanto o front não desenhar a molécula (sairia enunciado de figura sem figura).
-# Exige a migration 20261020120000_smiles_questoes.sql (coluna questoes_cache.smiles).
+# SMILES e pede para classificar "a cadeia representada na figura". O front desenha a
+# molécula com o smiles-drawer 2.4.1 (jsdelivr, carregado só em questão com SMILES) e o
+# backend manda junto o texto alternativo (moleculas.descrever_molecula). Exige a
+# migration 20261020120000_smiles_questoes.sql (coluna questoes_cache.smiles, já aplicada).
 # KAIA_ORGANICA_MOLECULA=1
 
 # Camada preventiva (Fluxo B). ATIVA=0 desliga tudo. MODO: `fixo` oferece sempre (mede
@@ -347,8 +350,9 @@ pronto: não precisa rodar nada aqui.** As contas de teste do passo 6 já existe
 senhas certas.
 
 > [!WARNING]
-> Depois de trocar a senha das contas de teste, atualize-a em `Backend/seed_contas_teste.py`
-> — o script a usa para recriar as contas, então as duas pontas têm de andar juntas.
+> Depois de trocar a senha das contas de teste, atualize-a na env `SENHA_CONTAS_TESTE`
+> (no `Backend/.env` de quem roda o seed) — o script a usa para recriar as contas, então as
+> duas pontas têm de andar juntas. Ela NÃO vai no código: o repositório é público.
 
 Você só mexe no banco nestes casos:
 

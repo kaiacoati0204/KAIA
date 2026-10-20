@@ -1977,11 +1977,87 @@ async function iniciarSessaoEstudo(subject, tema) {
 }
 
 // Carrega e renderiza UMA questão da fila. NÃO cria sessão (a sessão é contínua).
+// ==== MOLÉCULA DA QUESTÃO (Química Orgânica) ====
+// A questão com `smiles` pede para classificar "a cadeia representada na figura". O
+// smiles-drawer (57 KB gzip, MIT, <script> comum com global) só é INJETADO quando chega uma
+// questão com molécula: questão sem SMILES não carrega script nem ganha <figure> nenhum.
+// Versão exata + integrity calculado do arquivo real, como os outros <script> de CDN.
+const SMILES_DRAWER = {
+    src: 'https://cdn.jsdelivr.net/npm/smiles-drawer@2.4.1/dist/smiles-drawer.min.js',
+    integrity: 'sha384-TQRv1XqGLh2YAsADJ9/Lf0WIoJf8XVQxJr7cI7O/ZQxJNZUVyZ6dw+GrPi6YanTd',
+};
+let _smilesDrawer = null;
+
+function carregarSmilesDrawer() {
+    if (window.SmilesDrawer) return Promise.resolve(window.SmilesDrawer);
+    if (!_smilesDrawer) {
+        _smilesDrawer = new Promise((ok, falha) => {
+            const s = document.createElement('script');
+            s.src = SMILES_DRAWER.src;
+            s.integrity = SMILES_DRAWER.integrity;
+            s.crossOrigin = 'anonymous';
+            s.referrerPolicy = 'no-referrer';
+            s.onload = () => ok(window.SmilesDrawer);
+            s.onerror = () => { _smilesDrawer = null; falha(new Error('smiles-drawer não carregou')); };
+            document.head.appendChild(s);
+        });
+    }
+    return _smilesDrawer;
+}
+
+function tirarMoleculaDaQuestao() { $('questao-molecula')?.remove(); }
+
+// Cores do desenho = tokens do tema ATIVO (nada de hex cravado, nem #fff/#000): tudo em
+// --tinta sobre --card, monocromático. A letra do elemento (O, N, S) é o que distingue o
+// átomo — cor não carrega informação. Lido na hora, então acompanha os 4 temas.
+function _temaMolecula() {
+    const css = getComputedStyle(document.documentElement);
+    const tinta = css.getPropertyValue('--tinta').trim();
+    const t = { BACKGROUND: css.getPropertyValue('--card').trim() };
+    ['C', 'O', 'N', 'F', 'CL', 'BR', 'I', 'P', 'S', 'B', 'SI', 'H'].forEach(k => { t[k] = tinta; });
+    return t;
+}
+
+async function mostrarMoleculaDaQuestao(q) {
+    tirarMoleculaDaQuestao();
+    if (!q?.smiles) return;                                   // sem molécula: nada no DOM
+    const fig = document.createElement('figure');
+    fig.id = 'questao-molecula';
+    fig.className = 'questao-molecula';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('role', 'img');
+    // Texto alternativo vem do backend (gerado do SMILES): descreve o desenho, sem classificar.
+    svg.setAttribute('aria-label', q.figura_descricao || 'Figura da molécula da questão.');
+    fig.appendChild(svg);
+    $('question-display').after(fig);
+    try {
+        const SD = await carregarSmilesDrawer();
+        if (!fig.isConnected) return;                         // a questão já mudou
+        const desenhista = new SD.SvgDrawer({
+            width: 320, height: 220, bondThickness: 1.6, padding: 16,
+            fontFamily: getComputedStyle(document.body).fontFamily, fontSizeLarge: 12,
+            themes: { kaia: _temaMolecula() },
+        });
+        await new Promise((ok, falha) => SD.parse(q.smiles, (arvore) => {
+            desenhista.draw(arvore, svg, 'kaia'); ok();
+        }, falha));
+        if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', '0 0 320 220');   // escala com a coluna
+    } catch (e) {
+        // Sem desenho, a questão ainda tem de ser respondível: mostra a descrição em texto.
+        console.warn('[KaIA] desenho da molécula indisponível:', e);
+        const legenda = document.createElement('figcaption');
+        legenda.textContent = q.figura_descricao || 'Não foi possível desenhar a molécula.';
+        svg.remove();
+        fig.appendChild(legenda);
+    }
+}
+
 async function carregarQuestao(subject, tema) {
     currentSubject = subject;
     currentTema = tema;
     const fb = $('feedback');
     if (fb) { fb.className = 'feedback-msg'; fb.innerHTML = ''; }
+    tirarMoleculaDaQuestao();   // a figura da questão anterior não fica sob o enunciado novo
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
     if (esperaIA('Gerando questão', areaQuestao())) $('question-display').innerText = '';
@@ -2013,6 +2089,7 @@ async function carregarQuestao(subject, tema) {
     limiteOciosoS = limiarOcioso(dynamicLimit, currentSubject);   // overlay: bem mais folgado
     questaoIniciadaEm = new Date().toISOString();
     $('question-display').innerText = currentQuestion.q;
+    mostrarMoleculaDaQuestao(currentQuestion);   // só desenha se a questão tiver smiles
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
 
     questionShownAt = performance.now();
@@ -2057,6 +2134,7 @@ async function startMission(subject, tema) {
     currentSubject = subject;
     currentTema = tema;
     mostrarTela('quiz-view');
+    tirarMoleculaDaQuestao();   // a figura da questão anterior não fica sob o enunciado novo
     $('question-display').innerText = 'KaIA criando sua questão...';
     $('options-display').innerHTML  = '';
     if (esperaIA('Gerando questão', areaQuestao())) $('question-display').innerText = '';
@@ -2872,6 +2950,7 @@ function carregarQuestaoRevisao() {
     if (subjectEl) subjectEl.innerText = 'Revisão de erros';
     atualizarContadorRevisao();
     $('question-display').innerText = currentQuestion.q;
+    mostrarMoleculaDaQuestao(currentQuestion);   // só desenha se a questão tiver smiles
     renderBotoes($('options-display'), currentQuestion.opts, (_opt, idx, btn) => checkAnswer(idx, btn));
     isMissionActive = true;
 }

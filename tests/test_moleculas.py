@@ -242,3 +242,48 @@ def test_smiles_ruim_reprova_sem_lancar(ruim):
     r = classificar_cadeia(ruim)
     assert not r["ok"] and r["motivo"]
     assert not conferir_gabarito(ruim, _cls("AB N S HO -"))["aprovada"]
+
+
+# ---- portão de texto (o campo pode omitir o eixo e a alternativa citá-lo) ----
+from moleculas import alternativas_citam_eixo_nao_cobravel, descrever_molecula, _sem_acento  # noqa: E402
+
+
+@pytest.mark.parametrize("smiles,opts", [   # alternativas REAIS das 2 suspeitas da rodada B2
+    ("COC(C)C", ["aberta, normal, saturada e heterogênea", "aberta, ramificada, saturada e heterogênea",
+                 "fechada, saturada e heterogênea", "mista, saturada e homogênea", "aberta, insaturada e heterogênea"]),
+    ("CCOCC", ["aberta, ramificada, saturada e heterogênea", "fechada, saturada e heterogênea",
+               "aberta, normal, insaturada e heterogênea", "aberta, normal, saturada e heterogênea",
+               "mista, saturada e homogênea"]),
+])
+def test_portao_de_texto_pega_as_suspeitas_reais(smiles, opts):
+    achados = alternativas_citam_eixo_nao_cobravel(smiles, opts)
+    assert achados and all(e == "normal_ramificada" for e, _, _ in achados)
+
+
+def test_portao_de_texto_deixa_passar_eixo_cobravel_e_texto_limpo():
+    assert alternativas_citam_eixo_nao_cobravel("CC(C)C", ["aberta, ramificada, saturada e homogênea"]) == []
+    assert alternativas_citam_eixo_nao_cobravel("COC(C)C", ["aberta, saturada e heterogênea"]) == []
+    assert alternativas_citam_eixo_nao_cobravel("CCCC", ["aberta, alicíclica"])          # sem anel
+    assert alternativas_citam_eixo_nao_cobravel("CCCC", ["ABERTA, ALICÍCLICA"])          # caixa e acento
+
+
+# ---- texto alternativo: o que está desenhado, sem classificar ----
+_PROIBIDAS = __import__("re").compile(
+    r"\b(abert[oa]s?|fechad[oa]s?|mist[oa]s?|norma(l|is)|ramificad[oa]s?|saturad[oa]s?|insaturad[oa]s?|"
+    r"homogene[oa]s?|heterogene[oa]s?|aromatic[oa]s?|aliciclic[oa]s?)\b")
+_EXTRAS = ["COC(C)C", "CCOC=C", "C=Cc1ccccc1", "CC(C)(C)C", "CSCC", "C1CC1", "C", "CC(C)c1ccccc1"]
+
+
+@pytest.mark.parametrize("smiles", sorted({a[2] for a in AMOSTRA} | set(_EXTRAS)))
+def test_texto_alternativo_nunca_classifica(smiles):
+    t = descrever_molecula(smiles)
+    assert t and not _PROIBIDAS.search(_sem_acento(t)), t
+
+
+def test_texto_alternativo_descreve_o_desenho():
+    assert "círculo dentro" in descrever_molecula("Cc1ccccc1")           # como o smiles-drawer desenha
+    assert "Fora do anel há um carbono" in descrever_molecula("Cc1ccccc1")
+    assert "oxigênio está ligado a dois carbonos" in descrever_molecula("CCOCC")
+    assert "ligado a três outros carbonos" in descrever_molecula("CC(C)C")
+    assert "ligação dupla entre dois carbonos" in descrever_molecula("CC=C")
+    assert descrever_molecula("C1=CC=CC=C1") is None                     # Kekulé: reprovado, sem texto

@@ -971,6 +971,30 @@ html[data-luz="4"] {
   line-height: 1.65;
   color: var(--profundo);
 }
+/* Molécula da questão (Química Orgânica): só existe no DOM quando a questão tem SMILES.
+   Fundo --card igual ao BACKGROUND passado ao smiles-drawer (materias.js), para o desenho
+   não ganhar um retângulo de outra cor. max-width + height:auto: encolhe junto com a
+   coluna quando a alça aperta a questão. */
+.questao-molecula {
+  margin: -14px 0 28px;
+  padding: 12px;
+  border: 1px solid rgba(var(--bege-rgb), 0.35);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: center;
+}
+.questao-molecula svg {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  margin: 0 auto;
+}
+.questao-molecula figcaption {
+  color: var(--tinta);
+  font-size: 1rem;
+  line-height: 1.6;
+}
 .options-grid {
   display: flex;
   flex-direction: column;

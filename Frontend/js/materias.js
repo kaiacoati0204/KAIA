@@ -3424,6 +3424,13 @@ document.addEventListener('DOMContentLoaded', () => {
             novoBloco(e.clientX - rc.left, e.clientY - rc.top);
         }
     });
+    // Não rouba o foco do bloco recém-criado — mesmo padrão dos .cad-modo. O canvas não é
+    // focável: a ação padrão do mousedown seguinte jogava o foco no body e o texto digitado
+    // logo após o clique se perdia. SÓ no vazio: no bloco, preventDefault quebraria
+    // selecionar texto (e o arraste pela alça já tem o dele).
+    canvas.addEventListener('mousedown', (e) => {
+        if (e.target === canvas) e.preventDefault();
+    });
     // Guarda a última posição do cursor sobre o canvas — a imagem cola ali.
     canvas.addEventListener('pointermove', (e) => {
         const rc = canvas.getBoundingClientRect();

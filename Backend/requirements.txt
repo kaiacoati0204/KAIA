@@ -18,3 +18,11 @@ pyjwt[crypto]
 numpy==2.2.6
 pandas==3.0.3
 scikit-learn==1.7.1
+
+# Química Orgânica — validador de cadeia carbônica (Backend/moleculas.py) lê o SMILES.
+# pysmiles + networkx: ~7 MB instalados. NÃO o RDKit: ~185 MB instalados (com o Pillow)
+# num serviço que hiberna no plano grátis do Render — peso de instalação pesa no build
+# e no acordar. Versões fixas: a regra de Kekulé do validador depende de como ESTA
+# versão do pysmiles percebe aromaticidade; um upgrade pode mudar o que é reprovado.
+pysmiles==2.1.1
+networkx==3.6.1

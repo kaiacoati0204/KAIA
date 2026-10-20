@@ -4070,8 +4070,44 @@ body.split-arrastando { cursor: col-resize; user-select: none; }
 .cad-simbolo:hover { background: var(--bege-veu); border-color: var(--azul-coati); }
 .cad-simbolo:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 1px; }
 
+/* Linha dos MODOS: a régua em cima é o que diz, sem texto, que daqui para baixo o
+   botão não insere e sim liga. */
+.cad-modos {
+  display: flex;
+  gap: 6px;
+  margin: 0 8px 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(var(--bege-rgb), 0.55);
+}
+.cad-modos[hidden] { display: none; }
+.cad-modo {
+  min-height: 32px;
+  padding: 2px 12px;
+  border: 1px solid rgba(var(--bege-rgb), 0.4);
+  border-radius: 8px;
+  background: var(--marfim);
+  color: var(--profundo);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.cad-modo:hover { background: var(--bege-veu); border-color: var(--azul-coati); }
+.cad-modo:focus-visible { outline: 2px solid var(--azul-coati); outline-offset: 1px; }
+/* LIGADO não é só cor: o anel grosso e a inversão de fundo sobrevivem a daltonismo
+   e a tela ruim de celular, onde uma borda mais escura passaria batida. */
+.cad-modo[aria-pressed="true"] {
+  background: var(--profundo);
+  border-color: var(--profundo);
+  color: var(--marfim);
+  box-shadow: 0 0 0 2px var(--gravata-kinrou);
+}
+.cad-modo[aria-pressed="true"]:hover { background: var(--azul-coati); border-color: var(--azul-coati); }
+
 @media (prefers-reduced-motion: reduce) {
-  .cad-simbolos > summary::before, .cad-simbolo { transition: none; }
+  .cad-simbolos > summary::before, .cad-simbolo, .cad-modo { transition: none; }
 }
 
 /* Fundo pontilhado: pontos discretos de --tinta sobre --card. */

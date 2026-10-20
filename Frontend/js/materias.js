@@ -3120,7 +3120,7 @@ function toggleCaderno() {
     if (botao) botao.setAttribute('aria-pressed', String(abrindo));
     if (abrindo) carregarCaderno(currentTema);
     sincronizarAlca();   // sem caderno aberto não há divisória
-    sincronizarSimbolosCaderno();   // paleta só em MAT/FIS
+    sincronizarSimbolosCaderno();   // paleta só nas matérias de CAD_SIMBOLOS_POR_MATERIA
 }
 
 // Troca o canvas para um tema (salva o anterior antes, se estiver sujo).
@@ -3961,7 +3961,6 @@ document.addEventListener('DOMContentLoaded', ligarAlcaSplit);
 // trocar o armazenamento do caderno de texto puro para conteúdo rico). Símbolo É texto:
 // entra no .cad-texto como qualquer letra, dispara o mesmo `input` que já salva, e sobe
 // pro /anotacoes sem nenhuma mudança de formato.
-const CAD_MATERIAS_SIMBOLOS = ['MAT', 'FIS'];
 const CAD_SIMBOLOS = [
     ['π', 'pi'], ['√', 'raiz quadrada'], ['∑', 'somatório'], ['∫', 'integral'],
     ['≤', 'menor ou igual'], ['≥', 'maior ou igual'], ['≠', 'diferente'], ['±', 'mais ou menos'],
@@ -3970,6 +3969,35 @@ const CAD_SIMBOLOS = [
     ['Δ', 'delta'], ['θ', 'teta'], ['α', 'alfa'], ['β', 'beta'], ['λ', 'lambda'],
     ['μ', 'mi'], ['σ', 'sigma'], ['→', 'seta para a direita'], ['∈', 'pertence a'], ['°', 'grau'],
 ];
+
+// Química tem lista PRÓPRIA: encher a de MAT/FIS com seta de equilíbrio não ajuda
+// ninguém dos dois lados. As cargas de dois caracteres (²⁺) entram como string —
+// inserirSimboloCaderno escreve o que receber, não um caractere por vez.
+const CAD_SIMBOLOS_QUI = [
+    ['→', 'seta para a direita'], ['⇌', 'seta de equilíbrio'], ['⇄', 'seta de duplo sentido'],
+    ['↑', 'seta para cima'], ['↓', 'seta para baixo'],
+    ['⁺', 'carga positiva'], ['⁻', 'carga negativa'],
+    ['²⁺', 'carga dois positivo'], ['²⁻', 'carga dois negativo'],
+    ['³⁺', 'carga três positivo'], ['³⁻', 'carga três negativo'],
+    ['Δ', 'delta'], ['°', 'grau'], ['·', 'multiplicação (ponto)'], ['≈', 'aproximadamente'],
+];
+
+// Uma matéria aparece na gaveta SE E SÓ SE tem lista aqui — nada de uma segunda
+// lista de códigos para esquecer de atualizar. MAT e FIS apontam para o MESMO
+// array de propósito: são a mesma paleta, não duas cópias que divergem depois.
+const CAD_SIMBOLOS_POR_MATERIA = {
+    MAT: CAD_SIMBOLOS,
+    FIS: CAD_SIMBOLOS,
+    QUI: CAD_SIMBOLOS_QUI,
+};
+const CAD_MATERIAS_SIMBOLOS = Object.keys(CAD_SIMBOLOS_POR_MATERIA);
+
+// ---- modo subscrito/sobrescrito (só QUI) ----
+// Dígito -> caractere pequeno. Só dígito: letra em subscrito não existe em fórmula
+// de Ensino Médio, e ₓ ₙ não têm par maiúsculo que preste.
+const CAD_SUB = { '0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉' };
+const CAD_SUP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹' };
+let cadModo = null;               // null | 'sub' | 'sup'
 
 // Guardado no focusin (delegado no canvas) em vez de dentro do montarBloco: os blocos
 // nascem sob demanda, e assim a paleta não precisa tocar na criação deles.
@@ -4011,11 +4039,17 @@ function inserirSimboloCaderno(simbolo) {
     return true;
 }
 
-function montarSimbolosCaderno() {
-    const grade = $('cad-simbolos-grade');
-    if (!grade || grade.childElementCount) return;      // monta uma vez só
+// Remonta quando a MATÉRIA muda (antes era uma vez só, com lista única).
+let _cadSimbolosDe = null;
 
-    CAD_SIMBOLOS.forEach(([s, nome]) => {
+function montarSimbolosCaderno(materia) {
+    const grade = $('cad-simbolos-grade');
+    if (!grade) return;
+    if (_cadSimbolosDe === materia) return;             // já é a paleta certa
+    _cadSimbolosDe = materia;
+    grade.innerHTML = '';
+
+    (CAD_SIMBOLOS_POR_MATERIA[materia] || CAD_SIMBOLOS).forEach(([s, nome]) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'cad-simbolo';
@@ -4029,8 +4063,97 @@ function montarSimbolosCaderno() {
         grade.appendChild(b);
     });
 
-    cadCanvas()?.addEventListener('focusin', (e) => {
-        if (e.target.classList?.contains('cad-texto')) _cadUltimoTexto = e.target;
+    montarModosCaderno(materia);
+
+    if (!grade.dataset.focoLigado) {
+        grade.dataset.focoLigado = '1';
+        cadCanvas()?.addEventListener('focusin', (e) => {
+            if (e.target.classList?.contains('cad-texto')) _cadUltimoTexto = e.target;
+        });
+    }
+}
+
+// ---- os dois botões de MODO ----
+// Modo, não inserção: fica ligado e muda o que a próxima tecla escreve. Por isso
+// moram em linha própria, separados por uma régua dos botões que só inserem.
+function montarModosCaderno(materia) {
+    const linha = $('cad-modos');
+    if (!linha) return;
+    linha.hidden = (materia !== 'QUI');     // fórmula com índice é coisa de química
+    if (linha.childElementCount) return;    // os botões em si não mudam
+
+    [['sub', 'x₂', 'escrever embaixo (subscrito)'],
+     ['sup', 'x²', 'escrever em cima (sobrescrito)']].forEach(([modo, rotulo, nome]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cad-modo';
+        b.dataset.modo = modo;
+        b.textContent = rotulo;
+        b.title = nome;
+        b.setAttribute('aria-label', nome);
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('mousedown', (e) => e.preventDefault());   // não rouba o foco
+        b.addEventListener('click', () => alternarModo(modo));
+        linha.appendChild(b);
+    });
+
+    // Gaveta fechada esconde os botões: modo ligado ali seria estado invisível (dígito
+    // saindo pequeno sem nada na tela dizendo por quê). Fechar desliga; abrir não liga.
+    $('cad-simbolos')?.addEventListener('toggle', (e) => {
+        if (!e.target.open) desligarModo();
+    });
+}
+
+// Os dois modos são exclusivos: ligar um desliga o outro.
+function alternarModo(modo) {
+    cadModo = (cadModo === modo) ? null : modo;
+    pintarModos();
+    devolverFoco();
+}
+
+function desligarModo() {
+    if (cadModo === null) return;
+    cadModo = null;
+    pintarModos();
+}
+
+function pintarModos() {
+    $$('.cad-modo').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.modo === cadModo));
+    });
+}
+
+// Depois de acionar, o cursor volta para onde a pessoa estava escrevendo.
+function devolverFoco() {
+    const alvo = _cadUltimoTexto;
+    if (alvo && alvo.isConnected && document.activeElement !== alvo) alvo.focus();
+}
+
+// O CORAÇÃO DO MODO. beforeinput e não keydown: ele dá o texto já resolvido
+// (`data`), então acento morto, teclado de celular e autocompletar entram pelo
+// mesmo lugar. preventDefault + inserirSimboloCaderno reaproveita o execCommand
+// que já mantém o Ctrl+Z nativo — nenhum caminho novo de inserção.
+function ligarModoDigitacao() {
+    const canvas = cadCanvas();
+    if (!canvas || canvas.dataset.modoLigado) return;
+    canvas.dataset.modoLigado = '1';
+
+    canvas.addEventListener('beforeinput', (e) => {
+        if (!cadModo) return;
+        if (!e.target.classList?.contains('cad-texto')) return;
+        if (e.inputType !== 'insertText') return;       // apagar/colar não mexem no modo
+
+        const d = e.data;
+        const mapa = (cadModo === 'sub') ? CAD_SUB : CAD_SUP;
+        if (d && d.length === 1 && mapa[d]) {
+            e.preventDefault();
+            inserirSimboloCaderno(mapa[d]);
+            return;
+        }
+        // QUALQUER outra coisa desliga o modo e segue normal. Não é o espaço que
+        // desliga: em fórmula quase nada tem espaço, e ele viraria espaço de
+        // verdade no meio do H₂O.
+        desligarModo();
     });
 }
 
@@ -4040,6 +4163,7 @@ function sincronizarSimbolosCaderno() {
     if (!cx) return;
     const mostrar = CAD_MATERIAS_SIMBOLOS.includes(currentSubject);
     cx.hidden = !mostrar;
+    desligarModo();                     // trocar de matéria não leva o modo junto
     if (!mostrar) cx.open = false;      // trocar de matéria não deixa a gaveta aberta e vazia
-    else montarSimbolosCaderno();
+    else { montarSimbolosCaderno(currentSubject); ligarModoDigitacao(); }
 }

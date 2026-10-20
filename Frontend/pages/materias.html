@@ -10,6 +10,25 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <!-- SEGUNDO PEDIDO DA MESMA FONTE, e não de outra: o subset `latin` que o link
+         acima entrega NÃO cobre grego (U+03xx), operadores matemáticos (U+22xx),
+         setas (U+21xx) nem índices (U+2070-2089). Sem este link, 18 dos 27 símbolos
+         da paleta e TODOS os subscritos caem na fonte do sistema — e uma fórmula
+         como SO₄²⁻ sai em DUAS tipografias, porque o ² a Plus Jakarta Sans tem e o
+         ₄ não. Medido: 9/27 antes, 20/27 depois.
+         ⚠️ A URL lista os caracteres UM A UM no &text=. ACRESCENTAR SÍMBOLO À
+            PALETA (CAD_SIMBOLOS ou CAD_SIMBOLOS_QUI, em materias.js) EXIGE
+            ACRESCENTÁ-LO AQUI TAMBÉM. Se esquecer, o símbolo novo cai em fallback
+            em silêncio: ele aparece, só que em outra fonte — ninguém vê o erro,
+            e seis meses depois a paleta está remendada de tipografias.
+         ⚠️ FALLBACK CONHECIDO: θ α β λ μ σ ∈ ⇄ ⇌ — a Plus Jakarta Sans não tem esses
+            nove em subset nenhum, então estar no &text= não adianta: saem na fonte do
+            sistema. Os 7 primeiros são da paleta de MAT/FIS (os 7 que faltam no 20/27).
+            A paleta de QUI (15 símbolos) tem 2 em fallback, ⇌ e ⇄, e nunca foi medida
+            pelo mesmo método.
+            PENDENTE (Bia): uma segunda família só para esses nove (ex.: Noto Sans Math)
+            tiraria o fallback, ao custo de mais um pedido de fonte. Não implementado. -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;700&text=%C2%B0%C2%B1%C2%B2%C2%B3%C2%B7%C2%B9%C2%BC%C2%BD%C3%97%C3%B7%CE%94%CE%B1%CE%B2%CE%B8%CE%BB%CE%BC%CF%80%CF%83%E2%81%B0%E2%81%B4%E2%81%B5%E2%81%B6%E2%81%B7%E2%81%B8%E2%81%B9%E2%81%BA%E2%81%BB%E2%82%80%E2%82%81%E2%82%82%E2%82%83%E2%82%84%E2%82%85%E2%82%86%E2%82%87%E2%82%88%E2%82%89%E2%85%93%E2%86%91%E2%86%92%E2%86%93%E2%87%84%E2%87%8C%E2%88%88%E2%88%91%E2%88%9A%E2%88%9E%E2%88%AB%E2%89%88%E2%89%A0%E2%89%A4%E2%89%A5" rel="stylesheet">
     <link rel="stylesheet" href="../css/style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" integrity="sha384-WgXwGL6fUsYJWNaKJgVbrJKGRQwc1vieh2oy4kw9nXqpNDz3tdSsqEYUgeHD/NuF" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -168,6 +187,12 @@
                     <details class="cad-simbolos" id="cad-simbolos" hidden>
                         <summary>Símbolos</summary>
                         <div class="cad-simbolos-grade" id="cad-simbolos-grade"></div>
+                        <!-- MODO, não inserção: estes dois ficam LIGADOS e mudam o que a
+                             próxima tecla escreve. Por isso linha própria e separada por
+                             uma régua — botão que insere e acabou não se confunde com
+                             botão que muda o estado do teclado. Preenchida pelo JS, e só
+                             em Química. -->
+                        <div class="cad-modos" id="cad-modos" hidden></div>
                     </details>
                     <div class="caderno-canvas" id="caderno-canvas"></div>
                     <p class="caderno-dica">

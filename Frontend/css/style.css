@@ -1695,8 +1695,9 @@ html[data-luz="4"] {
   body.perfil-page .gauge-principal .gauge-slot { width: min(150px, 100%); }
 
   /* grade: 1 coluna, NUNCA 2. Com 2, qualquer número ímpar de matérias deixa card
-     órfão na última linha (medido com 5 e 9). Mesmo precedente dos planos da landing
-     (.lp-planos-grid): de 3 direto para 1, nunca 2, para não ter órfão. Em 1 coluna
+     órfão na última linha (medido com 5 e 9). É o mesmo raciocínio que os planos da
+     landing usavam quando eram três (ímpar): de 3 direto para 1. Os planos agora são
+     quatro (par) e descem 4 → 2 → 1; aqui as matérias continuam ímpares. Em 1 coluna
      o card tem a largura toda, então gauge e padding voltam aos do desktop. */
   body.perfil-page .materias-grade { grid-template-columns: 1fr; gap: 10px; }
 
@@ -4735,10 +4736,10 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
 /* ---- Seções da landing --------------------------------------------------- */
 /* A ESCALA DA LANDING, em três degraus que conversam entre si:
        1780px  conteúdo              (.zz-fileira, .zz-fecho, .lp-faixa-titulo)
-       1520px  blocos de três cards  (.lp-secao: "Como funciona" e "Planos")
+       1520px  blocos de cards       (.lp-secao: "Como funciona" e "Planos")
        1080px  rodapé                (.lp-rodape-inner)
    O degrau é proposital: o conteúdo é o que se lê e pode ser largo; um bloco
-   de três cards precisa de card grande o bastante para a lista caber sem
+   de cards precisa de card grande o bastante para a lista caber sem
    apertar, mas não tão largo que vire outra página; o rodapé é o fim e fecha.
    Mexer num sem olhar os outros desalinha a leitura vertical da página. */
 .lp-secao {
@@ -4833,24 +4834,27 @@ html:has(body.lp-page) { scroll-behavior: smooth; }
    olhar os outros desalinha a leitura vertical da página inteira.
 
    A largura e o padding agora moram na .lp-secao, que veste as DUAS seções
-   de três cards ("Como funciona" e "Planos"): o bloco .lp-planos que ficava
+   de cards ("Como funciona" e "Planos"): o bloco .lp-planos que ficava
    aqui prendia esta em 1400 e brigava com os 1520 de lá. */
-/* TRÊS COLUNAS FIXAS, nunca duas. O auto-fit caía para 2 colunas numa faixa
-   de larguras e deixava o terceiro card sozinho com um buraco ao lado — um
-   conjunto de três não tem arranjo honesto em duas colunas. Vai de 3 direto
-   para 1, na quebra de 900px (ver a @media no fim do arquivo).
+/* QUATRO COLUNAS FIXAS, escada 4 → 2 → 1 (ver a @media no fim do arquivo).
+   Antes eram três colunas e a regra era "nunca duas": 3 é ÍMPAR, e em duas
+   colunas o terceiro card ficava sozinho com um buraco ao lado. Com o Ypy são
+   quatro individuais, e 4 é PAR: duas colunas fecham 2+2, sem órfão. Não
+   reimponha o "nunca duas" — ele só valia para três cards.
+   Sem auto-fit de propósito: os pontos de quebra são medidos, não deixados
+   para o navegador decidir.
    A faixa ESCOLAR tem dois cards e segue 2 → 1 normalmente, pela regra dela. */
 .lp-planos-grid {
   align-items: stretch;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 48px;
 }
 .lp-planos-grid > .plano { height: 100%; }
 /* O botão desce para a base mesmo quando os cards têm listas de tamanhos
-   diferentes — as 5 chamadas ficam alinhadas numa linha só. */
+   diferentes — as chamadas de cada fileira ficam alinhadas numa linha só. */
 .lp-planos-grid .plano-itens { flex: 1; }
 /* 968 = dois cards de 460 + os 48 do gap. O teto de 460 mantém o card escolar
-   maior que o individual (432) sem virar outra escala. */
+   maior que o individual (312 com quatro colunas) sem virar outra escala. */
 .lp-planos-escolar {
   grid-template-columns: repeat(2, minmax(240px, 1fr));
   gap: 48px;
@@ -5439,11 +5443,18 @@ html:has(body.lp-page) {
 }
 
 /* ---- Telas estreitas ----------------------------------------------------- */
-/* A VIRADA DOS TRÊS: 900px. Logo acima dela o card fica com 244px; a 880
-   cairia para 238 e passaria do piso de 240 que a própria grade exige. É o
-   número redondo imediatamente acima do limite medido (890). Vai de 3 direto
-   para 1: duas colunas deixariam o terceiro card sozinho. */
-@media (max-width: 900px) {
+/* A ESCADA DOS QUATRO: 4 → 2 em 1220px, 2 → 1 em 590px. Piso do card: 240px.
+   Limites MEDIDOS COM a barra de rolagem visível (Chrome no Windows): 4 colunas
+   batem em 240 com 1217px de viewport, 2 colunas com 583px. Sem a barra os
+   números caem para 1200 e 568 — NÃO "corrija" para eles: a @media conta a
+   barra, o layout não, e quem abre no Windows ficaria abaixo do piso.
+   Cada quebra é o número redondo imediatamente acima do limite medido.
+   (O 900 antigo, dos três, tinha sido medido sem a barra: com ela o limite
+   era 904.) */
+@media (max-width: 1220px) {
+  .lp-planos-grid:not(.lp-planos-escolar) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 590px) {
   .lp-planos-grid:not(.lp-planos-escolar) { grid-template-columns: 1fr; }
 }
 

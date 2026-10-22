@@ -68,9 +68,12 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
                     A KaIA repara quando o estudo é interrompido e oferece apoio no momento
                     certo — para que cada hora de estudo valha de verdade.
                 </p>
-                <!-- Só "Ver planos": não existe plano gratuito, e um "Começar
-                     grátis" levando ao login prometia o que a tabela abaixo
-                     desmente. Quem quer entrar tem o botão do header. -->
+                <!-- Só "Ver planos": a entrada grátis é o Ypy, e ele é uma
+                     PRIMEIRA SEMANA, não um plano gratuito sem fim. Um "Começar
+                     grátis" solto aqui prometeria mais do que o card diz; quem
+                     vê o Ypy na tabela vê o prazo junto. Botão próprio para o Ypy
+                     no hero é outra decisão, ainda não tomada. Quem quer entrar
+                     tem o botão do header. -->
                 <div class="lp-hero-acoes">
                     <a href="#planos" class="lp-btn lp-btn-secundario">Ver planos</a>
                 </div>
@@ -298,7 +301,7 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
         </section>
 
         <!-- ===================== PLANOS ===================== -->
-        <!-- Mirim, Porã, Açu, Ara e Guará: família indígena do "kaiá"/Coati. O rótulo
+        <!-- Ypy, Mirim, Porã, Açu, Ara e Guará: família indígena do "kaiá"/Coati. O rótulo
              comercial ("Básico", "Pro"...) é SUBTÍTULO no <h4>, para quem compara
              com o mercado; quem manda no card é o nome próprio.
              RENOMEAR: cada nome está no <h4> e, se o card cita o plano de baixo, no
@@ -311,6 +314,32 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
 
             <h3 class="planos-titulo">Para você, sozinho</h3>
             <div class="planos-grid lp-planos-grid">
+
+                <!-- PENDENTE (Bia + Vitor): a "primeira semana grátis" NÃO existe
+                     no backend. Falta contar os 7 dias por conta e bloquear no fim
+                     (hoje nenhuma rota de estudo checa assinatura). Durante o beta
+                     todo mundo é grátis SEM prazo, então hoje o produto entrega MAIS
+                     do que este card promete. O ponto a resolver é a data de início
+                     de quem entrou no beta: quando o prazo passar a valer, a semana
+                     dessa pessoa começa quando? Sem isso decidido, ligar o bloqueio
+                     corta quem já está estudando.
+                     O card compromete o PRAZO, não a forma de entrada: nada sobre
+                     cartão aqui (decisão da Bia). O 3º item não diz "detecta
+                     distração" de propósito: regra de linguagem do projeto. -->
+                <div class="plano">
+                    <span class="plano-tipo">INDIVIDUAL</span>
+                    <h4 data-plano-nome>Ypy<span class="plano-nome-desc">Grátis</span></h4>
+                    <div class="plano-preco">R$ 0</div>
+                    <p class="plano-alvo">Primeira semana grátis · 1 aluno</p>
+                    <ul class="plano-itens">
+                        <li>Todas as matérias e temas</li>
+                        <li>Questões criadas na hora pela KaIA, no seu nível</li>
+                        <li>A KaIA acompanha seu ritmo e oferece apoio quando faz sentido</li>
+                        <li>Caderno, streak e meta diária</li>
+                        <li>Ao fim da primeira semana você escolhe se continua</li>
+                    </ul>
+                    <a href="login.html" class="plano-btn">Começar</a>
+                </div>
 
                 <div class="plano">
                     <span class="plano-tipo">INDIVIDUAL</span>
@@ -361,7 +390,7 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
             </div>
 
             <!-- Escolares em faixa PRÓPRIA e mais estreita: são dois cards, e num
-                 grid de 3 colunas eles ficariam com um buraco à direita — o que
+                 grid de 4 colunas eles ficariam com um buraco à direita — o que
                  se lê como "faltou um plano". -->
             <h3 class="planos-titulo lp-planos-titulo-escolar">Para escolas e redes</h3>
             <div class="planos-grid lp-planos-grid lp-planos-escolar">

@@ -23,6 +23,11 @@
                  class="marca-letreiro" width="540" height="319">
             <h1>Cadastre sua escola</h1>
             <p>Cadastre sua escola em 4 passos.</p>
+            <!-- ANTES do passo 1 e fora das seções: fica à vista nos 4 passos, e a pessoa
+                 sabe que é demonstração antes de digitar qualquer coisa. Estático: sem
+                 role nem aria-live (ver .aviso-beta no style.css). -->
+            <p class="aviso-beta">O cadastro de escolas ainda não está no ar. Esta tela mostra como vai
+                funcionar; nada do que você preencher aqui é enviado.</p>
 
             <!-- ==================== PROGRESSO ==================== -->
             <ol class="ce-progresso" aria-label="Passos do cadastro">
@@ -112,7 +117,7 @@
 
                 <dl class="ce-resumo" id="ce-resumo"></dl>
 
-                <p class="ce-info">Depois do envio, nosso time revisa os dados e manda a confirmação, com os códigos de acesso de professores e alunos, para o e-mail do coordenador.</p>
+                <p class="ce-info">Confira o resumo. Nesta demonstração nada é enviado: o cadastro de escolas ainda não está no ar.</p>
 
                 <!-- PENDENTE (Bia + Vitor/Daniel): consentimento LGPD. A escola contrata, mas
                      os alunos são menores: falta decidir onde o consentimento entra (aceite da
@@ -120,12 +125,14 @@
                      Esta etapa vai precisar existir no fluxo — não implementada. -->
             </section>
 
-            <!-- ==================== SUCESSO (mock) ==================== -->
+            <!-- ==================== FIM DA DEMONSTRAÇÃO ==================== -->
+            <!-- Não afirma recebimento: nada foi enviado, então nada de "recebemos",
+                 "nosso time" ou "confirmação por e-mail". Quando o envio existir de
+                 verdade, esta tela muda junto com o backend, não antes. -->
             <section class="ce-passo ce-sucesso" data-passo="fim" aria-labelledby="ce-tfim" hidden>
-                <h2 class="ce-titulo" id="ce-tfim" tabindex="-1">Cadastro enviado!</h2>
-                <p>Recebemos os dados da sua escola! Nosso time vai revisar e enviar a confirmação
-                    para o e-mail do coordenador, com os códigos de acesso.</p>
-                <p class="ce-nota">Tela de demonstração: nenhum dado foi enviado de verdade.</p>
+                <h2 class="ce-titulo" id="ce-tfim" tabindex="-1">Fim da demonstração</h2>
+                <p>Esses são os quatro passos do cadastro de uma escola. Como o cadastro ainda
+                    não está no ar, nada do que você preencheu foi enviado ou guardado.</p>
                 <a href="index.html" class="link-secundario">Voltar para a página inicial</a>
             </section>
 

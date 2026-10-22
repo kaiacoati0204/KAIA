@@ -179,7 +179,7 @@
         $('ce-acoes').classList.toggle('ce-acoes-sozinho', passo === 1);   // sem Voltar: Avançar ocupa a linha
         $('ce-voltar').hidden = passo === 1;
         $('ce-link-login').hidden = passo !== 1;   // "Já tem conta?" só no começo
-        $('ce-avancar').textContent = passo === TOTAL_PASSOS ? 'Enviar para a KaIA' : 'Avançar';
+        $('ce-avancar').textContent = passo === TOTAL_PASSOS ? 'Concluir demonstração' : 'Avançar';
         $('ce-erro').textContent = '';
 
         if (passo === 3) atualizarPreco();

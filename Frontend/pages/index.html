@@ -325,7 +325,22 @@ if(n>=1&&n<=4)document.documentElement.dataset.luz=n}catch(e){}</script>
                      corta quem já está estudando.
                      O card compromete o PRAZO, não a forma de entrada: nada sobre
                      cartão aqui (decisão da Bia). O 3º item não diz "detecta
-                     distração" de propósito: regra de linguagem do projeto. -->
+                     distração" de propósito: regra de linguagem do projeto.
+
+                     FIM DO BETA: estes itens são DEPENDENTES, não soltos. Mudar um
+                     sem os outros recria a contradição entre página e produto.
+                       - pages/cadastro.html:7   <title> "grátis no beta"
+                       - pages/cadastro.html:10  meta description "Gratuito durante o beta"
+                       - pages/cadastro.html:20  og:title (repete o title)
+                       - pages/cadastro.html:21  og:description (repete a description)
+                       - Frontend/llms.txt:19    "Uso gratuito nesta fase"
+                       - backend: contar os 7 dias por conta e bloquear no fim (não existe)
+                       - a data de início de quem entrou no beta (não decidida)
+                     A ORDEM IMPORTA: o backend conta o prazo PRIMEIRO; só depois os
+                     textos acima passam a falar de prazo. Ao contrário, a página
+                     promete um bloqueio que não existe.
+                     Hoje "Gratuito durante o beta" é o texto mais verdadeiro e fica
+                     (decisão da Bia). A data do fim do beta não foi decidida. -->
                 <div class="plano">
                     <span class="plano-tipo">INDIVIDUAL</span>
                     <h4 data-plano-nome>Ypy<span class="plano-nome-desc">Grátis</span></h4>
